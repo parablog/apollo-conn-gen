@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "userNotFoundError",
+    "message": "Double check your registered and have a valid user",
+    "header": "No user found"
+  }
+}

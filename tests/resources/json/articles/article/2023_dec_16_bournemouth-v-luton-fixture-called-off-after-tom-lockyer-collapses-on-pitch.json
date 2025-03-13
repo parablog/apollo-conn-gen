@@ -1,0 +1,447 @@
+{
+  "response": {
+    "status": "ok",
+    "userTier": "developer",
+    "total": 1,
+    "content": {
+      "id": "football/2023/dec/16/bournemouth-v-luton-fixture-called-off-after-tom-lockyer-collapses-on-pitch",
+      "type": "article",
+      "sectionId": "football",
+      "sectionName": "Football",
+      "webPublicationDate": "2023-12-16T20:46:40Z",
+      "webTitle": "Bournemouth v Luton abandoned after Tom Lockyer suffers cardiac arrest",
+      "webUrl": "https://www.theguardian.com/football/2023/dec/16/bournemouth-v-luton-fixture-called-off-after-tom-lockyer-collapses-on-pitch",
+      "apiUrl": "https://content.guardianapis.com/football/2023/dec/16/bournemouth-v-luton-fixture-called-off-after-tom-lockyer-collapses-on-pitch",
+      "fields": {
+        "headline": "Bournemouth v Luton abandoned after Tom Lockyer suffers cardiac arrest",
+        "standfirst": "<p>Premier League match halted and Luton Town captain was taken away on a stretcher, described as ‘alert and responsive’</p>",
+        "trailText": "Premier League match halted and Luton Town captain was taken away in a stretcher, described as ‘alert and responsive’",
+        "byline": "Jane Clinton",
+        "main": "<figure class=\"element element-image\" data-media-id=\"bdd9f10041e84cbec8391774bf84f35853f9f77e\"> <img src=\"https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/1000.jpg\" alt=\"Luton’s manager Rob Edwards looks on as the game with Bournemouth is stopped as Tom Lockyer receives medical attention.\" width=\"1000\" height=\"600\" class=\"gu-image\" /> <figcaption> <span class=\"element-image__caption\">Luton Town’s manager, Rob Edwards, looks on as the game with Bournemouth is stopped while Tom Lockyer receives medical attention.</span> <span class=\"element-image__credit\">Photograph: Paul Childs/Action Images/Reuters</span> </figcaption> </figure>",
+        "body": "<p>Luton’s Premier League match at Bournemouth on Saturday was abandoned after their captain, Tom Lockyer, collapsed on the pitch after a cardiac arrest.</p> <p>The match was stopped in the 59th minute as medics tended to Lockyer, who collapsed off the ball.</p> <p>Players and staff members from both clubs were clearly in distress as the incident unfolded at the Vitality Stadium, with Luton’s Issa Kaboré appearing to pray on the side of the pitch.</p> <p>Both teams were sent to the changing rooms as Lockyer received treatment.</p> <p>In a statement, Luton Town said: “Our medical staff have confirmed that the Hatters captain suffered cardiac arrest on the pitch, but was responsive by the time he was taken off on the stretcher. He received further treatment inside the stadium, for which we once again thank the medical teams from both sides.</p> <p>“Tom was transferred to hospital, where we can reassure supporters that he is stable and currently undergoing further tests with his family at his bedside. We would like to thank everyone for their support, concern and loving messages for Locks.”</p> <p>Earlier Luton had posted the club’s thanks to the crowd on X, formerly Twitter: “We are sorry to all supporters present that players from both sides were in no state of mind to continue with the game after seeing their much-loved teammate and friend taken off like that and staff could not carry on with managing the game in such circumstances.</p> <p>“We thank everyone for the wonderful applause and singing of Locks’ [Lockyer’s] name inside the stadium at such a difficult time.”</p> <p>They thanked “Bournemouth and the medical staff on both sides for their immediate response, which was absolutely amazing”.</p> <p>Bournemouth responded to Luton’s update on Lockyer’s condition, saying: “We’re relieved to hear Tom is responsive.”</p> <p>The club added: “Our thoughts will continue to be with Tom and his family at this time. We’d like to thank all the medical staff for their quick action as well as everyone inside the stadium for their support and unity during a difficult moment.”</p> <p>The Bournemouth Daily Echo’s live blog reported at 4.18pm: “Real concern as Tom Lockyer goes down with a head injury. Luton boss Rob Edwards immediately ran on to the pitch with the medical staff to get all the players away. Dean Court has fallen silent.”</p> <p>Edwards brought his team into a huddle, the blog continued, and both teams headed into the dressing room while Lockyer received treatment with “at least 10 medical staff around him”.</p> <p>Both sets of fans sang Lockyer’s name and there was spontaneous applause from all sides when he was taken off on a stretcher. When it was confirmed the game had been abandoned Luton and Bournemouth players returned to the pitch and applauded the supporters.</p> <p>A tearful Edwards walked around the stadium applauding the Luton and Bournemouth fans who gave a standing ovation and were also clapping.</p> <p>The match was abandoned in the 65th minute with the score at 1-1. The Premier League said in a statement: “The match between AFC Bournemouth and Luton Town FC has been abandoned due to a player medical incident. Our thoughts are with Tom Lockyer and all players involved in today’s match.”</p> <p>In May, Lockyer, 29, collapsed during the Championship playoff final against Coventry and was taken to hospital. He had heart surgery for an atrial fibrillation, which the NHS describes as causing “an irregular and often abnormally fast heart rate” and was given the all-clear to resume playing in June.</p> <p>In June he described that medical emergency in an interview with the BBC, recalling how he went “really light-headed” and his legs went “really weak straight away”.</p> <p>He added: “I remember stumbling back and then all I remember was [physiotherapist] Chris Phillips over the top of me, and he was saying: ‘Locks, you’re coming off.’”</p> <p>Initially Lockyer said he protested, insisting he was fine but then it dawned on him that he was “on the floor and this is actually serious”.</p> <p>He added: “I just got really emotional. I couldn’t stop crying on the floor. It was probably a lot worse for everyone else watching than it was for me because as soon as I came back around, I was fine. I never really felt in any danger and it definitely wasn’t as bad as it looked.”</p> <p>Lockyer said that he had the operation to fix the issue “and it shouldn’t happen again”, adding “there’s not really any reason to say why that happened”.</p> <p>“I’ve been given the all-clear – it is what it is and I just want to draw a line under it now and move on,” he said.</p> <p>The Wales defender returned to action for the start of the new season and had made 15 appearances so far in all competitions before Saturday’s match.</p> <p>Wales posted on X: “Our thoughts are with Tom Lockyer.”</p> <p>Gary Lineker tweeted: “Reports coming in that Tom Lockyer is now alert and responsive. Thank heavens.” He added: “Wish him well.”</p>",
+        "newspaperPageNumber": "4",
+        "wordcount": "827",
+        "commentCloseDate": "2023-12-19T17:00:00Z",
+        "commentable": "false",
+        "firstPublicationDate": "2023-12-16T17:03:53Z",
+        "isInappropriateForSponsorship": "false",
+        "isPremoderated": "false",
+        "lastModified": "2024-11-08T19:25:55Z",
+        "newspaperEditionDate": "2023-12-17T00:00:00Z",
+        "productionOffice": "UK",
+        "publication": "The Observer",
+        "shortUrl": "https://www.theguardian.com/p/phdyt",
+        "shouldHideAdverts": "false",
+        "showInRelatedContent": "true",
+        "thumbnail": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/500.jpg",
+        "legallySensitive": "false",
+        "lang": "en",
+        "isLive": "true",
+        "bodyText": "Luton’s Premier League match at Bournemouth on Saturday was abandoned after their captain, Tom Lockyer, collapsed on the pitch after a cardiac arrest. The match was stopped in the 59th minute as medics tended to Lockyer, who collapsed off the ball. Players and staff members from both clubs were clearly in distress as the incident unfolded at the Vitality Stadium, with Luton’s Issa Kaboré appearing to pray on the side of the pitch. Both teams were sent to the changing rooms as Lockyer received treatment. In a statement, Luton Town said: “Our medical staff have confirmed that the Hatters captain suffered cardiac arrest on the pitch, but was responsive by the time he was taken off on the stretcher. He received further treatment inside the stadium, for which we once again thank the medical teams from both sides. “Tom was transferred to hospital, where we can reassure supporters that he is stable and currently undergoing further tests with his family at his bedside. We would like to thank everyone for their support, concern and loving messages for Locks.” Earlier Luton had posted the club’s thanks to the crowd on X, formerly Twitter: “We are sorry to all supporters present that players from both sides were in no state of mind to continue with the game after seeing their much-loved teammate and friend taken off like that and staff could not carry on with managing the game in such circumstances. “We thank everyone for the wonderful applause and singing of Locks’ [Lockyer’s] name inside the stadium at such a difficult time.” They thanked “Bournemouth and the medical staff on both sides for their immediate response, which was absolutely amazing”. Bournemouth responded to Luton’s update on Lockyer’s condition, saying: “We’re relieved to hear Tom is responsive.” The club added: “Our thoughts will continue to be with Tom and his family at this time. We’d like to thank all the medical staff for their quick action as well as everyone inside the stadium for their support and unity during a difficult moment.” The Bournemouth Daily Echo’s live blog reported at 4.18pm: “Real concern as Tom Lockyer goes down with a head injury. Luton boss Rob Edwards immediately ran on to the pitch with the medical staff to get all the players away. Dean Court has fallen silent.” Edwards brought his team into a huddle, the blog continued, and both teams headed into the dressing room while Lockyer received treatment with “at least 10 medical staff around him”. Both sets of fans sang Lockyer’s name and there was spontaneous applause from all sides when he was taken off on a stretcher. When it was confirmed the game had been abandoned Luton and Bournemouth players returned to the pitch and applauded the supporters. A tearful Edwards walked around the stadium applauding the Luton and Bournemouth fans who gave a standing ovation and were also clapping. The match was abandoned in the 65th minute with the score at 1-1. The Premier League said in a statement: “The match between AFC Bournemouth and Luton Town FC has been abandoned due to a player medical incident. Our thoughts are with Tom Lockyer and all players involved in today’s match.” In May, Lockyer, 29, collapsed during the Championship playoff final against Coventry and was taken to hospital. He had heart surgery for an atrial fibrillation, which the NHS describes as causing “an irregular and often abnormally fast heart rate” and was given the all-clear to resume playing in June. In June he described that medical emergency in an interview with the BBC, recalling how he went “really light-headed” and his legs went “really weak straight away”. He added: “I remember stumbling back and then all I remember was [physiotherapist] Chris Phillips over the top of me, and he was saying: ‘Locks, you’re coming off.’” Initially Lockyer said he protested, insisting he was fine but then it dawned on him that he was “on the floor and this is actually serious”. He added: “I just got really emotional. I couldn’t stop crying on the floor. It was probably a lot worse for everyone else watching than it was for me because as soon as I came back around, I was fine. I never really felt in any danger and it definitely wasn’t as bad as it looked.” Lockyer said that he had the operation to fix the issue “and it shouldn’t happen again”, adding “there’s not really any reason to say why that happened”. “I’ve been given the all-clear – it is what it is and I just want to draw a line under it now and move on,” he said. The Wales defender returned to action for the start of the new season and had made 15 appearances so far in all competitions before Saturday’s match. Wales posted on X: “Our thoughts are with Tom Lockyer.” Gary Lineker tweeted: “Reports coming in that Tom Lockyer is now alert and responsive. Thank heavens.” He added: “Wish him well.”",
+        "charCount": "4820",
+        "shouldHideReaderRevenue": "false",
+        "showAffiliateLinks": "false",
+        "bylineHtml": "<a href=\"profile/jane-clinton\">Jane Clinton</a>",
+        "showTableOfContents": "false"
+      },
+      "tags": [
+        {
+          "id": "football/premierleague",
+          "type": "keyword",
+          "sectionId": "football",
+          "sectionName": "Football",
+          "webTitle": "Premier League",
+          "webUrl": "https://www.theguardian.com/football/premierleague",
+          "apiUrl": "https://content.guardianapis.com/football/premierleague",
+          "references": [
+            {
+              "id": "esa-football-tournament//football/tournament/faprem/2010",
+              "type": "esa-football-tournament"
+            },
+            {
+              "id": "opta-football-tournament/8/2012",
+              "type": "opta-football-tournament"
+            },
+            {
+              "id": "pa-football-competition/100",
+              "type": "pa-football-competition"
+            }
+          ]
+        },
+        {
+          "id": "football/bournemouth",
+          "type": "keyword",
+          "sectionId": "football",
+          "sectionName": "Football",
+          "webTitle": "Bournemouth",
+          "webUrl": "https://www.theguardian.com/football/bournemouth",
+          "apiUrl": "https://content.guardianapis.com/football/bournemouth",
+          "references": [
+            {
+              "id": "esa-football-team//football/team/78",
+              "type": "esa-football-team"
+            },
+            {
+              "id": "opta-football-team/91",
+              "type": "opta-football-team"
+            },
+            {
+              "id": "pa-football-team/23",
+              "type": "pa-football-team"
+            }
+          ]
+        },
+        {
+          "id": "football/lutontown",
+          "type": "keyword",
+          "sectionId": "football",
+          "sectionName": "Football",
+          "webTitle": "Luton Town",
+          "webUrl": "https://www.theguardian.com/football/lutontown",
+          "apiUrl": "https://content.guardianapis.com/football/lutontown",
+          "references": [
+            {
+              "id": "esa-football-team//football/team/30",
+              "type": "esa-football-team"
+            },
+            {
+              "id": "opta-football-team/102",
+              "type": "opta-football-team"
+            },
+            {
+              "id": "pa-football-team/10",
+              "type": "pa-football-team"
+            }
+          ]
+        },
+        {
+          "id": "football/football",
+          "type": "keyword",
+          "sectionId": "football",
+          "sectionName": "Football",
+          "webTitle": "Football",
+          "webUrl": "https://www.theguardian.com/football/football",
+          "apiUrl": "https://content.guardianapis.com/football/football",
+          "references": []
+        },
+        {
+          "id": "sport/sport",
+          "type": "keyword",
+          "sectionId": "sport",
+          "sectionName": "Sport",
+          "webTitle": "Sport",
+          "webUrl": "https://www.theguardian.com/sport/sport",
+          "apiUrl": "https://content.guardianapis.com/sport/sport",
+          "references": []
+        },
+        {
+          "id": "uk/uk",
+          "type": "keyword",
+          "sectionId": "uk-news",
+          "sectionName": "UK news",
+          "webTitle": "UK news",
+          "webUrl": "https://www.theguardian.com/uk/uk",
+          "apiUrl": "https://content.guardianapis.com/uk/uk",
+          "references": [
+            {
+              "id": "rich-link/https://www.theguardian.com/info/2015/dec/08/daily-email-uk",
+              "type": "rich-link"
+            }
+          ]
+        },
+        {
+          "id": "type/article",
+          "type": "type",
+          "webTitle": "Article",
+          "webUrl": "https://www.theguardian.com/articles",
+          "apiUrl": "https://content.guardianapis.com/type/article",
+          "references": []
+        },
+        {
+          "id": "tone/news",
+          "type": "tone",
+          "webTitle": "News",
+          "webUrl": "https://www.theguardian.com/tone/news",
+          "apiUrl": "https://content.guardianapis.com/tone/news",
+          "references": []
+        },
+        {
+          "id": "profile/jane-clinton",
+          "type": "contributor",
+          "webTitle": "Jane Clinton",
+          "webUrl": "https://www.theguardian.com/profile/jane-clinton",
+          "apiUrl": "https://content.guardianapis.com/profile/jane-clinton",
+          "references": [],
+          "bio": "<p>Jane Clinton is a freelance reporter</p>",
+          "firstName": "Jane",
+          "lastName": "Clinton"
+        },
+        {
+          "id": "publication/theobserver",
+          "type": "publication",
+          "sectionId": "theobserver",
+          "sectionName": "From the Observer",
+          "webTitle": "The Observer",
+          "webUrl": "https://www.theguardian.com/theobserver/all",
+          "apiUrl": "https://content.guardianapis.com/publication/theobserver",
+          "references": [],
+          "description": "From the Observer, the Sunday newspaper and sister publication of the Guardian."
+        },
+        {
+          "id": "theobserver/sport",
+          "type": "newspaper-book",
+          "sectionId": "sport",
+          "sectionName": "Sport",
+          "webTitle": "Observer Sport",
+          "webUrl": "https://www.theguardian.com/theobserver/sport",
+          "apiUrl": "https://content.guardianapis.com/theobserver/sport",
+          "references": []
+        },
+        {
+          "id": "theobserver/sport/news",
+          "type": "newspaper-book-section",
+          "sectionId": "sport",
+          "sectionName": "Sport",
+          "webTitle": "News & features",
+          "webUrl": "https://www.theguardian.com/theobserver/sport/news",
+          "apiUrl": "https://content.guardianapis.com/theobserver/sport/news",
+          "references": []
+        },
+        {
+          "id": "tracking/commissioningdesk/uk-sport",
+          "type": "tracking",
+          "webTitle": "UK Sport",
+          "webUrl": "https://www.theguardian.com/tracking/commissioningdesk/uk-sport",
+          "apiUrl": "https://content.guardianapis.com/tracking/commissioningdesk/uk-sport",
+          "references": []
+        }
+      ],
+      "elements": [
+        {
+          "id": "bdd9f10041e84cbec8391774bf84f35853f9f77e",
+          "relation": "main",
+          "type": "image",
+          "assets": [
+            {
+              "type": "image",
+              "mimeType": "image/jpeg",
+              "file": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/1000.jpg",
+              "typeData": {
+                "altText": "Luton’s manager Rob Edwards looks on as the game with Bournemouth is stopped as Tom Lockyer receives medical attention.",
+                "caption": "Luton Town’s manager, Rob Edwards, looks on as the game with Bournemouth is stopped while Tom Lockyer receives medical attention.",
+                "credit": "Photograph: Paul Childs/Action Images/Reuters",
+                "photographer": "Paul Childs",
+                "source": "Action Images/Reuters",
+                "width": "1000",
+                "height": "600",
+                "secureFile": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/1000.jpg",
+                "displayCredit": "true",
+                "mediaId": "bdd9f10041e84cbec8391774bf84f35853f9f77e",
+                "imageType": "Photograph",
+                "suppliersReference": "UP1EJCG19P4GL"
+              }
+            },
+            {
+              "type": "image",
+              "mimeType": "image/jpeg",
+              "file": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/500.jpg",
+              "typeData": {
+                "altText": "Luton’s manager Rob Edwards looks on as the game with Bournemouth is stopped as Tom Lockyer receives medical attention.",
+                "caption": "Luton Town’s manager, Rob Edwards, looks on as the game with Bournemouth is stopped while Tom Lockyer receives medical attention.",
+                "credit": "Photograph: Paul Childs/Action Images/Reuters",
+                "photographer": "Paul Childs",
+                "source": "Action Images/Reuters",
+                "width": "500",
+                "height": "300",
+                "secureFile": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/500.jpg",
+                "displayCredit": "true",
+                "mediaId": "bdd9f10041e84cbec8391774bf84f35853f9f77e",
+                "imageType": "Photograph",
+                "suppliersReference": "UP1EJCG19P4GL"
+              }
+            },
+            {
+              "type": "image",
+              "mimeType": "image/jpeg",
+              "file": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/140.jpg",
+              "typeData": {
+                "altText": "Luton’s manager Rob Edwards looks on as the game with Bournemouth is stopped as Tom Lockyer receives medical attention.",
+                "caption": "Luton Town’s manager, Rob Edwards, looks on as the game with Bournemouth is stopped while Tom Lockyer receives medical attention.",
+                "credit": "Photograph: Paul Childs/Action Images/Reuters",
+                "photographer": "Paul Childs",
+                "source": "Action Images/Reuters",
+                "width": "140",
+                "height": "84",
+                "secureFile": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/140.jpg",
+                "displayCredit": "true",
+                "mediaId": "bdd9f10041e84cbec8391774bf84f35853f9f77e",
+                "imageType": "Photograph",
+                "suppliersReference": "UP1EJCG19P4GL"
+              }
+            }
+          ]
+        },
+        {
+          "id": "bdd9f10041e84cbec8391774bf84f35853f9f77e",
+          "relation": "thumbnail",
+          "type": "image",
+          "assets": [
+            {
+              "type": "image",
+              "file": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/500.jpg",
+              "typeData": {
+                "altText": "Luton’s manager Rob Edwards looks on as the game with Bournemouth is stopped as Tom Lockyer receives medical attention.",
+                "credit": "Photograph: Paul Childs/Action Images/Reuters",
+                "photographer": "Paul Childs",
+                "source": "Action Images/Reuters",
+                "width": "500",
+                "height": "300",
+                "secureFile": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/500.jpg",
+                "displayCredit": "true",
+                "mediaId": "bdd9f10041e84cbec8391774bf84f35853f9f77e",
+                "imageType": "Photograph",
+                "suppliersReference": "UP1EJCG19P4GL"
+              }
+            }
+          ]
+        }
+      ],
+      "references": [
+        {
+          "id": "esa-football-team//football/team/78",
+          "type": "esa-football-team"
+        },
+        {
+          "id": "pa-football-team/10",
+          "type": "pa-football-team"
+        },
+        {
+          "id": "rich-link/https://www.theguardian.com/info/2015/dec/08/daily-email-uk",
+          "type": "rich-link"
+        },
+        {
+          "id": "opta-football-team/91",
+          "type": "opta-football-team"
+        },
+        {
+          "id": "pa-football-team/23",
+          "type": "pa-football-team"
+        },
+        {
+          "id": "pa-football-competition/100",
+          "type": "pa-football-competition"
+        },
+        {
+          "id": "opta-football-tournament/8/2012",
+          "type": "opta-football-tournament"
+        },
+        {
+          "id": "opta-football-team/102",
+          "type": "opta-football-team"
+        },
+        {
+          "id": "esa-football-team//football/team/30",
+          "type": "esa-football-team"
+        },
+        {
+          "id": "esa-football-tournament//football/tournament/faprem/2010",
+          "type": "esa-football-tournament"
+        }
+      ],
+      "blocks": {
+        "main": {
+          "id": "657dd0a48f08a7f5b92679bd",
+          "bodyHtml": "<figure class=\"element element-image\" data-media-id=\"bdd9f10041e84cbec8391774bf84f35853f9f77e\"> <img src=\"https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/1000.jpg\" alt=\"Luton’s manager Rob Edwards looks on as the game with Bournemouth is stopped as Tom Lockyer receives medical attention.\" width=\"1000\" height=\"600\" class=\"gu-image\" /> <figcaption> <span class=\"element-image__caption\">Luton Town’s manager, Rob Edwards, looks on as the game with Bournemouth is stopped while Tom Lockyer receives medical attention.</span> <span class=\"element-image__credit\">Photograph: Paul Childs/Action Images/Reuters</span> </figcaption> </figure>",
+          "bodyTextSummary": "",
+          "attributes": {},
+          "published": true,
+          "createdDate": "2023-12-16T17:03:53Z",
+          "firstPublishedDate": "2023-12-16T17:42:59Z",
+          "publishedDate": "2023-12-16T17:42:59Z",
+          "lastModifiedDate": "2023-12-16T17:40:43Z",
+          "contributors": [],
+          "elements": [
+            {
+              "type": "image",
+              "assets": [
+                {
+                  "type": "image",
+                  "mimeType": "image/jpeg",
+                  "file": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/1000.jpg",
+                  "typeData": {
+                    "aspectRatio": "5:3",
+                    "width": 1000,
+                    "height": 600
+                  }
+                },
+                {
+                  "type": "image",
+                  "mimeType": "image/jpeg",
+                  "file": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/500.jpg",
+                  "typeData": {
+                    "aspectRatio": "5:3",
+                    "width": 500,
+                    "height": 300
+                  }
+                },
+                {
+                  "type": "image",
+                  "mimeType": "image/jpeg",
+                  "file": "https://media.guim.co.uk/bdd9f10041e84cbec8391774bf84f35853f9f77e/0_48_2220_1332/140.jpg",
+                  "typeData": {
+                    "aspectRatio": "5:3",
+                    "width": 140,
+                    "height": 84
+                  }
+                }
+              ],
+              "imageTypeData": {
+                "caption": "Luton Town’s manager, Rob Edwards, looks on as the game with Bournemouth is stopped while Tom Lockyer receives medical attention.",
+                "displayCredit": true,
+                "credit": "Photograph: Paul Childs/Action Images/Reuters",
+                "source": "Action Images/Reuters",
+                "photographer": "Paul Childs",
+                "alt": "Luton’s manager Rob Edwards looks on as the game with Bournemouth is stopped as Tom Lockyer receives medical attention.",
+                "mediaId": "bdd9f10041e84cbec8391774bf84f35853f9f77e",
+                "suppliersReference": "UP1EJCG19P4GL",
+                "imageType": "Photograph"
+              }
+            }
+          ]
+        },
+        "body": [
+          {
+            "id": "657b2b358f08d04fc5204a19",
+            "bodyHtml": "<p>Luton’s Premier League match at Bournemouth on Saturday was abandoned after their captain, Tom Lockyer, collapsed on the pitch after a cardiac arrest.</p> <p>The match was stopped in the 59th minute as medics tended to Lockyer, who collapsed off the ball.</p> <p>Players and staff members from both clubs were clearly in distress as the incident unfolded at the Vitality Stadium, with Luton’s Issa Kaboré appearing to pray on the side of the pitch.</p> <p>Both teams were sent to the changing rooms as Lockyer received treatment.</p> <p>In a statement, Luton Town said: “Our medical staff have confirmed that the Hatters captain suffered cardiac arrest on the pitch, but was responsive by the time he was taken off on the stretcher. He received further treatment inside the stadium, for which we once again thank the medical teams from both sides.</p> <p>“Tom was transferred to hospital, where we can reassure supporters that he is stable and currently undergoing further tests with his family at his bedside. We would like to thank everyone for their support, concern and loving messages for Locks.”</p> <p>Earlier Luton had posted the club’s thanks to the crowd on X, formerly Twitter: “We are sorry to all supporters present that players from both sides were in no state of mind to continue with the game after seeing their much-loved teammate and friend taken off like that and staff could not carry on with managing the game in such circumstances.</p> <p>“We thank everyone for the wonderful applause and singing of Locks’ [Lockyer’s] name inside the stadium at such a difficult time.”</p> <p>They thanked “Bournemouth and the medical staff on both sides for their immediate response, which was absolutely amazing”.</p> <p>Bournemouth responded to Luton’s update on Lockyer’s condition, saying: “We’re relieved to hear Tom is responsive.”</p> <p>The club added: “Our thoughts will continue to be with Tom and his family at this time. We’d like to thank all the medical staff for their quick action as well as everyone inside the stadium for their support and unity during a difficult moment.”</p> <p>The Bournemouth Daily Echo’s live blog reported at 4.18pm: “Real concern as Tom Lockyer goes down with a head injury. Luton boss Rob Edwards immediately ran on to the pitch with the medical staff to get all the players away. Dean Court has fallen silent.”</p> <p>Edwards brought his team into a huddle, the blog continued, and both teams headed into the dressing room while Lockyer received treatment with “at least 10 medical staff around him”.</p> <p>Both sets of fans sang Lockyer’s name and there was spontaneous applause from all sides when he was taken off on a stretcher. When it was confirmed the game had been abandoned Luton and Bournemouth players returned to the pitch and applauded the supporters.</p> <p>A tearful Edwards walked around the stadium applauding the Luton and Bournemouth fans who gave a standing ovation and were also clapping.</p> <p>The match was abandoned in the 65th minute with the score at 1-1. The Premier League said in a statement: “The match between AFC Bournemouth and Luton Town FC has been abandoned due to a player medical incident. Our thoughts are with Tom Lockyer and all players involved in today’s match.”</p> <p>In May, Lockyer, 29, collapsed during the Championship playoff final against Coventry and was taken to hospital. He had heart surgery for an atrial fibrillation, which the NHS describes as causing “an irregular and often abnormally fast heart rate” and was given the all-clear to resume playing in June.</p> <p>In June he described that medical emergency in an interview with the BBC, recalling how he went “really light-headed” and his legs went “really weak straight away”.</p> <p>He added: “I remember stumbling back and then all I remember was [physiotherapist] Chris Phillips over the top of me, and he was saying: ‘Locks, you’re coming off.’”</p> <p>Initially Lockyer said he protested, insisting he was fine but then it dawned on him that he was “on the floor and this is actually serious”.</p> <p>He added: “I just got really emotional. I couldn’t stop crying on the floor. It was probably a lot worse for everyone else watching than it was for me because as soon as I came back around, I was fine. I never really felt in any danger and it definitely wasn’t as bad as it looked.”</p> <p>Lockyer said that he had the operation to fix the issue “and it shouldn’t happen again”, adding “there’s not really any reason to say why that happened”.</p> <p>“I’ve been given the all-clear – it is what it is and I just want to draw a line under it now and move on,” he said.</p> <p>The Wales defender returned to action for the start of the new season and had made 15 appearances so far in all competitions before Saturday’s match.</p> <p>Wales posted on X: “Our thoughts are with Tom Lockyer.”</p> <p>Gary Lineker tweeted: “Reports coming in that Tom Lockyer is now alert and responsive. Thank heavens.” He added: “Wish him well.”</p>",
+            "bodyTextSummary": "Luton’s Premier League match at Bournemouth on Saturday was abandoned after their captain, Tom Lockyer, collapsed on the pitch after a cardiac arrest. The match was stopped in the 59th minute as medics tended to Lockyer, who collapsed off the ball. Players and staff members from both clubs were clearly in distress as the incident unfolded at the Vitality Stadium, with Luton’s Issa Kaboré appearing to pray on the side of the pitch. Both teams were sent to the changing rooms as Lockyer received treatment. In a statement, Luton Town said: “Our medical staff have confirmed that the Hatters captain suffered cardiac arrest on the pitch, but was responsive by the time he was taken off on the stretcher. He received further treatment inside the stadium, for which we once again thank the medical teams from both sides. “Tom was transferred to hospital, where we can reassure supporters that he is stable and currently undergoing further tests with his family at his bedside. We would like to thank everyone for their support, concern and loving messages for Locks.” Earlier Luton had posted the club’s thanks to the crowd on X, formerly Twitter: “We are sorry to all supporters present that players from both sides were in no state of mind to continue with the game after seeing their much-loved teammate and friend taken off like that and staff could not carry on with managing the game in such circumstances. “We thank everyone for the wonderful applause and singing of Locks’ [Lockyer’s] name inside the stadium at such a difficult time.” They thanked “Bournemouth and the medical staff on both sides for their immediate response, which was absolutely amazing”. Bournemouth responded to Luton’s update on Lockyer’s condition, saying: “We’re relieved to hear Tom is responsive.” The club added: “Our thoughts will continue to be with Tom and his family at this time. We’d like to thank all the medical staff for their quick action as well as everyone inside the stadium for their support and unity during a difficult moment.” The Bournemouth Daily Echo’s live blog reported at 4.18pm: “Real concern as Tom Lockyer goes down with a head injury. Luton boss Rob Edwards immediately ran on to the pitch with the medical staff to get all the players away. Dean Court has fallen silent.” Edwards brought his team into a huddle, the blog continued, and both teams headed into the dressing room while Lockyer received treatment with “at least 10 medical staff around him”. Both sets of fans sang Lockyer’s name and there was spontaneous applause from all sides when he was taken off on a stretcher. When it was confirmed the game had been abandoned Luton and Bournemouth players returned to the pitch and applauded the supporters. A tearful Edwards walked around the stadium applauding the Luton and Bournemouth fans who gave a standing ovation and were also clapping. The match was abandoned in the 65th minute with the score at 1-1. The Premier League said in a statement: “The match between AFC Bournemouth and Luton Town FC has been abandoned due to a player medical incident. Our thoughts are with Tom Lockyer and all players involved in today’s match.” In May, Lockyer, 29, collapsed during the Championship playoff final against Coventry and was taken to hospital. He had heart surgery for an atrial fibrillation, which the NHS describes as causing “an irregular and often abnormally fast heart rate” and was given the all-clear to resume playing in June. In June he described that medical emergency in an interview with the BBC, recalling how he went “really light-headed” and his legs went “really weak straight away”. He added: “I remember stumbling back and then all I remember was [physiotherapist] Chris Phillips over the top of me, and he was saying: ‘Locks, you’re coming off.’” Initially Lockyer said he protested, insisting he was fine but then it dawned on him that he was “on the floor and this is actually serious”. He added: “I just got really emotional. I couldn’t stop crying on the floor. It was probably a lot worse for everyone else watching than it was for me because as soon as I came back around, I was fine. I never really felt in any danger and it definitely wasn’t as bad as it looked.” Lockyer said that he had the operation to fix the issue “and it shouldn’t happen again”, adding “there’s not really any reason to say why that happened”. “I’ve been given the all-clear – it is what it is and I just want to draw a line under it now and move on,” he said. The Wales defender returned to action for the start of the new season and had made 15 appearances so far in all competitions before Saturday’s match. Wales posted on X: “Our thoughts are with Tom Lockyer.” Gary Lineker tweeted: “Reports coming in that Tom Lockyer is now alert and responsive. Thank heavens.” He added: “Wish him well.”",
+            "attributes": {},
+            "published": true,
+            "createdDate": "2023-12-16T17:03:53Z",
+            "firstPublishedDate": "2023-12-16T17:08:21Z",
+            "publishedDate": "2023-12-17T14:01:52Z",
+            "lastModifiedDate": "2023-12-17T14:01:52Z",
+            "contributors": [],
+            "elements": [
+              {
+                "type": "text",
+                "assets": [],
+                "textTypeData": {
+                  "html": "<p>Luton’s Premier League match at Bournemouth on Saturday was abandoned after their captain, Tom Lockyer, collapsed on the pitch after a cardiac arrest.</p> \n<p>The match was stopped in the 59th minute as medics tended to Lockyer, who collapsed off the ball.</p> \n<p>Players and staff members from both clubs were clearly in distress as the incident unfolded at the Vitality Stadium, with Luton’s Issa Kaboré appearing to pray on the side of the pitch.</p> \n<p>Both teams were sent to the changing rooms as Lockyer received treatment.</p> \n<p>In a statement, Luton Town said: “Our medical staff have confirmed that the Hatters captain suffered cardiac arrest on the pitch, but was responsive by the time he was taken off on the stretcher. He received further treatment inside the stadium, for which we once again thank the medical teams from both sides.</p> \n<p>“Tom was transferred to hospital, where we can reassure supporters that he is stable and currently undergoing further tests with his family at his bedside. We would like to thank everyone for their support, concern and loving messages for Locks.”</p> \n<p>Earlier Luton had posted the club’s thanks to the crowd on X, formerly Twitter: “We are sorry to all supporters present that players from both sides were in no state of mind to continue with the game after seeing their much-loved teammate and friend taken off like that and staff could not carry on with managing the game in such circumstances.</p> \n<p>“We thank everyone for the wonderful applause and singing of Locks’ [Lockyer’s] name inside the stadium at such a difficult time.”</p> \n<p>They thanked “Bournemouth and the medical staff on both sides for their immediate response, which was absolutely amazing”.</p> \n<p>Bournemouth responded to Luton’s update on Lockyer’s condition, saying: “We’re relieved to hear Tom is responsive.”</p> \n<p>The club added: “Our thoughts will continue to be with Tom and his family at this time. We’d like to thank all the medical staff for their quick action as well as everyone inside the stadium for their support and unity during a difficult moment.”</p> \n<p>The Bournemouth Daily Echo’s live blog reported at 4.18pm: “Real concern as Tom Lockyer goes down with a head injury. Luton boss Rob Edwards immediately ran on to the pitch with the medical staff to get all the players away. Dean Court has fallen silent.”</p> \n<p>Edwards brought his team into a huddle, the blog continued, and both teams headed into the dressing room while Lockyer received treatment with “at least 10 medical staff around him”.</p> \n<p>Both sets of fans sang Lockyer’s name and there was spontaneous applause from all sides when he was taken off on a stretcher. When it was confirmed the game had been abandoned Luton and Bournemouth players returned to the pitch and applauded the supporters.</p> \n<p>A tearful Edwards walked around the stadium applauding the Luton and Bournemouth fans who gave a standing ovation and were also clapping.</p> \n<p>The match was abandoned in the 65th minute with the score at 1-1. The Premier League said in a statement: “The match between AFC Bournemouth and Luton Town FC has been abandoned due to a player medical incident. Our thoughts are with Tom Lockyer and all players involved in today’s match.”</p> \n<p>In May, Lockyer, 29, collapsed during the Championship playoff final against Coventry and was taken to hospital. He had heart surgery for an atrial fibrillation, which the NHS describes as causing “an irregular and often abnormally fast heart rate” and was given the all-clear to resume playing in June.</p> \n<p>In June he described that medical emergency in an interview with the BBC, recalling how he went “really light-headed” and his legs went “really weak straight away”.</p> \n<p>He added: “I remember stumbling back and then all I remember was [physiotherapist] Chris Phillips over the top of me, and he was saying: ‘Locks, you’re coming off.’”</p> \n<p>Initially Lockyer said he protested, insisting he was fine but then it dawned on him that he was “on the floor and this is actually serious”.</p> \n<p>He added: “I just got really emotional. I couldn’t stop crying on the floor. It was probably a lot worse for everyone else watching than it was for me because as soon as I came back around, I was fine. I never really felt in any danger and it definitely wasn’t as bad as it looked.”</p> \n<p>Lockyer said that he had the operation to fix the issue “and it shouldn’t happen again”, adding “there’s not really any reason to say why that happened”.</p> \n<p>“I’ve been given the all-clear – it is what it is and I just want to draw a line under it now and move on,” he said.</p> \n<p>The Wales defender returned to action for the start of the new season and had made 15 appearances so far in all competitions before Saturday’s match.</p> \n<p>Wales posted on X: “Our thoughts are with Tom Lockyer.”</p> \n<p>Gary Lineker tweeted: “Reports coming in that Tom Lockyer is now alert and responsive. Thank heavens.” He added: “Wish him well.”</p>"
+                }
+              }
+            ]
+          }
+        ],
+        "totalBodyBlocks": 1
+      },
+      "rights": {
+        "syndicatable": "true",
+        "subscriptionDatabases": "true",
+        "developerCommunity": "true"
+      },
+      "isHosted": false,
+      "pillarId": "pillar/sport",
+      "pillarName": "Sport"
+    }
+  }
+}

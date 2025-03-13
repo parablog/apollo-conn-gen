@@ -1,0 +1,184 @@
+{
+  "results": [
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Ewood Park",
+      "referee": "Dean Whitestone",
+      "home_team": {
+        "name": "Blackburn",
+        "score": 1,
+        "ht_score": 1,
+        "scorers": "Adam Wharton (3)"
+      },
+      "away_team": {
+        "name": "Watford",
+        "score": 2,
+        "ht_score": 0,
+        "scorers": "Mileta Rajovic (83),Rhys Healey (87)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "The King Power Stadium",
+      "referee": "Darren Bond",
+      "home_team": {
+        "name": "Leicester",
+        "score": 3,
+        "ht_score": 0,
+        "scorers": "Patson Daka (60),Patson Daka (65 Pen),Cesare Casadei (72)"
+      },
+      "away_team": {
+        "name": "Rotherham",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Riverside Stadium",
+      "referee": "James Linington",
+      "home_team": {
+        "name": "Middlesbrough",
+        "score": 1,
+        "ht_score": 1,
+        "scorers": "Morgan Rogers (40)"
+      },
+      "away_team": {
+        "name": "West Brom",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Carrow Road",
+      "referee": "Thomas Kirk",
+      "home_team": {
+        "name": "Norwich",
+        "score": 2,
+        "ht_score": 0,
+        "scorers": "Sam McCallum (47),Borja Sainz (73)"
+      },
+      "away_team": {
+        "name": "Huddersfield",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Home Park",
+      "referee": "Graham Scott",
+      "home_team": {
+        "name": "Plymouth",
+        "score": 3,
+        "ht_score": 1,
+        "scorers": "Joe Edwards (43),Ben Waine (68),Morgan Whittaker (86)"
+      },
+      "away_team": {
+        "name": "Birmingham",
+        "score": 3,
+        "ht_score": 2,
+        "scorers": "Jay Stansfield (15),Jordan James (39),Juninho Bacuna (62)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Loftus Road",
+      "referee": "Oliver Langford",
+      "home_team": {
+        "name": "QPR",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      },
+      "away_team": {
+        "name": "Southampton",
+        "score": 1,
+        "ht_score": 1,
+        "scorers": "Taylor Harwood-Bellis (42)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Hillsborough",
+      "referee": "Sam Barrott",
+      "home_team": {
+        "name": "Sheff Wed",
+        "score": 1,
+        "ht_score": 1,
+        "scorers": "Anthony Musaba (28)"
+      },
+      "away_team": {
+        "name": "Cardiff",
+        "score": 2,
+        "ht_score": 0,
+        "scorers": "Karlan Ahearne-Grant (74),Akin Famewo (88 o.g.)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "bet365 Stadium",
+      "referee": "Geoff Eltringham",
+      "home_team": {
+        "name": "Stoke",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      },
+      "away_team": {
+        "name": "Millwall",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Stadium of Light",
+      "referee": "Matthew Donohue",
+      "home_team": {
+        "name": "Sunderland",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      },
+      "away_team": {
+        "name": "Coventry",
+        "score": 3,
+        "ht_score": 1,
+        "scorers": "Tatsuhiro Sakamoto (45 +0:29),Callum O'Hare (67),Kasey Palmer (70)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "12:30",
+      "venue": "Elland Road",
+      "referee": "Stephen Martin",
+      "home_team": {
+        "name": "Leeds",
+        "score": 4,
+        "ht_score": 3,
+        "scorers": "Pascal Struijk (8),Leif Davis (25 o.g.),Crysencio Summerville (45 Pen),Joel Piroe (52)"
+      },
+      "away_team": {
+        "name": "Ipswich",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    }
+  ]
+}

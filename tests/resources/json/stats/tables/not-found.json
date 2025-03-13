@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "tableNotFoundError",
+    "message": "Double check your have supplied a valid league and date",
+    "header": "No table found for this league and date"
+  }
+}

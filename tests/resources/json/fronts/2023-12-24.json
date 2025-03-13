@@ -1,0 +1,1048 @@
+{
+  "id": "football-2023-12-24",
+  "name": "Football",
+  "collections": [
+    {
+      "key": "0:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/liverpool-arsenal-premier-league-match-report",
+              "headline": "Salah’s stunning strike earns Liverpool draw but Arsenal stay top of table",
+              "kicker": "Premier League",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Mohamed Salah equalised Gabriel Magalhães’s early goal and Martin Ødegaard survived a handball appeal",
+              "image": {
+                "source": "media",
+                "id": "9488902f808b2f88f43efbe39495f5d083a065e3/0_102_3096_1858/master/3096.jpg",
+                "credit": "Photograph: Michael Regan/Getty Images",
+                "caption": "Mohamed Salah cuts inside to score Liverpool’s equaliser.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "9488902f808b2f88f43efbe39495f5d083a065e3/0_102_3096_1858/master/3096.jpg",
+                "source": "media",
+                "credit": "Photograph: Michael Regan/Getty Images",
+                "caption": "Mohamed Salah cuts inside to score Liverpool’s equaliser.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Andy Hunter at Anfiield",
+              "bylineHtml": "<a href=\"profile/andyhunter\">Andy Hunter</a> at Anfiield",
+              "bylineImages": {
+                "cutout": {
+                  "source": "uploads",
+                  "id": "2022/11/21/Andy_Hunter.png"
+                }
+              },
+              "standfirst": "Mohamed Salah equalised Gabriel Magalhães’s early goal and Martin Ødegaard survived a handball appeal",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/liverpool-arsenal-premier-league-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "coverCard",
+              "cardImage": {
+                "id": "f606ca1049be49c303d39408b3af12676b17f9e0/0_0_1680_2854/master/1680.jpg",
+                "source": "media"
+              },
+              "cardImageTablet": {
+                "id": "2e129e7bad302662322ad8d635a272545e548a54/0_0_2146_2359/master/2146.jpg",
+                "source": "media"
+              },
+              "sportScore": "Liverpool 1 Arsenal 1"
+            }
+          ]
+        },
+        {
+          "appearance": "two",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/mikel-arteta-hails-arsenals-courage-and-belief-after-liverpool-draw",
+              "headline": "Arteta hails team’s ‘courage and belief’ after Liverpool draw",
+              "kicker": "Arsenal",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "‘An unbelievable game, the quality of both teams was superb’",
+              "image": {
+                "id": "3131c015f2f2a5645fcd7b08f8667c2cbbe5e378/0_0_3680_2208/master/3680.jpg",
+                "source": "media",
+                "credit": "Photograph: David Price/Arsenal FC/Getty Images",
+                "caption": "Gabriel Magalhães gives Arsenal the lead in what Mikel Arteta called ‘one of the most intense and hectic games I’ve witnessed in this league’.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "3131c015f2f2a5645fcd7b08f8667c2cbbe5e378/0_0_3680_2208/master/3680.jpg",
+                "source": "media",
+                "credit": "Photograph: David Price/Arsenal FC/Getty Images",
+                "caption": "Gabriel Magalhães gives Arsenal the lead in what Mikel Arteta called ‘one of the most intense and hectic games I’ve witnessed in this league’.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Andy Hunter at Anfield",
+              "bylineHtml": "<a href=\"profile/andyhunter\">Andy Hunter</a> at Anfield",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Andy_Hunter.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "‘An unbelievable game, the quality of both teams was superb’",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/mikel-arteta-hails-arsenals-courage-and-belief-after-liverpool-draw",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/blog/2023/dec/23/xxx-",
+              "headline": "Rice calls tune for Arsenal but could do with reinforcements",
+              "kicker": "Barney Ronay",
+              "articleType": "feature",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "The midfielder covered vast amounts of ground at Anfield and Jürgen Klopp knew Liverpool would have won without him",
+              "image": {
+                "id": "6141ca5a83b97c3309de1e98cf55ec3523e7b261/0_85_3285_2026/master/3285.jpg",
+                "source": "media",
+                "credit": "Photograph: Paul Ellis/AFP/Getty Images",
+                "caption": "Declan Rice, pictured battling with Ibrahima Konaté, was superb in keeping Liverpool at bay for large parts of Arsenal’s draw at Anfield.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "6141ca5a83b97c3309de1e98cf55ec3523e7b261/0_85_3285_2026/master/3285.jpg",
+                "source": "media",
+                "credit": "Photograph: Paul Ellis/AFP/Getty Images",
+                "caption": "Declan Rice, pictured battling with Ibrahima Konaté, was superb in keeping Liverpool at bay for large parts of Arsenal’s draw at Anfield.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Barney Ronay",
+              "bylineHtml": "<a href=\"profile/barneyronay\">Barney Ronay</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Barney_Ronay.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "The midfielder covered vast amounts of ground at Anfield and Jürgen Klopp knew Liverpool would have won without him",
+              "webUrl": "https://www.theguardian.com/football/blog/2023/dec/23/xxx-",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "1:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/nottingham-forest-bournemouth-premier-league-match-report",
+              "headline": "Solanke hat-trick seals Bournemouth win after Forest red card controversy",
+              "kicker": "Premier League",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Dominic Solanke’s stoppage time goal gave Bournemouth a win at Nottingham Forest, who had Willy Boly sent off after a contentious second yellow",
+              "image": {
+                "id": "49a07d837a124281f7fe0162c939a33190254d02/0_165_4939_2964/master/4939.jpg",
+                "source": "media",
+                "credit": "Photograph: Naomi Baker/Getty Images",
+                "caption": "Dominic Solanke (right) celebrates with Marcus Tavernier after scoring Bournemouth’s winner.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "49a07d837a124281f7fe0162c939a33190254d02/0_165_4939_2964/master/4939.jpg",
+                "source": "media",
+                "credit": "Photograph: Naomi Baker/Getty Images",
+                "caption": "Dominic Solanke (right) celebrates with Marcus Tavernier after scoring Bournemouth’s winner.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Ben Fisher at the City Ground",
+              "bylineHtml": "<a href=\"profile/ben-fisher\">Ben Fisher</a> at the City Ground",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Ben_Fisher.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Dominic Solanke’s stoppage time goal gave Bournemouth a win at Nottingham Forest, who had Willy Boly sent off after a contentious second yellow",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/nottingham-forest-bournemouth-premier-league-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "coverCard",
+              "cardImage": {
+                "id": "20fcebeb8098ff48298a3b3e87c6816dcecfc833/0_0_2018_3428/master/2018.jpg",
+                "source": "media"
+              },
+              "cardImageTablet": {
+                "id": "1541b7e9b251fa5f916d478915bcd61bf25f0d32/0_0_2221_2441/master/2221.jpg",
+                "source": "media"
+              },
+              "sportScore": "Nottm Forest 2 Bournemouth 3"
+            }
+          ]
+        },
+        {
+          "appearance": "three",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/tottenham-everton-premier-league-match-report",
+              "headline": "Spurs cling on to beat Everton thanks to Son and Vicario",
+              "kicker": "Premier League",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Tottenham led through Richarlison and Son Heung-min at half-time, as Everton’s André Gomes pulled one back in a tense second half",
+              "image": {
+                "id": "05e3b39667fb1e4a206afa5ee61aee9cd2be6dbe/277_200_3477_2086/master/3477.jpg",
+                "source": "media",
+                "credit": "Photograph: John Patrick Fletcher/Action Plus/Shutterstock",
+                "caption": "Son Heung-min celebrates scoring what proved Tottenham’s decisive second goal against Everton.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "05e3b39667fb1e4a206afa5ee61aee9cd2be6dbe/277_200_3477_2086/master/3477.jpg",
+                "source": "media",
+                "credit": "Photograph: John Patrick Fletcher/Action Plus/Shutterstock",
+                "caption": "Son Heung-min celebrates scoring what proved Tottenham’s decisive second goal against Everton.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "thumb-large"
+                }
+              },
+              "byline": "David Hytner at the Tottenham Hotspur Stadium",
+              "bylineHtml": "<a href=\"profile/davidhytner\">David Hytner</a> at the Tottenham Hotspur Stadium",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2018/01/10/David_Hytner,_L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Tottenham led through Richarlison and Son Heung-min at half-time, as Everton’s André Gomes pulled one back in a tense second half",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/tottenham-everton-premier-league-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail",
+              "sportScore": "Spurs 2 Everton 1"
+            },
+            {
+              "id": "football/2023/dec/23/fulham-burnley-premier-league-match-report",
+              "headline": "Odobert and Berge stun Fulham to boost Burnley’s survival hopes ",
+              "kicker": "Premier League",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Goals from Wilson Odobert and Sander Berge earned Burnley a win at Fulham, as Rebecca Welch became the first female Premier League referee",
+              "image": {
+                "id": "00b158895ffdc21669c48f0a052f69ebac17e27b/0_73_2847_1708/master/2847.jpg",
+                "source": "media",
+                "credit": "Photograph: Peter Cziborra/Action Images/Reuters",
+                "caption": "Wilson Odobert scores Burnley’s first goal against Fulham.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "00b158895ffdc21669c48f0a052f69ebac17e27b/0_73_2847_1708/master/2847.jpg",
+                "source": "media",
+                "credit": "Photograph: Peter Cziborra/Action Images/Reuters",
+                "caption": "Wilson Odobert scores Burnley’s first goal against Fulham.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "not-used",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "John Brewin at Craven Cottage",
+              "bylineHtml": "<a href=\"profile/john-brewin\">John Brewin</a> at Craven Cottage",
+              "standfirst": "Goals from Wilson Odobert and Sander Berge earned Burnley a win at Fulham, as Rebecca Welch became the first female Premier League referee",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/fulham-burnley-premier-league-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail",
+              "sportScore": "Fulham 0 Burnley 2"
+            },
+            {
+              "id": "football/2023/dec/23/rebecca-welch-vincent-kompany-marco-silva-burnley-fulham-a-big-moment",
+              "headline": "Kompany congratulates referee Welch on historic debut",
+              "kicker": "‘A big moment’",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Burnley manager praises Premier League’s first female referee",
+              "image": {
+                "id": "f781ae76e6b028e4e27ea6b3f51948a05a0d5906/0_0_2925_1755/master/2925.jpg",
+                "source": "media",
+                "credit": "Photograph: George Beck/PPAUK/Shutterstock",
+                "caption": "Rebecca Welch talks to Fulham’s Bobby De Cordova-Reid during her historic debut at Craven Cottage.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "f781ae76e6b028e4e27ea6b3f51948a05a0d5906/0_0_2925_1755/master/2925.jpg",
+                "source": "media",
+                "credit": "Photograph: George Beck/PPAUK/Shutterstock",
+                "caption": "Rebecca Welch talks to Fulham’s Bobby De Cordova-Reid during her historic debut at Craven Cottage.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "not-used",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "John Brewin at Craven Cottage",
+              "bylineHtml": "<a href=\"profile/john-brewin\">John Brewin</a> at Craven Cottage",
+              "standfirst": "Burnley manager praises Premier League’s first female referee",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/rebecca-welch-vincent-kompany-marco-silva-burnley-fulham-a-big-moment",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "2:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/west-ham-manchester-united-premier-league-match-report",
+              "headline": "Bowen and Kudus strike to sink Manchester United and lift West Ham",
+              "kicker": "Premier League",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Second-half goals from Jarrod Bowen and Mohammed Kudus took West Ham above Manchester United in the table with a win",
+              "image": {
+                "id": "5027746be419a38292da990bc2c848655e941324/0_33_4463_2678/master/4463.jpg",
+                "source": "media",
+                "credit": "Photograph: Charlotte Wilson/Offside/Getty Images",
+                "caption": "Kurt Zouma congratulates Mohammed Kudus, after West Ham scored their second goal against Manchester United.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "5027746be419a38292da990bc2c848655e941324/0_33_4463_2678/master/4463.jpg",
+                "source": "media",
+                "credit": "Photograph: Charlotte Wilson/Offside/Getty Images",
+                "caption": "Kurt Zouma congratulates Mohammed Kudus, after West Ham scored their second goal against Manchester United.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Jacob Steinberg  at the London Stadium",
+              "bylineHtml": "<a href=\"profile/jacob-steinberg\">Jacob Steinberg</a>  at the London Stadium",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2017/10/06/Jacob-Steinberg,-L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Second-half goals from Jarrod Bowen and Mohammed Kudus took West Ham above Manchester United in the table with a win",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/west-ham-manchester-united-premier-league-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "coverCard",
+              "cardImage": {
+                "id": "ac08b91399370249d60b8f95462f6dbdd82c5fef/0_0_1749_2971/master/1749.jpg",
+                "source": "media"
+              },
+              "cardImageTablet": {
+                "id": "b9904d00d825e0aa1403ee55d7eeef8d4acda29a/0_0_2703_2971/master/2703.jpg",
+                "source": "media"
+              },
+              "sportScore": "West Ham 2 Man Utd 0"
+            }
+          ]
+        },
+        {
+          "appearance": "two",
+          "articles": [
+            {
+              "id": "football/blog/2023/dec/23/dull-manchester-united-plumb-new-depths-in-defeat-to-west-ham",
+              "headline": "Manchester United hit new low at West Ham",
+              "kicker": "Drab, weary, uninspired",
+              "articleType": "feature",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "United’s best players are woefully short of form and there is a hopelessness that smacks of a managerial endgame for Erik ten Hag",
+              "image": {
+                "id": "4baa0f0e8db3e9d1ecd728ac0aa5e08665cb555f/0_154_2555_1533/master/2555.jpg",
+                "source": "media",
+                "credit": "Photograph: Shaun Brooks/Action Plus/Shutterstock",
+                "caption": "Marcus Rashford looks dejected after Jarrod Bowen scored West Ham’s first goal against Manchester United.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "4baa0f0e8db3e9d1ecd728ac0aa5e08665cb555f/259_0_1717_1031/master/1717.jpg",
+                "source": "media",
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Jonathan Wilson at the London Stadium",
+              "bylineHtml": "<a href=\"profile/jonathanwilson\">Jonathan Wilson</a> at the London Stadium",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2018/04/24/Jonathan_Wilson,_L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "United’s best players are woefully short of form and there is a hopelessness that smacks of a managerial endgame for Erik ten Hag",
+              "webUrl": "https://www.theguardian.com/football/blog/2023/dec/23/dull-manchester-united-plumb-new-depths-in-defeat-to-west-ham",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "image"
+            },
+            {
+              "id": "football/2023/dec/23/erik-ten-hag-insists-he-can-improve-clubs-fortunes-despite-west-ham-loss",
+              "headline": "Ten Hag insists he can improve club’s fortunes",
+              "kicker": "Manchester United",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "‘The players on the pitch are good enough’",
+              "image": {
+                "id": "3543953ab9f979d1ec40e60daf69bfd5e4de0e1e/0_143_4263_2558/master/4263.jpg",
+                "source": "media",
+                "credit": "Photograph: Sebastian Frej/MB Media/Getty Images",
+                "caption": "Erik ten Hag said he did not see Marcus Rashford leaving the pitch without acknowledging the club’s fans.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "0d5029a960b9abd71a36588c54d82b835c729dec/582_1070_2625_2625/master/2625.jpg",
+                "source": "media",
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Jacob Steinberg at the London Stadium",
+              "bylineHtml": "<a href=\"profile/jacob-steinberg\">Jacob Steinberg</a> at the London Stadium",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2017/10/06/Jacob-Steinberg,-L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "‘The players on the pitch are good enough’",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/erik-ten-hag-insists-he-can-improve-clubs-fortunes-despite-west-ham-loss",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "image"
+            }
+          ]
+        },
+        {
+          "appearance": "four",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/luton-newcastle-premier-league-match-report",
+              "headline": "Townsend gives revitalised Luton emotional win over Newcastle",
+              "kicker": "Premier League",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "One week after Tom Lockyer was taken to hospital, Luton produced a superb performance to beat Newcastle at home",
+              "image": {
+                "source": "media",
+                "id": "84353eaa67076bd75bdbfc089515f276a3444b9b/0_0_3440_2064/master/3440.jpg",
+                "credit": "Photograph: Nick Potts/PA",
+                "caption": "Luton Town's Andros Townsend (left) scores his side’s winning goal against Newcastle.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "84353eaa67076bd75bdbfc089515f276a3444b9b/0_0_3440_2064/master/3440.jpg",
+                "source": "media",
+                "credit": "Photograph: Nick Potts/PA",
+                "caption": "Luton Town's Andros Townsend (left) scores his side’s winning goal against Newcastle.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb-large"
+                }
+              },
+              "byline": "Paul MacInnes at Kenilworth Road",
+              "bylineHtml": "<a href=\"profile/paulmacinnes\">Paul MacInnes</a> at Kenilworth Road",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2018/01/23/Paul_MacInnes,_L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "One week after Tom Lockyer was taken to hospital, Luton produced a superb performance to beat Newcastle at home",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/luton-newcastle-premier-league-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail",
+              "sportScore": "Luton 1 Newcastle 0"
+            },
+            {
+              "id": "football/2023/dec/23/chris-wilder-vows-crackdown-after-sheffield-uniteds-lineup-leaked",
+              "headline": "Wilder vows crackdown after Sheffield United’s lineup leaked",
+              "kicker": "Premier League",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "‘It’s a joke … they are harming the football club’",
+              "image": {
+                "id": "b590568793032df5f256cb1a5c1bc5376359bc86/369_180_1463_878/master/1463.jpg",
+                "source": "media",
+                "credit": "Photograph: Mike Egerton/PA",
+                "caption": "Chris Wilder has pledged to tighten security at Sheffield United’s training ground.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "b590568793032df5f256cb1a5c1bc5376359bc86/369_180_1463_878/master/1463.jpg",
+                "source": "media",
+                "credit": "Photograph: Mike Egerton/PA",
+                "caption": "Chris Wilder has pledged to tighten security at Sheffield United’s training ground.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Ben Fisher",
+              "bylineHtml": "<a href=\"profile/ben-fisher\">Ben Fisher</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Ben_Fisher.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "‘It’s a joke … they are harming the football club’",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/chris-wilder-vows-crackdown-after-sheffield-uniteds-lineup-leaked",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/24/premier-league-fans-half-term-reports-part-one-arsenal-to-fulham",
+              "headline": "Fans’ half-term reports, part one: Arsenal to Fulham",
+              "kicker": "Premier League",
+              "articleType": "feature",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Fans rate the best and worst of the season so far – the stars, the flops and what needs to change in 2024",
+              "image": {
+                "id": "7557b93327e660a8db0559ca20d89ff0c4df2ed4/295_236_3205_1922/master/3205.jpg",
+                "source": "media",
+                "credit": "Photograph: Peter Byrne/PA",
+                "caption": "Everton fans protest at Goodison Park in November. ",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "7557b93327e660a8db0559ca20d89ff0c4df2ed4/295_236_3205_1922/master/3205.jpg",
+                "source": "media",
+                "credit": "Photograph: Peter Byrne/PA",
+                "caption": "Everton fans protest at Goodison Park in November. ",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Observer fans' network",
+              "bylineHtml": "<a href=\"profile/observer-fans-network\">Observer fans' network</a>",
+              "standfirst": "Fans rate the best and worst of the season so far – the stars, the flops and what needs to change in 2024",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/24/premier-league-fans-half-term-reports-part-two-liverpool-to-wolves",
+              "headline": "Fans’ half-term reports, part two: Liverpool to Wolves",
+              "kicker": "Premier League",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Fans rate the best and worst of the season so far – the stars, the flops and what needs to change in 2024",
+              "image": {
+                "id": "cbbd26ba5aa38c20f16881f58ea3fc26281e627c/0_150_2897_1738/master/2897.jpg",
+                "source": "media",
+                "credit": "Photograph: Peter Powell/Reuters",
+                "caption": "Darwin Núñez celebrates scoring for Liverpool against West Ham in September. ",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "cbbd26ba5aa38c20f16881f58ea3fc26281e627c/0_150_2897_1738/master/2897.jpg",
+                "source": "media",
+                "credit": "Photograph: Peter Powell/Reuters",
+                "caption": "Darwin Núñez celebrates scoring for Liverpool against West Ham in September. ",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Observer fans' network",
+              "bylineHtml": "<a href=\"profile/observer-fans-network\">Observer fans' network</a>",
+              "standfirst": "Fans rate the best and worst of the season so far – the stars, the flops and what needs to change in 2024",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "3:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/brian-deane-the-last-christmas-eve-scorer-had-a-cracker-against-fergie",
+              "headline": "‘Elland Road was a very intimidating place on Christmas Eve’",
+              "kicker": "Interview",
+              "articleType": "interview",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Brian Deane, scorer of the first Premier League goal and former Sheffield United and Leeds striker, could be about to lose a record on Sunday",
+              "image": {
+                "id": "d65e672f50f761cb7db1c5bc3d9d7a0b993ed99d/13_0_2253_1352/master/2253.jpg",
+                "source": "media",
+                "credit": "Photograph: Allstar Picture Library Ltd/Alamy",
+                "caption": "Brian Deane celebrates scoring against Blackburn in April 1995.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "d65e672f50f761cb7db1c5bc3d9d7a0b993ed99d/13_0_2253_1352/master/2253.jpg",
+                "source": "media",
+                "credit": "Photograph: Allstar Picture Library Ltd/Alamy",
+                "caption": "Brian Deane celebrates scoring against Blackburn in April 1995.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Morgan Ofori",
+              "bylineHtml": "<a href=\"profile/morgan-ofori\">Morgan Ofori</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2023/10/21/Morgan_Ofori.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Brian Deane, scorer of the first Premier League goal and former Sheffield United and Leeds striker, could be about to lose a record on Sunday",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/brian-deane-the-last-christmas-eve-scorer-had-a-cracker-against-fergie",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "coverCard",
+              "cardImage": {
+                "id": "2d0279a1ab9760fd9591c260ead2215ffd77095c/0_0_756_1285/master/756.jpg",
+                "source": "media"
+              },
+              "cardImageTablet": {
+                "id": "9e0b627ed13ece023f4b41dd8145d51fe7900047/0_0_826_909/master/826.jpg",
+                "source": "media"
+              }
+            }
+          ]
+        },
+        {
+          "appearance": "two",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/leeds-ipswich-championship-match-report",
+              "headline": "Rampant Leeds make their point with emphatic win",
+              "kicker": "Championship",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Pascal Struijk’s header put Leeds on the way to a home win as they reduced the gap to second-placed Ipswich to seven points",
+              "image": {
+                "id": "0a9e5844f478e1f61762ddb586c21bf8230245b3/1644_139_4075_2445/master/4075.jpg",
+                "source": "media",
+                "credit": "Photograph: Malcolm Bryce/ProSports/Shutterstock",
+                "caption": "Ethan Ampadu, Joël Piroe and Georginio Rutter celebrate after Piroe put Leeds 4-0 up against Ipswich.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "e4c9d409436132e0c82f5a80f12709b901ae8745/640_88_3904_2344/master/3904.jpg",
+                "source": "media",
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "PA Media",
+              "bylineHtml": "PA Media",
+              "standfirst": "Pascal Struijk’s header put Leeds on the way to a home win as they reduced the gap to second-placed Ipswich to seven points",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/leeds-ipswich-championship-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "image",
+              "sportScore": "Leeds 4 Ipswich 0"
+            },
+            {
+              "id": "football/2023/dec/23/championship-roundup-leicester-cruise-while-southampton-beat-qpr",
+              "headline": "Leicester cruise while Southampton beat QPR  ",
+              "kicker": "Championship roundup",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Saints’ victory makes it 15 matches without defeat",
+              "image": {
+                "id": "cae06206b5559485759c848181bdefac64f791fb/683_166_1940_1164/master/1940.jpg",
+                "source": "media",
+                "credit": "Photograph: Nigel French/PA",
+                "caption": "Patson Daka (left) celebrates scoring Leicester’s second against Rotherham.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "cae06206b5559485759c848181bdefac64f791fb/683_166_1940_1164/master/1940.jpg",
+                "source": "media",
+                "credit": "Photograph: Nigel French/PA",
+                "caption": "Patson Daka (left) celebrates scoring Leicester’s second against Rotherham.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "PA Media",
+              "bylineHtml": "PA Media",
+              "standfirst": "Saints’ victory makes it 15 matches without defeat",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/championship-roundup-leicester-cruise-while-southampton-beat-qpr",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        },
+        {
+          "appearance": "four",
+          "articles": [
+            {
+              "id": "football/2023/dec/23/celtic-livingston-scottish-premiership-match-report",
+              "headline": "Kyogo back among goals as Celtic return to winning ways",
+              "kicker": "Scottish Premiership",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Celtic recorded a win over Livingston and restored their five point advantage on Rangers at the top of the Premiership table",
+              "image": {
+                "id": "c2000fad32197bba7668473a4180308563954890/107_160_1804_1082/master/1804.jpg",
+                "source": "media",
+                "credit": "Photograph: Ian MacNicol/Getty Images",
+                "caption": "Kyogo Furuhashi (right) celebrates scoring Celtic’s opener against Livingston.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "c2000fad32197bba7668473a4180308563954890/107_160_1804_1082/master/1804.jpg",
+                "source": "media",
+                "credit": "Photograph: Ian MacNicol/Getty Images",
+                "caption": "Kyogo Furuhashi (right) celebrates scoring Celtic’s opener against Livingston.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb-large"
+                }
+              },
+              "byline": "PA Media",
+              "bylineHtml": "PA Media",
+              "standfirst": "Celtic recorded a win over Livingston and restored their five point advantage on Rangers at the top of the Premiership table",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/celtic-livingston-scottish-premiership-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail",
+              "sportScore": "Celtic 2 Livingston 0"
+            },
+            {
+              "id": "football/blog/2023/dec/24/uefa-confident-it-holds-sway-over-competitions-after-ruling-but-clubs-now-have-more-power",
+              "headline": "Uefa confident in Super League battleground but grip has weakened",
+              "kicker": "Nick Ames",
+              "articleType": "opinion",
+              "headerType": "largebyline",
+              "displayHint": "",
+              "trail": "A successful breakaway tournament appears a pipe dream until English clubs feel they have the latitude to join in once again",
+              "image": {
+                "id": "5008f258ae1bd14972a79f64d5ca8d6df669cb30/0_40_1637_982/master/1637.jpg",
+                "source": "media",
+                "credit": "Photograph: Reuters",
+                "caption": "Aleksander Ceferin cut a relaxed figure when reacting to the European Court of Justice ruling.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "2022/11/21/Nick_Ames.png",
+                "source": "uploads",
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Nick Ames",
+              "bylineHtml": "<a href=\"profile/nick-ames\">Nick Ames</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Nick_Ames.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "A successful breakaway tournament appears a pipe dream until English clubs feel they have the latitude to join in once again",
+              "showByline": true,
+              "showQuotedHeadline": true,
+              "mediaType": "cutout"
+            },
+            {
+              "id": "football/2023/dec/24/santa-stops-play-how-brentfords-christmas-plan-proved-cold-turkey",
+              "headline": "How Brentford’s Christmas plan proved cold turkey",
+              "kicker": "Santa stops play",
+              "articleType": "feature",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "It’s nearly 40 years since the plan to meet the Crazy Gang in a ground-breaking fixture hit the buffers",
+              "image": {
+                "id": "07dcf3682ce04cfbadc70e7ddd5bde90cccc6690/0_42_4096_2458/master/4096.jpg",
+                "source": "media",
+                "credit": "Photograph: PA",
+                "caption": "Brentford were struggling in 1983, and sought new ideas to get fans through the gates at Christmas.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "07dcf3682ce04cfbadc70e7ddd5bde90cccc6690/0_42_4096_2458/master/4096.jpg",
+                "source": "media",
+                "credit": "Photograph: PA",
+                "caption": "Brentford were struggling in 1983, and sought new ideas to get fans through the gates at Christmas.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Rob Smyth",
+              "bylineHtml": "<a href=\"profile/robsmyth\">Rob Smyth</a>",
+              "standfirst": "It’s nearly 40 years since the plan to meet the Crazy Gang in a ground-breaking fixture hit the buffers",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/23/victor-osimhen-signs-new-napoli-deal-tying-him-to-club-until-2026",
+              "headline": "Osimhen signs new deal tying him to club until 2026",
+              "kicker": "Napoli",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Nigeria striker’s salary more than doubled by Serie A champions",
+              "image": {
+                "id": "cc01bec1f62736c307c210ebdcc470411dd9e8a8/0_241_8256_4954/master/8256.jpg",
+                "source": "media",
+                "credit": "Photograph: Alberto Pizzoli/AFP/Getty Images",
+                "caption": "Victor Osimhen had been subject of speculation about a move to Saudi Arabia but has committed himself to Napoli.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "cc01bec1f62736c307c210ebdcc470411dd9e8a8/0_241_8256_4954/master/8256.jpg",
+                "source": "media",
+                "credit": "Photograph: Alberto Pizzoli/AFP/Getty Images",
+                "caption": "Victor Osimhen had been subject of speculation about a move to Saudi Arabia but has committed himself to Napoli.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Associated Press",
+              "bylineHtml": "Associated Press",
+              "standfirst": "Nigeria striker’s salary more than doubled by Serie A champions",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/23/victor-osimhen-signs-new-napoli-deal-tying-him-to-club-until-2026",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "4:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/blog/2023/dec/23/in-footballs-third-age-old-certainties-have-melted-away-and-nothing-is-as-it-seems",
+              "headline": "In football’s third age, old certainties have melted away",
+              "kicker": "Jonathan Wilson",
+              "articleType": "opinion",
+              "headerType": "largebyline",
+              "displayHint": "",
+              "trail": "No longer a game of possession, the prevailing tactic is more complex",
+              "image": {
+                "id": "17b0ffe3ac27fdbcf137082ceb34ccfee206f104/756_112_2194_1316/master/2194.jpg",
+                "source": "media",
+                "credit": "Photograph: Simon Stacpoole/Offside/Getty Images",
+                "caption": "Andoni Iraola plots with Dominic Solanke at Old Trafford. The Bournemouth manager sees opportunity in opposition goal-kicks.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "17b0ffe3ac27fdbcf137082ceb34ccfee206f104/756_112_2194_1316/master/2194.jpg",
+                "source": "media",
+                "credit": "Photograph: Simon Stacpoole/Offside/Getty Images",
+                "caption": "Andoni Iraola plots with Dominic Solanke at Old Trafford. The Bournemouth manager sees opportunity in opposition goal-kicks.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Jonathan Wilson",
+              "bylineHtml": "<a href=\"profile/jonathanwilson\">Jonathan Wilson</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2018/04/24/Jonathan_Wilson,_L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "No longer a game of possession, the prevailing tactic is more complex",
+              "webUrl": "https://www.theguardian.com/football/blog/2023/dec/23/in-footballs-third-age-old-certainties-have-melted-away-and-nothing-is-as-it-seems",
+              "showByline": true,
+              "showQuotedHeadline": true,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        },
+        {
+          "appearance": "three",
+          "articles": [
+            {
+              "id": "football/2023/dec/24/results",
+              "headline": "Results",
+              "kicker": "Football",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Latest roundup",
+              "image": {
+                "id": "0c9c46a8364e5e0bd40a331e8ed6f3a445459d3e/0_0_2000_1200/master/2000.jpg",
+                "source": "media",
+                "credit": "Illustration: ana pradas",
+                "caption": " ",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "0c9c46a8364e5e0bd40a331e8ed6f3a445459d3e/0_0_2000_1200/master/2000.jpg",
+                "source": "media",
+                "credit": "Illustration: ana pradas",
+                "caption": " ",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "thumb-large"
+                }
+              },
+              "byline": "",
+              "bylineHtml": "",
+              "standfirst": "Latest roundup",
+              "key": "football/2023/dec/24/results",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/24/the-weeks-fixtures",
+              "headline": "The week’s fixtures",
+              "kicker": "Football",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": " ",
+              "image": {
+                "id": "a75bc20f9ec61e98fd40ab515c5d756e92426c67/951_0_4837_2902/master/4837.jpg",
+                "source": "media",
+                "credit": "Photograph: Neville Williams/Aston Villa FC/Getty Images",
+                "caption": "High-flying Aston Villa travel to Manchester United on Tuesday.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "a75bc20f9ec61e98fd40ab515c5d756e92426c67/951_0_4837_2902/master/4837.jpg",
+                "source": "media",
+                "credit": "Photograph: Neville Williams/Aston Villa FC/Getty Images",
+                "caption": "High-flying Aston Villa travel to Manchester United on Tuesday.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "not-used",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "",
+              "bylineHtml": "",
+              "standfirst": " ",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "sport/2023/dec/23/in-brief",
+              "headline": "In brief",
+              "kicker": "Football",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": " ",
+              "image": {
+                "id": "1979fd0e2699dd5ae82b112ba421597f92470724/422_37_3431_2059/master/3431.jpg",
+                "source": "media",
+                "credit": "Photograph: Eurasia Sport Images/Getty Images",
+                "caption": "Jack Grealish.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "1979fd0e2699dd5ae82b112ba421597f92470724/422_37_3431_2059/master/3431.jpg",
+                "source": "media",
+                "credit": "Photograph: Eurasia Sport Images/Getty Images",
+                "caption": "Jack Grealish.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "not-used",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "",
+              "bylineHtml": "",
+              "standfirst": " ",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "swatch": "sport",
+  "appearance": {
+    "type": "pillar",
+    "name": "sport"
+  },
+  "displayName": "Sport",
+  "key": "Sport"
+}

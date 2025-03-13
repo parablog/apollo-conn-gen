@@ -1,0 +1,58 @@
+{
+  "results": [
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Celtic Park",
+      "referee": "Matthew MacDermid",
+      "home_team": {
+        "name": "Celtic",
+        "score": 2,
+        "ht_score": 0,
+        "scorers": "Kyogo Furuhashi (46),Liam Scales (51)"
+      },
+      "away_team": {
+        "name": "Livingston",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Tynecastle Park",
+      "referee": "Nick Walsh",
+      "home_team": {
+        "name": "Hearts",
+        "score": 2,
+        "ht_score": 1,
+        "scorers": "Lawrence Shankland (33),Lawrence Shankland (49)"
+      },
+      "away_team": {
+        "name": "St Mirren",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Rugby Park",
+      "referee": "John Beaton",
+      "home_team": {
+        "name": "Kilmarnock",
+        "score": 2,
+        "ht_score": 2,
+        "scorers": "David Watson (6),Marley Watkins (17)"
+      },
+      "away_team": {
+        "name": "St Johnstone",
+        "score": 1,
+        "ht_score": 0,
+        "scorers": "Nicky Clark (61)"
+      }
+    }
+  ]
+}

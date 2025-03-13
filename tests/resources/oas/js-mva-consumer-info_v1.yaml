@@ -1,0 +1,450 @@
+openapi: 3.0.2
+info:
+  version: "1.0.1" # Your API version
+  # It can be any string but it is better to use semantic versioning: http://semver.org/
+  # Warning: OpenAPI requires the version to be a string, but without quotation marks YAML can recognize it as a number.
+
+  title: VFA005 Consumer Information # Replace with your API title
+  # Keep it simple. Don't add "API" or version at the end of the string.
+
+  contact:
+    email: itaap.apifactory@vodafone.com # [Optional] Replace with your contact email
+
+  # Describe your API here, you can use GFM (https://guides.github.com/features/mastering-markdown) here
+  description: |
+    This is Consumer information specification which provides customer context for various journeys.
+
+    # Introduction
+    The consumer information journey service provides customer context aware characteristics.
+
+security:
+  - main_auth: []
+
+externalDocs:
+  url: www.todo.com # External URL
+
+# A list of tags used by the definition with additional metadata.
+# The order of the tags can be used to reflect on their order by the parsing tools.
+tags:
+  - name: consumer
+    description: Operations about consumer
+servers:
+  - url: "http://itaap/consumerInfo/v1"
+
+paths:
+  /consumer/{id}: # id as in local sub
+    # parameters list that are used with each operation for this path
+    parameters:
+      - name: channel-id
+        in: header
+        description: |
+          The project field used for routing.
+        x-example: itaap
+        schema:
+          type: string
+        required: true
+
+      - name: vf-country-code
+        in: header
+        description: >
+          The country-code field should be passed with the 2-letter OpCo
+          country code (e.g. DE, ES).
+        x-example: DE
+        schema:
+          type: string
+          format: iso-3166-1-alpha-2
+        required: false
+      - name: pretty_print
+        in: query
+        description: Pretty print response
+        schema:
+          type: boolean
+        required: false
+
+    ## GET
+    get: # documentation for GET operation for this path
+      tags:
+        - consumer
+
+      summary: Get consumer information using Id or Me
+
+      # you can use GFM in operation description too: https://guides.github.com/features/mastering-markdown
+      description: |
+        Get consumer information for given Party identifier based on local sub
+
+      # operationId should be unique across the whole specification
+      operationId: getConsumer
+      # list of parameters for the operation
+      parameters:
+        - name: id
+          in: path
+          description: |
+            The `id` [`local_sub` from Global VF-ID token] as in Party ID that needs to be fetched.
+
+            This allows the API request to accept either a custom ID or the fixed me identifier.
+          required: true
+          schema:
+            oneOf:
+              - type: string
+              - enum:
+                  - me
+            example: "msisdn or contact-id or local-identity or `me with implicit implementation"
+        - name: fields
+          in: query
+          description: Comma-separated properties to provide projections in the response
+          schema:
+            type: string
+
+      # security schemas applied to this operation
+      security:
+        - main_auth:
+            - "read:consumers" # for oauth2 provide list of scopes here
+        - api_key: []
+      responses: # list of responses
+        200:
+          description: Success
+          content:
+            application/json: # operation response mime type
+              schema: # response schema can be specified for each response
+                $ref: "#/components/schemas/Consumer"
+          headers:
+            ExpiresAfter:
+              description: date in UTC when the relevant content expires
+              schema:
+                type: string
+                format: date-time
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+              description: Request limit per hour.
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+              description: The number of requests left for the time window.
+            X-RateLimit-Reset:
+              schema:
+                type: string
+                format: date-time
+              description: The UTC date/time at which the current rate limit window resets.
+
+        403:
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        404:
+          description: Consumer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    # documentation for PUT operation for this path
+
+# An object to hold reusable parts that can be used across the definition
+components:
+  schemas:
+
+    Consumer:
+      type: object
+
+      properties:
+        title:
+          description: Consumer Salutation
+          type: string
+          example: Ms
+        firstName:
+          description: Consumer first name
+          type: string
+          example: John
+        lastName:
+          description: Consumer last name
+          type: string
+          example: Smith
+        birthDate:
+          description: Consumer date of birth the day and month but without year
+          type: string
+          format: date
+        me:
+          description: |
+            the 'me' attribute serves as a value for the special identifier,
+            uniquely representing the authenticated user within the local subsystem.
+
+            This special identifier is generated post-login as `login_hint`, enabling streamlined access control and
+            personalized user experiences during the session. It acts as a contextual reference, ensuring actions and
+            data are correctly attributed to the authenticated user while simplifying the need to repeatedly
+            reference their individual identifier.
+          type: string
+          example: "9494394"
+        gender:
+          description: Consumer gender
+          type: string
+          example: female
+        taxIdentifier:
+          description: Consumer Tax Identification
+          type: string
+          example: "ST929031C"
+        relatedParty:
+          description: Related Entity reference. A related party defines party or party role linked to a specific entity.
+          type: array
+          items:
+            $ref: "#/components/schemas/RelatedParty"
+        contactMedium:
+          description: Indicates the contact medium that could be used to contact the party..
+          type: array
+          items:
+            $ref: "#/components/schemas/ContactMedium"
+        partyCharacteristic:
+          description: Additional characteristics
+          type: array
+          items:
+            $ref: "#/components/schemas/Characteristic"
+        accounts:
+          description: |
+            Account related to products and services. _Note_ this is not a product view
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          description: Consumer account role(s)
+          type: array
+          minLength: 1
+          items:
+            type: string
+            example: Owner, Chooser, User, BillPayer
+            maxLength: 32
+            pattern: ^example-[0-9a-z]+$
+        isPrimary:
+          description: defines if this account is primary or not.
+          type: boolean
+        state:
+          type: string
+          description: "A billing account can be active, inactive, suspended."
+          example: "suspended"
+        stateReason:
+          type: string
+          description: "The reason of the given state value. For example, a billing account can be suspended due to unpaid bills."
+          example: "debt"
+        segment:
+          $ref: "#/components/schemas/SegmentCharacteristic"
+        contact:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+          maxItems: 100
+        relatedParty:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelatedParty'
+
+    Contact:
+      type: object
+      description: An individual or an organization used as a contact point for a given account and accessed via some contact medium.
+      required:
+        - contactType
+      properties:
+        contactType:
+          type: string
+          description: Type of contact (primary, secondary...)
+        contactMedium:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactMedium'
+
+    SegmentCharacteristic:
+      description: |
+        Consumer segment as configured for the Account.
+      type: object
+      properties:
+        category:
+          description: Consumer could be individual or Enterprise representative
+          type: string
+          example: Individual, Business, Enterprise
+        subCategory:
+          description: Consumer relationship type
+          type: string
+          maxLength: 128
+          example: Consumer, SOHO, Sole-Trader, Partnership, Limited, Charity, Public, Other-Bodies
+        userType:
+          description: Consumer based on primary subscription
+          type: string
+          example: PAYG, PAYM, BB
+        productType:
+          description: Type of product
+          type: string
+          example: Broadband, Fixedline, Device
+        paymentPlanType:
+          description: Consumer Payment Plan
+          type: string
+          minLength: 1
+          example: To Be defined [i.e DirectDebit, Credit]
+          maxLength: 32
+        paymentMethod:
+          description: Consumer payment method
+          type: string
+          maxLength: 128
+          example: To be defined [i.e Apple pay, Google Pay]
+
+    Characteristic:
+      type: object
+      description: Describes a given characteristic of an object or entity through a name/value pair.
+      required:
+        - name
+        - value
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the characteristic
+        name:
+          type: string
+          description: Name of the characteristic
+        valueType:
+          type: string
+          description: Data type of the value of the characteristic
+        value:
+          type: string
+          description: Data value of the characteristic
+    RelatedParty:
+      type: object
+      description: Related Entity reference. A related party defines party or party role linked to a specific entity.
+      required:
+        - '@referredType'
+        - id
+      properties:
+        id:
+          type: string
+          description: Unique identifier of a related entity.
+        name:
+          type: string
+          description: Name of the related entity.
+        role:
+          type: string
+          description: Role played by the related party
+    ContactMedium:
+      type: object
+      description: Indicates the contact medium that could be used to contact the party.
+      properties:
+        mediumType:
+          type: string
+          description: '*`Only ONE`* Type of the contact medium, such as: email address, telephone number, postal address'
+          enum:
+            - emailAddress
+            - postalAddress
+            - phoneNumber
+        preferred:
+          type: boolean
+          description: If true, indicates that is the preferred contact medium
+        characteristic:
+          $ref: "#/components/schemas/MediumCharacteristicExtended"
+
+    MediumCharacteristic:
+      type: object
+      description:  Describes the contact medium characteristics that could be used to contact a party (an individual or an organization)
+      properties:
+        city:
+          type: string
+          description: The city
+        contactType:
+          type: string
+          description: Type of contact type
+          example: Main, Primary, Secondary
+        country:
+          type: string
+          description: The country
+        emailAddress:
+          type: string
+          description: Full email address in standard format
+        faxNumber:
+          type: string
+          description: The fax number of the contact
+        phoneNumber:
+          type: string
+          description: The primary phone number of the contact
+        postCode:
+          type: string
+          description: Postcode
+        socialNetworkId:
+          type: string
+          description: Identifier as a member of a social network
+        stateOrProvince:
+          type: string
+          description: State or province
+        street1:
+          type: string
+          description: Describes the street
+        street2:
+          type: string
+          description: Complementary street description
+
+    MediumCharacteristicExtended:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/MediumCharacteristic"
+      properties:
+        verified:
+          type: boolean
+          description: Verification status of contact medium.
+        contactCharacteristic:
+          type: array
+          items:
+            $ref: '#/components/schemas/Characteristic'
+
+    Error:
+      required:
+        - code
+        - reason
+      type: object
+      properties:
+        code:
+          type: string
+          description: Application relevant detail, defined in the API or a common
+            list.
+        reason:
+          type: string
+          description: Explanation of the reason for the error which can be shown
+            to a client user.
+        message:
+          type: string
+          description: More details and corrective actions related to the error which
+            can be shown to a client user.
+        status:
+          type: string
+          description: HTTP Error code extension
+        referenceError:
+          type: string
+          description: URI of documentation describing the error.
+          format: uri
+        '@baseType':
+          type: string
+          description: When sub-classing, this defines the super-class.
+        '@schemaLocation':
+          type: string
+          description: A URI to a JSON-Schema file that defines additional attributes
+            and relationships
+          format: uri
+        '@type':
+          type: string
+          description: When sub-classing, this defines the sub-class entity name.
+      description: Used when an API throws an Error, typically with a HTTP error response-code
+        (3xx, 4xx, 5xx)
+  # Security scheme definitions that can be used across the definition.
+  securitySchemes:
+    main_auth: # security definition name (you can name it as you want)
+      # the following options are specific to oauth2 type
+      type: oauth2 # authorization type, one of: oauth2, apiKey, http
+      flows:
+        implicit:
+          authorizationUrl: "https://example.com/api/oauth/dialog"
+          scopes:
+            "read:users": read users info
+            "write:users": modify or remove users
+    api_key: # security definition name (you can name it as you want)
+      type: apiKey
+      # The following options are specific to apiKey type
+      in: header # Where API key will be passed: header or query
+      name: api_key # API key parameter name

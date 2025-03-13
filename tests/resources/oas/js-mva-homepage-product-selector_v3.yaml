@@ -1,0 +1,1103 @@
+openapi: 3.0.2
+info:
+  version: "3.0.4" # Your API version
+  # It can be any string, but it is better to use semantic versioning: http://semver.org/
+  # Warning: OpenAPI requires the version to be a string, but without quotation marks YAML can recognize it as a number.
+
+  title: VFA007 Homepage Product Selector # Replace with your API title
+  # Keep it simple. Don't add "API" or version at the end of the string.
+
+  contact:
+    email: lara.silva1@vodafone.com # [Optional] Replace with your contact email
+
+  # Describe your API here, you can use GFM (https://guides.github.com/features/mastering-markdown) here
+  description:
+
+    # Introduction
+    OneApp Product Selector is a component we offer for markets to display all their products and services as well as their linked accounts products and services.
+
+
+    The component allows users to have visible unlimited number of products organised in a horizontal scroll and to avoid performance issues we should load only five products at the time.
+
+
+    When the user is on the fifth product and swipes then we load five more, and so on.
+
+
+    /productSelectorGroupItems groups products and services with the same name and status.
+
+externalDocs:
+  url: www.todo.com # External URL
+# A list of tags used by the definition with additional metadata.
+# The order of the tags can be used to reflect on their order by the parsing tools.
+tags:
+  - name: productSelectorItems
+
+servers:
+  - url: "http://itaap/homepageProductSelector/v3"
+
+security:
+  - main_auth: []
+  - bearerAuth: []
+
+paths:
+  /productSelectorItems: # path parameter in curly braces
+    get:
+      summary: Get product selector items
+      tags:
+        - productSelectorItems
+      operationId: getProductSelectorItems
+      parameters:
+
+        - name: vf-project
+          in: header
+          description: |
+            The project field used for routing.
+          x-example: oneapp
+          schema:
+            type: string
+
+        - name: channel-id
+          in: header
+          description: |
+            The project field used for routing.
+          x-example: itaap
+          schema:
+            type: string
+          required: true
+
+        - name: vf-country-code
+          in: header
+          description: >
+            The country-code field should be passed with the 2-letter OpCo
+            country code (e.g. DE, ES).
+          x-example: PT
+          schema:
+            type: string
+          required: true
+
+        - in: query
+          name: billingAccount.id
+          required: false
+          description: Billing account holding information related to products
+          schema:
+            type: string
+
+        - in: query
+          name: relatedParty.id
+          required: false
+          description: Party unique identifier
+          schema:
+            type: string
+        - in: query
+          name: relatedParty.role
+          required: false
+          description: Role played by party
+          schema:
+            type: string
+
+        - in: query
+          name: status
+          required: true
+          description: Filter by status
+          schema:
+            type: string
+
+        - in: query
+          name: isBundled
+          required: false
+          description: When filter by isBundled==false, retrieves all products by excluding the children of bundled products.
+          schema:
+            type: boolean
+            example: false
+
+
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/productSelectorItems'
+              examples:
+                Use_case_with_bundles:
+                  value:
+                    - id: 'p1'
+                      serviceId: 's1000'
+                      name: 'Superfast fiber'
+                      speed: '...'
+                      type: 'mobile_broadband'
+                      status: 'active'
+                      price: ''
+                      renewalDate: '2024-01-20T14:49:55.177Z'
+                      phoneNumber: '07928336715'
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: true
+                      activationDate: '2024-01-20T14:49:55.177Z'
+                      contractEndDate: '2025-05-05T10:57:00.000Z'
+                      description: 'Phils mobile plan'
+                      isBundle: false
+                      isBundled: false
+                      category:
+                        - id: 'c1'
+                          name: ' MOBILE_BROADBAND'
+                        - id: 'c2'
+                          name: 'LONGPRODUCTTERM'
+                    - id: 'p2'
+                      serviceId: 's1000'
+                      name: 'TV Net Voz'
+                      speed: '...'
+                      type: 'bundle'
+                      status: 'active'
+                      price: ''
+                      renewalDate: '2024-03-20T14:49:55.177Z'
+                      phoneNumber: '07928336123'
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: false
+                      activationDate: '2024-02-20T14:49:55.177Z'
+                      contractEndDate: '2025-05-05T10:57:00.000Z'
+                      description: 'Fixed Service'
+                      isBundle: true
+                      isBundled: false
+                      category:
+                        - id: 'c22'
+                          name: ''
+                      productRelationship:
+                        - relationshipType: 'bundled'
+                          product:
+                            id: 'p3'
+                            name: 'VBox Smart'
+                            type: 'tv'
+                        - relationshipType: 'bundled'
+                          product:
+                            id: 'p4'
+                            name: 'Internet 1GB / Upload 5GB'
+                            type: 'landline'
+                        - relationshipType: 'bundled'
+                          product:
+                            id: 'p5'
+                            name: 'Voz Fixa'
+                            type: 'voice'
+                    - id: 'p3'
+                      serviceId: 's1003'
+                      name: 'VBox Smart'
+                      speed: '...'
+                      type: 'isBundled'
+                      status: 'active'
+                      price: ''
+                      renewalDate: '2024-01-20T14:49:55.177Z'
+                      phoneNumber: ''
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: false
+                      activationDate: '2024-01-20T14:49:55.177Z'
+                      contractEndDate: '2025-05-05T10:57:00.000Z'
+                      description: 'Fixed Service'
+                      isBundle: false
+                      isBundled: true
+                      category:
+                        - id: 'c33'
+                          name: ''
+                    - id: 'p4'
+                      serviceId: 's1004'
+                      name: 'Internet 1GB / upload 5GB'
+                      speed: '...'
+                      type: 'isBundled'
+                      status: 'active'
+                      price: ''
+                      renewalDate: '2024-01-20T14:49:55.177Z'
+                      phoneNumber: ''
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: false
+                      activationDate: '2024-01-20T14:49:55.177Z'
+                      description: 'Fixed Service'
+                      isBundle: false
+                      category:
+                        - id: 'c44'
+                          name: ''
+                    - id: 'p5'
+                      serviceId: 's1005'
+                      name: 'Voz Fixa'
+                      speed: '...'
+                      type: 'isBundled'
+                      status: 'active'
+                      price: ''
+                      renewalDate: '2024-01-20T14:49:55.177Z'
+                      phoneNumber: ''
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: false
+                      activationDate: '2024-01-20T14:49:55.177Z'
+                      description: 'Fixed Service'
+                      isBundle: false
+                      isBundled: true
+                      category:
+                        - id: 'c44'
+                          name: ''
+                    - id: 'p6'
+                      serviceId: 's1000'
+                      name: 'Vodafone TV'
+                      speed: '...'
+                      type: 'bundle'
+                      status: 'active'
+                      price: ''
+                      renewalDate: '2024-03-20T14:49:55.177Z'
+                      phoneNumber: '07928336123'
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: false
+                      activationDate: '2024-02-20T14:49:55.177Z'
+                      description: 'Fixed Service'
+                      isBundle: true
+                      isBundled: false
+                      category:
+                        - id: 'c22'
+                          name: ''
+                      productRelationship:
+                        - relationshipType: 'bundled'
+                          product:
+                            id: 'p7'
+                            name: 'Vodafone tv'
+                            type: 'tv'
+
+                    - id: 'p7'
+                      serviceId: 's1005'
+                      name: 'Vodafone tv'
+                      speed: '...'
+                      type: 'isBundled'
+                      status: 'active'
+                      price: ''
+                      renewalDate: '2024-01-20T14:49:55.177Z'
+                      phoneNumber: ''
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: false
+                      activationDate: '2024-01-20T14:49:55.177Z'
+                      description: 'Fixed Service'
+                      isBundle: false
+                      isBundled: true
+                      category:
+                        - id: 'c44'
+                          name: ''
+
+                Use_case_without_bundles:
+                  value:
+                    - id: 'p100'
+                      serviceId: 's1000'
+                      name: 'Superfast fiber'
+                      speed: '...'
+                      type: 'mobile_broadband'
+                      status: 'suspended'
+                      price: ''
+                      renewalDate: '2024-01-20T14:49:55.177Z'
+                      phoneNumber: '07928336715'
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: true
+                      activationDate: '2024-01-20T14:49:55.177Z'
+                      description: '...'
+                      isBundle: false
+                      isBundled: false
+                      category:
+                        - id: 'c1'
+                          name: 'MOBILE_BROADBAND'
+                        - id: 'c2'
+                          name: 'LONGPRODUCTTERM'
+                    - id: 'p200'
+                      serviceId: 's1000'
+                      name: 'Phils mobile plan'
+                      speed: '...'
+                      type: 'mobile'
+                      status: 'active'
+                      price: ''
+                      renewalDate: '2024-01-20T14:49:55.177Z'
+                      phoneNumber: '07928336715'
+                      deviceCounter: 0
+                      isOneNumber: false
+                      hasUsage: true
+                      activationDate: '2024-01-20T14:49:55.177Z'
+                      description: 'Phils mobile plan'
+                      isBundle: false
+                      isBundled: false
+                      category:
+                        - id: 'c1'
+                          name: 'BROADBAND'
+                        - id: 'c2'
+                          name: 'LONGPRODUCTTERM'
+
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '405':
+          description: Method Not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /productSelectorItemDetails: # path parameter in curly braces
+    get:
+      summary: Get product selector items details
+      tags:
+        - productSelectorItems
+      operationId: getProductSelectorDetails
+      parameters:
+
+        - name: vf-project
+          in: header
+          description: |
+            The project field used for routing.
+          x-example: oneapp
+          schema:
+            type: string
+
+        - name: channel-id
+          in: header
+          description: |
+            The project field used for routing.
+          x-example: itaap
+          schema:
+            type: string
+          required: true
+
+        - name: vf-country-code
+          in: header
+          description: >
+            The country-code field should be passed with the 2-letter OpCo
+            country code (e.g. DE, ES).
+          x-example: PT
+          schema:
+            type: string
+          required: true
+
+        - in: query
+          name: serviceId
+          required: true
+          description: Unique identifier of your service
+          schema:
+            type: string
+
+        - in: query
+          name: productId
+          required: false
+          description: Unique identifier of your product
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/productSelectorItemDetails'
+              examples:
+                Use_case_with_unlimited_data:
+                  value:
+                    serviceId: 'S01'
+                    accumulatedUsageConsumption:
+                      - usageType: 'sms'
+                        isUnlimited: 'false'
+                        totalValue: 2500.0
+                        remainingValue: 2500.0
+                        usedValue: 0.0
+                        unit: 'sms'
+                        type: 'National'
+                      - usageType: 'voice'
+                        isUnlimited: 'false'
+                        validFor: 2		 
+                        totalValue: 20.0
+                        remainingValue: 20.0
+                        usedValue: 0.0
+                        unit: 'minutes'
+                        type: 'National'
+                      - usageType: 'data'
+                        isUnlimited: 'true'
+                        usedValue: 5
+                        unit: 'GB'
+                        type: 'National'
+                    usageConsumption:
+                      - productId: 'P01-A'
+                        usageSummary:
+                          - usageType: 'sms'
+                            isUnlimited: false
+                            validFor: 2
+                            totalValue: 2500.0
+                            remainingValue: 2500.0
+                            usedValue: 0.0
+                            unit: 'sms'
+                            type: 'National'
+                          - usageType: 'voice'
+                            isUnlimited: false
+                            validFor: 2
+                            totalValue: 20.0
+                            remainingValue: 20.0
+                            usedValue: 0.0
+                            unit: 'minutes'
+                            type: 'National'
+                          - usageType: 'data'
+                            isUnlimited: true
+                            usedValue: 5
+                            unit: 'GB'
+                            type: 'National'
+                      - productId: 'P02-TF'
+                        usageSummary:
+                          - usageType: 'data'
+                            isUnlimited: false
+                            validFor: 3
+                            totalValue: 10
+                            remainingValue: 10
+                            usedValue: 0
+                            unit: 'GB'
+                            type: 'National'
+                Use_case_without_unlimited_data:
+                  value:
+                    serviceId: 'S01'
+                    accumulatedUsageConsumption:
+                      - usageType: 'sms'
+                        isUnlimited: 'false'
+                        validFor: 2
+                        totalValue: 2500.0
+                        remainingValue: 2400.0
+                        usedValue: 100.0
+                        unit: 'sms'
+                        type: 'National'
+                      - usageType: 'voice'
+                        isUnlimited: 'false'
+                        validFor: 2
+                        totalValue: 20.0
+                        remainingValue: 20.0
+                        usedValue: 0.0
+                        unit: 'minutes'
+                        type: 'National'
+                      - usageType: 'data'
+                        isUnlimited: 'false'
+                        validFor: 2
+                        totalValue: 20.53
+                        remainingValue: 20.53
+                        usedValue: 0.0
+                        unit: 'GB'
+                        type: 'National'
+                    usageConsumption:
+                      - productId: 'P01'
+                        usageSummary:
+                          - usageType: 'sms'
+                            isUnlimited: false
+                            validFor: ''
+                            totalValue: 2500.0
+                            remainingValue: 2400.0
+                            usedValue: 100.0
+                            unit: 'sms'
+                            type: 'National'
+                          - usageType: 'voice'
+                            isUnlimited: false
+                            validFor: ''
+                            totalValue: 20.0
+                            remainingValue: 20.0
+                            usedValue: 0.0
+                            type: 'National'
+                            unit: 'minutes'
+                          - usageType: 'data'
+                            isUnlimited: false
+                            totalValue: 20.0
+                            remainingValue: 20.0
+                            usedValue: 0.0
+                            unit: 'GB'
+                            type: 'National'
+                      - productId: 'P02'
+                        usageSummary:
+                          - usageType: 'data'
+                            isUnlimited: false
+                            validFor: 2		 
+                            totalValue: 0.53
+                            remainingValue: 0.53
+                            usedValue: 0.0
+                            unit: 'GB'
+                            type: 'National'
+                Use_case_mixed_data(limited & unlimited data, money type):
+                  value:
+                    serviceId: 'S01'
+                    accumulatedUsageConsumption:
+                      - usageType: 'sms'
+                        isUnlimited: 'false'
+                        validFor: 2	 
+                        totalValue: 2567.0
+                        remainingValue: 2467.0
+                        usedValue: 100.0
+                        unit: 'sms'
+                        type: 'National'
+                      - usageType: 'voice'
+                        isUnlimited: 'false'
+                        validFor: 2
+                        totalValue: 20.0
+                        remainingValue: 20.0
+                        usedValue: 0.0
+                        unit: 'minutes'
+                        type: 'National'
+                      - usageType: 'data'
+                        isUnlimited: 'true'
+                        validFor: 2
+                        usedValue: 5.5
+                        unit: 'GB'
+                        type: 'National'
+                      - usageType: 'money'
+                        isUnlimited: false
+                        validFor: 2	 
+                        totalValue: 25.0
+                        remainingValue: 25.0
+                        usedValue: 0.0
+                        unit: 'EUR'
+                        type: 'National'
+                    usageConsumption:
+                      - productId: 'P01'
+                        usageSummary:
+                          - usageType: 'sms'
+                            isUnlimited: false
+                            validFor: ''
+                            totalValue: 2500.0
+                            remainingValue: 2400.0
+                            usedValue: 100.0
+                            unit: 'sms'
+                            type: 'National'
+                          - usageType: 'voice'
+                            isUnlimited: false
+                            validFor: ''
+                            totalValue: 20.0
+                            remainingValue: 20.0
+                            usedValue: 0.0
+                            unit: 'minutes'
+                            type: 'National'
+                          - usageType: 'data'
+                            isUnlimited: true
+                            usedValue: 5.0
+                            unit: 'GB'
+                            type: 'National'
+                      - productId: 'P02'
+                        usageSummary:
+                          - usageType: 'sms'
+                            isUnlimited: false
+                            validFor: ''
+                            totalValue: 67.0
+                            remainingValue: 67.0
+                            usedValue: 0.0
+                            unit: 'sms'
+                            type: 'National'
+                          - usageType: 'data'
+                            isUnlimited: false
+                            totalValue: 0.50
+                            remainingValue: 0.0
+                            usedValue: 0.50
+                            unit: 'GB'
+                            type: 'National'
+                      - productId: 'P03'
+                        usageSummary:
+                          - usageType: 'money'
+                            validFor: ''
+                            isUnlimited: false
+                            totalValue: 25.0
+                            usedValue: 0.0
+                            remainingValue: 25.0
+                            unit: 'EUR'
+                            type: 'Extra'
+
+
+
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '405':
+          description: Method Not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /productSelectorGroupItems: # path parameter in curly braces
+    get:
+      summary: Get product selector items
+      tags:
+        - productSelectorGroupItems
+      operationId: getproductSelectorGroupItems
+      parameters:
+
+        - name: vf-project
+          in: header
+          description: |
+            The project field used for routing.
+          x-example: oneapp
+          schema:
+            type: string
+
+        - name: channel-id
+          in: header
+          description: |
+            The project field used for routing.
+          x-example: itaap
+          schema:
+            type: string
+          required: true
+
+        - name: vf-country-code
+          in: header
+          description: >
+            The country-code field should be passed with the 2-letter OpCo
+            country code (e.g. DE, ES).
+          x-example: PT
+          schema:
+            type: string
+          required: true
+
+        - in: query
+          name: relatedParty.id
+          description: Party unique identifier
+          required: true
+          schema:
+            type: string
+
+        - in: query
+          name: relatedParty.role
+          required: true
+          description: Role played by party
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/productSelectorGroupItems'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '405':
+          description: Method Not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+# An object to hold reusable parts that can be used across the definition
+components:
+  schemas:
+    usageSummary:
+      type: array
+      items:
+        type: object
+        required:
+          - "usageType"
+        properties:
+          usageType:
+            type: string
+            enum:
+              - voice
+              - sms
+              - data
+              - money
+              - mms
+              - roaming_data
+              - roaming_voice
+              - roaming_sms
+              - voice_sms
+            example: voice
+          "type":
+            type: string
+          isUnlimited:
+            type: boolean
+            default: false
+          validFor:
+            type: number
+            description: 'Expires in a number of days'
+          totalValue:
+            type: number
+            format: float
+          remainingValue:
+            type: number
+            format: float
+          usedValue:
+            type: number
+            format: float
+          unit:
+            type: string
+            example: minutes
+
+    accumulatedUsageConsumption:
+      type: object
+      required:
+        - "usageType"
+      properties:
+        usageType:
+          type: string
+          enum:
+            - voice
+            - sms
+            - data
+            - money
+            - mms
+            - roaming_data
+            - roaming_voice
+            - roaming_sms
+            - voice_sms
+          example: voice
+        "type":
+          type: string
+        isUnlimited:
+          type: boolean
+          default: false
+        validFor:
+          type: number
+          description: 'Expires in a number of days'
+        totalValue:
+          type: number
+          format: float
+        remainingValue:
+          type: number
+          format: float
+        usedValue:
+          type: number
+          format: float
+        unit:
+          type: string
+        validPeriod:
+          $ref: '#/components/schemas/TimePeriod'
+
+    productSelectorItemDetails:
+      type: object
+      properties:
+        serviceId:
+          type: string
+        accumulatedUsageConsumption:
+          type: array
+          items:
+            $ref: '#/components/schemas/accumulatedUsageConsumption'
+        usageConsumption:
+          type: array
+          items:
+            properties:
+              productId:
+                type: string
+              usageSummary:
+                $ref: '#/components/schemas/usageSummary'
+
+
+    productSelectorItems:
+      type: array
+      items:
+        type: object
+        required:
+          - "id"
+          - "serviceId"
+          - "type"
+          - "name"
+          - "hasUsage"
+        properties:
+          id:
+            type: string
+          serviceId:
+            type: string
+          name:
+            type: string
+          speed:
+            type: string
+          type:
+            type: string
+            enum:
+              - mobile_broadband
+              - roaming
+              - insurance
+              - financing
+              - mobile
+              - securenet
+              - onenumber
+              - tv
+              - bundle
+              - addon
+              - fixed_voice
+              - broadband
+          status:
+            type: string
+          description:
+            type: string
+          price:
+            type: string
+          renewalDate:
+            type: string
+          phoneNumber:
+            type: string
+          activationDate:
+            type: string
+            format: date-time
+          contractEndDate:
+            type: string   
+            format: date-time         
+          deviceCounter:
+            type: integer
+          isOneNumber:
+            type: boolean
+            default: false
+          hasUsage:
+            type: boolean
+            default: false
+          category:
+            type: array
+            items:
+              type: object
+              required:
+                - "id"
+                - "name"
+              properties:
+                name:
+                  type: string
+                id:
+                  type: string
+          isBundle:
+            type: boolean
+            default: false
+          isBundled:
+            type: boolean
+            default: false
+            description: Identifies if the product is part of another product(bundle). This product is referenced in the parent product with a relation ship type bundled.
+          productRelationship:
+            type: array
+            items:
+              $ref: '#/components/schemas/productRelationship'
+          productPrice:
+            type: array
+            items:
+              $ref: '#/components/schemas/productPrice'
+            
+              
+              
+              
+    productPrice:
+      type: object
+      properties:
+        priceType:
+          type: string
+        recurringChargePeriod:
+          type: string
+        price:
+          $ref: '#/components/schemas/price'
+          
+    price: 
+      type: object
+      properties:
+        dutyFreeAmount: 
+          $ref: '#/components/schemas/money'
+        taxIncludedAmount: 
+          $ref: '#/components/schemas/money'
+          
+    money: 
+      type: object
+      properties: 
+        value: 
+          type: number
+          format: float
+        unit:
+          type: string
+
+    productRelationship:
+      type: object
+      required:
+        - product
+      properties:
+        relationshipType:
+          type: string
+        product:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            type:
+              type: string
+              enum:
+                - mobile_broadband
+                - roaming
+                - insurance
+                - financing
+                - mobile
+                - securenet
+                - onenumber
+                - tv
+                - bundle
+                - addon
+                - fixed_voice
+                - broadband
+
+
+    productSelectorGroupItems:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          type:
+            type: string
+            minLength: 1
+            enum:
+              - mobile_broadband
+              - roaming
+              - insurance
+              - financing
+              - mobile
+              - securenet
+              - onenumber
+              - tv
+              - bundle
+              - addon
+              - fixed_voice
+              - broadband
+          status:
+            type: string
+          numberOfUsers:
+            type: integer
+    TimePeriod:
+      type: object
+      description: An enddate time.
+      properties:
+        endDateTime:
+          example: '1985-04-12T23:20:50.52Z'
+          type: string
+          format: date-time
+          description: End of the time period, using IETC-RFC-3339 format
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Application relevant detail, defined in the API or a common
+            list.
+        reason:
+          type: string
+          description: Explanation of the reason for the error which can be shown
+            to a client user.
+        message:
+          type: string
+          description: More details and corrective actions related to the error which
+            can be shown to a client user.
+        status:
+          type: string
+          description: HTTP Error code extension
+        referenceError:
+          type: string
+          description: URI of documentation describing the error.
+          format: uri
+        '@baseType':
+          type: string
+          description: When sub-classing, this defines the super-class.
+        '@schemaLocation':
+          type: string
+          description: A URI to a JSON-Schema file that defines additional attributes
+            and relationships
+          format: uri
+        '@type':
+          type: string
+          description: When sub-classing, this defines the sub-class entity name.
+      description: Used when an API throws an Error, typically with a HTTP error response-code
+        (3xx, 4xx, 5xx)
+
+  # Security scheme definitions that can be used across the definition.
+  securitySchemes:
+    main_auth: # security definition name (you can name it as you want)
+      # the following options are specific to oauth2 type
+      type: oauth2 # authorization type, one of: oauth2, apiKey, http
+      flows:
+        implicit:
+          authorizationUrl: "http://example.com/api/oauth/dialog"
+          scopes:
+            "read:users": read users info
+            "write:users": modify or remove users
+    bearerAuth:            # arbitrary name for the security scheme
+      type: http
+      scheme: bearer
+      bearerFormat: JWT    # optional, arbitrary value for documentation purposes 

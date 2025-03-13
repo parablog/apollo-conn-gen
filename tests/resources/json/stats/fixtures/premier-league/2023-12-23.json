@@ -1,0 +1,46 @@
+{
+  "fixtures": [
+    {
+      "date": "2023-12-23",
+      "ko_time": "17:30",
+      "home_team": "Liverpool",
+      "away_team": "Arsenal",
+      "venue": "Anfield"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Fulham",
+      "away_team": "Burnley",
+      "venue": "Craven Cottage"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Luton",
+      "away_team": "Newcastle",
+      "venue": "Kenilworth Road"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Nottm Forest",
+      "away_team": "AFC Bournemouth",
+      "venue": "The City Ground"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Tottenham Hotspur",
+      "away_team": "Everton",
+      "venue": "Tottenham Hotspur Stadium"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "12:30",
+      "home_team": "West Ham",
+      "away_team": "Man Utd",
+      "venue": "London Stadium"
+    }
+  ]
+}

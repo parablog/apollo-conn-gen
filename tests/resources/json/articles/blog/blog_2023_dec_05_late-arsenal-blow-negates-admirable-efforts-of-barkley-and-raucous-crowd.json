@@ -1,0 +1,455 @@
+{
+  "response": {
+    "status": "ok",
+    "userTier": "developer",
+    "total": 1,
+    "content": {
+      "id": "football/blog/2023/dec/05/late-arsenal-blow-negates-admirable-efforts-of-barkley-and-raucous-crowd",
+      "type": "article",
+      "sectionId": "football",
+      "sectionName": "Football",
+      "webPublicationDate": "2023-12-05T23:56:18Z",
+      "webTitle": "Rice embraces mayhem to douse fire of Barkley and raucous Luton crowd | Nick Ames",
+      "webUrl": "https://www.theguardian.com/football/blog/2023/dec/05/late-arsenal-blow-negates-admirable-efforts-of-barkley-and-raucous-crowd",
+      "apiUrl": "https://content.guardianapis.com/football/blog/2023/dec/05/late-arsenal-blow-negates-admirable-efforts-of-barkley-and-raucous-crowd",
+      "fields": {
+        "headline": "Rice embraces mayhem to douse fire of Barkley and raucous Luton crowd",
+        "standfirst": "<p>Luton pushed the league leaders Arsenal to their limits, but this was the sort of white-knuckle victory that wins titles</p>",
+        "trailText": "Luton pushed the league leaders Arsenal to their limits, but this was the sort of white-knuckle victory that wins titles",
+        "byline": "Nick Ames at Kenilworth Road",
+        "main": "<figure class=\"element element-image element--showcase\" data-media-id=\"fe58e5d2036e4033f8d05af631d525620fcc5c3e\"> <img src=\"https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/1000.jpg\" alt=\"Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh m inute of added time to finish off Luton.\" width=\"1000\" height=\"600\" class=\"gu-image\" /> <figcaption> <span class=\"element-image__caption\">Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh minute of added time to finish off Luton.</span> <span class=\"element-image__credit\">Photograph: Tom Jenkins/The Guardian</span> </figcaption> </figure>",
+        "body": "<p>Perhaps this topsy-turvy old venue, where the more sanitised precepts of the Premier League football experience simply do not apply, was always going to be the place where Arsenal surrendered themselves to the rollercoaster. Stability and control have been two of the buzzwords around a run that has traded some dazzle for durability; here, performing in a snapping chill to a snarling audience, they wheeled away with the kind of <a href=\"https://www.theguardian.com/football/2023/dec/05/luton-arsenal-premier-league-match-report\" title=\"\">white-knuckle victory</a> that wins titles.</p> <p>Declan Rice was purchased to add precisely the composure Arsenal had lacked during their doomed title chase last spring. This time he brought the chaos, lighting the touchpaper with the final action of added time for a prolonged blur of limbs, wild‑eyed faces and tracksuited figures hurtling ecstatically down the touchline. With the victory confirmed, David Raya – at fault for Luton’s second and third goals, and seemingly destined to be the night’s villain – embraced his teammate with added meaning.</p> <aside class=\"element element-rich-link element--thumbnail\"> <p> <span>Related: </span><a href=\"https://www.theguardian.com/football/2023/dec/05/luton-arsenal-premier-league-match-report\">Rice’s injury-time header gives Arsenal win over Luton in seven-goal thriller</a> </p> </aside>  <p>It took that much to silence this place; to freeze three and a half of its sides into disbelief. At the outset it was tempting to wonder how Mikel Arteta, who has form for tailoring pre-match methods in anticipation of a particularly fiendish away atmosphere, had primed his players for Luton. Before a trip to Anfield two seasons ago he famously arranged for You’ll Never Walk Alone to blare through speakers while a nonplussed group of players trained; the best preparation this time might have been to hire a few hundred extras to scream in their faces. There is no other ground in the division whose public are so actively involved. At Luton, the fans hug the touchline and make the notion of an extra man seem real.</p> <p>So it was all the more astounding that Arsenal, their ideas seemingly dwindling with the clock ticking down, contrived a move of match‑winning clarity. Rice and Martin Ødegaard knew exactly what each other would do next when Oleksandr Zinchenko fed the Norwegian. “I shifted my marker one way and then went off his back shoulder,” Rice offered afterwards by way of explanation. Two of Arsenal’s talismen had managed, through the din of orange noise, to stay on the right frequency.</p> <p>On the balance of chances it was deserved but how hard this felt on Luton and, in particular, Ross Barkley. There was no better player on the pitch than Barkley, from first minute to last: this was the blend of personality, flair and composure that marked his early career, and probably his most complete performance in well over two years.</p>    <p>As he turns 30, he cannot hold much expectation of returning to a club of Arsenal’s level but he looked perfectly at home in this company, happy to take on Ødegaard and beat him, content in his ability to slalom past three players and pick the sensible pass, confident enough to take on the run and shot that skidded under Raya and briefly threatened the shock of the season.</p> <p>“He’s allowed us to evolve and change,” Rob Edwards said of a natural footballer who has given his team a technical conscience. What Barkley’s colleagues lacked in finesse they compensated for in rugged, intelligent physicality. No challenge was shirked; some of them were on the borderline of legality, Gabriel Martinelli discovering that in particular.</p> <p>The towering headers from Gabriel Osho and Elijah Adebayo that dialled up the contest’s drama both stemmed from sheer desire to ensure the ball was theirs.</p> <p>But this version of Arteta’s Arsenal cannot be accused of lacking heart. They were led gladiatorially from the front by Gabriel Jesus, who was happy to embrace a running spat with the home crowd and made his point having headed in emphatically before half-time; there were signs that Kai Havertz, so maligned, has worked through the moments of doubt to serve a vital function. The goal that cancelled out Barkley’s thrilling intervention owed plenty to instinct and understanding that are finally making themselves clear regularly.</p> <p>“Conference champions, you’ll never sing that,” came the self‑deprecating chant from Luton’s support, audibly still pinching themselves at their rise back through the leagues, early in the first half. It would certainly be some turn-up if Arsenal ever had to; thanks to Rice’s willingness to embrace the mayhem, though, the chances of securing a very different kind of title improved by another potentially crucial notch.</p>",
+        "newspaperPageNumber": "39",
+        "wordcount": "722",
+        "firstPublicationDate": "2023-12-05T23:56:18Z",
+        "isInappropriateForSponsorship": "false",
+        "isPremoderated": "false",
+        "lastModified": "2023-12-06T17:07:13Z",
+        "newspaperEditionDate": "2023-12-06T00:00:00Z",
+        "productionOffice": "UK",
+        "publication": "The Guardian",
+        "shortUrl": "https://www.theguardian.com/p/pft7b",
+        "shouldHideAdverts": "false",
+        "showInRelatedContent": "true",
+        "thumbnail": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/500.jpg",
+        "legallySensitive": "false",
+        "lang": "en",
+        "isLive": "true",
+        "bodyText": "Perhaps this topsy-turvy old venue, where the more sanitised precepts of the Premier League football experience simply do not apply, was always going to be the place where Arsenal surrendered themselves to the rollercoaster. Stability and control have been two of the buzzwords around a run that has traded some dazzle for durability; here, performing in a snapping chill to a snarling audience, they wheeled away with the kind of white-knuckle victory that wins titles. Declan Rice was purchased to add precisely the composure Arsenal had lacked during their doomed title chase last spring. This time he brought the chaos, lighting the touchpaper with the final action of added time for a prolonged blur of limbs, wild‑eyed faces and tracksuited figures hurtling ecstatically down the touchline. With the victory confirmed, David Raya – at fault for Luton’s second and third goals, and seemingly destined to be the night’s villain – embraced his teammate with added meaning. It took that much to silence this place; to freeze three and a half of its sides into disbelief. At the outset it was tempting to wonder how Mikel Arteta, who has form for tailoring pre-match methods in anticipation of a particularly fiendish away atmosphere, had primed his players for Luton. Before a trip to Anfield two seasons ago he famously arranged for You’ll Never Walk Alone to blare through speakers while a nonplussed group of players trained; the best preparation this time might have been to hire a few hundred extras to scream in their faces. There is no other ground in the division whose public are so actively involved. At Luton, the fans hug the touchline and make the notion of an extra man seem real. So it was all the more astounding that Arsenal, their ideas seemingly dwindling with the clock ticking down, contrived a move of match‑winning clarity. Rice and Martin Ødegaard knew exactly what each other would do next when Oleksandr Zinchenko fed the Norwegian. “I shifted my marker one way and then went off his back shoulder,” Rice offered afterwards by way of explanation. Two of Arsenal’s talismen had managed, through the din of orange noise, to stay on the right frequency. On the balance of chances it was deserved but how hard this felt on Luton and, in particular, Ross Barkley. There was no better player on the pitch than Barkley, from first minute to last: this was the blend of personality, flair and composure that marked his early career, and probably his most complete performance in well over two years. As he turns 30, he cannot hold much expectation of returning to a club of Arsenal’s level but he looked perfectly at home in this company, happy to take on Ødegaard and beat him, content in his ability to slalom past three players and pick the sensible pass, confident enough to take on the run and shot that skidded under Raya and briefly threatened the shock of the season. “He’s allowed us to evolve and change,” Rob Edwards said of a natural footballer who has given his team a technical conscience. What Barkley’s colleagues lacked in finesse they compensated for in rugged, intelligent physicality. No challenge was shirked; some of them were on the borderline of legality, Gabriel Martinelli discovering that in particular. The towering headers from Gabriel Osho and Elijah Adebayo that dialled up the contest’s drama both stemmed from sheer desire to ensure the ball was theirs. But this version of Arteta’s Arsenal cannot be accused of lacking heart. They were led gladiatorially from the front by Gabriel Jesus, who was happy to embrace a running spat with the home crowd and made his point having headed in emphatically before half-time; there were signs that Kai Havertz, so maligned, has worked through the moments of doubt to serve a vital function. The goal that cancelled out Barkley’s thrilling intervention owed plenty to instinct and understanding that are finally making themselves clear regularly. “Conference champions, you’ll never sing that,” came the self‑deprecating chant from Luton’s support, audibly still pinching themselves at their rise back through the leagues, early in the first half. It would certainly be some turn-up if Arsenal ever had to; thanks to Rice’s willingness to embrace the mayhem, though, the chances of securing a very different kind of title improved by another potentially crucial notch.",
+        "charCount": "4360",
+        "shouldHideReaderRevenue": "false",
+        "showAffiliateLinks": "false",
+        "bylineHtml": "<a href=\"profile/nick-ames\">Nick Ames</a> at Kenilworth Road",
+        "showTableOfContents": "false"
+      },
+      "tags": [
+        {
+          "id": "football/arsenal",
+          "type": "keyword",
+          "sectionId": "football",
+          "sectionName": "Football",
+          "webTitle": "Arsenal",
+          "webUrl": "https://www.theguardian.com/football/arsenal",
+          "apiUrl": "https://content.guardianapis.com/football/arsenal",
+          "references": [
+            {
+              "id": "esa-football-team//football/team/1",
+              "type": "esa-football-team"
+            },
+            {
+              "id": "opta-football-team/3",
+              "type": "opta-football-team"
+            },
+            {
+              "id": "pa-football-team/1006",
+              "type": "pa-football-team"
+            }
+          ],
+          "description": "Read the latest Arsenal news, transfer rumours, match reports, fixtures and live scores from the Guardian"
+        },
+        {
+          "id": "football/lutontown",
+          "type": "keyword",
+          "sectionId": "football",
+          "sectionName": "Football",
+          "webTitle": "Luton Town",
+          "webUrl": "https://www.theguardian.com/football/lutontown",
+          "apiUrl": "https://content.guardianapis.com/football/lutontown",
+          "references": [
+            {
+              "id": "esa-football-team//football/team/30",
+              "type": "esa-football-team"
+            },
+            {
+              "id": "opta-football-team/102",
+              "type": "opta-football-team"
+            },
+            {
+              "id": "pa-football-team/10",
+              "type": "pa-football-team"
+            }
+          ]
+        },
+        {
+          "id": "football/football",
+          "type": "keyword",
+          "sectionId": "football",
+          "sectionName": "Football",
+          "webTitle": "Football",
+          "webUrl": "https://www.theguardian.com/football/football",
+          "apiUrl": "https://content.guardianapis.com/football/football",
+          "references": []
+        },
+        {
+          "id": "campaign/email/the-fiver",
+          "type": "campaign",
+          "webTitle": "Football Daily (daily football newsletter signup)",
+          "webUrl": "https://www.theguardian.com/campaign/email/the-fiver",
+          "apiUrl": "https://content.guardianapis.com/campaign/email/the-fiver",
+          "references": [],
+          "campaignInformationType": "email"
+        },
+        {
+          "id": "sport/sport",
+          "type": "keyword",
+          "sectionId": "sport",
+          "sectionName": "Sport",
+          "webTitle": "Sport",
+          "webUrl": "https://www.theguardian.com/sport/sport",
+          "apiUrl": "https://content.guardianapis.com/sport/sport",
+          "references": []
+        },
+        {
+          "id": "sport/blog",
+          "type": "blog",
+          "sectionId": "sport",
+          "sectionName": "Sport",
+          "webTitle": "Sportblog",
+          "webUrl": "https://www.theguardian.com/sport/blog",
+          "apiUrl": "https://content.guardianapis.com/sport/blog",
+          "references": [],
+          "description": "The Guardian's blog on football, tennis, cricket and the latest sports stories"
+        },
+        {
+          "id": "type/article",
+          "type": "type",
+          "webTitle": "Article",
+          "webUrl": "https://www.theguardian.com/articles",
+          "apiUrl": "https://content.guardianapis.com/type/article",
+          "references": []
+        },
+        {
+          "id": "tone/features",
+          "type": "tone",
+          "webTitle": "Features",
+          "webUrl": "https://www.theguardian.com/tone/features",
+          "apiUrl": "https://content.guardianapis.com/tone/features",
+          "references": []
+        },
+        {
+          "id": "profile/nick-ames",
+          "type": "contributor",
+          "webTitle": "Nick Ames",
+          "webUrl": "https://www.theguardian.com/profile/nick-ames",
+          "apiUrl": "https://content.guardianapis.com/profile/nick-ames",
+          "references": [],
+          "bio": "<p>Nick Ames&nbsp;is the Guardian's European sport correspondent</p>",
+          "bylineImageUrl": "https://uploads.guim.co.uk/2022/11/21/Nick_Ames.jpg",
+          "bylineLargeImageUrl": "https://uploads.guim.co.uk/2022/11/21/Nick_Ames.png",
+          "firstName": "Nick ",
+          "lastName": "Ames",
+          "twitterHandle": "NickAmes82"
+        },
+        {
+          "id": "publication/theguardian",
+          "type": "publication",
+          "sectionId": "theguardian",
+          "sectionName": "From the Guardian",
+          "webTitle": "The Guardian",
+          "webUrl": "https://www.theguardian.com/theguardian/all",
+          "apiUrl": "https://content.guardianapis.com/publication/theguardian",
+          "references": [],
+          "description": "All the latest from the world's leading liberal voice."
+        },
+        {
+          "id": "theguardian/sport",
+          "type": "newspaper-book",
+          "sectionId": "sport",
+          "sectionName": "Sport",
+          "webTitle": "Sport",
+          "webUrl": "https://www.theguardian.com/theguardian/sport",
+          "apiUrl": "https://content.guardianapis.com/theguardian/sport",
+          "references": []
+        },
+        {
+          "id": "theguardian/sport/news",
+          "type": "newspaper-book-section",
+          "sectionId": "sport",
+          "sectionName": "Sport",
+          "webTitle": "News & features",
+          "webUrl": "https://www.theguardian.com/theguardian/sport/news",
+          "apiUrl": "https://content.guardianapis.com/theguardian/sport/news",
+          "references": []
+        },
+        {
+          "id": "tracking/commissioningdesk/uk-sport",
+          "type": "tracking",
+          "webTitle": "UK Sport",
+          "webUrl": "https://www.theguardian.com/tracking/commissioningdesk/uk-sport",
+          "apiUrl": "https://content.guardianapis.com/tracking/commissioningdesk/uk-sport",
+          "references": []
+        }
+      ],
+      "elements": [
+        {
+          "id": "fe58e5d2036e4033f8d05af631d525620fcc5c3e",
+          "relation": "main",
+          "type": "image",
+          "assets": [
+            {
+              "type": "image",
+              "mimeType": "image/jpeg",
+              "file": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/1000.jpg",
+              "typeData": {
+                "altText": "Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh m inute of added time to finish off Luton.",
+                "caption": "Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh minute of added time to finish off Luton.",
+                "credit": "Photograph: Tom Jenkins/The Guardian",
+                "photographer": "Tom Jenkins",
+                "source": "The Guardian",
+                "width": "1000",
+                "height": "600",
+                "secureFile": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/1000.jpg",
+                "displayCredit": "true",
+                "role": "showcase",
+                "mediaId": "fe58e5d2036e4033f8d05af631d525620fcc5c3e",
+                "imageType": "Photograph"
+              }
+            },
+            {
+              "type": "image",
+              "mimeType": "image/jpeg",
+              "file": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/500.jpg",
+              "typeData": {
+                "altText": "Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh m inute of added time to finish off Luton.",
+                "caption": "Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh minute of added time to finish off Luton.",
+                "credit": "Photograph: Tom Jenkins/The Guardian",
+                "photographer": "Tom Jenkins",
+                "source": "The Guardian",
+                "width": "500",
+                "height": "300",
+                "secureFile": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/500.jpg",
+                "displayCredit": "true",
+                "role": "showcase",
+                "mediaId": "fe58e5d2036e4033f8d05af631d525620fcc5c3e",
+                "imageType": "Photograph"
+              }
+            },
+            {
+              "type": "image",
+              "mimeType": "image/jpeg",
+              "file": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/140.jpg",
+              "typeData": {
+                "altText": "Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh m inute of added time to finish off Luton.",
+                "caption": "Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh minute of added time to finish off Luton.",
+                "credit": "Photograph: Tom Jenkins/The Guardian",
+                "photographer": "Tom Jenkins",
+                "source": "The Guardian",
+                "width": "140",
+                "height": "84",
+                "secureFile": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/140.jpg",
+                "displayCredit": "true",
+                "role": "showcase",
+                "mediaId": "fe58e5d2036e4033f8d05af631d525620fcc5c3e",
+                "imageType": "Photograph"
+              }
+            }
+          ]
+        },
+        {
+          "id": "fe58e5d2036e4033f8d05af631d525620fcc5c3e",
+          "relation": "thumbnail",
+          "type": "image",
+          "assets": [
+            {
+              "type": "image",
+              "file": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/500.jpg",
+              "typeData": {
+                "altText": "Arsenal's Declan Rice is mobbed by his jubilant teammates after scoring the winner deep in added time",
+                "credit": "Photograph: Tom Jenkins/The Guardian",
+                "photographer": "Tom Jenkins",
+                "source": "The Guardian",
+                "width": "500",
+                "height": "300",
+                "secureFile": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/500.jpg",
+                "displayCredit": "true",
+                "mediaId": "fe58e5d2036e4033f8d05af631d525620fcc5c3e",
+                "imageType": "Photograph"
+              }
+            }
+          ]
+        },
+        {
+          "id": "_no_ids",
+          "relation": "body",
+          "type": "embed",
+          "assets": [
+            {
+              "type": "embed",
+              "file": "https://www.theguardian.com/football/2023/dec/05/luton-arsenal-premier-league-match-report",
+              "typeData": {
+                "embedType": "rich-link",
+                "linkText": "Rice’s injury-time header gives Arsenal win over Luton in seven-goal thriller",
+                "linkPrefix": "Related: "
+              }
+            }
+          ]
+        }
+      ],
+      "references": [
+        {
+          "id": "pa-football-team/10",
+          "type": "pa-football-team"
+        },
+        {
+          "id": "esa-football-team//football/team/1",
+          "type": "esa-football-team"
+        },
+        {
+          "id": "esa-football-team//football/team/30",
+          "type": "esa-football-team"
+        },
+        {
+          "id": "opta-football-team/102",
+          "type": "opta-football-team"
+        },
+        {
+          "id": "pa-football-team/1006",
+          "type": "pa-football-team"
+        },
+        {
+          "id": "opta-football-team/3",
+          "type": "opta-football-team"
+        }
+      ],
+      "blocks": {
+        "main": {
+          "id": "656fb7698f087d984051e13c",
+          "bodyHtml": "<figure class=\"element element-image element--showcase\" data-media-id=\"fe58e5d2036e4033f8d05af631d525620fcc5c3e\"> <img src=\"https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/1000.jpg\" alt=\"Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh m inute of added time to finish off Luton.\" width=\"1000\" height=\"600\" class=\"gu-image\" /> <figcaption> <span class=\"element-image__caption\">Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh minute of added time to finish off Luton.</span> <span class=\"element-image__credit\">Photograph: Tom Jenkins/The Guardian</span> </figcaption> </figure>",
+          "bodyTextSummary": "",
+          "attributes": {},
+          "published": true,
+          "createdDate": "2023-12-05T23:56:18Z",
+          "firstPublishedDate": "2023-12-06T00:04:22Z",
+          "publishedDate": "2023-12-06T00:12:23Z",
+          "lastModifiedDate": "2023-12-06T00:10:57Z",
+          "contributors": [],
+          "elements": [
+            {
+              "type": "image",
+              "assets": [
+                {
+                  "type": "image",
+                  "mimeType": "image/jpeg",
+                  "file": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/1000.jpg",
+                  "typeData": {
+                    "aspectRatio": "5:3",
+                    "width": 1000,
+                    "height": 600
+                  }
+                },
+                {
+                  "type": "image",
+                  "mimeType": "image/jpeg",
+                  "file": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/500.jpg",
+                  "typeData": {
+                    "aspectRatio": "5:3",
+                    "width": 500,
+                    "height": 300
+                  }
+                },
+                {
+                  "type": "image",
+                  "mimeType": "image/jpeg",
+                  "file": "https://media.guim.co.uk/fe58e5d2036e4033f8d05af631d525620fcc5c3e/0_31_7710_4626/140.jpg",
+                  "typeData": {
+                    "aspectRatio": "5:3",
+                    "width": 140,
+                    "height": 84
+                  }
+                }
+              ],
+              "imageTypeData": {
+                "caption": "Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh minute of added time to finish off Luton.",
+                "displayCredit": true,
+                "credit": "Photograph: Tom Jenkins/The Guardian",
+                "source": "The Guardian",
+                "photographer": "Tom Jenkins",
+                "alt": "Declan Rice is mobbed by his jubilant Arsenal teammates after popping up in the seventh m inute of added time to finish off Luton.",
+                "mediaId": "fe58e5d2036e4033f8d05af631d525620fcc5c3e",
+                "imageType": "Photograph",
+                "role": "showcase"
+              }
+            }
+          ]
+        },
+        "body": [
+          {
+            "id": "656f1ba18f0864ebfcf0e741",
+            "bodyHtml": "<p>Perhaps this topsy-turvy old venue, where the more sanitised precepts of the Premier League football experience simply do not apply, was always going to be the place where Arsenal surrendered themselves to the rollercoaster. Stability and control have been two of the buzzwords around a run that has traded some dazzle for durability; here, performing in a snapping chill to a snarling audience, they wheeled away with the kind of <a href=\"https://www.theguardian.com/football/2023/dec/05/luton-arsenal-premier-league-match-report\" title=\"\">white-knuckle victory</a> that wins titles.</p> <p>Declan Rice was purchased to add precisely the composure Arsenal had lacked during their doomed title chase last spring. This time he brought the chaos, lighting the touchpaper with the final action of added time for a prolonged blur of limbs, wild‑eyed faces and tracksuited figures hurtling ecstatically down the touchline. With the victory confirmed, David Raya – at fault for Luton’s second and third goals, and seemingly destined to be the night’s villain – embraced his teammate with added meaning.</p> <aside class=\"element element-rich-link element--thumbnail\"> <p> <span>Related: </span><a href=\"https://www.theguardian.com/football/2023/dec/05/luton-arsenal-premier-league-match-report\">Rice’s injury-time header gives Arsenal win over Luton in seven-goal thriller</a> </p> </aside>  <p>It took that much to silence this place; to freeze three and a half of its sides into disbelief. At the outset it was tempting to wonder how Mikel Arteta, who has form for tailoring pre-match methods in anticipation of a particularly fiendish away atmosphere, had primed his players for Luton. Before a trip to Anfield two seasons ago he famously arranged for You’ll Never Walk Alone to blare through speakers while a nonplussed group of players trained; the best preparation this time might have been to hire a few hundred extras to scream in their faces. There is no other ground in the division whose public are so actively involved. At Luton, the fans hug the touchline and make the notion of an extra man seem real.</p> <p>So it was all the more astounding that Arsenal, their ideas seemingly dwindling with the clock ticking down, contrived a move of match‑winning clarity. Rice and Martin Ødegaard knew exactly what each other would do next when Oleksandr Zinchenko fed the Norwegian. “I shifted my marker one way and then went off his back shoulder,” Rice offered afterwards by way of explanation. Two of Arsenal’s talismen had managed, through the din of orange noise, to stay on the right frequency.</p> <p>On the balance of chances it was deserved but how hard this felt on Luton and, in particular, Ross Barkley. There was no better player on the pitch than Barkley, from first minute to last: this was the blend of personality, flair and composure that marked his early career, and probably his most complete performance in well over two years.</p>    <p>As he turns 30, he cannot hold much expectation of returning to a club of Arsenal’s level but he looked perfectly at home in this company, happy to take on Ødegaard and beat him, content in his ability to slalom past three players and pick the sensible pass, confident enough to take on the run and shot that skidded under Raya and briefly threatened the shock of the season.</p> <p>“He’s allowed us to evolve and change,” Rob Edwards said of a natural footballer who has given his team a technical conscience. What Barkley’s colleagues lacked in finesse they compensated for in rugged, intelligent physicality. No challenge was shirked; some of them were on the borderline of legality, Gabriel Martinelli discovering that in particular.</p> <p>The towering headers from Gabriel Osho and Elijah Adebayo that dialled up the contest’s drama both stemmed from sheer desire to ensure the ball was theirs.</p> <p>But this version of Arteta’s Arsenal cannot be accused of lacking heart. They were led gladiatorially from the front by Gabriel Jesus, who was happy to embrace a running spat with the home crowd and made his point having headed in emphatically before half-time; there were signs that Kai Havertz, so maligned, has worked through the moments of doubt to serve a vital function. The goal that cancelled out Barkley’s thrilling intervention owed plenty to instinct and understanding that are finally making themselves clear regularly.</p> <p>“Conference champions, you’ll never sing that,” came the self‑deprecating chant from Luton’s support, audibly still pinching themselves at their rise back through the leagues, early in the first half. It would certainly be some turn-up if Arsenal ever had to; thanks to Rice’s willingness to embrace the mayhem, though, the chances of securing a very different kind of title improved by another potentially crucial notch.</p>",
+            "bodyTextSummary": "Perhaps this topsy-turvy old venue, where the more sanitised precepts of the Premier League football experience simply do not apply, was always going to be the place where Arsenal surrendered themselves to the rollercoaster. Stability and control have been two of the buzzwords around a run that has traded some dazzle for durability; here, performing in a snapping chill to a snarling audience, they wheeled away with the kind of white-knuckle victory that wins titles. Declan Rice was purchased to add precisely the composure Arsenal had lacked during their doomed title chase last spring. This time he brought the chaos, lighting the touchpaper with the final action of added time for a prolonged blur of limbs, wild‑eyed faces and tracksuited figures hurtling ecstatically down the touchline. With the victory confirmed, David Raya – at fault for Luton’s second and third goals, and seemingly destined to be the night’s villain – embraced his teammate with added meaning.\nIt took that much to silence this place; to freeze three and a half of its sides into disbelief. At the outset it was tempting to wonder how Mikel Arteta, who has form for tailoring pre-match methods in anticipation of a particularly fiendish away atmosphere, had primed his players for Luton. Before a trip to Anfield two seasons ago he famously arranged for You’ll Never Walk Alone to blare through speakers while a nonplussed group of players trained; the best preparation this time might have been to hire a few hundred extras to scream in their faces. There is no other ground in the division whose public are so actively involved. At Luton, the fans hug the touchline and make the notion of an extra man seem real. So it was all the more astounding that Arsenal, their ideas seemingly dwindling with the clock ticking down, contrived a move of match‑winning clarity. Rice and Martin Ødegaard knew exactly what each other would do next when Oleksandr Zinchenko fed the Norwegian. “I shifted my marker one way and then went off his back shoulder,” Rice offered afterwards by way of explanation. Two of Arsenal’s talismen had managed, through the din of orange noise, to stay on the right frequency. On the balance of chances it was deserved but how hard this felt on Luton and, in particular, Ross Barkley. There was no better player on the pitch than Barkley, from first minute to last: this was the blend of personality, flair and composure that marked his early career, and probably his most complete performance in well over two years.\nAs he turns 30, he cannot hold much expectation of returning to a club of Arsenal’s level but he looked perfectly at home in this company, happy to take on Ødegaard and beat him, content in his ability to slalom past three players and pick the sensible pass, confident enough to take on the run and shot that skidded under Raya and briefly threatened the shock of the season. “He’s allowed us to evolve and change,” Rob Edwards said of a natural footballer who has given his team a technical conscience. What Barkley’s colleagues lacked in finesse they compensated for in rugged, intelligent physicality. No challenge was shirked; some of them were on the borderline of legality, Gabriel Martinelli discovering that in particular. The towering headers from Gabriel Osho and Elijah Adebayo that dialled up the contest’s drama both stemmed from sheer desire to ensure the ball was theirs. But this version of Arteta’s Arsenal cannot be accused of lacking heart. They were led gladiatorially from the front by Gabriel Jesus, who was happy to embrace a running spat with the home crowd and made his point having headed in emphatically before half-time; there were signs that Kai Havertz, so maligned, has worked through the moments of doubt to serve a vital function. The goal that cancelled out Barkley’s thrilling intervention owed plenty to instinct and understanding that are finally making themselves clear regularly. “Conference champions, you’ll never sing that,” came the self‑deprecating chant from Luton’s support, audibly still pinching themselves at their rise back through the leagues, early in the first half. It would certainly be some turn-up if Arsenal ever had to; thanks to Rice’s willingness to embrace the mayhem, though, the chances of securing a very different kind of title improved by another potentially crucial notch.",
+            "attributes": {},
+            "published": true,
+            "createdDate": "2023-12-05T23:56:18Z",
+            "firstPublishedDate": "2023-12-06T00:04:24Z",
+            "publishedDate": "2023-12-06T01:06:35Z",
+            "lastModifiedDate": "2023-12-06T01:06:35Z",
+            "contributors": [],
+            "elements": [
+              {
+                "type": "text",
+                "assets": [],
+                "textTypeData": {
+                  "html": "<p>Perhaps this topsy-turvy old venue, where the more sanitised precepts of the Premier League football experience simply do not apply, was always going to be the place where Arsenal surrendered themselves to the rollercoaster. Stability and control have been two of the buzzwords around a run that has traded some dazzle for durability; here, performing in a snapping chill to a snarling audience, they wheeled away with the kind of <a href=\"https://www.theguardian.com/football/2023/dec/05/luton-arsenal-premier-league-match-report\" title=\"\">white-knuckle victory</a> that wins titles.</p> \n<p>Declan Rice was purchased to add precisely the composure Arsenal had lacked during their doomed title chase last spring. This time he brought the chaos, lighting the touchpaper with the final action of added time for a prolonged blur of limbs, wild‑eyed faces and tracksuited figures hurtling ecstatically down the touchline. With the victory confirmed, David Raya – at fault for Luton’s second and third goals, and seemingly destined to be the night’s villain – embraced his teammate with added meaning.</p>"
+                }
+              },
+              {
+                "type": "rich-link",
+                "assets": [],
+                "richLinkTypeData": {
+                  "url": "https://www.theguardian.com/football/2023/dec/05/luton-arsenal-premier-league-match-report",
+                  "originalUrl": "https://www.theguardian.com/football/2023/dec/05/luton-arsenal-premier-league-match-report",
+                  "linkText": "Rice’s injury-time header gives Arsenal win over Luton in seven-goal thriller",
+                  "linkPrefix": "Related: ",
+                  "role": "thumbnail"
+                }
+              },
+              {
+                "type": "text",
+                "assets": [],
+                "textTypeData": {
+                  "html": "<p>It took that much to silence this place; to freeze three and a half of its sides into disbelief. At the outset it was tempting to wonder how Mikel Arteta, who has form for tailoring pre-match methods in anticipation of a particularly fiendish away atmosphere, had primed his players for Luton. Before a trip to Anfield two seasons ago he famously arranged for You’ll Never Walk Alone to blare through speakers while a nonplussed group of players trained; the best preparation this time might have been to hire a few hundred extras to scream in their faces. There is no other ground in the division whose public are so actively involved. At Luton, the fans hug the touchline and make the notion of an extra man seem real.</p> \n<p>So it was all the more astounding that Arsenal, their ideas seemingly dwindling with the clock ticking down, contrived a move of match‑winning clarity. Rice and Martin Ødegaard knew exactly what each other would do next when Oleksandr Zinchenko fed the Norwegian. “I shifted my marker one way and then went off his back shoulder,” Rice offered afterwards by way of explanation. Two of Arsenal’s talismen had managed, through the din of orange noise, to stay on the right frequency.</p> \n<p>On the balance of chances it was deserved but how hard this felt on Luton and, in particular, Ross Barkley. There was no better player on the pitch than Barkley, from first minute to last: this was the blend of personality, flair and composure that marked his early career, and probably his most complete performance in well over two years.</p>"
+                }
+              },
+              {
+                "type": "text",
+                "assets": [],
+                "textTypeData": {
+                  "html": "<p>As he turns 30, he cannot hold much expectation of returning to a club of Arsenal’s level but he looked perfectly at home in this company, happy to take on Ødegaard and beat him, content in his ability to slalom past three players and pick the sensible pass, confident enough to take on the run and shot that skidded under Raya and briefly threatened the shock of the season.</p> \n<p>“He’s allowed us to evolve and change,” Rob Edwards said of a natural footballer who has given his team a technical conscience. What Barkley’s colleagues lacked in finesse they compensated for in rugged, intelligent physicality. No challenge was shirked; some of them were on the borderline of legality, Gabriel Martinelli discovering that in particular.</p> \n<p>The towering headers from Gabriel Osho and Elijah Adebayo that dialled up the contest’s drama both stemmed from sheer desire to ensure the ball was theirs.</p> \n<p>But this version of Arteta’s Arsenal cannot be accused of lacking heart. They were led gladiatorially from the front by Gabriel Jesus, who was happy to embrace a running spat with the home crowd and made his point having headed in emphatically before half-time; there were signs that Kai Havertz, so maligned, has worked through the moments of doubt to serve a vital function. The goal that cancelled out Barkley’s thrilling intervention owed plenty to instinct and understanding that are finally making themselves clear regularly.</p> \n<p>“Conference champions, you’ll never sing that,” came the self‑deprecating chant from Luton’s support, audibly still pinching themselves at their rise back through the leagues, early in the first half. It would certainly be some turn-up if Arsenal ever had to; thanks to Rice’s willingness to embrace the mayhem, though, the chances of securing a very different kind of title improved by another potentially crucial notch.</p>"
+                }
+              }
+            ]
+          }
+        ],
+        "totalBodyBlocks": 1
+      },
+      "rights": {
+        "syndicatable": "true",
+        "subscriptionDatabases": "true",
+        "developerCommunity": "true"
+      },
+      "isHosted": false,
+      "pillarId": "pillar/sport",
+      "pillarName": "Sport"
+    }
+  }
+}

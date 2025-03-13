@@ -1,0 +1,27 @@
+{
+  "premier-league": [
+    "West Ham 0 - 0 Man Utd",
+    "Fulham 0 - 0 Burnley",
+    "Luton 0 - 0 Newcastle",
+    "Nottm Forest 0 - 0 Bournmouth",
+    "Tottenham 0 - 0 Everton",
+    "Liverpool 0 - 0 Arsenal"
+  ],
+  "championship": [
+    "Leeds 0 - 0 Ipswich",
+    "Blackburn 0 - 0 Watford",
+    "Leicester 0 - 0 Rotherham",
+    "Middlesbrough 0 - 0 West Brom",
+    "Norwich 0 - 0 Huddersfield",
+    "Plymouth 0 - 0 Birmingham",
+    "QPR 0 - 0 Southampton",
+    "Sheff Wed 0 - 0 Cardiff",
+    "Stoke 0 - 0 Millwall",
+    "Sunderland 0 - 0 Coventry"
+  ],
+  "scottish-premiership": [
+    "Celtic 0 - 0 Livingston",
+    "Hearts 0 - 0 St. Mirren",
+    "Kilmarnock 0 - 0 St. Johnstone"
+  ]
+}

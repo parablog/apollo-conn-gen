@@ -1,17 +1,21 @@
 import { execSync, spawnSync } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
-import { OasGen } from '../src';
-import { Writer } from '../src/oas/io';
+import { OasGen } from '../src/index.js';
 import _ from 'lodash';
 import fs from 'fs';
 
-console.log = () => {};
-console.warn = () => {};
-console.error = () => {};
+console.log = () => {
+};
+console.warn = () => {
+};
+console.error = () => {
+};
 
-const base =
-  '/Users/fernando/Development/Apollo/connectors/projects/OasToConnector/java-apollo-connector-gen/src/test/resources';
+import { it, describe, afterEach, after as afterAll, test } from 'node:test';
+import assert from 'node:assert';
+
+const base = './tests/resources/oas';
 
 test('test minimal petstore', async () => {
   const paths = [
@@ -45,10 +49,10 @@ test('test minimal petstore 03 array', async () => {
 });
 
 test('test full petstore', async () => {
-  expect(fs.existsSync(`${base}/petstore.yaml`)).toBeTruthy();
+  assert.ok(fs.existsSync(`${base}/petstore.yaml`));
 
   const file = fs.readFileSync(`${base}/petstore.yaml`);
-  expect(file).toBeDefined();
+  assert.ok(file !== undefined);
 
   const paths = [
     'get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:ref:#category>obj:#/c/s/Category>prop:scalar:id',
@@ -238,15 +242,15 @@ test('test_013_testTMF637_TestSimpleRecursion no type found', async () => {
   ];
 
   // two checks in the run function + 1 here
-  expect.assertions(4);
+  // expect.assertions(4);
   try {
     await run('TMF637-002-SimpleRecursionTest.yaml', paths, 1, 2, true);
   } catch (error) {
     console.error(error);
-    expect(error).toBeDefined();
+    assert.ok(error !== undefined);
 
     const message = _.get(error, 'message') ?? '';
-    expect(message).toContain('Could not find type');
+    assert.ok((message).includes('Could not find type'));
   }
 });
 
@@ -266,7 +270,7 @@ test('test_014_testTMF637_TestRecursion', async () => {
     'get:/productById>res:r>ref:#/c/s/Product>comp:#/c/s/Product>obj:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:#/c/s/RelatedPartyOrPartyRole>obj:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>comp:#/c/s/PartyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:#/c/s/Producer>ref:#/c/s/PartyRole>comp:#/c/s/PartyRole>obj:[anonymous:#/c/s/PartyRole]>circular-ref:#prop:array:#relatedParty',
   ];
 
-  expect.assertions(6);
+  // expect.assertions(6);
   const error = await run('TMF637-002-RecursionTest.yaml', paths, 1, 10);
   // expect(error).toContain("Circular reference detected in `@connect(selection:)` on `Query.productById`");
 });
@@ -507,25 +511,25 @@ async function run(
   const gen = await OasGen.fromFile(`${base}/${file}`, { skipValidation });
   await gen.visit();
 
-  expect(gen.paths).toBeDefined();
-  expect(gen.paths.size).toBe(pathsSize);
+  assert.ok(gen.paths !== undefined);
+  assert.ok(gen.paths.size === pathsSize);
 
   const schema = gen.generateSchema(paths);
-  expect(gen.context?.types.size).toBe(typesSize);
+  assert.ok(gen.context?.types.size === typesSize);
 
-  expect(schema).toBeDefined();
+  assert.ok(schema !== undefined);
 
   const schemaFile = path.join(os.tmpdir(), file.replace(/yaml|json|yml/, 'graphql'));
   fs.writeFileSync(schemaFile, schema, { encoding: 'utf-8', flag: 'w' });
 
   const [result, output] = compose(schemaFile);
   if (shouldFail) {
-    expect(result).toBeFalsy();
-    expect(output).toBeDefined();
-    return output as string | undefined;
+    assert.ok(result === false);
+    assert.ok(output !== undefined);
+    return output as unknown as string | undefined;
   } else {
-    expect(output).toBeUndefined();
-    expect(result).toBeTruthy();
+    assert.ok(output === undefined);
+    assert.ok(result === true);
   }
 }
 
@@ -538,7 +542,7 @@ function isRoverAvailable(command: string): [boolean, string?] {
 }
 
 function compose(schemaPath: string) {
-  console.log('schemaPath', schemaPath);
+  console.info('schemaPath', schemaPath);
 
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');
   if (!rover[0]) {

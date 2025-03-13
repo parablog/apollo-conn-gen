@@ -1,0 +1,25 @@
+{
+  "fixtures": [
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Celtic",
+      "away_team": "Livingston",
+      "venue": "Celtic Park"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Hearts",
+      "away_team": "St Mirren",
+      "venue": "Tynecastle Park"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Kilmarnock",
+      "away_team": "St Johnstone",
+      "venue": "Rugby Park"
+    }
+  ]
+}

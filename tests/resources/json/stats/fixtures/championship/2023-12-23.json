@@ -1,0 +1,74 @@
+{
+  "fixtures": [
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Blackburn",
+      "away_team": "Watford",
+      "venue": "Ewood Park"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Leicester",
+      "away_team": "Rotherham",
+      "venue": "The King Power Stadium"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Middlesbrough",
+      "away_team": "West Brom",
+      "venue": "Riverside Stadium"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Norwich",
+      "away_team": "Huddersfield",
+      "venue": "Carrow Road"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Plymouth",
+      "away_team": "Birmingham",
+      "venue": "Home Park"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "QPR",
+      "away_team": "Southampton",
+      "venue": "Loftus Road"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Sheff Wed",
+      "away_team": "Cardiff",
+      "venue": "Hillsborough"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Stoke",
+      "away_team": "Millwall",
+      "venue": "bet365 Stadium"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "home_team": "Sunderland",
+      "away_team": "Coventry",
+      "venue": "Stadium of Light"
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "12:30",
+      "home_team": "Leeds",
+      "away_team": "Ipswich",
+      "venue": "Elland Road"
+    }
+  ]
+}

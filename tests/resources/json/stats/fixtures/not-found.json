@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "fixturesNotFoundError",
+    "message": "Double check your have supplied a valid match day",
+    "header": "No fixtures found for this league on this date"
+  }
+}

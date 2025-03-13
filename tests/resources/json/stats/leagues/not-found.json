@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "leagueNotFoundError",
+    "message": "Double check your have supplied a valid league",
+    "header": "No league found"
+  }
+}

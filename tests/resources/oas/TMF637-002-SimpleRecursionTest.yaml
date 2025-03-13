@@ -1,0 +1,52 @@
+openapi: 3.0.1
+info:
+  title: ProductInventory
+  version: 5.0.0
+servers:
+  - url: 'https://serverRoot'
+paths:
+  '/productById':
+    get:
+      tags:
+        - product
+      summary: Retrieves a Product by ID
+      description: >-
+        This operation retrieves a Product entity. Attribute selection enabled for all first level
+        attributes.
+      operationId: retrieveProduct
+      responses:
+        '200':
+          $ref: '#/components/responses/200Product_Get'
+
+components:
+  responses:
+    200Product_Get:
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Product'
+
+  schemas:
+    Entity:
+      type: object
+      properties:
+        href:
+          type: string
+          description: Hyperlink reference
+        id:
+          type: string
+          description: unique identifier
+
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: >-
+            A product offering procured by a customer or other interested party playing a party
+            role. A product is realized as one or more service(s) and / or resource(s).
+          properties:
+            sku:
+              type: string
+            relatedProduct:
+              $ref: '#/components/schemas/Product'

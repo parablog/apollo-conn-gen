@@ -1,0 +1,52 @@
+{
+  "teams": [
+    {
+      "id": 45,
+      "name": "Aberdeen"
+    },
+    {
+      "id": 46,
+      "name": "Celtic"
+    },
+    {
+      "id": 47,
+      "name": "Dundee"
+    },
+    {
+      "id": 48,
+      "name": "Hearts"
+    },
+    {
+      "id": 49,
+      "name": "Hibernian"
+    },
+    {
+      "id": 50,
+      "name": "Kilmarnock"
+    },
+    {
+      "id": 51,
+      "name": "Livingston"
+    },
+    {
+      "id": 52,
+      "name": "Motherwell"
+    },
+    {
+      "id": 53,
+      "name": "Rangers"
+    },
+    {
+      "id": 54,
+      "name": "Ross County"
+    },
+    {
+      "id": 55,
+      "name": "St Johnstone"
+    },
+    {
+      "id": 56,
+      "name": "St Mirren"
+    }
+  ]
+}

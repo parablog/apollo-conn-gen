@@ -1,0 +1,131 @@
+openapi: 3.0.1
+info:
+  title: ProductInventory
+  version: 5.0.0
+servers:
+  - url: 'https://serverRoot'
+paths:
+  '/productById':
+    get:
+      tags:
+        - product
+      summary: Retrieves a Product by ID
+      description: >-
+        This operation retrieves a Product entity. Attribute selection enabled for all first level
+        attributes.
+      operationId: retrieveProduct
+      responses:
+        '200':
+          $ref: '#/components/responses/200Product_Get'
+
+components:
+  responses:
+    200Product_Get:
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Product'
+
+  schemas:
+    Entity:
+      type: object
+      properties:
+        href:
+          type: string
+          description: Hyperlink reference
+        id:
+          type: string
+          description: unique identifier
+
+    Extensible:
+      type: object
+      description: >-
+        Base Extensible schema for use in TMForum Open-APIs - When used for in a schema it means
+        that the Entity described by the schema  MUST be extended with the @type
+      properties:
+        '@type':
+          type: string
+          description: 'When sub-classing, this defines the sub-class Extensible name'
+        '@baseType':
+          type: string
+          description: 'When sub-classing, this defines the super-class'
+        '@schemaLocation':
+          type: string
+          description: A URI to a JSON-Schema file that defines additional attributes and relationships
+      required:
+        - '@type'
+
+    PartyRole:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: The part played by a party in a given context.
+          properties:
+            name:
+              type: string
+              description: >-
+                A word, term, or phrase by which the PartyRole is known and distinguished from other
+                PartyRoles. It's the name of the PartyRole unique entity.
+            relatedParty:
+              type: array
+              items:
+                $ref: '#/components/schemas/RelatedPartyOrPartyRole'
+
+    PartyOrPartyRole:
+      type: object
+      description: ''
+      oneOf:
+        - $ref: '#/components/schemas/Producer'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Producer: '#/components/schemas/Producer'
+
+    RelatedPartyOrPartyRole:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - type: object
+          description: >-
+            RelatedParty reference. A related party defines party or party role or its reference,
+            linked to a specific entity
+          properties:
+            role:
+              description: >-
+                Role played by the related party or party role in the context of the specific entity
+                it is linked to. Such as 'initiator', 'customer',  'salesAgent', 'user'
+              type: string
+            partyOrPartyRole:
+              $ref: '#/components/schemas/PartyOrPartyRole'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          RelatedPartyOrPartyRole: '#/components/schemas/RelatedPartyOrPartyRole'
+
+    Producer:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/PartyRole'
+
+    Supplier:
+      type: object
+      description: 'When business partner is the Supplier '
+      allOf:
+        - $ref: '#/components/schemas/PartyRole'
+
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: >-
+            A product offering procured by a customer or other interested party playing a party
+            role. A product is realized as one or more service(s) and / or resource(s).
+          properties:
+            relatedParty:
+              type: array
+              items:
+                $ref: '#/components/schemas/RelatedPartyOrPartyRole'
+            terminationDate:
+              type: string
+              format: date-time
+              description: Is the date when the product was terminated

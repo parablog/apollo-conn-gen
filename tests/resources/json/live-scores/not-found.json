@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "liveScoresNotFoundError",
+    "message": "Double check your have supplied a valid league and dateTime",
+    "header": "No live scores found at this time"
+  }
+}

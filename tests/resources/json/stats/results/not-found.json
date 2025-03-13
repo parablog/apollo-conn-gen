@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "resultsNotFoundError",
+    "message": "Double check your have supplied a valid league and date",
+    "header": "No results found"
+  }
+}

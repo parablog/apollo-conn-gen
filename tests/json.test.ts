@@ -3,10 +3,10 @@ import * as path from 'path';
 import fs from 'fs';
 import { execSync, spawnSync } from 'child_process';
 import _ from 'lodash';
-import { ConnectorWriter, StringWriter } from '../src/json/io/writer';
-import { JsonGen } from '../src/json/walker/jsonGen';
-import { JsonContext } from '../src/json/walker/jsonContext';
-import { JsonType } from '../src/json/walker/types/jsonType';
+import { ConnectorWriter, StringWriter } from '../src/json/index.js';
+import { JsonGen } from '../src/index.js';
+import { JsonContext } from '../src/json/index.js';
+import { JsonType } from '../src/json/index.js';
 
 import { it, describe, afterEach, after as afterAll } from 'node:test';
 import assert, { equal } from 'node:assert';
@@ -16,11 +16,13 @@ interface ITestOptions {
   outputContains?: string;
 }
 
-console.log = () => {};
-console.warn = () => {};
+console.log = () => {
+};
+console.warn = () => {
+};
 
 const writer = new StringWriter();
-const base = '/Users/fernando/Development/Apollo/connectors/projects/JsonToConnector/src/test/resources/';
+const base = './tests/resources/json';
 
 afterEach(() => {
   writer.clear();
@@ -103,8 +105,8 @@ describe('Walker Test Suite', () => {
 
   it('articles/clockwatch', async () => {
     const output = await run('articles/clockwatch', { shouldFail: true });
-    expect(output).toBeDefined();
-    expect(output!.includes('SELECTED_FIELD_NOT_FOUND')).toBeTruthy();
+    assert.ok(output !== undefined);
+    assert.ok(output!.includes('SELECTED_FIELD_NOT_FOUND'));
   });
 
   it('test/merge', async () => {
@@ -118,12 +120,12 @@ describe('Walker Test Suite', () => {
     });
   });
 
-  // it('articles/article', async () => {
-  //   await run('articles/article', {
-  //     shouldFail: true,
-  //     outputContains: 'SELECTED_FIELD_NOT_FOUND',
-  //   });
-  // });
+  it('articles/article', async () => {
+    await run('articles/article', {
+      shouldFail: true,
+      outputContains: 'SELECTED_FIELD_NOT_FOUND',
+    });
+  });
 
   it('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend', async () => {
     await run('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend.json', {
@@ -143,7 +145,7 @@ async function run(
 ): Promise<string | undefined> {
   const fileOrFolderPath: string = `${base}/${fileOrFolder}`;
 
-  expect(fs.existsSync(fileOrFolderPath)).toBeTruthy();
+  assert.ok(fs.existsSync(fileOrFolderPath));
 
   let walker: JsonGen;
 
@@ -156,13 +158,13 @@ async function run(
     for (const source of sources) {
       const fullPath = path.join(fileOrFolderPath, source);
       const json = fs.readFileSync(fullPath, 'utf-8');
-      expect(json).toBeDefined();
+      assert.ok(json !== undefined);
 
       walker.walkJson(json);
     }
   } else {
     const json = fs.readFileSync(fileOrFolderPath, 'utf-8');
-    expect(json).toBeDefined();
+    assert.ok(json !== undefined);
 
     walker = JsonGen.fromReader(json);
   }
@@ -170,10 +172,10 @@ async function run(
   const context: JsonContext = walker.getContext();
 
   const types: JsonType[] = context.getTypes();
-  expect(types.length).toBeGreaterThan(0);
+  assert.ok(types.length > 0);
 
   const schema = walker.generateSchema();
-  expect(schema).toBeDefined();
+  assert.ok(schema !== undefined);
 
   const schemaFile = path.join(os.tmpdir() + '/walker', fileOrFolder.replace(/\.yaml|\.json|\.yml/, '') + '.graphql');
 
@@ -193,12 +195,12 @@ async function run(
   const [result, output] = compose(schemaFile);
 
   if (options.shouldFail) {
-    expect(result).toBeFalsy();
-    expect(output).toBeDefined();
-    return output as string | undefined;
+    assert.ok(result === false);
+    assert.ok(output !== undefined);
+    return output as unknown as string | undefined;
   } else {
-    expect(output).toBeUndefined();
-    expect(result).toBeTruthy();
+    assert.ok(output === undefined);
+    assert.ok(result === true);
   }
 
   writer.clear();

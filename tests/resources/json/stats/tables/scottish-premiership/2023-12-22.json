@@ -1,0 +1,148 @@
+{
+  "scottish-premiership": [
+    {
+      "rank": 1,
+      "name": "Celtic",
+      "points": 42,
+      "total_played": 18,
+      "won": 13,
+      "drawn": 3,
+      "lost": 2,
+      "goals_for": 43,
+      "goals_against": 14,
+      "goal_difference": 29
+    },
+    {
+      "rank": 2,
+      "name": "Rangers",
+      "points": 40,
+      "total_played": 17,
+      "won": 13,
+      "drawn": 1,
+      "lost": 3,
+      "goals_for": 35,
+      "goals_against": 8,
+      "goal_difference": 27
+    },
+    {
+      "rank": 3,
+      "name": "Hearts",
+      "points": 26,
+      "total_played": 17,
+      "won": 8,
+      "drawn": 2,
+      "lost": 7,
+      "goals_for": 17,
+      "goals_against": 15,
+      "goal_difference": 2
+    },
+    {
+      "rank": 4,
+      "name": "St Mirren",
+      "points": 26,
+      "total_played": 18,
+      "won": 7,
+      "drawn": 5,
+      "lost": 6,
+      "goals_for": 21,
+      "goals_against": 22,
+      "goal_difference": -1
+    },
+    {
+      "rank": 5,
+      "name": "Kilmarnock",
+      "points": 24,
+      "total_played": 18,
+      "won": 6,
+      "drawn": 6,
+      "lost": 6,
+      "goals_for": 18,
+      "goals_against": 17,
+      "goal_difference": 1
+    },
+    {
+      "rank": 6,
+      "name": "Hibernian",
+      "points": 24,
+      "total_played": 18,
+      "won": 6,
+      "drawn": 6,
+      "lost": 6,
+      "goals_for": 24,
+      "goals_against": 26,
+      "goal_difference": -2
+    },
+    {
+      "rank": 7,
+      "name": "Dundee",
+      "points": 21,
+      "total_played": 16,
+      "won": 5,
+      "drawn": 6,
+      "lost": 5,
+      "goals_for": 20,
+      "goals_against": 23,
+      "goal_difference": -3
+    },
+    {
+      "rank": 8,
+      "name": "Aberdeen",
+      "points": 19,
+      "total_played": 16,
+      "won": 5,
+      "drawn": 4,
+      "lost": 7,
+      "goals_for": 19,
+      "goals_against": 26,
+      "goal_difference": -7
+    },
+    {
+      "rank": 9,
+      "name": "St Johnstone",
+      "points": 18,
+      "total_played": 18,
+      "won": 4,
+      "drawn": 6,
+      "lost": 8,
+      "goals_for": 12,
+      "goals_against": 25,
+      "goal_difference": -13
+    },
+    {
+      "rank": 10,
+      "name": "Ross County",
+      "points": 17,
+      "total_played": 17,
+      "won": 4,
+      "drawn": 5,
+      "lost": 8,
+      "goals_for": 15,
+      "goals_against": 24,
+      "goal_difference": -9
+    },
+    {
+      "rank": 11,
+      "name": "Motherwell",
+      "points": 16,
+      "total_played": 18,
+      "won": 3,
+      "drawn": 7,
+      "lost": 8,
+      "goals_for": 20,
+      "goals_against": 29,
+      "goal_difference": -9
+    },
+    {
+      "rank": 12,
+      "name": "Livingston",
+      "points": 11,
+      "total_played": 17,
+      "won": 2,
+      "drawn": 5,
+      "lost": 10,
+      "goals_for": 10,
+      "goals_against": 25,
+      "goal_difference": -15
+    }
+  ]
+}

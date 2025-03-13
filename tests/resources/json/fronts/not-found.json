@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "frontNotFoundError",
+    "message": "Double check your have supplied a valid date",
+    "header": "No front page for this date"
+  }
+}

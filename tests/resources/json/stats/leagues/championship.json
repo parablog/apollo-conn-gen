@@ -1,0 +1,100 @@
+{
+  "teams": [
+    {
+      "id": 21,
+      "name": "Birmingham"
+    },
+    {
+      "id": 22,
+      "name": "Blackburn"
+    },
+    {
+      "id": 23,
+      "name": "Bristol City"
+    },
+    {
+      "id": 24,
+      "name": "Cardiff"
+    },
+    {
+      "id": 25,
+      "name": "Coventry"
+    },
+    {
+      "id": 26,
+      "name": "Huddersfield"
+    },
+    {
+      "id": 27,
+      "name": "Hull"
+    },
+    {
+      "id": 28,
+      "name": "Ipswich"
+    },
+    {
+      "id": 29,
+      "name": "Leeds"
+    },
+    {
+      "id": 30,
+      "name": "Leicester"
+    },
+    {
+      "id": 31,
+      "name": "Middlesbrough"
+    },
+    {
+      "id": 32,
+      "name": "Millwall"
+    },
+    {
+      "id": 33,
+      "name": "Norwich"
+    },
+    {
+      "id": 34,
+      "name": "Plymouth"
+    },
+    {
+      "id": 35,
+      "name": "Preston North End"
+    },
+    {
+      "id": 36,
+      "name": "QPR"
+    },
+    {
+      "id": 37,
+      "name": "Rotherham"
+    },
+    {
+      "id": 38,
+      "name": "Sheff Wed"
+    },
+    {
+      "id": 39,
+      "name": "Southampton"
+    },
+    {
+      "id": 40,
+      "name": "Stoke"
+    },
+    {
+      "id": 41,
+      "name": "Sunderland"
+    },
+    {
+      "id": 42,
+      "name": "Swansea"
+    },
+    {
+      "id": 43,
+      "name": "Watford"
+    },
+    {
+      "id": 44,
+      "name": "West Brom"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "articleNotFoundError",
+    "message": "Double check your have supplied a valid article id",
+    "header": "No article found for this id"
+  }
+}

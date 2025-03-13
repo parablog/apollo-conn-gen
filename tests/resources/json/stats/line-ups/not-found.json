@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "lineUpNotFoundError",
+    "message": "Double check your have supplied a valid matchId",
+    "header": "No line-ups found for this match"
+  }
+}

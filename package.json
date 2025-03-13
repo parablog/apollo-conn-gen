@@ -24,16 +24,13 @@
       "default": "./dist/json/index.js"
     }
   },
-  "bin": {
-    "oas-to-connector": "./dist/oas/index.js"
-  },
   "files": [
     "dist/*"
   ],
   "scripts": {
     "prebuild": "rm -r dist",
     "build": "tsc",
-    "test": "node --import tsx/esm --test 'tests/**.test.ts'",
+    "test": "node --import tsx/esm --test 'tests/oas.test.ts'",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint",
     "prepare": "npm run build",

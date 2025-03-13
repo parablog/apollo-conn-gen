@@ -1,0 +1,808 @@
+{
+  "id": "football-2023-12-23",
+  "name": "Football",
+  "collections": [
+    {
+      "key": "0:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/2023/dec/22/manchester-city-fluminense-club-world-cup-final-match-report",
+              "headline": "Manchester City crowned champions after Fluminense win",
+              "kicker": "Club World Cup",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Man City 4-0 Fluminense (Álvarez 1 88, Nino 27og, Foden 72)",
+              "image": {
+                "source": "media",
+                "id": "8797f1b13a3cb2bebc893ba0283db76a114ae4d0/0_169_5364_3218/master/5364.jpg",
+                "credit": "Photograph: Tullio Puglia/FIFA/Getty Images",
+                "caption": "Kyle Walker lifts the Club World Cup trophy as his Manchester City teammates enjoy a special moment after they beat Fluminense in a one-sided final.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "8797f1b13a3cb2bebc893ba0283db76a114ae4d0/0_169_5364_3218/master/5364.jpg",
+                "source": "media",
+                "credit": "Photograph: Tullio Puglia/FIFA/Getty Images",
+                "caption": "Kyle Walker lifts the Club World Cup trophy as his Manchester City teammates enjoy a special moment after they beat Fluminense in a one-sided final.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Nick Ames at King Abdullah Sports City",
+              "bylineHtml": "<a href=\"profile/nick-ames\">Nick Ames</a> at King Abdullah Sports City",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Nick_Ames.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Man City 4-0 Fluminense (Álvarez 1 88, Nino 27og, Foden 72)",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/manchester-city-fluminense-club-world-cup-final-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "coverCard",
+              "cardImage": {
+                "id": "209eb4dca4c19c7fdbae304603b812a1b8ac6fd9/0_0_2353_3997/master/2353.jpg",
+                "source": "media"
+              },
+              "cardImageTablet": {
+                "id": "9e1582857b004cfa6f823c7448a3bad12c23e499/0_0_3607_3965/master/3607.jpg",
+                "source": "media"
+              },
+              "sportScore": "Man City 4 Fluminense 0"
+            }
+          ]
+        },
+        {
+          "appearance": "two",
+          "articles": [
+            {
+              "id": "football/2023/dec/22/manchester-city-have-closed-a-chapter-in-completing-set-says-guardiola",
+              "headline": "City have closed a chapter in completing set, says Guardiola",
+              "kicker": "Club World Cup",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "‘We won all the titles, there’s nothing else to win’",
+              "image": {
+                "id": "a9c8e4b81b3965c11bf14b786b46cd2290b8679b/0_176_4200_2520/master/4200.jpg",
+                "source": "media",
+                "credit": "Photograph: Richard Callis/SPP/Shutterstock",
+                "caption": "Pep Guardiola shows off the Club World Cup.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "a9c8e4b81b3965c11bf14b786b46cd2290b8679b/0_0_3893_2336/master/3893.jpg",
+                "source": "media",
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Nick Ames at King Abdullah Sports City",
+              "bylineHtml": "<a href=\"profile/nick-ames\">Nick Ames</a> at King Abdullah Sports City",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Nick_Ames.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "‘We won all the titles, there’s nothing else to win’",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/manchester-city-have-closed-a-chapter-in-completing-set-says-guardiola",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "image"
+            },
+            {
+              "id": "football/2023/dec/22/aston-villa-sheffield-united-premier-league-match-report",
+              "headline": "Zaniolo rescues late draw for Villa against Sheffield United",
+              "kicker": "Premier League",
+              "articleType": "matchresult",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "A 97th-minute header from Nicolò Zaniolo secured Aston Villa a draw against Sheffield United, who had taken the lead through Cameron Archer",
+              "image": {
+                "id": "06168eeb5b45d3c337368843d46e563d2457383a/0_156_4155_2494/master/4155.jpg",
+                "source": "media",
+                "credit": "Photograph: Shaun Botterill/Getty Images",
+                "caption": "Nicolò Zaniolo heads Aston Villa’s 97th-minute equaliser against Sheffield United.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "06168eeb5b45d3c337368843d46e563d2457383a/0_156_4155_2494/master/4155.jpg",
+                "source": "media",
+                "credit": "Photograph: Shaun Botterill/Getty Images",
+                "caption": "Nicolò Zaniolo heads Aston Villa’s 97th-minute equaliser against Sheffield United.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Ben Fisher at Villa Park",
+              "bylineHtml": "<a href=\"profile/ben-fisher\">Ben Fisher</a> at Villa Park",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Ben_Fisher.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "A 97th-minute header from Nicolò Zaniolo secured Aston Villa a draw against Sheffield United, who had taken the lead through Cameron Archer",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/aston-villa-sheffield-united-premier-league-match-report",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail",
+              "sportScore": "Aston Villa 1 Sheff Utd 1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "1:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/2023/dec/22/traditionalist-ange-postecoglou-opposes-european-super-league",
+              "headline": "‘Traditionalist’ Postecoglou opposes European Super League",
+              "kicker": "Tottenham",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Spurs manager talks up power of fans to stand in way of change",
+              "image": {
+                "id": "1ee4204d7104821369a0958f462766b3f102b87b/0_253_5493_3296/master/5493.jpg",
+                "source": "media",
+                "credit": "Photograph: Alex Morton/Tottenham Hotspur FC/Shutterstock",
+                "caption": "The Tottenham manager, Ange Postecoglou, said he ‘doesn’t like the game changing too much’.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "1ee4204d7104821369a0958f462766b3f102b87b/0_253_5493_3296/master/5493.jpg",
+                "source": "media",
+                "credit": "Photograph: Alex Morton/Tottenham Hotspur FC/Shutterstock",
+                "caption": "The Tottenham manager, Ange Postecoglou, said he ‘doesn’t like the game changing too much’.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "David Hytner",
+              "bylineHtml": "<a href=\"profile/davidhytner\">David Hytner</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2018/01/10/David_Hytner,_L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Spurs manager talks up power of fans to stand in way of change",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/traditionalist-ange-postecoglou-opposes-european-super-league",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        },
+        {
+          "appearance": "three",
+          "articles": [
+            {
+              "id": "football/2024/dec/25/it-annoys-me-when-people-around-the-player-complain-mauricio-pochettino",
+              "headline": "Pochettino: ‘It annoys me when people around the player complain’",
+              "kicker": "Chelsea",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": " ",
+              "image": {
+                "id": "8785c19ab6c7af69fd731afa1e7acf784d023bfe/0_206_6192_3715/master/6192.jpg",
+                "source": "media",
+                "credit": "Photograph: Darren Walsh/Chelsea FC/Getty Images",
+                "caption": "Mauricio Pochettino.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "8785c19ab6c7af69fd731afa1e7acf784d023bfe/0_206_6192_3715/master/6192.jpg",
+                "source": "media",
+                "credit": "Photograph: Darren Walsh/Chelsea FC/Getty Images",
+                "caption": "Mauricio Pochettino.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "thumb-large"
+                }
+              },
+              "byline": "PA Media",
+              "bylineHtml": "PA Media",
+              "standfirst": " ",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/22/erik-ten-hag-still-unclear-over-manchester-united-injury-problems",
+              "headline": "Ten Hag still unclear over United’s injury problems",
+              "kicker": "Football",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Having had up to 11 players missing United are investigating the causes, while André Onana would add to the absentees if picked for the Africa Cup of Nations",
+              "image": {
+                "id": "a69c446e58faecf3669172fd553c3fb3650015c4/0_598_7975_4784/master/7975.jpg",
+                "source": "media",
+                "credit": "Photograph: Ash Donelon/Manchester United/Getty Images",
+                "caption": "Christian Eriksen (centre) has had problems with a knee injury which has previously kept him out of the Manchester United squad.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "a69c446e58faecf3669172fd553c3fb3650015c4/0_598_7975_4784/master/7975.jpg",
+                "source": "media",
+                "credit": "Photograph: Ash Donelon/Manchester United/Getty Images",
+                "caption": "Christian Eriksen (centre) has had problems with a knee injury which has previously kept him out of the Manchester United squad.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "not-used",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Jamie Jackson",
+              "bylineHtml": "<a href=\"profile/jamiejackson\">Jamie Jackson</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2017/10/06/Jamie-Jackson,-L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Having had up to 11 players missing United are investigating the causes, while André Onana would add to the absentees if picked for the Africa Cup of Nations",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/erik-ten-hag-still-unclear-over-manchester-united-injury-problems",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/22/we-want-to-win-for-tom-lockyer-rob-edwards-expects-emotional-return-for-luton",
+              "headline": "Edwards expects emotional return for Luton",
+              "kicker": "‘We want to win for Locks’",
+              "articleType": "feature",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Luton’s manager says the health scare involving their captain at Bournemouth last weekend is ‘still very raw’ before Newcastle’s visit on Saturday",
+              "image": {
+                "id": "21ea7f2c1c707c1901f337dd3116d369fd539a23/0_462_8411_5046/master/8411.jpg",
+                "source": "media",
+                "credit": "Photograph: Sean Ryan/IPS/Shutterstock",
+                "caption": "Rob Edwards talks to his players as Tom Lockyer is treated by medical staff on the pitch against Bournemouth.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "source": "media",
+                "id": "21ea7f2c1c707c1901f337dd3116d369fd539a23/0_462_8411_5046/master/8411.jpg",
+                "credit": "Photograph: Sean Ryan/IPS/Shutterstock",
+                "caption": "Rob Edwards talks to his players as Tom Lockyer is treated by medical staff on the pitch against Bournemouth.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "not-used",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Sachin Nakrani",
+              "bylineHtml": "<a href=\"profile/sachinnakrani\">Sachin Nakrani</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2017/10/09/Sachin-Nakrani,-L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Luton’s manager says the health scare involving their captain at Bournemouth last weekend is ‘still very raw’ before Newcastle’s visit on Saturday",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/we-want-to-win-for-tom-lockyer-rob-edwards-expects-emotional-return-for-luton",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "2:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/2023/dec/22/qpr-marti-cifuentes-manager-cruyff-championship",
+              "headline": "‘I’m an optimist. I don’t have any magical recipe’",
+              "kicker": "Interview",
+              "articleType": "interview",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "QPR’s Martí Cifuentes is used to proving doubters wrong",
+              "image": {
+                "id": "e835e6a24adf75962c204dc93149edeb46f12ff1/0_533_8192_4915/master/8192.jpg",
+                "source": "media",
+                "credit": "Photograph: Graeme Robertson/The Guardian",
+                "caption": "Martí Cifuentes learned from Johan Cruyff that expressing yourself in a straightforward way is a huge strength.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "source": "media",
+                "id": "e835e6a24adf75962c204dc93149edeb46f12ff1/0_533_8192_4915/master/8192.jpg",
+                "credit": "Photograph: Graeme Robertson/The Guardian",
+                "caption": "Martí Cifuentes learned from Johan Cruyff that expressing yourself in a straightforward way is a huge strength.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Jacob Steinberg",
+              "bylineHtml": "<a href=\"profile/jacob-steinberg\">Jacob Steinberg</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2017/10/06/Jacob-Steinberg,-L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "QPR’s Martí Cifuentes is used to proving doubters wrong",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/qpr-marti-cifuentes-manager-cruyff-championship",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        },
+        {
+          "appearance": "three",
+          "articles": [
+            {
+              "id": "football/2023/dec/22/arteta-and-klopp-seeking-perfect-recipe-to-end-the-city-supremacy",
+              "headline": "Arteta and Klopp seeking perfect recipe to end City Supremacy",
+              "kicker": "Premier League",
+              "articleType": "feature",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Arsenal are further down the track towards a title-winning team while Liverpool wrestle with a volatile streak",
+              "image": {
+                "id": "753a9102d56a59164425d9f704521cac9863ef70/0_21_4000_2399/master/4000.jpg",
+                "source": "media",
+                "credit": "Photograph: Paul Ellis/AFP/Getty Images",
+                "caption": "Jürgen Klopp and Mikel Arteta are in charge of the teams most likely to challenge Manchester City this season",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "753a9102d56a59164425d9f704521cac9863ef70/1093_0_2765_1660/master/2765.jpg",
+                "source": "media",
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "thumb-large"
+                }
+              },
+              "byline": "Barney Ronay",
+              "bylineHtml": "<a href=\"profile/barneyronay\">Barney Ronay</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Barney_Ronay.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Arsenal are further down the track towards a title-winning team while Liverpool wrestle with a volatile streak",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/arteta-and-klopp-seeking-perfect-recipe-to-end-the-city-supremacy",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "image"
+            },
+            {
+              "id": "football/2023/dec/22/how-is-that-fair-klopp-questions-busy-fixture-list-with-player-welfare-concerns",
+              "headline": "Klopp questions busy fixture list with player welfare concerns",
+              "kicker": "‘How is that fair?’",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "The manager again highlights the demand on all clubs",
+              "image": {
+                "id": "a4fc2d911342f4cc5baae58b12181a69de617c66/0_400_6000_3600/master/6000.jpg",
+                "source": "media",
+                "credit": "Photograph: Molly Darlington/Reuters",
+                "caption": "The Liverpool manager questioned why West Ham were given the early-kick off this weekend despite playing a midweek cup match.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "a4fc2d911342f4cc5baae58b12181a69de617c66/0_400_6000_3600/master/6000.jpg",
+                "source": "media",
+                "credit": "Photograph: Molly Darlington/Reuters",
+                "caption": "The Liverpool manager questioned why West Ham were given the early-kick off this weekend despite playing a midweek cup match.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "not-used",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Andy Hunter",
+              "bylineHtml": "<a href=\"profile/andyhunter\">Andy Hunter</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Andy_Hunter.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "The manager again highlights the demand on all clubs",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/how-is-that-fair-klopp-questions-busy-fixture-list-with-player-welfare-concerns",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/22/blue-rising-how-everton-have-roused-themselves-after-points-deduction",
+              "headline": "How Everton have roused themselves after points deduction",
+              "kicker": "Blue rising",
+              "articleType": "feature",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "From Sean Dyche’s team rapport and lack of self-pity to a suddenly firing front line and fine away form, we look at why Everton are flying",
+              "image": {
+                "id": "c547d0ddaf24284dc41981c2656b7a75c3d1aeeb/0_196_5568_3341/master/5568.jpg",
+                "source": "media",
+                "credit": "Photograph: Tony McArdle/Everton FC/Getty Images",
+                "caption": "Amadou Onana celebrates his goal in Everton’s win at Burnley, their fourth away from home in a row.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "source": "media",
+                "id": "c547d0ddaf24284dc41981c2656b7a75c3d1aeeb/0_196_5568_3341/master/5568.jpg",
+                "credit": "Photograph: Tony McArdle/Everton FC/Getty Images",
+                "caption": "Amadou Onana celebrates his goal in Everton’s win at Burnley, their fourth away from home in a row.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "not-used",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Andy Hunter",
+              "bylineHtml": "<a href=\"profile/andyhunter\">Andy Hunter</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Andy_Hunter.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "From Sean Dyche’s team rapport and lack of self-pity to a suddenly firing front line and fine away form, we look at why Everton are flying",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/blue-rising-how-everton-have-roused-themselves-after-points-deduction",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "3:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "football/2023/dec/22/erling-haaland-manchester-city-top-100-analysis",
+              "headline": "Haaland voted the world’s best player – and he’s just getting started",
+              "kicker": "The 100 best male footballers",
+              "articleType": "analysis",
+              "headerType": "largebyline",
+              "displayHint": "",
+              "trail": "The Norwegian is only 23 but his devastating goal record has seen him voted as the No 1 player in the world by the Guardian’s expert panel",
+              "image": {
+                "id": "0fad20927adc306083bcad57ae06a2aca48d14f8/0_0_1871_1247/master/1871.jpg",
+                "source": "media",
+                "credit": "Photograph: James Gill/Danehouse/Getty Images",
+                "caption": "Pep Guardiola does not construct route-one teams, but Erling Haaland’s qualities offer City a second edge, another key on the chain to unpick defences.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "0fad20927adc306083bcad57ae06a2aca48d14f8/0_0_1871_1247/master/1871.jpg",
+                "source": "media",
+                "credit": "Photograph: James Gill/Danehouse/Getty Images",
+                "caption": "Pep Guardiola does not construct route-one teams, but Erling Haaland’s qualities offer City a second edge, another key on the chain to unpick defences.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Niall McVeigh",
+              "bylineHtml": "<a href=\"profile/niall-mcveigh\">Niall McVeigh</a>",
+              "standfirst": "The Norwegian is only 23 but his devastating goal record has seen him voted as the No 1 player in the world by the Guardian’s expert panel",
+              "webUrl": "https://www.theguardian.com/football/2023/dec/22/erling-haaland-manchester-city-top-100-analysis",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "coverCard",
+              "cardImage": {
+                "id": "588f29da7deccf52b035c05abb4323da09a59bbd/0_0_1050_1784/master/1050.jpg",
+                "source": "media"
+              },
+              "cardImageTablet": {
+                "id": "9a6f77e07cd45dd7d077387dcb3cf8406af912e6/0_0_1623_1784/master/1623.jpg",
+                "source": "media"
+              }
+            }
+          ]
+        },
+        {
+          "appearance": "four",
+          "articles": [
+            {
+              "id": "football/2024/dec/25/top-100-male-footballers-top-10",
+              "headline": "Top 10",
+              "kicker": "The 100 best male footballers",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": " ",
+              "image": {
+                "id": "ff377434b91020578946b61f61bd889049a91a8d/0_0_1167_700/master/1167.jpg",
+                "source": "media",
+                "credit": "Composite: Guardian Design; Action Plus/Shutterstock; EPA; Reuters",
+                "caption": "Our top 100 male footballers of the year list concludes today.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "ff377434b91020578946b61f61bd889049a91a8d/0_0_1167_700/master/1167.jpg",
+                "source": "media",
+                "credit": "Composite: Guardian Design; Action Plus/Shutterstock; EPA; Reuters",
+                "caption": "Our top 100 male footballers of the year list concludes today.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb-large"
+                }
+              },
+              "byline": "",
+              "bylineHtml": "",
+              "standfirst": " ",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/23/the-ian-wright-line-why-tfl-need-look-no-further-for-train-routes-new-name",
+              "headline": "Why TfL need look no further for train route’s new name",
+              "kicker": "The Ian Wright Line",
+              "articleType": "opinion",
+              "headerType": "largebyline",
+              "displayHint": "",
+              "trail": "The Overground arc from Crystal Palace to Highbury takes in all the key staging posts in the career of Ian Wright, one of our most loved football people",
+              "image": {
+                "id": "0a6178da64f1017b8de5d215ee906d758184d39d/0_0_2560_1536/master/2560.jpg",
+                "source": "media",
+                "credit": "Illustration: Nathan Daniels",
+                "caption": "Ian Wright’s life has spanned a remarkable period in the fabric of post-imperial Britain.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "0a6178da64f1017b8de5d215ee906d758184d39d/0_0_2560_1536/master/2560.jpg",
+                "source": "media",
+                "credit": "Illustration: Nathan Daniels",
+                "caption": "Ian Wright’s life has spanned a remarkable period in the fabric of post-imperial Britain.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "Barney Ronay",
+              "bylineHtml": "<a href=\"profile/barneyronay\">Barney Ronay</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2022/11/21/Barney_Ronay.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "The Overground arc from Crystal Palace to Highbury takes in all the key staging posts in the career of Ian Wright, one of our most loved football people",
+              "showByline": true,
+              "showQuotedHeadline": true,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "football/2023/dec/22/in-brief",
+              "headline": "In brief",
+              "kicker": "Football",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": " ",
+              "image": {
+                "id": "76e9113802a83878141f30fea93cd36ba8e47ef3/0_0_1619_971/master/1619.jpg",
+                "source": "media",
+                "credit": "Photograph: Stuart MacFarlane/Arsenal FC/Getty Images",
+                "caption": "Mikel Arteta.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "76e9113802a83878141f30fea93cd36ba8e47ef3/0_0_1619_971/master/1619.jpg",
+                "source": "media",
+                "credit": "Photograph: Stuart MacFarlane/Arsenal FC/Getty Images",
+                "caption": "Mikel Arteta.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "",
+              "bylineHtml": "",
+              "standfirst": " ",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "sport/2024/dec/25/fixtures-and-tables",
+              "headline": "Fixtures and tables",
+              "kicker": "Football",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "All fixtures today 3pm unless stated",
+              "image": {
+                "id": "de2815d7c79e3fde6eec09ce36b74bae30a6ccf8/0_0_2000_1200/master/2000.jpg",
+                "source": "media",
+                "credit": "Illustration: Guardian Design",
+                "caption": "Fixtures and tables.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "de2815d7c79e3fde6eec09ce36b74bae30a6ccf8/0_0_2000_1200/master/2000.jpg",
+                "source": "media",
+                "credit": "Illustration: Guardian Design",
+                "caption": "Fixtures and tables.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "",
+              "bylineHtml": "",
+              "standfirst": "All fixtures today 3pm unless stated",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "4:Football",
+      "cards": [
+        {
+          "appearance": "splash",
+          "articles": [
+            {
+              "id": "sport/2023/dec/23/buddies-and-honest-men-scotland-claim-prize-in-nicknames-world-cup",
+              "headline": "Scotland claim prize in nicknames World Cup",
+              "kicker": "Buddies and Honest Men",
+              "articleType": "feature",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": "Historic and evocative alternative monikers can be found across the globe, but the best are north of Hadrian’s Wall",
+              "image": {
+                "id": "dcc1742d06c6e99ac8e3a449929ecb34158183a1/0_0_4992_2995/master/4992.jpg",
+                "source": "media",
+                "credit": "Composite: Guardian Picture Desk",
+                "caption": "Clockwise from top left: Bristol Rovers aka The Gas; Alemannia Aachen aka Kartoffelkäfer; Wycombe aka the Chairboys; Estudiantes de La Plata aka Los Pincharratas; Ayr United aka Honest Men; Cork GAA aka Rebel County or the Donkey Eaters.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "b2913d22e3375930c88a85d5252f5dc5b6931b6b/0_620_3555_2133/master/3555.jpg",
+                "source": "media",
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Matthew Engel and Richard Whitehead",
+              "bylineHtml": "<a href=\"profile/matthewengel\">Matthew Engel</a> and <a href=\"profile/richard-whitehead\">Richard Whitehead</a>",
+              "bylineImages": {
+                "cutout": {
+                  "id": "2018/04/11/Matthew_Engel,_L.png",
+                  "source": "uploads"
+                }
+              },
+              "standfirst": "Historic and evocative alternative monikers can be found across the globe, but the best are north of Hadrian’s Wall",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "image"
+            }
+          ]
+        },
+        {
+          "appearance": "two",
+          "articles": [
+            {
+              "id": "sport/2023/dec/22/chess-bodhana-sivanandan-eight-sets-new-records-with-victory-in-zagreb",
+              "headline": "Sivanandan sets fresh records with Zagreb win",
+              "kicker": "Chess",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": " ",
+              "image": {
+                "id": "fc8c2a7b1fa15153f4f54fbffac12e10e682895f/0_1436_3648_2189/master/3648.jpg",
+                "source": "media",
+                "credit": "Photograph: Luka Rifelj",
+                "caption": "Bodhana Sivanandan, eight, was the top female in the European open blitz championship at Zagreb.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "fc8c2a7b1fa15153f4f54fbffac12e10e682895f/0_1436_3648_2189/master/3648.jpg",
+                "source": "media",
+                "credit": "Photograph: Luka Rifelj",
+                "caption": "Bodhana Sivanandan, eight, was the top female in the European open blitz championship at Zagreb.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "full-size",
+                  "tablet": "full-size"
+                }
+              },
+              "byline": "Leonard Barden",
+              "bylineHtml": "<a href=\"profile/leonardbarden\">Leonard Barden</a>",
+              "standfirst": " ",
+              "webUrl": "https://www.theguardian.com/sport/2023/dec/22/chess-bodhana-sivanandan-eight-sets-new-records-with-victory-in-zagreb",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            },
+            {
+              "id": "sport/2023/dec/22/in-brief",
+              "headline": "In brief",
+              "kicker": "Sport",
+              "articleType": "article",
+              "headerType": "regularbyline",
+              "displayHint": "",
+              "trail": " ",
+              "image": {
+                "id": "905f7681806a1b7972fd31014a6b05ea014d8b8c/0_0_3149_1890/master/3149.jpg",
+                "source": "media",
+                "credit": "Photograph: Matt Roberts-ICC/ICC/Getty Images",
+                "caption": "Jonathan Trott.",
+                "displayCredit": true
+              },
+              "trailImage": {
+                "id": "905f7681806a1b7972fd31014a6b05ea014d8b8c/0_0_3149_1890/master/3149.jpg",
+                "source": "media",
+                "credit": "Photograph: Matt Roberts-ICC/ICC/Getty Images",
+                "caption": "Jonathan Trott.",
+                "displayCredit": true,
+                "use": {
+                  "mobile": "thumb",
+                  "tablet": "thumb"
+                }
+              },
+              "byline": "",
+              "bylineHtml": "",
+              "standfirst": " ",
+              "showByline": false,
+              "showQuotedHeadline": false,
+              "mediaType": "useArticleTrail"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "swatch": "sport",
+  "appearance": {
+    "type": "pillar",
+    "name": "sport"
+  },
+  "displayName": "Sport",
+  "key": "Sport"
+}

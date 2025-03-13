@@ -1,0 +1,7 @@
+{
+  "error": {
+    "name": "clockwatchNotFoundError",
+    "message": "Double check your have supplied a valid date",
+    "header": "No live clockwatch updates for this date"
+  }
+}

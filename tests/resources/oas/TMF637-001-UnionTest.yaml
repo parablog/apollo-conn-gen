@@ -1,0 +1,189 @@
+openapi: 3.0.1
+info:
+  title: ProductInventory
+  description: >+
+    **TMF API Reference : TMF 637 - Product Inventory Management**
+    Copyright © TM Forum 2021. All Rights Reserved
+
+
+  version: 5.0.0
+servers:
+  - url: 'https://serverRoot'
+tags:
+  - name: product
+    description: Operations for Product Resource
+  - name: notification listener
+    description: Notifications for Resource Lifecycle and event notifications
+  - name: events subscription
+    description: Endpoints to register and terminate an Event Listener
+paths:
+  '/product/{id}':
+    get:
+      tags:
+        - product
+      summary: Retrieves a Product by ID
+      description: >-
+        This operation retrieves a Product entity. Attribute selection enabled for all first level
+        attributes.
+      operationId: retrieveProduct
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          $ref: '#/components/responses/200Product_Get'
+
+components:
+  schemas:
+    Addressable:
+      type: object
+      description: Base schema for adressable entities
+      properties:
+        href:
+          type: string
+          description: Hyperlink reference
+        id:
+          type: string
+          description: unique identifier
+
+    Extensible:
+      type: object
+      description: >-
+        Base Extensible schema for use in TMForum Open-APIs - When used for in a schema it means
+        that the Entity described by the schema  MUST be extended with the @type
+      properties:
+        '@type':
+          type: string
+          description: 'When sub-classing, this defines the sub-class Extensible name'
+        '@baseType':
+          type: string
+          description: 'When sub-classing, this defines the super-class'
+        '@schemaLocation':
+          type: string
+          description: A URI to a JSON-Schema file that defines additional attributes and relationships
+      required:
+        - '@type'
+
+    EntityRef:
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Addressable'
+        - type: object
+          description: Entity reference schema to be use for all entityRef class.
+          properties:
+            id:
+              type: string
+              description: The identifier of the referred entity.
+            href:
+              type: string
+              description: The URI of the referred entity.
+            name:
+              type: string
+              description: Name of the referred entity.
+            '@referredType':
+              type: string
+              description: The actual type of the target instance when needed for disambiguation.
+          required:
+            - id
+
+    Entity:
+      type: object
+      description: Base entity schema for use in TMForum Open-APIs. Property.
+      allOf:
+        - $ref: '#/components/schemas/Extensible'
+        - $ref: '#/components/schemas/Addressable'
+
+    IntentRef:
+      type: object
+      description: 'Intent reference, for when Intent is used by other entities'
+      allOf:
+        - $ref: '#/components/schemas/EntityRef'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          IntentRef: '#/components/schemas/IntentRef'
+
+    Intent:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: >-
+            An Intent instance is the formal description of all expectations including requirements,
+            goals, and constraints given to a technical system
+          properties:
+            description:
+              type: string
+              description: The description of the intent.
+            name:
+              type: string
+              description: The name of the intent.
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Intent: '#/components/schemas/Intent'
+
+    IntentRefOrValue:
+      type: object
+      description: >-
+        Intent Ref (if Intent already exists) or Value (if Intent be created or its details be
+        presented)
+      oneOf:
+        - $ref: '#/components/schemas/IntentRef'
+        - $ref: '#/components/schemas/Intent'
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          IntentRef: '#/components/schemas/IntentRef'
+          Intent: '#/components/schemas/Intent'
+
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          description: >-
+            A product offering procured by a customer or other interested party playing a party
+            role. A product is realized as one or more service(s) and / or resource(s).
+          properties:
+            intent:
+              $ref: '#/components/schemas/IntentRefOrValue'
+            name:
+              type: string
+              description: Name of the product. It could be the same as the name of the product offering
+      discriminator:
+        propertyName: '@type'
+        mapping:
+          Product: '#/components/schemas/Product'
+  parameters:
+    Id:
+      name: id
+      required: true
+      schema:
+        type: string
+      in: path
+      description: Identifier of the Resource
+    Fields:
+      name: fields
+      in: query
+      description: Comma-separated properties to be provided in response
+      schema:
+        type: string
+    Offset:
+      name: offset
+      in: query
+      description: Requested index for start of resources to be provided in response
+      schema:
+        type: integer
+    Limit:
+      name: limit
+      in: query
+      description: Requested number of resources to be provided in response
+      schema:
+        type: integer
+
+  responses:
+    200Product_Get:
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Product'

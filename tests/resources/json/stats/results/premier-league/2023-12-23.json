@@ -1,0 +1,112 @@
+{
+  "results": [
+    {
+      "date": "2023-12-23",
+      "ko_time": "17:30",
+      "venue": "Anfield",
+      "referee": "Chris Kavanagh",
+      "home_team": {
+        "name": "Liverpool",
+        "score": 1,
+        "ht_score": 1,
+        "scorers": "Mohamed Salah (29)"
+      },
+      "away_team": {
+        "name": "Arsenal",
+        "score": 1,
+        "ht_score": 1,
+        "scorers": "Magalhaes Gabriel (4)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Craven Cottage",
+      "referee": "Rebecca Welch",
+      "home_team": {
+        "name": "Fulham",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      },
+      "away_team": {
+        "name": "Burnley",
+        "score": 2,
+        "ht_score": 0,
+        "scorers": "Wilson Odobert (47),Sander Berge (66)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Kenilworth Road",
+      "referee": "Darren England",
+      "home_team": {
+        "name": "Luton",
+        "score": 1,
+        "ht_score": 1,
+        "scorers": "Andros Townsend (25)"
+      },
+      "away_team": {
+        "name": "Newcastle",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "The City Ground",
+      "referee": "Robert Jones",
+      "home_team": {
+        "name": "Nottm Forest",
+        "score": 2,
+        "ht_score": 0,
+        "scorers": "Anthony Elanga (47),Chris Wood (74)"
+      },
+      "away_team": {
+        "name": "AFC Bournemouth",
+        "score": 3,
+        "ht_score": 0,
+        "scorers": "Dominic Solanke (51),Dominic Solanke (58),Dominic Solanke (90 +3:38)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "15:00",
+      "venue": "Tottenham Hotspur Stadium",
+      "referee": "Stuart Attwell",
+      "home_team": {
+        "name": "Tottenham Hotspur",
+        "score": 2,
+        "ht_score": 2,
+        "scorers": "de Andrade Richarlison (9),Heung-Min Son (18)"
+      },
+      "away_team": {
+        "name": "Everton",
+        "score": 1,
+        "ht_score": 0,
+        "scorers": "Filipe Andre Gomes (82)"
+      }
+    },
+    {
+      "date": "2023-12-23",
+      "ko_time": "12:30",
+      "venue": "London Stadium",
+      "referee": "Simon Hooper",
+      "home_team": {
+        "name": "West Ham",
+        "score": 2,
+        "ht_score": 0,
+        "scorers": "Jarrod Bowen (72),Mohammed Kudus (78)"
+      },
+      "away_team": {
+        "name": "Man Utd",
+        "score": 0,
+        "ht_score": 0,
+        "scorers": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "userId": 50,
+  "favouriteTeams": ["Luton"],
+  "favouriteLeagues": [
+    "premier-league",
+    "championship",
+    "scottish-premiership"
+  ],
+  "joiningDate": "2023-12-11"
+}

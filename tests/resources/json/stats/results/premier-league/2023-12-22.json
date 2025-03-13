@@ -1,0 +1,22 @@
+{
+  "results": [
+    {
+      "date": "2023-12-22",
+      "ko_time": "20:00",
+      "venue": "Villa Park",
+      "referee": "Anthony Taylor",
+      "home_team": {
+        "name": "Aston Villa",
+        "score": 1,
+        "ht_score": 0,
+        "scorers": "Nicolo Zaniolo (90 +6:59)"
+      },
+      "away_team": {
+        "name": "Sheff Utd",
+        "score": 1,
+        "ht_score": 0,
+        "scorers": "Cameron Archer (87)"
+      }
+    }
+  ]
+}
