@@ -1,1 +1,1 @@
-export * from './oasGen';
+export * from './oasGen.js';
