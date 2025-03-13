@@ -1,1 +1,1 @@
-export { StringWriter, ConnectorWriter, IWriter } from './writer.js';
+export { StringWriter, ConnectorWriter, type IWriter } from './writer.js';

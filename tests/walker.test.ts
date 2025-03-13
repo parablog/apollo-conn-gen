@@ -8,6 +8,9 @@ import { JsonGen } from '../src/json/walker/jsonGen';
 import { JsonContext } from '../src/json/walker/jsonContext';
 import { JsonType } from '../src/json/walker/types/jsonType';
 
+import { it, describe, afterEach, after as afterAll } from 'node:test';
+import assert, { equal } from 'node:assert';
+
 interface ITestOptions {
   shouldFail: boolean;
   outputContains?: string;
@@ -17,8 +20,7 @@ console.log = () => {};
 console.warn = () => {};
 
 const writer = new StringWriter();
-const base =
-  '/Users/fernando/Development/Apollo/connectors/projects/JsonToConnector/src/test/resources/';
+const base = '/Users/fernando/Development/Apollo/connectors/projects/JsonToConnector/src/test/resources/';
 
 afterEach(() => {
   writer.clear();
@@ -32,7 +34,7 @@ afterAll(async () => {
     const filePath = path.join(directory, file);
     fs.rmSync(filePath, { recursive: true, force: true });
   }
-})
+});
 
 describe('Walker Test Suite', () => {
   it('should construct Walker from JSON string and store types in context', () => {
@@ -52,7 +54,7 @@ describe('Walker Test Suite', () => {
     ConnectorWriter.write(walker, writer);
     writer.clear();
 
-    expect(types.length).toBeGreaterThan(0);
+    assert.ok(types.length > 0);
   });
 
   it('should construct Walker from JSON file and store types in context', async () => {
@@ -101,8 +103,8 @@ describe('Walker Test Suite', () => {
 
   it('articles/clockwatch', async () => {
     const output = await run('articles/clockwatch', { shouldFail: true });
-    expect(output).toBeDefined()
-    expect(output!.includes("SELECTED_FIELD_NOT_FOUND")).toBeTruthy()
+    expect(output).toBeDefined();
+    expect(output!.includes('SELECTED_FIELD_NOT_FOUND')).toBeTruthy();
   });
 
   it('test/merge', async () => {
@@ -124,11 +126,10 @@ describe('Walker Test Suite', () => {
   // });
 
   it('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend', async () => {
-    await run(
-      'articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend.json', {
-        shouldFail: true,
-        outputContains: 'SELECTED_FIELD_NOT_FOUND',
-      });
+    await run('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend.json', {
+      shouldFail: true,
+      outputContains: 'SELECTED_FIELD_NOT_FOUND',
+    });
   });
 
   it('live-scores/all/2023-12-23_15_00.json', async () => {
@@ -138,7 +139,7 @@ describe('Walker Test Suite', () => {
 
 async function run(
   fileOrFolder: string,
-  options: ITestOptions = { shouldFail: false, outputContains: undefined }
+  options: ITestOptions = { shouldFail: false, outputContains: undefined },
 ): Promise<string | undefined> {
   const fileOrFolderPath: string = `${base}/${fileOrFolder}`;
 
@@ -150,9 +151,7 @@ async function run(
   if (stats.isDirectory()) {
     walker = JsonGen.new();
 
-    const sources = fs
-      .readdirSync(fileOrFolderPath)
-      .filter((name) => name.toLowerCase().endsWith('.json'));
+    const sources = fs.readdirSync(fileOrFolderPath).filter((name) => name.toLowerCase().endsWith('.json'));
 
     for (const source of sources) {
       const fullPath = path.join(fileOrFolderPath, source);
@@ -176,10 +175,7 @@ async function run(
   const schema = walker.generateSchema();
   expect(schema).toBeDefined();
 
-  const schemaFile = path.join(
-    os.tmpdir() + '/walker',
-    fileOrFolder.replace(/\.yaml|\.json|\.yml/, '') + '.graphql'
-  );
+  const schemaFile = path.join(os.tmpdir() + '/walker', fileOrFolder.replace(/\.yaml|\.json|\.yml/, '') + '.graphql');
 
   // Ensure the directory exists
   // fs.mkdirSync(path.dirname(schemaFile), { recursive: true });
