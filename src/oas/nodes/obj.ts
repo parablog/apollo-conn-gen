@@ -1,15 +1,15 @@
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Naming } from '../utils/naming';
-import { Arr } from './arr';
-import { Factory } from './factory';
-import { Get } from './get';
-import { PropArray } from './props';
-import { Ref } from './ref';
-import { Response } from './response';
-import { IType, Type } from './type';
+import { SchemaObject } from 'oas/types';
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
+import { Arr } from './arr.js';
+import { Factory } from './factory.js';
+import { Get } from './get.js';
+import { PropArray } from './props/index.js';
+import { Ref } from './ref.js';
+import { Response } from './response.js';
+import { IType, Type } from './type.js';
 
 export class Obj extends Type {
   constructor(

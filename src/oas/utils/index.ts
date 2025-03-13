@@ -1,3 +1,3 @@
-export * from './gql';
-export * from './naming';
-export * from './type_utils';
+export * from './gql.js';
+export * from './naming.js';
+export * from './typeUtils.js';

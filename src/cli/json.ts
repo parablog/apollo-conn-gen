@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { JsonGen } from '../json';
+import { JsonGen } from '../json/index.js';
 
 // mute console.log
 console.log = () => {};

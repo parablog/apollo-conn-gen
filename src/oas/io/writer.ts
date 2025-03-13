@@ -1,17 +1,17 @@
 import _ from 'lodash';
 import Oas from 'oas';
-import { ServerObject } from 'oas/dist/types';
-import { OasContext } from '../oasContext';
-import { OasGen } from '../oasGen';
-import { CircularRef, Composed, Get, Obj } from '../nodes';
-import { Param } from '../nodes';
-import { Prop } from '../nodes';
-import { PropArray } from '../nodes';
-import { PropScalar } from '../nodes';
-import { IType, Type } from '../nodes';
-import { Union } from '../nodes';
-import { Naming } from '../utils';
-import { T } from '../utils';
+import { ServerObject } from 'oas/types';
+import { OasContext } from '../oasContext.js';
+import { OasGen } from '../oasGen.js';
+import { CircularRef, Composed, Get, Obj } from '../nodes/index.js';
+import { Param } from '../nodes/index.js';
+import { Prop } from '../nodes/index.js';
+import { PropArray } from '../nodes/index.js';
+import { PropScalar } from '../nodes/index.js';
+import { IType, Type } from '../nodes/index.js';
+import { Union } from '../nodes/index.js';
+import { Naming } from '../utils/naming.js';
+import { T } from '../utils/index.js';
 
 export class Writer {
   public static findNonPropParent(type: IType) {
@@ -211,7 +211,7 @@ export class Writer {
 
   private writeConnector(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
     const indent = 0;
-    const get = type as Get; // assume type is GetOp
+    const get = type as unknown as Get; // assume type is GetOp
     let spacing = ' '.repeat(indent + 4);
     writer.append(spacing).append('@connect(\n');
 

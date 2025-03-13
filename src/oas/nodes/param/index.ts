@@ -1,1 +1,1 @@
-export * from './param';
+export * from './param.js';

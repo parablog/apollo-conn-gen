@@ -1,13 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { JsonContext } from './jsonContext';
-import { JsonArray, JsonObj, JsonScalar, JsonType } from './types';
-import { trace, warn } from './log/trace';
-import { sanitiseField } from './naming';
 import _ from 'lodash';
-import { ConnectorWriter, StringWriter } from '../io';
+import { ConnectorWriter, JsonArray, JsonContext, JsonObj, JsonScalar, JsonType, StringWriter } from '../index.js';
+import { trace, warn } from './log/trace.js';
+import { sanitiseField } from './naming.js';
 
 export class JsonGen {
-  private context: JsonContext;
+  private readonly context: JsonContext;
 
   // Private constructor
   private constructor() {
@@ -64,7 +62,7 @@ export class JsonGen {
   // Writes selection using a given Writer
   public writeSelection(writer: { write(text: string): void }): void {
     const types = this.context.getTypes();
-    const root = types.find((t) => t.getParent() === null);
+    const root = types.find((t: JsonType) => t.getParent() === null);
     if (root) {
       root.select(this.context, writer);
     }
@@ -73,7 +71,7 @@ export class JsonGen {
   // Writes all types in order using the provided Writer
   public writeTypes(writer: { write(text: string): void }): void {
     const types = this.context.getTypes();
-    const root = types.find((t) => t.getParent() === null);
+    const root = types.find((t: JsonType) => t.getParent() === null);
     if (root) {
       const orderedSet = new Set<JsonType>();
       this.writeType(root, orderedSet);
@@ -81,7 +79,7 @@ export class JsonGen {
       const generatedSet = new Map<string, JsonType>();
       orderedSet.forEach((t) => {
         // Assumes t is an Obj
-        const obj = t as JsonObj;
+        const obj = t as unknown as JsonObj;
         let typeName = obj.getType();
         if (generatedSet.has(typeName)) {
           // If same type, skip generation
@@ -144,7 +142,7 @@ export class JsonGen {
     } else if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
       result = this.walkPrimitive(context, parent, name, element);
     } else {
-      throw new Error("Cannot yet handle '" + name + "' of type " + typeof element);
+      throw new Error('Cannot yet handle \'' + name + '\' of type ' + typeof element);
     }
 
     trace(context, '<- [walkElement]', 'out: ' + name);
@@ -178,14 +176,14 @@ export class JsonGen {
       const arrayType = this.walkElement(context, parent, name, firstElement);
       result.setArrayType(arrayType);
     } else {
-      warn(context, '   [walkArray]', "Array is empty -- cannot derive type for field '" + name + "'");
+      warn(context, '   [walkArray]', 'Array is empty -- cannot derive type for field \'' + name + '\'');
     }
     trace(context, '-> [walkArray]', 'in: ' + name);
     return result;
   }
 
   // Walk a primitive JSON value
-  private walkPrimitive(context: JsonContext, parent: JsonType | null, name: string, primitive: any): JsonScalar {
+  private walkPrimitive(_context: JsonContext, parent: JsonType | null, name: string, primitive: any): JsonScalar {
     let result: JsonScalar;
     if (typeof primitive === 'string') {
       result = new JsonScalar(name, parent, 'String');

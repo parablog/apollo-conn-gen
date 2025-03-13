@@ -1,4 +1,4 @@
-import { OasContext } from '../oasContext';
+import { OasContext } from '../oasContext.js';
 
 export function trace(ctx: OasContext | null, loc: string, log: string) {
   console.log(' '.repeat(ctx?.size() ?? 0), loc, log);

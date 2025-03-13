@@ -1,6 +1,4 @@
-// import { trace } from './Trace'; // Uncomment if you wish to use tracing
-
-import { JsonObj, JsonType } from './types';
+import { JsonObj, JsonType } from '../index.js';
 
 export class JsonContext {
   private stack: JsonType[];
@@ -20,7 +18,7 @@ export class JsonContext {
     this.stack.push(element);
   }
 
-  public leave(element: JsonType): void {
+  public leave(_element: JsonType): void {
     // trace(this, "[context]", "<- leave: (" + this.stack.length + ") " + element.getName());
     this.stack.pop();
   }
@@ -37,7 +35,7 @@ export class JsonContext {
     const source = this.types.get(type.id());
     // Only merge if both are Obj instances
     if (source instanceof JsonObj && type instanceof JsonObj) {
-      type.getFields().forEach((value, key) => {
+      type.getFields().forEach((value: JsonType, key: string) => {
         source.getFields().set(key, value);
       });
       this.types.set(source.id(), source);

@@ -1,9 +1,8 @@
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../../log/trace';
-import { OasContext } from '../../oasContext';
-import { Writer } from '../../io/writer';
-import { Naming } from '../../utils/naming';
-import { IType, Type } from '../type';
+import { SchemaObject } from 'oas/types';
+import { OasContext } from '../../oasContext.js';
+import { Writer } from '../../io/writer.js';
+import { Naming } from '../../utils/naming.js';
+import { IType, Type } from '../type.js';
 
 export abstract class Prop extends Type {
   public required: boolean = false;

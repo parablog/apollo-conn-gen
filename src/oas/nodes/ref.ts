@@ -1,13 +1,13 @@
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Naming } from '../utils/naming';
-import { Arr } from './arr';
-import { Factory } from './factory';
-import { Prop } from './props/prop';
-import { ReferenceObject } from './props/types';
-import { IType, Type } from './type';
+import { SchemaObject } from 'oas/types';
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
+import { Arr } from './arr.js';
+import { Factory } from './factory.js';
+import { Prop } from './props/prop.js';
+import { IType, Type } from './type.js';
+import { ReferenceObject } from './props/index.js';
 
 export class Ref extends Type {
   public refType?: IType;

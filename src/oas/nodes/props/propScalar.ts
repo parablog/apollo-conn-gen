@@ -1,11 +1,10 @@
-import { Prop } from './prop';
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../../log/trace';
-import { OasContext } from '../../oasContext';
-import { Writer } from '../../io/writer';
-import { Naming } from '../../utils/naming';
-import { Factory } from '../factory';
-import { IType } from '../type';
+import { SchemaObject } from 'oas/types';
+import { trace } from '../../log/trace.js';
+import { OasContext } from '../../oasContext.js';
+import { Writer } from '../../io/index.js';
+import { Naming } from '../../utils/index.js';
+import { Factory } from '../factory.js';
+import { IType, Prop } from '../index.js';
 
 export class PropScalar extends Prop {
   private propType?: IType;

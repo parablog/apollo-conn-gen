@@ -1,9 +1,9 @@
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Factory } from './factory';
-import { IType, Type } from './type';
+import { SchemaObject } from 'oas/types';
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/index.js';
+import { Factory } from './index.js';
+import { IType, Type } from './index.js';
 
 export class Response extends Type {
   public schema: SchemaObject;

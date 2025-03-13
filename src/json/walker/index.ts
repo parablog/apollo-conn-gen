@@ -1,3 +1,2 @@
-export { JsonContext } from './jsonContext';
-export { JsonGen } from './jsonGen';
-export * from './types';
+export { JsonContext } from './jsonContext.js';
+export { JsonGen } from './jsonGen.js';

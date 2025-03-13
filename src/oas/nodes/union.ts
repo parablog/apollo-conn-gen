@@ -1,12 +1,12 @@
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Naming } from '../utils/naming';
-import { Factory } from './factory';
-import { Prop } from './props';
-import { Ref } from './ref';
-import { IType, Type } from './type';
+import { SchemaObject } from 'oas/types';
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/index.js';
+import { Naming } from '../utils/index.js';
+import { Factory } from './index.js';
+import { Prop } from './props/index.js';
+import { Ref } from './index.js';
+import { IType, Type } from './index.js';
 
 export class Union extends Type {
   get id(): string {
@@ -159,7 +159,7 @@ export class Union extends Type {
     return ids;
   }
 
-  private visitProperties(context: OasContext): void {
+  private visitProperties(_context: OasContext): void {
     // do nothing?
     // for (const [_, prop] of collected.entries()) {
     //   trace(context, '   [union]', 'prop: ' + prop);

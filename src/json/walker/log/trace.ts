@@ -1,4 +1,4 @@
-import { JsonContext } from '../jsonContext';
+import { JsonContext } from '../jsonContext.js';
 
 export function trace(ctx: JsonContext | null, context: string, message: string): void {
   const count = ctx ? ctx.getStack().length : 0;

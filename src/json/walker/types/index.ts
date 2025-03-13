@@ -1,4 +1,4 @@
-export { JsonObj } from './jsonObj';
-export { JsonScalar } from './jsonScalar';
-export { JsonType } from './jsonType';
-export { JsonArray } from './jsonArray';
+export { JsonObj } from './jsonObj.js';
+export { JsonScalar } from './jsonScalar.js';
+export { JsonType } from './jsonType.js';
+export { JsonArray } from './jsonArray.js';

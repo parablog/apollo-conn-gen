@@ -1,13 +1,14 @@
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Naming } from '../utils/naming';
-import { Factory } from './factory';
-import { Prop } from './props/prop';
-import { Ref } from './ref';
-import { IType, Type } from './type';
-import { ReferenceObject } from './props/types';
+import { SchemaObject } from 'oas/types';
+
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
+import { Factory } from './factory.js';
+import { Prop } from './props/index.js';
+import { Ref } from './index.js';
+import { IType, Type } from './type.js';
+import { ReferenceObject } from './props/index.js';
 
 export class Composed extends Type {
   get id(): string {
@@ -142,7 +143,7 @@ export class Composed extends Type {
     }
 
     // copy all collected props from children into this node
-    props.forEach((prop) => this.props.set(prop.name, prop));
+    props.forEach((prop, name) => this.props.set(name, prop));
 
     this.consolidated = true;
 

@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import { Operation } from 'oas/dist/operation';
+import { Operation } from 'oas/operation';
 
 interface Converter {
   convert(input: string): string;

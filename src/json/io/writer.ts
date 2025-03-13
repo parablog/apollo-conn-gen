@@ -1,5 +1,8 @@
-import { IWriter } from './types';
-import { JsonGen } from '../walker/jsonGen';
+import { JsonGen } from '../walker/jsonGen.js';
+
+export interface IWriter {
+  write(text: string): void;
+}
 
 export class StringWriter implements IWriter {
   builder: string[] = [];

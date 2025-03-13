@@ -1,8 +1,8 @@
-import { IWriter } from '../../io/types';
-import { JsonContext } from '../jsonContext';
-import { trace } from '../log/trace';
-import { sanitiseField, sanitiseFieldForSelect } from '../naming';
-import { JsonType } from './jsonType';
+import { JsonContext } from '../jsonContext.js';
+import { trace } from '../log/trace.js';
+import { sanitiseField, sanitiseFieldForSelect } from '../naming.js';
+import { JsonType } from './index.js';
+import { IWriter } from '../../io/index.js';
 
 function capitalize(s: string): string {
   if (!s) return s;

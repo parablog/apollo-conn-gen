@@ -1,8 +1,8 @@
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Factory } from './factory';
-import { Prop } from './props/prop';
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/index.js';
+import { Factory } from './index.js';
+import { Prop } from './props/index.js';
 
 export interface IType {
   name: string;

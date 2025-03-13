@@ -1,4 +1,4 @@
-import { IWriter } from '../../io/types';
+import { IWriter } from '../../io/index.js';
 
 export interface Context {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

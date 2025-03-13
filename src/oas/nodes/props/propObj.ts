@@ -1,14 +1,10 @@
 import _ from 'lodash';
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../../log/trace';
-import { IType, Type } from '../type';
-import { Composed } from '../comp';
-import { OasContext } from '../../oasContext';
-import { Writer } from '../../io/writer';
-import { Naming } from '../../utils/naming';
-import { Obj } from '../obj';
-import { Union } from '../union';
-import { Prop } from './prop';
+import { SchemaObject } from 'oas/types';
+import { trace } from '../../log/trace.js';
+import { IType, Type, Composed, Obj, Union, Prop } from '../index.js';
+import { OasContext } from '../../oasContext.js';
+import { Writer } from '../../io/index.js';
+import { Naming } from '../../utils/index.js';
 
 export class PropObj extends Prop {
   constructor(

@@ -1,8 +1,8 @@
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Naming } from '../utils';
-import { IType, Type } from './type';
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/index.js';
+import { IType, Type } from './type.js';
 
 export class CircularRef extends Type {
   constructor(

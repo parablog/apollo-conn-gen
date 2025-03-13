@@ -1,4 +1,4 @@
-export { StringWriter, ConnectorWriter } from './io';
-export { JsonContext } from './walker';
-export { JsonGen } from './walker';
-export { JsonObj, JsonScalar, JsonType, JsonArray } from './walker/types';
+export { StringWriter, ConnectorWriter } from './io/index.js';
+export { JsonContext } from './walker/jsonContext.js';
+export { JsonGen } from './walker/jsonGen.js';
+export { JsonObj, JsonScalar, JsonType, JsonArray } from './walker/types/index.js';

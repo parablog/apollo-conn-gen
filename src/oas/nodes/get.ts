@@ -1,14 +1,14 @@
-import { Operation } from 'oas/dist/operation';
-import { MediaTypeObject, ParameterObject, ResponseObject, SchemaObject } from 'oas/dist/types';
+import { Operation } from 'oas/operation';
+import { MediaTypeObject, ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
 
-import { trace, warn } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Naming } from '../utils/naming';
-import { Factory } from './factory';
-import { Param } from './param';
-import { ReferenceObject } from './props/types';
-import { IType, Type } from './type';
+import { trace, warn } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
+import { Factory } from './factory.js';
+import { Param } from './param/index.js';
+import { IType, Type } from './type.js';
+import { ReferenceObject } from './props/index.js';
 
 export class Get extends Type {
   public resultType?: IType;

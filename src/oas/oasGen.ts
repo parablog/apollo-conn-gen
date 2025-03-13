@@ -1,15 +1,15 @@
 import Oas from 'oas';
 import OASNormalize from 'oas-normalize';
-import { Operation, Webhook } from 'oas/dist/operation';
-import { OASDocument } from 'oas/dist/types';
+import { Operation, Webhook } from 'oas/operation';
+import { OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
-import { OasContext } from './oasContext';
-import { Factory } from './nodes';
-import { IType } from './nodes';
-import { Writer } from './io';
-import { trace } from './log/trace';
+import { OasContext } from './oasContext.js';
+import { Factory } from './nodes/index.js';
+import { IType } from './nodes/index.js';
+import { Writer } from './io/index.js';
+import { trace } from './log/trace.js';
 
 interface IGenOptions {
   skipValidation: boolean;

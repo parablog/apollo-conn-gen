@@ -21,15 +21,15 @@ import figures from '@inquirer/figures';
 import type { PartialDeep } from '@inquirer/type';
 import _ from 'lodash';
 
-import { OasContext } from '../oasContext';
-import { CircularRef } from '../nodes';
-import { Composed } from '../nodes';
-import { En } from '../nodes';
-import { PropArray } from '../nodes';
-import { PropScalar } from '../nodes';
-import { IType } from '../nodes';
-import { getMaxLength, isEscapeKey } from './base/utils';
-import { CustomTheme, RenderContext } from './theme';
+import { OasContext } from '../oasContext.js';
+import { CircularRef } from '../nodes/index.js';
+import { Composed } from '../nodes/index.js';
+import { En } from '../nodes/index.js';
+import { PropArray } from '../nodes/index.js';
+import { PropScalar } from '../nodes/index.js';
+import { IType } from '../nodes/index.js';
+import { getMaxLength, isEscapeKey } from './base/utils.js';
+import { CustomTheme, RenderContext } from './theme.js';
 
 const baseTheme: CustomTheme = {
   prefix: {

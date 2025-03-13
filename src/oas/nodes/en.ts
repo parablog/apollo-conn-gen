@@ -1,10 +1,10 @@
-import { SchemaObject } from 'oas/dist/types';
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { GqlUtils } from '../utils/gql';
-import { Naming } from '../utils/naming';
-import { IType, Type } from './type';
+import { SchemaObject } from 'oas/types';
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { GqlUtils } from '../utils/gql.js';
+import { Naming } from '../utils/index.js';
+import { IType, Type } from './index.js';
 
 export class En extends Type {
   constructor(

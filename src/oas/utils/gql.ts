@@ -1,4 +1,4 @@
-import { SchemaObject } from 'oas/dist/types';
+import { SchemaObject } from 'oas/types';
 
 export class GqlUtils {
   public static getGQLScalarType(schema: SchemaObject): string {

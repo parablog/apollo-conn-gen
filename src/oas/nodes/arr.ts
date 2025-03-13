@@ -1,11 +1,12 @@
 import { OpenAPIV3 } from 'openapi-types';
-import { trace } from '../log/trace';
-import { OasContext } from '../oasContext';
-import { Writer } from '../io/writer';
-import { Naming } from '../utils/naming';
-import { Factory } from './factory';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
-import { IType, Type } from './type';
+
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
+import { Factory } from './factory.js';
+import { IType, Type } from './type.js';
 
 export class Arr extends Type {
   public itemsType?: IType;
@@ -38,7 +39,7 @@ export class Arr extends Type {
     context.leave(this);
   }
 
-  public forPrompt(context: OasContext): string {
+  public forPrompt(_context: OasContext): string {
     return `${Naming.getRefName(this.name)} (Array)`;
   }
 

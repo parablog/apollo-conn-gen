@@ -1,3 +1,3 @@
 // export * from './oas';
-export { JsonGen } from './json';
-export { OasGen } from './oas';
+export { JsonGen } from './json/index.js';
+export { OasGen } from './oas/index.js';
