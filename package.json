@@ -1,6 +1,6 @@
 {
   "name": "apollo-oas",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Generates an Apollo Connector from an OpenAPI 3.x specification (YAML or JSON)",
   "author": "Fernando @ Apollo",
   "license": "MIT",

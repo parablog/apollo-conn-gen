@@ -1,6 +1,6 @@
 /// internal functions
 import fs from 'fs';
-import { IType, Type } from '../../oas/nodes/index.js'
+import { IType, Type } from '../../oas/nodes/index.js';
 import { Composed } from '../../oas/nodes/index.js';
 import { Union } from '../../oas/nodes/index.js';
 import { Ref } from '../../oas/nodes/index.js';

@@ -142,7 +142,7 @@ export class JsonGen {
     } else if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
       result = this.walkPrimitive(context, parent, name, element);
     } else {
-      throw new Error('Cannot yet handle \'' + name + '\' of type ' + typeof element);
+      throw new Error("Cannot yet handle '" + name + "' of type " + typeof element);
     }
 
     trace(context, '<- [walkElement]', 'out: ' + name);
@@ -176,7 +176,7 @@ export class JsonGen {
       const arrayType = this.walkElement(context, parent, name, firstElement);
       result.setArrayType(arrayType);
     } else {
-      warn(context, '   [walkArray]', 'Array is empty -- cannot derive type for field \'' + name + '\'');
+      warn(context, '   [walkArray]', "Array is empty -- cannot derive type for field '" + name + "'");
     }
     trace(context, '-> [walkArray]', 'in: ' + name);
     return result;
