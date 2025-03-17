@@ -5,24 +5,25 @@ import { Naming } from '../utils/naming.js';
 import { IType, Type } from './type.js';
 
 export class CircularRef extends Type {
+  public ref?: IType
+
   constructor(
     parent: IType,
-    public ref: IType,
+    name: string
   ) {
-    super(parent, ref.name);
-    // this.children = parent.children;
+    super(parent, name);
   }
 
   get id(): string {
-    return `circular-ref:#${this.ref.id}`;
+    return `circular-ref:#${this.ref?.id}`;
     // return this.child.id;
   }
 
   public forPrompt(_: OasContext): string {
-    return `${Naming.getRefName(this.ref.name)} (Circular Ref in: ${this.parent?.id})`;
+    return `${Naming.getRefName(this.ref!.name)} (Circular Ref in: ${this.parent?.id})`;
   }
 
-  public add(child: IType): void {
+  public add(_child: IType): void {
     throw new Error('Should not be adding a child to a circular ref');
   }
 
@@ -32,7 +33,7 @@ export class CircularRef extends Type {
     trace(context, '<- [circular-ref:visit]', `-> out: ${this.name}`);
   }
 
-  public generate(context: OasContext, writer: Writer): void {
+  public generate(context: OasContext, _writer: Writer): void {
     trace(context, '-> [circular-ref:generate]', `-> in: ${this.name}`);
     // Do nothing, we can't really generate a circular reference.
     trace(context, '<- [circular-ref:generate]', `-> out: ${this.name}`);

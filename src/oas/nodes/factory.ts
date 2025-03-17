@@ -188,7 +188,9 @@ export class Factory {
   }
 
   public static fromCircularRef(parent: IType, child: IType): IType {
-    return new CircularRef(parent, child);
+    const circularRef = new CircularRef(parent, child.name);
+    circularRef.ref = child;
+    return circularRef;
   }
 
   public static fromUnion(_context: OasContext, parent: IType, oneOfs: SchemaObject[]): IType {
