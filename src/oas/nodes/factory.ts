@@ -55,7 +55,7 @@ export class Factory {
 
       const items = schema.items as ArraySchemaObject;
       arr.items = items;
-      arr.itemsType = Factory.fromSchema(arr, items)
+      arr.itemsType = Factory.fromSchema(arr, items);
 
       result = arr;
     }

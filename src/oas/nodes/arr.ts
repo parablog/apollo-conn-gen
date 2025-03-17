@@ -9,12 +9,9 @@ import { IType, Type } from './type.js';
 
 export class Arr extends Type {
   public itemsType?: IType;
-  public items?: ArraySchemaObject
+  public items?: ArraySchemaObject;
 
-  constructor(
-    parent: IType | undefined,
-    name: string,
-  ) {
+  constructor(parent: IType | undefined, name: string) {
     super(parent, name);
   }
 
