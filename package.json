@@ -43,7 +43,8 @@
     "prepublishOnly": "npm run build && npm test && publint",
     "preversion": "npm run lint && npm test",
     "version": "npm run format && git add -A src",
-    "postversion": "git push && git push --tags"
+    "postversion": "git push && git push --tags",
+    "yalc:update": "yalc push --scripts --update --replace"
   },
   "dependencies": {
     "@inquirer/checkbox": "^4.1.1",

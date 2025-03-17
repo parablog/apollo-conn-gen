@@ -9,11 +9,11 @@ import { Factory } from './factory.js';
 import { IType, Type } from './type.js';
 
 export class Arr extends Type {
+  public itemsType?: IType;
   constructor(
     parent: IType | undefined,
     name: string,
     public items: ArraySchemaObject,
-    public itemsType?: IType,
   ) {
     super(parent, name);
   }
