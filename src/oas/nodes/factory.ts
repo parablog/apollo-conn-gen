@@ -48,8 +48,16 @@ export class Factory {
       } else {
         trace(null, '[factory]', 'Factory.fromSchema >>> HERE');
       }
-      result = new Arr(parent, parentName, schema.items as ArraySchemaObject);
-      (result as Arr).itemsType = Factory.fromSchema(result, schema.items as ArraySchemaObject);
+
+      // result = new Arr(parent, parentName, schema.items as ArraySchemaObject);
+      // (result as Arr).itemsType = Factory.fromSchema(result, schema.items as ArraySchemaObject);
+      const arr = new Arr(parent, parentName);
+
+      const items = schema.items as ArraySchemaObject;
+      arr.items = items;
+      arr.itemsType = Factory.fromSchema(arr, items)
+
+      result = arr;
     }
     // array case
     else if (schema.type === 'object') {
