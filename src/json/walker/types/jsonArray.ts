@@ -1,6 +1,6 @@
 import { trace } from '../log/trace.js';
-import { JsonType} from './jsonType.js';
-import { JsonScalar} from './jsonScalar.js';
+import { JsonType } from './jsonType.js';
+import { JsonScalar } from './jsonScalar.js';
 import { JsonObj } from './jsonObj.js';
 import { JsonContext } from '../jsonContext.js';
 import { sanitiseField, sanitiseFieldForSelect } from '../naming.js';

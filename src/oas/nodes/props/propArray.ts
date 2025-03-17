@@ -5,7 +5,7 @@ import { Naming } from '../../utils/naming.js';
 import { Factory } from '../factory.js';
 import { PropObj } from './propObj.js';
 import { PropRef } from './propRef.js';
-import { IType} from '../type.js';
+import { IType } from '../type.js';
 import { Prop } from '../props/prop.js';
 
 export class PropArray extends Prop {
