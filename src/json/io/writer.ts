@@ -23,7 +23,7 @@ export class StringWriter implements IWriter {
 export class ConnectorWriter {
   public static write(walker: JsonGen, writer: IWriter): void {
     this.writeConnector(writer);
-    walker.writeTypes(writer);
+    writer.write(walker.writeTypes());
     this.writeQuery(walker, writer);
   }
 
@@ -47,11 +47,11 @@ export class ConnectorWriter {
     @connect(
       source: "api"
       http: { GET: "/test" }
-      selection: """`,
+      selection: """` +
+        '\n',
     );
 
-    walker.writeSelection(writer);
-
+    writer.write(walker.writeSelection());
     writer.write(`"""
 )}
 `);

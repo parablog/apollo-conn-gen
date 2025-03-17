@@ -68,16 +68,22 @@ export class JsonGen {
   }
 
   // Writes selection using a given Writer
-  public writeSelection(writer: { write(text: string): void }): void {
+  public writeSelection(): string {
+    const writer = new StringWriter();
+
     const types = this.context.getTypes();
     const root = types.find((t: JsonType) => t.getParent() === null);
     if (root) {
       root.select(this.context, writer);
     }
+
+    return writer.flush();
   }
 
   // Writes all types in order using the provided Writer
-  public writeTypes(writer: { write(text: string): void }): void {
+  public writeTypes(): string {
+    const writer = new StringWriter();
+
     const types = this.context.getTypes();
     const root = types.find((t: JsonType) => t.getParent() === null);
     if (root) {
@@ -103,6 +109,8 @@ export class JsonGen {
 
       console.log('orderedSet =', Array.from(orderedSet));
     }
+
+    return writer.flush();
   }
 
   // Recursive helper to order types

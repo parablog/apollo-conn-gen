@@ -1,7 +1,7 @@
 {
-  "name": "apollo-oas",
-  "version": "1.0.13",
-  "description": "Generates an Apollo Connector from an OpenAPI 3.x specification (YAML or JSON)",
+  "name": "apollo-conn-gen",
+  "version": "0.0.1",
+  "description": "Library to generate Apollo connector schemas from OpenAPI specs or JSON payloads. Also includes a CLI to generate connectors from the command line.",
   "author": "Fernando @ Apollo",
   "license": "MIT",
   "repository": {
@@ -34,6 +34,7 @@
     "dist/*"
   ],
   "scripts": {
+    "dev": "tsc --watch",
     "prebuild": "rm -r dist",
     "build": "tsc",
     "test": "node --import tsx/esm --test 'tests/oas.test.ts'",

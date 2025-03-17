@@ -1,20 +1,17 @@
 # OAS to Apollo Connector Generator
 
-**NOTE: THIS TOOL IS BEING REFACTORED -- PLEASE DO NOT USE BEFORE CONTACTING ME.**
-
 ## Introduction
 
-The OAS to Apollo Connector Generator is a tool designed to create
-an [Apollo GraphQL Connector](https://www.apollographql.com/docs/apollo-server/) from an OpenAPI Specification (OAS)
-file. It supports OAS versions 3.x and above, accepting input files in both YAML and JSON formats.
+This project is a library designed to convert an OpenAPI Specification (OAS) file (YAML or JSON) into an Apollo GraphQL Connector. It also includes CLI tools to facilitate this conversion process.
 
-*Note: This project is experimental. Not all OAS specification options are currently supported, and you may encounter
-bugs or unimplemented features. Contributions, bug reports, and feedback are highly appreciated. If you have specific
-OAS files you'd like to add to our test suite, please share them.*
+Key features:
+
+* Generates an Apollo Connector from an OAS specification, converting all types and `GET` entry points defined in the spec (*only* `GET` methods are supported for now)
+* Generates a schema based on a single or a collection of`JSON` files.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) version 18 or higher. Typescript version 5.1.6.
+* [Node.js](https://nodejs.org/) version 18 or higher. Built using Typescript 5.1.6.
 
 ## Installation
 
@@ -37,53 +34,122 @@ OAS files you'd like to add to our test suite, please share them.*
    npm run build
    ```
 
-   And run the CLI with:
-
-    ```shell
-    node ./cli/index.js -h
-    Usage: index [options] <source>
-    
-    Arguments:
-      source                source spec (yaml or json)
-    
-    Options:
-      -V, --version                output the version number
-      -i --skip-validation         Skip validation step (default: false)
-      -n --skip-selection          Generate all [filtered] paths without prompting for a selection (default: false)
-      -l --list-paths              Only list the paths that can be generated (default: false)
-      -g --grep <regex>            Filter the list of paths with the passed expression (default: "*")
-      -p --page-size <num>         Number of rows to display in selection mode (default: "10")
-      -s --load-selections <file>  Load a JSON file with field selections (other options are ignored)
-      -h, --help                   display help for command
-    ```
-
-## Usage
+## Running the `cli/oas` tool
 
 To generate an Apollo Connector from your OAS file, run:
 
 ```bash
-node ./cli/index.js <path-to-your-oas-helpers-file>
+node ./dist/cli/oas <path-to-oas-spec>
 ```
 
-Replace `<path-to-your-oas-file>` with the relative or absolute path to your OAS YAML or JSON file.
+Replace `<path-to-oas-spec>` with the relative or absolute path to your OAS YAML or JSON file.
 
-### Example with Petstore
+### Example with *Petstore*
 
 *Note: the petstore spec can be downloaded from (<https://petstore3.swagger.io>)*
 
 ```bash
-node ./cli/index.js ./tests/petstore.yaml
+node ./dist/cli/oas ./tests/resources/petstore.yaml
 ```
 
 The output should be similar to the following:
 ![Screenshot showing a list of paths available to generate](./docs/screenshot-01.png)
 
-### Selecting fields
+## Running the `cli/json` tool
+
+To generate an Apollo Connector from a `JSON` (or a set of) file(s) you can use the `json` command:
+
+```bash
+node ./dist/cli/json <file|folder>
+```
+
+Replace `<file|folder>` with a path to a `JSON` file or a folder that contains `JSON` files.
+
+### Example with the following `JSON` payload
+
+If we have a file `tests/resources/json/preferences/user/50.json` with the following contents:
+
+```json
+{
+  "userId": 50,
+  "favouriteTeams": ["Luton"],
+  "favouriteLeagues": [
+    "premier-league",
+    "championship",
+    "scottish-premiership"
+  ],
+  "joiningDate": "2023-12-11"
+}
+```
+
+Then running the tool with
+
+```shell
+node ./dist/cli/json tests/resources/json/preferences/user/50.json
+```
+
+Will result in the following Apollo connector schema:
+
+```graphql
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.10", import: ["@key"])
+  @link(
+    url: "https://specs.apollo.dev/connect/v0.1"
+    import: ["@connect", "@source"]
+  )
+  @source(name: "api", http: { baseURL: "http://localhost:4010" })
+  
+type Root {
+ userId: Int
+ favouriteTeams: [String]
+ joiningDate: String
+ favouriteLeagues: [String]
+}
+
+type Query {
+  root: Root
+    @connect(
+      source: "api"
+      http: { GET: "/test" }
+      selection: """
+ userId
+ favouriteTeams
+ joiningDate
+ favouriteLeagues
+"""
+)}
+```
+
+## Using the `apollo-conn-gen` library
+
+The library provides two entry classes:
+
+* `OasGen`, for generating from OAS specifications, and
+* `JsonGen` for working with `JSON` files
+
+### Installation for JS/TS projects
+
+In your project, run
+
+```shell
+npm i "apollo-conn-gen`
+```
+
+to install the library. Next, in your JS/TS file yu can import the tools using
+
+```typescript
+import { OasGen } from "apollo-conn-gen/oas"
+import { JsonGen } from "apollo-conn-gen/json"
+```
+
+## Additional details
+
+### Detailed usage for the `oas` CLI
 
 Navigate using the `arrow` keys and select the fields you want to include in the generated connector schema using the 'x' key. Other options are:
 
-- `a` to select all fields in the current type, or
-- `n` key to deselect all fields.
+* `a` to select all fields in the current type, or
+* `n` key to deselect all fields.
 
 Once you've made your selection, press the `Enter` key to generate the Apollo Connector.
 
@@ -148,14 +214,14 @@ type Query {
 
 ## Options
 
-- `-i, --skip-validation`: Skip the validation step (default: `false`).
-- `-n, --skip-selection`: Generate all filtered paths without prompting for selection (default: `false`).
-- `-l, --list-paths`: Only list the paths that can be generated (default: `false`).
+* `-i, --skip-validation`: Skip the validation step (default: `false`).
+* `-n, --skip-selection`: Generate all filtered paths without prompting for selection (default: `false`).
+* `-l, --list-paths`: Only list the paths that can be generated (default: `false`).
 
 For a complete list of options, run:
 
 ```bash
-node ./cli/index.js -h
+node ./dist/cli/oas -h
 ```
 
 ### Filtering paths
@@ -163,7 +229,7 @@ node ./cli/index.js -h
 The tool allows filtering the list of paths using a regular expression. This is useful when you have large specs and only want to generate (or list) a subset. As shown above, you can list all the paths using the `-l` flag:
 
 ```shell
-node ./cli/index.js ./tests/petstore.yaml --list-paths
+node ./dist/cli/oas ./tests/petstore.yaml --list-paths
 
 get:/pet/{petId}
 get:/pet/findByStatus
@@ -178,7 +244,7 @@ get:/user/logout
 If you'd like to filter the paths using a regular expression, you can use the `-g` flag. For example, to only list the operations ending with an argument, you can use the following command:
 
 ```shell
-node ./cli/index.js ./tests/petstore.yaml  --list-paths  --grep "{\\w+}$"
+node ./dist/cli/oas ./tests/petstore.yaml  --list-paths  --grep "{\\w+}$"
 
 get:/pet/{petId}
 get:/store/order/{orderId}
@@ -187,7 +253,7 @@ get:/store/order/{orderId}
 or, for instance, filtering by a specific path:
 
 ```shell
-node ./cli/index.js ./tests/petstore.yaml  --list-paths  --grep "/pet/"
+node ./dist/cli/oas ./tests/petstore.yaml  --list-paths  --grep "/pet/"
 
 get:/pet/{petId}
 get:/pet/findByTags
@@ -202,7 +268,7 @@ By default, the tool will validate the OAS specification before generating the A
 When selecting paths, the tool will display a list of paths with a default page size of `10`. You can change this value using the `-p` (or `--page-size`) flag. For example, to display `40` rows per page, you can use the following command:
 
 ```shell
-node ./cli/index.js ./tests/petstore.yaml  --page-size 40
+node ./dist/cli/oas ./tests/petstore.yaml  --page-size 40
 ```
 
 ## Generating a connector from an existing selection set
@@ -227,7 +293,7 @@ File: `tests/sample-petstore-selection.json`:
 Running the following command:
 
 ```shell
-  node ./cli/index.js -s tests/sample-petstore-selection.json tests/petstore.yaml
+  node ./dist/cli/oas -s tests/sample-petstore-selection.json tests/petstore.yaml
 ```
 
 will output the following:
@@ -290,3 +356,28 @@ Which will build everything under the `./dist` folder:
 ls dist/
 index.d.ts       index.esm.js     index.esm.js.map index.js         index.js.map
 ```
+
+### Detailed usage for the `cli/json` tool
+
+```shell
+node ./dist/cli/json -h
+Usage: json [options] <file|folder>
+
+Arguments:
+  file|folder              A single JSON file or a folder with a collection of JSON files
+
+Options:
+  -V, --version            output the version number
+  -s --schema-types        Output the GraphQL schema types (default: false)
+  -e --selection-set       Output the Apollo Connector selection set (default: false)
+  -o --output-file <file>  Where to write the output (default: "stdout")
+  -h, --help               display help for command
+```
+
+The CLI options affect what is generated by the tool. There are three possibilities:
+
+* generate the whole connector schema,
+* generate only the types for the schema, or
+* generate the selection set
+
+The `-o` (or `--output-file`) allows sending the output to a file instead of the console.
