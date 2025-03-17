@@ -1,8 +1,8 @@
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
-import { Writer } from '../io/index.js';
-import { Factory } from './index.js';
-import { Prop } from './props/index.js';
+import { Writer } from '../io/writer.js';
+import { Factory } from './factory.js';
+import { Prop } from './props/prop.js';
 
 export interface IType {
   name: string;
@@ -13,23 +13,14 @@ export interface IType {
   id: string;
 
   forPrompt(context: OasContext): string;
-
   add(child: IType): void;
-
   ancestors(): IType[];
-
   visit(context: OasContext): void;
-
   generate(context: OasContext, writer: Writer, selection: string[]): void;
-
   pathToRoot(): string;
-
   path(): string;
-
   expand(context: OasContext): IType[];
-
   find(path: string, collection: IType[]): IType | boolean;
-
   select(context: OasContext, writer: Writer, selection: string[]): void;
 }
 

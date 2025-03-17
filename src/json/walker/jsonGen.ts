@@ -53,6 +53,14 @@ export class JsonGen {
     return walker;
   }
 
+  public static fromJsons(jsons: string[]): JsonGen {
+    const walker = new JsonGen();
+    for (const json of jsons) {
+      walker.walkJson(json);
+    }
+    return walker;
+  }
+
   public generateSchema(): string {
     const writer = new StringWriter();
     ConnectorWriter.write(this, writer);

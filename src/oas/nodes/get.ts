@@ -6,9 +6,10 @@ import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Factory } from './factory.js';
-import { Param } from './param/index.js';
+import { Param } from './param/param.js';
 import { IType, Type } from './type.js';
-import { ReferenceObject } from './props/index.js';
+
+import { ReferenceObject } from './props/referenceObject.js';
 
 export class Get extends Type {
   public resultType?: IType;

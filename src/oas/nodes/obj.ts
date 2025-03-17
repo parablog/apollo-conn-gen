@@ -6,7 +6,7 @@ import { Naming } from '../utils/naming.js';
 import { Arr } from './arr.js';
 import { Factory } from './factory.js';
 import { Get } from './get.js';
-import { PropArray } from './props/index.js';
+import { PropArray } from './props/propArray.js';
 import { Ref } from './ref.js';
 import { Response } from './response.js';
 import { IType, Type } from './type.js';

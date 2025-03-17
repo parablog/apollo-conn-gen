@@ -1,4 +1,5 @@
-import { JsonObj, JsonType } from '../index.js';
+import { JsonObj } from '../walker/types/jsonObj.js';
+import { JsonType } from '../walker/types/jsonType.js';
 
 export class JsonContext {
   private stack: JsonType[];

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
-import { OasGen } from '../oas/index.js';
+import { OasGen } from '../oas/oasGen.js';
 
 const originalConsole = {
   log: console.log,

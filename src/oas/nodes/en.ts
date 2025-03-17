@@ -3,8 +3,8 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { GqlUtils } from '../utils/gql.js';
-import { Naming } from '../utils/index.js';
-import { IType, Type } from './index.js';
+import { Naming } from '../utils/naming.js';
+import { IType, Type } from './type.js';
 
 export class En extends Type {
   constructor(

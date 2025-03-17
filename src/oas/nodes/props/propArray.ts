@@ -1,11 +1,12 @@
 import { trace } from '../../log/trace.js';
 import { OasContext } from '../../oasContext.js';
-import { Writer } from '../../io/index.js';
-import { Naming } from '../../utils/index.js';
+import { Writer } from '../../io/writer.js';
+import { Naming } from '../../utils/naming.js';
 import { Factory } from '../factory.js';
 import { PropObj } from './propObj.js';
 import { PropRef } from './propRef.js';
-import { IType, Prop } from '../index.js';
+import { IType} from '../type.js';
+import { Prop } from '../props/prop.js';
 
 export class PropArray extends Prop {
   public items?: Prop;

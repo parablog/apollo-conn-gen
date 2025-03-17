@@ -1,8 +1,8 @@
 import { JsonContext } from '../jsonContext.js';
 import { trace } from '../log/trace.js';
 import { sanitiseField, sanitiseFieldForSelect } from '../naming.js';
-import { JsonType } from './index.js';
-import { IWriter } from '../../io/index.js';
+import { JsonType } from './jsonType.js';
+import { IWriter } from '../../io/writer.js';
 
 export class JsonScalar extends JsonType {
   private readonly type: string;

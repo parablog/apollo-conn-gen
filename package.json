@@ -22,6 +22,12 @@
       "module-sync": "./dist/json/index.js",
       "require": null,
       "default": "./dist/json/index.js"
+    },
+    "./oas": {
+      "types": "./dist/oas/index.d.ts",
+      "module-sync": "./dist/oas/index.js",
+      "require": null,
+      "default": "./dist/oas/index.js"
     }
   },
   "files": [

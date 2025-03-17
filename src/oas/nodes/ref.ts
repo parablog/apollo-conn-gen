@@ -7,7 +7,8 @@ import { Arr } from './arr.js';
 import { Factory } from './factory.js';
 import { Prop } from './props/prop.js';
 import { IType, Type } from './type.js';
-import { ReferenceObject } from './props/index.js';
+
+import { ReferenceObject } from './props/referenceObject.js';
 
 export class Ref extends Type {
   public refType?: IType;

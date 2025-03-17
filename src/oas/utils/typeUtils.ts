@@ -1,4 +1,8 @@
-import { CircularRef, En, PropArray, PropScalar, IType } from '../nodes/index.js';
+import { CircularRef } from '../nodes/circularRef.js';
+import { En } from '../nodes/en.js';
+import { PropArray } from '../nodes/props/propArray.js';
+import { PropScalar } from '../nodes/props/propScalar.js';
+import { IType } from '../nodes/type.js';
 
 export class T {
   public static isLeaf(type: IType): boolean {

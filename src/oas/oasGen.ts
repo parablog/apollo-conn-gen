@@ -6,9 +6,9 @@ import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
 import { OasContext } from './oasContext.js';
-import { Factory } from './nodes/index.js';
-import { IType } from './nodes/index.js';
-import { Writer } from './io/index.js';
+import { Factory } from './nodes/factory.js';
+import { IType } from './nodes/type.js';
+import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
 
 interface IGenOptions {

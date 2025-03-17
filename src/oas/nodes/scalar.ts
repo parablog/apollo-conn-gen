@@ -1,8 +1,8 @@
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
-import { Writer } from '../io/index.js';
-import { IType, Type } from './index.js';
+import { Writer } from '../io/writer.js';
+import { IType, Type } from './type.js';
 
 export class Scalar extends Type {
   constructor(

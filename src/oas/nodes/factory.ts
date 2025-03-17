@@ -14,21 +14,20 @@ import { Composed } from './comp.js';
 import { En } from './en.js';
 import { Get } from './get.js';
 import { Obj } from './obj.js';
-import { Param } from './param/index.js';
-import { Prop } from './props/index.js';
-import { PropArray, ReferenceObject } from './props/index.js';
-import { PropObj } from './props/index.js';
-import { PropRef } from './props/index.js';
-import { PropScalar } from './props/index.js';
+import { Param } from './param/param.js';
+import { Prop } from './props/prop.js';
+import { PropArray } from './props/propArray.js';
+import { PropObj } from './props/propObj.js';
+import { PropRef } from './props/propRef.js';
+import { PropScalar } from './props/propScalar.js';
 import { Ref } from './ref.js';
 import { Response } from './response.js';
 import { Union } from './union.js';
 import { Scalar } from './scalar.js';
+import { ReferenceObject } from './props/referenceObject.js';
 
 export class Factory {
   public static createGet(name: string, op: Operation): Get {
-    // result.originalPath = name;
-    // result.summary = op.summary;
     return new Get(name, op);
   }
 
@@ -50,6 +49,7 @@ export class Factory {
         trace(null, '[factory]', 'Factory.fromSchema >>> HERE');
       }
       result = new Arr(parent, parentName, schema.items as ArraySchemaObject);
+      (result as Arr).itemsType = Factory.fromSchema(result, schema.items as ArraySchemaObject);
     }
     // array case
     else if (schema.type === 'object') {
