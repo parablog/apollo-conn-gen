@@ -5,12 +5,9 @@ import { Naming } from '../utils/naming.js';
 import { IType, Type } from './type.js';
 
 export class CircularRef extends Type {
-  public ref?: IType
+  public ref?: IType;
 
-  constructor(
-    parent: IType,
-    name: string
-  ) {
+  constructor(parent: IType, name: string) {
     super(parent, name);
   }
 
