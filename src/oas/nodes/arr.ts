@@ -1,7 +1,7 @@
-import { IType, Type } from './type.js';
 import { OpenAPIV3 } from 'openapi-types';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
+import { IType, Type } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';

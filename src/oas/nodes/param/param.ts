@@ -1,10 +1,9 @@
-import { IType, Type } from '../type.js';
+import { Factory, IType, Type } from '../internal.js';
 import { ParameterObject, SchemaObject } from 'oas/types';
 import { trace } from '../../log/trace.js';
 import { OasContext } from '../../oasContext.js';
 import { Writer } from '../../io/writer.js';
 import { Naming } from '../../utils/naming.js';
-import { Factory } from '../factory.js';
 
 export class Param extends Type {
   public resultType!: IType;

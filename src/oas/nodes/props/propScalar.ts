@@ -3,9 +3,7 @@ import { trace } from '../../log/trace.js';
 import { OasContext } from '../../oasContext.js';
 import { Writer } from '../../io/writer.js';
 import { Naming } from '../../utils/naming.js';
-import { Factory } from '../factory.js';
-import { IType } from '../type.js';
-import { Prop } from '../props/prop.js';
+import { Factory, IType, Prop } from '../internal.js';
 
 export class PropScalar extends Prop {
   private propType?: IType;

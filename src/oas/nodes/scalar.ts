@@ -1,4 +1,4 @@
-import { IType, Type } from './type.js';
+import { IType, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -28,7 +28,7 @@ export class Scalar extends Type {
     context.leave(this);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(_context: OasContext, writer: Writer, selection: string[]) {
     // Scalars do not need to be selected.
   }
 }

@@ -27,9 +27,9 @@ import { Composed } from '../nodes/comp.js';
 import { En } from '../nodes/en.js';
 import { PropArray } from '../nodes/props/propArray.js';
 import { PropScalar } from '../nodes/props/propScalar.js';
-import { IType } from '../nodes/type.js';
 import { getMaxLength, isEscapeKey } from './base/utils.js';
 import { CustomTheme, RenderContext } from './theme.js';
+import { IType } from '../nodes/iType.js';
 
 const baseTheme: CustomTheme = {
   prefix: {

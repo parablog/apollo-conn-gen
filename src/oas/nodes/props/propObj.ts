@@ -1,14 +1,11 @@
-import { IType, Type } from '../type.js';
+import { IType, Obj, Prop, Union } from '../internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../../log/trace.js';
 import { Composed } from '../comp.js';
-import { Obj } from '../obj.js';
-import { Union } from '../union.js';
 import { OasContext } from '../../oasContext.js';
 import { Writer } from '../../io/writer.js';
 import { Naming } from '../../utils/naming.js';
-import { Prop } from './prop.js';
 
 export class PropObj extends Prop {
   constructor(

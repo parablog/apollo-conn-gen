@@ -11,10 +11,11 @@ import { Param } from '../nodes/param/param.js';
 import { Prop } from '../nodes/props/prop.js';
 import { PropArray } from '../nodes/props/propArray.js';
 import { PropScalar } from '../nodes/props/propScalar.js';
-import { IType, Type } from '../nodes/type.js';
+import { Type } from '../nodes/type.js';
 import { Union } from '../nodes/union.js';
 import { Naming } from '../utils/naming.js';
 import { T } from '../utils/typeUtils.js';
+import { IType } from '../nodes/iType.js';
 
 export class Writer {
   public static findNonPropParent(type: IType) {

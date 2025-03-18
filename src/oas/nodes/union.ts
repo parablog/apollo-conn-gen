@@ -1,12 +1,9 @@
-import { IType, Type } from './type.js';
+import { Factory, IType, Prop, Ref, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import { Factory } from './factory.js';
-import { Prop } from './props/prop.js';
-import { Ref } from './ref.js';
 
 export class Union extends Type {
   get id(): string {

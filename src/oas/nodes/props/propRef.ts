@@ -1,18 +1,10 @@
 import { OasContext } from '../../oasContext.js';
-import { Prop } from './prop.js';
-
+import { Arr, CircularRef, Composed, Factory, IType, Obj, Prop, Union } from '../internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../../log/trace.js';
-import { IType } from '../type.js';
 import { Writer } from '../../io/writer.js';
 import { Naming } from '../../utils/naming.js';
-import { Arr } from '../arr.js';
-import { CircularRef } from '../circularRef.js';
-import { Composed } from '../comp.js';
-import { Factory } from '../factory.js';
-import { Obj } from '../obj.js';
-import { Union } from '../union.js';
 
 export class PropRef extends Prop {
   get id(): string {

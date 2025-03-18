@@ -1,4 +1,6 @@
-import { IType, Type } from '../type.js';
+import {
+  IType, Type
+} from '../internal.js';
 import { SchemaObject } from 'oas/types';
 import { OasContext } from '../../oasContext.js';
 import { Writer } from '../../io/writer.js';

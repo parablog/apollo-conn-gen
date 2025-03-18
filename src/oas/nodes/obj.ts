@@ -1,4 +1,4 @@
-import { IType, Type } from './type.js';
+import { IType, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -21,7 +21,7 @@ export class Obj extends Type {
     this.updateName();
   }
 
-  public forPrompt(context: OasContext): string {
+  public forPrompt(_context: OasContext): string {
     return `${Naming.getRefName(this.name)} (Obj)`;
   }
 

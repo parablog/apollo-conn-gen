@@ -1,12 +1,9 @@
-import { IType, Type } from './type.js';
+import { Arr, Factory, IType, Prop, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import { Arr } from './arr.js';
-import { Factory } from './factory.js';
-import { Prop } from './props/prop.js';
 
 import { ReferenceObject } from './props/referenceObject.js';
 
@@ -29,7 +26,7 @@ export class Ref extends Type {
     return this.refType?.props ?? new Map();
   }
 
-  public forPrompt(context: OasContext): string {
+  public forPrompt(_context: OasContext): string {
     return `${Naming.getRefName(this.name)} (Ref)`;
   }
 
@@ -58,7 +55,7 @@ export class Ref extends Type {
     context.leave(this);
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, _selection: string[]): void {
     context.enter(this);
     trace(context, '-> [ref::generate]', `-> in: ${this.name}`);
 

@@ -1,30 +1,32 @@
+import {
+  Get,
+  IType,
+  Ref,
+  ReferenceObject,
+  Arr,
+  Composed,
+  Obj,
+  En,
+  Scalar,
+  Prop,
+  PropRef,
+  PropArray,
+  PropObj,
+  PropScalar,
+  CircularRef,
+  Union,
+  Response,
+} from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
 import { OpenAPIV3 } from 'openapi-types';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 import _ from 'lodash';
-import { IType } from './type.js';
 import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { GqlUtils } from '../utils/gql.js';
-import { Arr } from './arr.js';
-import { CircularRef } from './circularRef.js';
-import { Composed } from './comp.js';
-import { En } from './en.js';
-import { Get } from './get.js';
-import { Obj } from './obj.js';
 import { Param } from './param/param.js';
-import { Prop } from './props/prop.js';
-import { PropArray } from './props/propArray.js';
-import { PropObj } from './props/propObj.js';
-import { PropRef } from './props/propRef.js';
-import { PropScalar } from './props/propScalar.js';
-import { Ref } from './ref.js';
-import { Response } from './response.js';
-import { Union } from './union.js';
-import { Scalar } from './scalar.js';
-import { ReferenceObject } from './props/referenceObject.js';
 
 export class Factory {
   public static createGet(name: string, op: Operation): Get {
