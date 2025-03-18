@@ -1,4 +1,4 @@
-import { Factory, IType} from '../internal.js';
+import { Factory, IType } from '../internal.js';
 import { Prop } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../../log/trace.js';

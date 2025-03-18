@@ -18,4 +18,4 @@ export * from './props/propObj.js';
 export * from './props/propRef.js';
 export * from './props/propScalar.js';
 export * from './props/referenceObject.js';
-export * from './param/param.js'
+export * from './param/param.js';
