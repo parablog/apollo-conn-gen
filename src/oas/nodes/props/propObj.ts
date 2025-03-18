@@ -1,7 +1,7 @@
+import { IType, Type } from '../type.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../../log/trace.js';
-import { IType, Type } from '../type.js';
 import { Composed } from '../comp.js';
 import { Obj } from '../obj.js';
 import { Union } from '../union.js';

@@ -1,3 +1,4 @@
+import { IType, Type } from './type.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -9,7 +10,6 @@ import { Get } from './get.js';
 import { PropArray } from './props/propArray.js';
 import { Ref } from './ref.js';
 import { Response } from './response.js';
-import { IType, Type } from './type.js';
 
 export class Obj extends Type {
   constructor(

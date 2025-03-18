@@ -1,3 +1,4 @@
+import { IType, Type } from './type.js';
 import { OpenAPIV3 } from 'openapi-types';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
@@ -5,7 +6,6 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import { IType, Type } from './type.js';
 
 export class Arr extends Type {
   public itemsType?: IType;

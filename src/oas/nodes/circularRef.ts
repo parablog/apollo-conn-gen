@@ -1,8 +1,8 @@
+import { IType, Type } from './type.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import { IType, Type } from './type.js';
 
 export class CircularRef extends Type {
   public ref?: IType;

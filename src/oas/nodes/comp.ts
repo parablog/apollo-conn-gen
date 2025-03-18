@@ -1,3 +1,4 @@
+import { IType, Type } from './type.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';
@@ -7,7 +8,6 @@ import { Naming } from '../utils/naming.js';
 import { Factory } from './factory.js';
 import { Prop } from './props/prop.js';
 import { Ref } from './ref.js';
-import { IType, Type } from './type.js';
 import { type ReferenceObject } from './props/referenceObject.js';
 
 export class Composed extends Type {
