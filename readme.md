@@ -1,8 +1,12 @@
-# OAS to Apollo Connector Generator
+# Generator library and CLI for Apollo Connectors 
 
 ## Introduction
 
-This project is a library designed to convert an OpenAPI Specification (OAS) file (YAML or JSON) into an Apollo GraphQL Connector. It also includes CLI tools to facilitate this conversion process.
+This project is a library designed to generate an an [Apollo Connector](https://www.apollographql.com/graphos/apollo-connectors) schema from either
+- an OpenAPI Specification (OAS) file (YAML or JSON), or
+- a set of JSON payloads. 
+
+It also includes CLI tools to facilitate this conversion process.
 
 Key features:
 
