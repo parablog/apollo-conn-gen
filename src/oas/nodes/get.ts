@@ -1,3 +1,4 @@
+import { Type } from './type.js';
 import { Operation } from 'oas/operation';
 import { MediaTypeObject, ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
 
