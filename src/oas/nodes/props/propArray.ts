@@ -1,8 +1,9 @@
+import { Factory, IType } from '../internal.js';
+import { Prop, PropObj, PropRef } from './internal.js';
 import { trace } from '../../log/trace.js';
 import { OasContext } from '../../oasContext.js';
 import { Writer } from '../../io/writer.js';
 import { Naming } from '../../utils/naming.js';
-import { Factory, IType, Prop, PropObj, PropRef } from '../internal.js';
 
 export class PropArray extends Prop {
   public items?: Prop;
