@@ -15,7 +15,8 @@ import {
   PropScalar,
   CircularRef,
   Union,
-  Response, Param,
+  Response,
+  Param,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';

@@ -1,7 +1,24 @@
 import {
-  Arr, CircularRef, Composed, En,
-  Factory, Get, IType, Obj, Param, Prop, PropArray, PropObj, PropRef, PropScalar, Ref, ReferenceObject,
-  Response, Scalar, Type, Union
+  Arr,
+  CircularRef,
+  Composed,
+  En,
+  Factory,
+  Get,
+  IType,
+  Obj,
+  Param,
+  Prop,
+  PropArray,
+  PropObj,
+  PropRef,
+  PropScalar,
+  Ref,
+  ReferenceObject,
+  Response,
+  Scalar,
+  Type,
+  Union,
 } from './nodes/internal.js';
 
 export { OasGen } from './oasGen.js';
