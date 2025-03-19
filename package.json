@@ -35,7 +35,7 @@
   ],
   "scripts": {
     "dev": "tsc --watch",
-    "prebuild": "rm -r dist",
+    "prebuild": "rm -rf dist",
     "build": "tsc -b",
     "test": "node --import tsx/esm --test 'tests/oas.test.ts'",
     "format": "prettier --write \"src/**/*.ts\"",
