@@ -37,7 +37,7 @@
     "dev": "tsc --watch",
     "prebuild": "rm -rf dist",
     "build": "tsc -b",
-    "test": "node --import tsx/esm --test 'tests/oas.test.ts'",
+    "test": "node --import tsx/esm --test 'tests/all.test.ts'",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint",
     "prepare": "npm run build",
