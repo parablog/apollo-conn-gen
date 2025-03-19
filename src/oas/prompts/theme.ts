@@ -1,7 +1,7 @@
 import { Status } from '@inquirer/core';
 import { OasContext } from '../oasContext.js';
 
-import { IType } from '../nodes/iType.js';
+import { IType } from '../nodes/internal.js';
 
 export interface RenderContext {
   /**

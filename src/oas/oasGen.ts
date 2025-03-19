@@ -6,10 +6,10 @@ import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
 import { OasContext } from './oasContext.js';
-import { Factory } from './nodes/factory.js';
+import { Factory } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
-import { IType } from './nodes/iType.js';
+import { IType } from './nodes/internal.js';
 
 interface IGenOptions {
   skipValidation: boolean;

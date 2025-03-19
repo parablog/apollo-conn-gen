@@ -22,14 +22,14 @@ import type { PartialDeep } from '@inquirer/type';
 import _ from 'lodash';
 
 import { OasContext } from '../oasContext.js';
-import { CircularRef } from '../nodes/circularRef.js';
-import { Composed } from '../nodes/comp.js';
-import { En } from '../nodes/en.js';
-import { PropArray } from '../nodes/props/propArray.js';
-import { PropScalar } from '../nodes/props/propScalar.js';
+import { CircularRef } from '../nodes/internal.js';
+import { Composed } from '../nodes/internal.js';
+import { En } from '../nodes/internal.js';
+import { PropArray } from '../nodes/internal.js';
+import { PropScalar } from '../nodes/internal.js';
 import { getMaxLength, isEscapeKey } from './base/utils.js';
 import { CustomTheme, RenderContext } from './theme.js';
-import { IType } from '../nodes/iType.js';
+import { IType } from '../nodes/internal.js';
 
 const baseTheme: CustomTheme = {
   prefix: {

@@ -1,9 +1,9 @@
+import { trace } from './log/trace.js';
 import Oas from 'oas';
 import { ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
-import { trace } from './log/trace.js';
-import { ReferenceObject } from './nodes/props/referenceObject.js';
+import { ReferenceObject } from './nodes/internal.js';
 import { Naming } from './utils/naming.js';
-import { IType } from './nodes/iType.js';
+import { IType } from './nodes/internal.js';
 
 export class OasContext {
   public static readonly COMPONENTS_SCHEMAS: string = '#/components/schemas/';

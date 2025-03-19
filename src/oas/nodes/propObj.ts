@@ -1,12 +1,12 @@
-import { IType, Obj, Union } from '../internal.js';
+import { IType, Obj, Union } from './internal.js';
 import { Prop } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
-import { trace } from '../../log/trace.js';
-import { Composed } from '../comp.js';
-import { OasContext } from '../../oasContext.js';
-import { Writer } from '../../io/writer.js';
-import { Naming } from '../../utils/naming.js';
+import { trace } from '../log/trace.js';
+import { Composed } from './comp.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
 
 export class PropObj extends Prop {
   constructor(

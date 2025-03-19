@@ -5,7 +5,7 @@ import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 
-import { ReferenceObject } from './props/referenceObject.js';
+import { ReferenceObject } from './referenceObject.js';
 
 export class Ref extends Type {
   public refType?: IType;

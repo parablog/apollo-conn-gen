@@ -1,12 +1,12 @@
 /// internal functions
 import fs from 'fs';
-import { Composed } from '../../oas/nodes/comp.js';
-import { Ref } from '../../oas/nodes/ref.js';
-import { Type } from '../../oas/nodes/type.js';
-import { Union } from '../../oas/nodes/union.js';
+import { Composed } from '../../oas/nodes/internal.js';
+import { Ref } from '../../oas/nodes/internal.js';
+import { Type } from '../../oas/nodes/internal.js';
+import { Union } from '../../oas/nodes/internal.js';
 import { OasGen } from '../../oas/oasGen.js';
 import { typesPrompt } from '../../oas/prompts/prompt.js';
-import { IType } from '../../oas/nodes/iType.js';
+import { IType } from '../../oas/nodes/internal.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function generateFromSelection(opts: any, gen: OasGen) {

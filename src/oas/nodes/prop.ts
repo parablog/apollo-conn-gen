@@ -1,8 +1,8 @@
-import { IType, Type } from '../internal.js';
+import { IType, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
-import { OasContext } from '../../oasContext.js';
-import { Writer } from '../../io/writer.js';
-import { Naming } from '../../utils/naming.js';
+import { OasContext } from '../oasContext.js';
+import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
 
 export abstract class Prop extends Type {
   public required: boolean = false;
@@ -32,9 +32,6 @@ export abstract class Prop extends Type {
     if (this.required) {
       writer.append('!');
     }
-
-    // TODO: source
-    // writer.append(" # ").append(this.parent);
 
     writer.append('\n');
   }

@@ -1,9 +1,9 @@
-import { IType } from './iType.js';
+import { IType } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Factory } from './factory.js';
-import { Prop } from './props/prop.js';
+import { Prop } from './internal.js';
 
 export abstract class Type implements IType {
   public parent?: IType;

@@ -15,7 +15,7 @@ import {
   PropScalar,
   CircularRef,
   Union,
-  Response,
+  Response, Param,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
@@ -26,7 +26,6 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { GqlUtils } from '../utils/gql.js';
-import { Param } from './param/param.js';
 
 export class Factory {
   public static createGet(name: string, op: Operation): Get {

@@ -3,19 +3,19 @@ import Oas from 'oas';
 import { ServerObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { CircularRef } from '../nodes/circularRef.js';
-import { Composed } from '../nodes/comp.js';
-import { Get } from '../nodes/get.js';
-import { Obj } from '../nodes/obj.js';
-import { Param } from '../nodes/param/param.js';
-import { Prop } from '../nodes/props/prop.js';
-import { PropArray } from '../nodes/props/propArray.js';
-import { PropScalar } from '../nodes/props/propScalar.js';
-import { Type } from '../nodes/type.js';
-import { Union } from '../nodes/union.js';
+import { CircularRef } from '../nodes/internal.js';
+import { Composed } from '../nodes/internal.js';
+import { Get } from '../nodes/internal.js';
+import { Obj } from '../nodes/internal.js';
+import { Param } from '../nodes/internal.js';
+import { Prop } from '../nodes/internal.js';
+import { PropArray } from '../nodes/internal.js';
+import { PropScalar } from '../nodes/internal.js';
+import { Type } from '../nodes/internal.js';
+import { Union } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
 import { T } from '../utils/typeUtils.js';
-import { IType } from '../nodes/iType.js';
+import { IType } from '../nodes/internal.js';
 
 export class Writer {
   public static findNonPropParent(type: IType) {
