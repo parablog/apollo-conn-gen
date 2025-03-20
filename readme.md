@@ -342,11 +342,114 @@ type Query {
 }
 ```
 
+## Using wildcards in selection sets
+
+The tool supports the use of wildcards in selection sets. For example, to select all fields in a `type`, you can use the `*` character. For example, the two selection sets below will produce the same result:
+
+`./tests/resources/sample-petstore-selection.json`:
+```json
+[
+  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:scalar:id",
+  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:scalar:name",
+  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:array:#photoUrls",
+  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:scalar:status"
+]
+```
+
+`./tests/resources/wildcard-petstore-selection.json`:
+```json
+[
+  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>*"
+]
+```
+
+### Selecting everything under a specific selection path
+
+The tool also supports selecting everything under a specific path. For example, if we wanted to select everything for the operation `get:/pet/{petId}`, then all we need to do is use a selection like so (note the double `*` at the end):
+
+```json
+[
+  "get:/pet/{petId}>**"
+]
+```
+
+With this, the tool will generate the whole schema under that path. Running the following command:
+
+```shell
+node dist/cli/oas -s ./tests/resources/double-wildcard-petstore-selection.json ./tests/resources/petstore.yaml
+```
+
+will output the following:
+
+```graphql
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.10", import: ["@key"])
+  @link(
+    url: "https://specs.apollo.dev/connect/v0.1"
+    import: ["@connect", "@source"]
+  )
+  @source(name: "api", http: { baseURL: "https://petstore3.swagger.io/v3" })
+
+
+scalar JSON
+
+type Category {
+  id: Int
+  name: String
+}
+
+type Pet {
+  category: Category
+  id: Int
+  name: String
+  photoUrls: [String]
+  "pet status in the store"
+  status: String
+  tags: [Tag]
+}
+
+type Tag {
+  id: Int
+  name: String
+}
+
+type Query {
+  """
+  Find pet by ID (/pet/{petId})
+  """
+  petByPetId(petId: Int!): Pet
+    @connect(
+      source: "api"
+      http: { GET: "/pet/{$args.petId}"
+ }
+      selection: """
+      category {
+       id
+       name
+      }
+      id
+      name
+      photoUrls
+      status
+      tags {
+       id
+       name
+      }
+      """
+    )
+}
+```
+
+
+This is particularly useful for specifications that are bound to change often.
+
+will select all fields in the `Pet` type:
+
 ## Generating all paths
 
 Whilst this option is not recommended for large specifications, you can generate all paths without prompting for a specific selection. To do so, you can use the `-n` (or `--skip-selection`) flag. This may result in a very large Apollo Connector schema, might take a long time to process and not be particularly useful, so use with caution.
 
-## Buildling the library
+## Building the library
 
 The tool can be built as a library to use in other projects. To do this, simply run
 

@@ -1,0 +1,3 @@
+[
+  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>*"
+]
