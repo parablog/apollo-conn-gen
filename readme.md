@@ -363,6 +363,8 @@ The tool supports the use of wildcards in selection sets. For example, to select
 ]
 ```
 
+Note that using wildcards only works for *scalar* fields.
+
 ### Selecting everything under a specific selection path
 
 The tool also supports selecting everything under a specific path. For example, if we wanted to select everything for the operation `get:/pet/{petId}`, then all we need to do is use a selection like so (note the double `*` at the end):
