@@ -1,5 +1,6 @@
 import {
   Get,
+  Post,
   IType,
   Ref,
   ReferenceObject,
@@ -16,7 +17,7 @@ import {
   CircularRef,
   Union,
   Response,
-  Param,
+  Param, Body,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
@@ -33,7 +34,7 @@ export class Factory {
     return new Get(name, op);
   }
 
-  public static fromSchema(parent: IType, schema: SchemaObject): IType {
+  public static fromSchema(parent: IType, schema: SchemaObject | ReferenceObject): IType {
     let result: IType | null = null;
 
     if ('$ref' in schema) {
@@ -171,8 +172,6 @@ export class Factory {
   }
 
   public static fromResponse(_context: OasContext, parent: IType, mediaSchema: SchemaObject): IType {
-    // const content = Factory.fromSchema(response, mediaSchema);
-    // response.response = content;
     return new Response(parent, 'r', mediaSchema);
   }
 
@@ -207,5 +206,13 @@ export class Factory {
     const union = new Union(parent, parent.name, oneOfs);
     parent.add(union);
     return union;
+  }
+
+  public static createPost(name: string, op: Operation): Post {
+    return new Post(name, op);
+  }
+
+  public static fromBody(_context: OasContext, parent: IType, schema: SchemaObject): IType {
+    return new Body(parent, 'b', schema);
   }
 }

@@ -1,4 +1,4 @@
-import { IType, Type } from './internal.js';
+import { IType, Post, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -68,12 +68,16 @@ export class Obj extends Type {
     const sanitised = Naming.genTypeName(this.name);
     const refName = Naming.getRefName(this.name);
 
+    const inBody = context.inContextOf('Body', this);
     writer
-      .append('type ')
+      .append(inBody ? 'input ' : 'type ')
       .append(sanitised === refName ? refName : sanitised)
       .append(' {\n');
 
-    const selected = this.selectedProps(selection);
+    const selected = inBody
+      ? this.props.values()
+      : this.selectedProps(selection);
+
     for (const prop of selected) {
       trace(context, '-> [obj::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
       prop.generate(context, writer, selection);

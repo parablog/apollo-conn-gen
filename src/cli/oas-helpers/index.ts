@@ -1,12 +1,13 @@
 /// internal functions
 import fs from 'fs';
-import { Composed } from '../../oas/nodes/internal.js';
+import { Composed, Post } from '../../oas/nodes/internal.js';
 import { Ref } from '../../oas/nodes/internal.js';
 import { Type } from '../../oas/nodes/internal.js';
 import { Union } from '../../oas/nodes/internal.js';
 import { OasGen } from '../../oas/oasGen.js';
 import { typesPrompt } from '../../oas/prompts/prompt.js';
 import { IType } from '../../oas/nodes/internal.js';
+import _ from 'lodash';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function generateFromSelection(opts: any, gen: OasGen) {
@@ -35,7 +36,16 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
       (type as Composed | Union).consolidate([]);
 
       result = Array.from(type.props.values());
-    } else {
+    }
+    else if (type instanceof Post) {
+      if (!type.visited) type.visit(gen.context!)
+      result = gen.expand(type);
+
+      // we need to exclude the body from the selection - not sure we need to generalise this..
+      result = _.filter(result, (r) => r !== type.body);
+      console.log(result)
+    }
+    else {
       // top level paths
       result = gen.expand(type);
 

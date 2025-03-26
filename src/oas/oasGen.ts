@@ -117,13 +117,13 @@ export class OasGen {
 
     const paths = parser.getPaths();
     const filtered = Object.entries(paths)
-      .filter(([_key, pathItem]) => pathItem.get !== undefined)
+      .filter(([_key, pathItem]) => pathItem.get !== undefined || pathItem.post !== undefined)
       .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
 
     const collected = new Map<string, IType>();
     for (const [key, pathItem] of filtered) {
       const result = this.visitPath(context, key, pathItem);
-      collected.set(key, result);
+      collected.set(key, result!);
     }
 
     this.paths = collected;
@@ -164,6 +164,7 @@ export class OasGen {
     return false;
   }
 
+  /** this seems a bit buggy at the moment, needs more testing **/
   public findPath(path: string): IType | boolean {
     let collection = Array.from(this.paths.values());
     let current: IType | undefined;
@@ -197,9 +198,11 @@ export class OasGen {
   // private methods
 
   private visitGet(_context: OasContext, name: string, op: Operation): IType {
-    // TODO
-    // operation.visit(context);
     return Factory.createGet(name, op);
+  }
+
+  private visitPost(_context: OasContext, name: string, op: Operation): IType {
+    return Factory.createPost(name, op);
   }
 
   private printRefs(values: Map<string, number>): void {
@@ -209,16 +212,25 @@ export class OasGen {
     });
   }
 
-  private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType {
-    const operation = pathItem.get;
-    if (operation.constructor.name === 'Webhook') {
-      throw new Error('Webhook not supported');
+  private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType | undefined {
+    if (pathItem.get !== undefined) {
+      const operation = pathItem.get as Webhook | Operation;
+      if (operation?.constructor.name === 'Webhook') {
+        throw new Error('Webhook not supported');
+      }
+
+      trace(context, '-> [visitPath]', `in:  [${name}] id: ${operation.getOperationId()}`);
+      const type = this.visitGet(context, name, operation);
+      trace(context, '<- [visitPath]', `out: [${name}] id: ${operation.getOperationId()}`);
+
+      return type;
+    } else if (pathItem.post !== undefined) {
+      const operation = pathItem.post;
+      trace(context, '-> [visitPath]', `in:  [${name}] id: ${operation.getOperationId()}`);
+      const type = this.visitPost(context, name, operation);
+      trace(context, '<- [visitPath]', `out: [${name}] id: ${operation.getOperationId()}`);
+
+      return type;
     }
-
-    trace(context, '-> [visitPath]', `in:  [${name}] id: ${operation.getOperationId()}`);
-    const type = this.visitGet(context, name, operation);
-    trace(context, '<- [visitPath]', `out: [${name}] id: ${operation.getOperationId()}`);
-
-    return type;
   }
 }

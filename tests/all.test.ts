@@ -600,6 +600,14 @@ test('live-scores/all/2023-12-23_15_00.json', async () => {
   await runJsonTest('live-scores/all/2023-12-23_15_00.json');
 });
 
+test('test_027_sample-post', async () => {
+  const paths = [
+    'post:/pet/**',
+  ];
+
+  await runOasTest(`post-sample.yaml`, paths, 8, 1);
+});
+
 // runOasTest test
 async function runOasTest(
   file: string,

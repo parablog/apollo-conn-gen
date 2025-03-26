@@ -3,7 +3,7 @@ import Oas from 'oas';
 import { ServerObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { CircularRef } from '../nodes/internal.js';
+import { CircularRef, Post } from '../nodes/internal.js';
 import { Composed } from '../nodes/internal.js';
 import { Get } from '../nodes/internal.js';
 import { Obj } from '../nodes/internal.js';
@@ -34,6 +34,7 @@ export class Writer {
     }
     return results;
   }
+
   public buffer: string[];
 
   constructor(public generator: OasGen) {
@@ -83,7 +84,13 @@ export class Writer {
     //   }
     // }
 
-    this.writeQuery(context, writer, this.generator.paths, selection);
+    const expanded = [...this.generator.paths];
+
+    const gets = new Map(expanded.filter(([_k, type]) => type.id.startsWith('get:')));
+    const posts = new Map(expanded.filter(([_k, type]) => type.id.startsWith('post:')));
+
+    this.writeQuery(context, writer, gets, selection);
+    this.writeMutations(context, writer, posts, selection);
     writer.flush();
   }
 
@@ -106,7 +113,7 @@ export class Writer {
           selection = selection.filter((s) => s !== path);
 
           if (current instanceof Composed) {
-            current.consolidate(selection);
+            current!.consolidate(selection);
           }
 
           // add all the props from the current node and exit loop
@@ -150,6 +157,14 @@ export class Writer {
           });
       }
     }
+
+    // process any POST paths, as we need to add the Body as a pending item
+    Array.from(this.generator.paths.values())
+      .filter((t) => t instanceof Post)
+      .forEach((path) => {
+        if (path.body && !pending.has(path.body.id))
+          pending.set(path.body.id, path.body);
+      });
 
     if (!_.isEmpty(pending)) {
       // first pass is to consolidate all Composed & Union nodes
@@ -238,20 +253,20 @@ export class Writer {
     writer.append(spacing).append(')\n');
   }
 
-  private buildRequestMethodAndArgs(get: Get): string {
+  private buildRequestMethodAndArgs(op: Get | Post): string {
     let builder = '';
 
-    builder += '"' + get.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}');
+    builder += '"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}');
 
-    if (get.params.length > 0) {
-      const params = get.params.filter((p: Param) => {
+    if (op.params.length > 0) {
+      const params = op.params.filter((p: Param) => {
         return p.required && p.parameter.in && p.parameter.in.toLowerCase() === 'query';
       });
 
       if (params.length > 0) {
         builder += '?' + params.map((p: Param) => `${p.name}={$args.${Naming.genParamName(p.name)}}`).join('&');
       }
-      const headers = get.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
+      const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
 
       builder += '"\n';
 
@@ -285,7 +300,9 @@ export class Writer {
       builder += '"';
     }
 
-    return `{ GET: ${builder} }`;
+    const verb = op.id.startsWith("get:") ? 'GET' : 'POST';
+
+    return `{ ${verb}: ${builder} }`;
   }
 
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
@@ -383,5 +400,21 @@ export class Writer {
 
     // finally remove the expanded paths from the selection
     return [...newSelection, ...selection.filter((p) => !expands.includes(p))];
+  }
+
+  private writeMutations(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
+    writer.write('type Mutation {\n');
+
+    const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
+
+    const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
+
+    for (const path of paths) {
+      path.generate(context, writer, []);
+      this.writeConnector(context, writer, path, selection);
+      context.generatedSet.add(path.id);
+    }
+
+    writer.write('}\n\n');
   }
 }

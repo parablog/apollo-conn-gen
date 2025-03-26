@@ -1,0 +1,75 @@
+openapi: 3.1.0
+info:
+  title: Sample Post API
+  description: Sample Post API
+  version: 1.0.0
+servers:
+  - url: 'https://localhost:8080/v1/api'
+
+
+paths:
+  /status:
+    post:
+      summary: Update user status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusUpdate'
+            example: |
+              {
+                "username": "test",
+                "status": "online",
+                "address": {
+                  "street": "1234 Elm St",
+                  "city": "Springfield",
+                  "postalCode": "12345"
+                }
+              }
+      responses:
+        '200':
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example: |
+                {
+                  "message": "Status updated successfully"
+                }
+
+components:
+  schemas:
+    StatusUpdate:
+      type: object
+      properties:
+        username:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        status:
+          type: string
+          enum:
+            - offline
+            - online
+            - away
+      required:
+        - username
+        - status
+
+    StatusResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        postalCode:
+          type: string

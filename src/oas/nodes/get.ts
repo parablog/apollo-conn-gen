@@ -85,7 +85,7 @@ export class Get extends Type {
     return Naming.genOperationName(this.operation.path, this.operation);
   }
 
-  private visitParameters(context: OasContext): void {
+  protected visitParameters(context: OasContext): void {
     trace(context, '-> [get::params]', 'in: ' + this.name);
 
     const parameters = this.operation.getParameters();
@@ -101,7 +101,7 @@ export class Get extends Type {
     trace(context, '<- [get::params]', 'out: ' + this.name);
   }
 
-  private visitResponses = (context: OasContext) => {
+  protected visitResponses = (context: OasContext) => {
     const statusCodes = this.operation.getResponseStatusCodes();
 
     if (!statusCodes.includes('200') && !statusCodes.includes('default')) {
@@ -177,7 +177,7 @@ export class Get extends Type {
     trace(context, '<- [get::responses::ref]', `out: ${this.name}, ref: ${ref.$ref}`);
   }
 
-  private generateParameters(context: OasContext, writer: Writer, selection: string[]): void {
+  protected generateParameters(context: OasContext, writer: Writer, selection: string[]): void {
     const sorted = this.params.sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0));
 
     if (sorted.length === 0) {

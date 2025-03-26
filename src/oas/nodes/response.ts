@@ -25,13 +25,13 @@ export class Response extends Type {
     }
 
     context.enter(this);
-    trace(context, '-> [get:visit]', 'in ' + this.name);
+    trace(context, '-> [res:visit]', 'in ' + this.name);
 
     this.response = Factory.fromSchema(this, this.schema);
-    trace(context, '   [get:visit]', 'array type: ' + this.response.id);
+    trace(context, '   [res:visit]', 'array type: ' + this.response.id);
     this.visited = true;
 
-    trace(context, '<- [get:visit]', 'out ' + this.name);
+    trace(context, '<- [res:visit]', 'out ' + this.name);
     context.leave(this);
   }
 
@@ -41,23 +41,23 @@ export class Response extends Type {
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
     context.enter(this);
-    trace(context, '-> [response:generate]', `-> in: ${this.parent!.name}`);
+    trace(context, '-> [res:generate]', `-> in: ${this.parent!.name}`);
 
     if (this.response) {
       this.response.generate(context, writer, selection);
     }
 
-    trace(context, '<- [response:generate]', `-> out: ${this.parent!.name}`);
+    trace(context, '<- [res:generate]', `-> out: ${this.parent!.name}`);
     context.leave(this);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {
-    trace(context, '-> [response:select]', `-> in: ${this.parent!.name}`);
+    trace(context, '-> [res:select]', `-> in: ${this.parent!.name}`);
 
     if (this.response) {
       this.response.select(context, writer, selection);
     }
 
-    trace(context, '<- [response:select]', `-> out: ${this.parent!.name}`);
+    trace(context, '<- [res:select]', `-> out: ${this.parent!.name}`);
   }
 }
