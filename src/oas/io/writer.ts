@@ -70,20 +70,6 @@ export class Writer {
       }
     });
 
-    // TODO: Pending
-    // const counter = new RefCounter(this.context);
-    // counter.addAll(this.collected);
-
-    // const refs = counter.getCount();
-    // this.printRefs(refs);
-
-    // for (const type of this.context.types.ts.values()) {
-    //   if (counter.getCount().has(type.name)) {
-    //     await type.generate(this.context, writer);
-    //     generatedSet.add(type.name);
-    //   }
-    // }
-
     const expanded = [...this.generator.paths];
 
     const gets = new Map(expanded.filter(([_k, type]) => type.id.startsWith('get:')));
@@ -301,6 +287,14 @@ export class Writer {
     }
 
     const verb = op.id.startsWith("get:") ? 'GET' : 'POST';
+
+    if (verb === 'POST') {
+      builder += ',\n';
+      let spacing = ' '.repeat(6);
+      builder += spacing + 'body: """\n';
+      builder += spacing + '$args.input' + '\n';
+      builder += spacing + '"""\n' + ' '.repeat(5);
+    }
 
     return `{ ${verb}: ${builder} }`;
   }

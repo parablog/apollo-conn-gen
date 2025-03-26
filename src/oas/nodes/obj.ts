@@ -1,4 +1,4 @@
-import { IType, Post, Type } from './internal.js';
+import { Body, IType, Post, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -120,6 +120,10 @@ export class Obj extends Type {
       else if (parent instanceof Response) {
         const op = parent.parent as Get;
         name = op.getGqlOpName() + 'Response';
+      }
+      else if (parent instanceof Body) {
+        // const op = parent.parent as Post;
+        name = this.name + 'Input';
       }
       // if the parent is an object then we can use the parent name
       else if (parent instanceof Obj) {

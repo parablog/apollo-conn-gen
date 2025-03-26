@@ -27,6 +27,7 @@ export class Body extends Type {
     trace(context, '-> [body:visit]', 'in ' + this.name);
 
     this.visitBodyMedia(context, this.schema);
+    this.payload!.name = this.payload!.name + "Input";
     this.payload!.visit(context);
     this.visited = true;
 
