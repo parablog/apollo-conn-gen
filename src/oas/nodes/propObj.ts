@@ -24,8 +24,6 @@ export class PropObj extends Prop {
     if (obj.parent !== this) {
       obj.parent = this;
     }
-
-    // this.updateName(parent);
   }
 
   public forPrompt(_context: OasContext): string {
@@ -87,24 +85,4 @@ export class PropObj extends Prop {
   private needsBrackets(child: IType): boolean {
     return child instanceof Obj || child instanceof Union || child instanceof Composed;
   }
-
-  /*
-  private updateName(parent: IType): void {
-    if (this.name === 'items') {
-      const parentName = parent.name;
-      // if the part is a ref, then use replace for the pointed object
-      if (parent instanceof PropRef) {
-        this.name = parentName.replace('ref:', 'obj:');
-      }
-      // if within an array, synthesize a name
-      else if (parent.constructor.name === 'PropArray') {
-        this.name = parentName + 'Item';
-      }
-      // create a anonymous name
-      else {
-        this.name = `[prop:obj:anonymous:${this.parent?.name}]`;
-      }
-    }
-  }
-*/
 }

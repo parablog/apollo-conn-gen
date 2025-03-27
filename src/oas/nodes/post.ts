@@ -1,4 +1,4 @@
-import { Factory, Get, Body, ReferenceObject } from './internal.js';
+import { Factory, Get, Body, Type } from './internal.js';
 import { Writer } from '../io/writer.js';
 import { OasContext } from '../oasContext.js';
 import { Operation } from 'oas/operation';
@@ -118,13 +118,17 @@ export class Post extends Get {
   }
 
   private generateBodyInput(context: OasContext, writer: Writer) {
+    if (!this.body || !this.body.payload) return
+
+    const payload = this.body.payload as Type;
+
     writer.append('(');
 
-    const inputName = Naming.genParamName(Naming.getRefName(this.body!.name))
+    const name = Naming.getRefName(payload.name!) + payload.nameSuffix();
     writer
       .append("input")
       .append(": ")
-      .append(Naming.getRefName(this.body?.payload?.name!))
+      .append(name)
       .append("!");
 
     writer.append(')');

@@ -11,6 +11,7 @@ export class Body extends Type {
   constructor(parent: IType, name: string, schema: SchemaObject) {
     super(parent, name);
     this.schema = schema;
+    this.kind = 'input'; // all children will have the same type
   }
 
   get id(): string {
@@ -26,29 +27,18 @@ export class Body extends Type {
     context.enter(this);
     trace(context, '-> [body:visit]', 'in ' + this.name);
 
-    this.visitBodyMedia(context, this.schema);
-    this.payload!.name = this.payload!.name + "Input";
-    this.payload!.visit(context);
+    this.visitBody(context, 'Input', this.schema);
     this.visited = true;
 
     trace(context, '<- [body:visit]', 'out ' + this.name);
     context.leave(this);
   }
-
   public forPrompt(context: OasContext): string {
     return 'Body';
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
-    context.enter(this);
-    trace(context, '-> [body:generate]', `-> in: ${this.parent!.name}`);
-
-    if (this.payload) {
-      this.payload.generate(context, writer, selection);
-    }
-
-    trace(context, '<- [body:generate]', `-> out: ${this.parent!.name}`);
-    context.leave(this);
+  public generate(_context: OasContext, _writer: Writer, _selection: string[]): void {
+    // do nothing for body, it will be added automatically
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {
@@ -61,7 +51,7 @@ export class Body extends Type {
     trace(context, '<- [body:select]', `-> out: ${this.parent!.name}`);
   }
 
-  private visitBodyMedia(context: OasContext, schema: SchemaObject | ReferenceObject): void {
+  private visitBody(context: OasContext, name: string, schema: SchemaObject | ReferenceObject): void {
     trace(context, '-> [post::body::content]', 'in ' + this.name);
 
     if ('$ref' in schema) {
@@ -70,7 +60,9 @@ export class Body extends Type {
     // If the response has a content property, we need to find the JSON content.
     else if (schema) {
       this.payload = Factory.fromSchema(this, schema as SchemaObject);
+      this.payload!.name = name;
     }
+    // don't know how to handle this yet
     else {
       throw new Error('Not yet implemented for: ' + JSON.stringify(schema));
     }
@@ -90,9 +82,7 @@ export class Body extends Type {
       throw new Error('Not yet implemented for nested refs');
     }
 
-    const bodyType: IType = Factory.fromSchema(this, lookup as SchemaObject);
-    bodyType.name = ref.$ref;
-    this.payload = bodyType;
+    this.visitBody(context, ref.$ref, lookup as SchemaObject);
     trace(context, '<- [post::body::ref]', `out: ${this.name}, ref: ${ref.$ref}`);
   }
 }

@@ -2,6 +2,8 @@ import { Prop } from './prop.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 
+export type Kind = "input" | "type";
+
 export interface IType {
   name: string;
   parent?: IType;
@@ -9,6 +11,8 @@ export interface IType {
   circularRef?: IType;
   props: Map<string, Prop>;
   id: string;
+  kind: Kind;
+  visited: boolean;
 
   forPrompt(context: OasContext): string;
 

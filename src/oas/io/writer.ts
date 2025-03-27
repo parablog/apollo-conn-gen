@@ -55,7 +55,7 @@ export class Writer {
     return this.buffer.join('');
   }
 
-  public writeSchema(writer: Writer, pending: Map<string, IType>, selection: string[]): void {
+  public writeSchema(writer: Writer, types: Map<string, IType>, inputs: Map<string, IType>, selection: string[]): void {
     const context = this.generator.context!;
     const generatedSet = context.generatedSet;
     // generatedSet.clear();
@@ -63,10 +63,17 @@ export class Writer {
     this.writeDirectives(writer);
     this.writeJSONScalar(writer);
 
-    pending.forEach((type: IType) => {
-      if (!generatedSet.has(type.id)) {
+    types.forEach((type: IType) => {
+      if (!generatedSet.has('type:' + type.id)) {
         type.generate(context, this, selection);
-        generatedSet.add(type.id);
+        generatedSet.add('type:' + type.id);
+      }
+    });
+
+    inputs.forEach((type: IType) => {
+      if (!generatedSet.has('input:' + type.id)) {
+        type.generate(context, this, selection);
+        generatedSet.add('input:' + type.id);
       }
     });
 
@@ -81,7 +88,8 @@ export class Writer {
   }
 
   public generate(selection: string[]) {
-    const pending: Map<string, IType> = new Map();
+    const pendingTypes: Map<string, IType> = new Map();
+    const pendingInputs: Map<string, IType> = new Map();
 
     selection = this.collectExpandedPaths(selection);
 
@@ -126,43 +134,61 @@ export class Writer {
       } while (i < parts.length);
 
       if (current) {
-        // TODO: this seems redundant, we've already walked the parent AND can be also
-        // contained in the context stack
+        // TODO: this seems redundant, we've already walked the parent AND can be also contained in the context stack
         const parentType = Writer.findNonPropParent(current as IType);
 
-        if (!pending.has(parentType.id)) {
-          pending.set(parentType.id, parentType);
+        if (!pendingTypes.has(parentType.id)) {
+          pendingTypes.set(parentType.id, parentType);
         }
 
         parentType
           .ancestors()
-          .filter((t) => !pending.has(t.id) && this.isContainer(t))
+          .filter((t) => !pendingTypes.has(t.id) && this.isContainer(t))
           .forEach((dep) => {
             // TODO: potential merge needed?
-            pending.set(dep.id, dep);
+            pendingTypes.set(dep.id, dep);
           });
       }
     }
 
-    // process any POST paths, as we need to add the Body as a pending item
+    // process any POST paths, as we need to add the Body as a pendingInputs item
     Array.from(this.generator.paths.values())
       .filter((t) => t instanceof Post)
       .forEach((path) => {
-        if (path.body && !pending.has(path.body.id))
-          pending.set(path.body.id, path.body);
+        if (path.body && !pendingInputs.has(path.body.id))
+          pendingInputs.set(path.body.id, path.body);
+
+        if (path.body) {
+          this.generator.expand(path.body!);
+
+          const queue: IType[] = Array.from(path.body!.children.values());
+
+          while (queue.length > 0) {
+            const node = queue.shift()!;
+            const isContainer = this.isContainer(node)
+
+            if (isContainer && !pendingInputs.has(node.id)) {
+              pendingInputs.set(node.id, node)
+            }
+
+            this.generator.expand(node);
+            queue.push(...node.children);
+          }
+        }
       });
 
-    if (!_.isEmpty(pending)) {
+    // TODO: do we need to do the same for the pending inputs?
+    if (!_.isEmpty(pendingTypes)) {
       // first pass is to consolidate all Composed & Union nodes
-      const composed: Array<Composed | Union> = Array.from(pending.values())
+      const composed: Array<Composed | Union> = Array.from(pendingTypes.values())
         .filter((t) => t instanceof Composed || t instanceof Union)
         .map((t) => t as Composed);
 
       for (const comp of composed) {
-        comp.consolidate(selection).forEach((id) => pending.delete(id));
+        comp.consolidate(selection).forEach((id) => pendingTypes.delete(id));
       }
 
-      this.writeSchema(this, pending, selection);
+      this.writeSchema(this, pendingTypes, pendingInputs, selection);
     }
   }
 
@@ -199,11 +225,13 @@ export class Writer {
   }
 
   private writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-    writer.write('type Query {\n');
 
     const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
+    if (_.isEmpty(paths)) return;
+
+    writer.write('type Query {\n');
 
     for (const path of paths) {
       path.generate(context, writer, []);
@@ -397,11 +425,13 @@ export class Writer {
   }
 
   private writeMutations(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-    writer.write('type Mutation {\n');
 
     const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
+    if (_.isEmpty(paths)) return;
+
+    writer.write('type Mutation {\n');
 
     for (const path of paths) {
       path.generate(context, writer, []);

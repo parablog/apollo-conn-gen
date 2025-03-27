@@ -68,14 +68,14 @@ export class Obj extends Type {
     const sanitised = Naming.genTypeName(this.name);
     const refName = Naming.getRefName(this.name);
 
-    const inBody = context.inContextOf('Body', this);
     writer
-      .append(inBody ? 'input ' : 'type ')
+      .append(this.kind + ' ')
       .append(sanitised === refName ? refName : sanitised)
+      .append(this.nameSuffix())
       .append(' {\n');
 
-    const selected = inBody
-      ? this.props.values()
+    const selected = this.kind == "input"
+      ? this.props.values() // select all values for inputs, no selection applies here
       : this.selectedProps(selection);
 
     for (const prop of selected) {
@@ -164,57 +164,6 @@ export class Obj extends Type {
       }
     }
 
-    // const propertiesNames = Array.from(collected.values())
-    //   .map((p) => p.forPrompt(context))
-    //   .join(',\n - ');
-    //
-    // const inCompose = context.inContextOf(Composed, this);
-    // const inComposeIdx = Type.findAncestorOf(this, Composed);
-    // const inArrayIdx = Type.findAncestorOf(this, PropArray);
-    //
-    // if (!inCompose || inArrayIdx > inComposeIdx) {
-    //   console.log('Obj.visitProperties HERE');
-    // }
-    //
-    // trace(
-    //   context,
-    //   '   [obj::props]',
-    //   `${this.getSimpleName()} is within compose context? ${inCompose}`
-    // );
-    //
-    // const addAll =
-    //   !inCompose || inArrayIdx > inComposeIdx
-    //     ? await context.prompt.yesNoSelect(
-    //       this.path(),
-    //       ` -> Add all properties from [object] ${this.getOwner()}?: \n - ${propertiesNames}\n`
-    //     )
-    //     : 'y';
-    //
-    // if (addAll === 'y' || addAll === 's') {
-    //   for (const [propertyName, propertySchema] of sorted) {
-    //     const prop = Factory.fromProperty(
-    //       context,
-    //       this,
-    //       propertyName,
-    //       propertySchema
-    //     );
-    //     if (
-    //       addAll === 'y' ||
-    //       (await context.prompt.yesNo(
-    //         prop.path(),
-    //         `Add field '${prop.forPrompt(context)}'?`
-    //       ))
-    //     ) {
-    //       trace(context, '   [obj::props]', 'prop: ' + prop);
-    //       this.props.set(propertyName, prop);
-    //       if (!this.children.includes(prop)) {
-    //         this.add(prop);
-    //       }
-    //     }
-    //   }
-    // }
-    //
-    // this.addDependencies(context);
     trace(context, '<- [obj::props]', 'out props ' + this.props.size);
   }
 }
