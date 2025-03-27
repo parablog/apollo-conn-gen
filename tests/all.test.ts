@@ -605,7 +605,7 @@ test('test_027_sample-post', async () => {
     "post:/pet>**"
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 13, 1);
+  await runOasTest(`petstore.yaml`, paths, 13, 4);
 });
 
 // runOasTest test
@@ -624,20 +624,27 @@ async function runOasTest(
   assert.ok(gen.paths.size === pathsSize, `${gen.paths.size} is not equal to ${pathsSize}`);
 
   const schema = gen.generateSchema(paths);
-  assert.ok(gen.context?.types.size === typesSize);
+  assert.ok(gen.context?.types.size === typesSize, `${gen.context?.types.size} is not equal to ${typesSize}`);
 
   assert.ok(schema !== undefined);
 
   const schemaFile = path.join(os.tmpdir(), file.replace(/yaml|json|yml/, 'graphql'));
   fs.writeFileSync(schemaFile, schema, { encoding: 'utf-8', flag: 'w' });
 
-  const [result, output] = compose(schemaFile);
+  // need to write another graphql file but this only with a sample query otherwise composition
+  // will fail for mutations
+  const sampleFile = path.join(os.tmpdir(), 'simple-query.graphql');
+  if (!fs.existsSync(sampleFile)) {
+    fs.writeFileSync(sampleFile, "type Query { hello: String }", { encoding: 'utf-8', flag: 'w' });
+  }
+
+  const [result, output] = compose(schemaFile, sampleFile);
   if (shouldFail) {
     assert.ok(result === false);
     assert.ok(output !== undefined);
     return output as unknown as string | undefined;
   } else {
-    assert.ok(output === undefined);
+    assert.ok(output === undefined, "should have been undefined, but it is: " + output);
     assert.ok(result === true);
   }
 }
@@ -722,7 +729,7 @@ function isRoverAvailable(command: string): [boolean, string?] {
   return [result.status === 0, result.stdout.toString().trim()];
 }
 
-function compose(schemaPath: string) {
+function compose(schemaPath: string, samplePath?: string) {
   console.info('schemaPath', schemaPath);
 
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');
@@ -731,13 +738,22 @@ function compose(schemaPath: string) {
   }
 
   const supergraphFile = path.join(os.tmpdir(), 'supergraph.yaml');
-  const content: string = `
+  let content: string = `
 federation_version: =2.10.0
 subgraphs:
   test_spec:
     routing_url: http://localhost # this value is ignored
     schema:
       file: ${schemaPath} # path to the schema file`;
+
+  if (samplePath) {
+    content += `
+  sample_spec:
+    routing_url: http://localhost # this value is ignored
+    schema:
+      file: ${samplePath} # path to the sample file\`;
+  `
+  }
 
   fs.writeFileSync(supergraphFile, content, { encoding: 'utf-8', flag: 'w' });
 

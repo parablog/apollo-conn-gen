@@ -10,6 +10,7 @@ import { Get } from './get.js';
 import { PropArray } from './propArray.js';
 import { Ref } from './ref.js';
 import { Response } from './response.js';
+import _, { isArray } from 'lodash';
 
 export class Obj extends Type {
   constructor(
@@ -162,6 +163,14 @@ export class Obj extends Type {
       if (!this.children.includes(prop)) {
         this.add(prop);
       }
+    }
+
+    // required can also be set in a separate array too, apparently
+    if (_.isArray(this.schema.required)) {
+      this.schema.required.forEach(name => {
+        const prop = this.props.get(name);
+        if (prop) prop!.required = true;
+      })
     }
 
     trace(context, '<- [obj::props]', 'out props ' + this.props.size);
