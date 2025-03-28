@@ -75,10 +75,9 @@ export class Post extends Get {
     }
 
     writer.append('  ').append(this.getGqlOpName());
-    this.generateBodyInput(context, writer);
 
-    // TODO: what if we have query params?
-    // this.generateParameters(context, writer, selection);
+    this.generateParameters(context, writer, selection);
+    this.generateBodyInput(context, writer);
 
     if (this.resultType) {
       writer.append(': ');

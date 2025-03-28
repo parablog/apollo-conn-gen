@@ -122,8 +122,7 @@ export class OasGen {
 
     const collected = new Map<string, IType>();
     for (const [key, pathItem] of filtered) {
-      const result = this.visitPath(context, key, pathItem);
-      collected.set(key, result!);
+      this.visitPath(context, key, pathItem).forEach(type => collected.set(type.id, type));
     }
 
     this.paths = collected;
@@ -212,7 +211,8 @@ export class OasGen {
     });
   }
 
-  private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType | undefined {
+  private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType[] {
+    const paths: IType[] = [];
     if (pathItem.get !== undefined) {
       const operation = pathItem.get as Webhook | Operation;
       if (operation?.constructor.name === 'Webhook') {
@@ -223,14 +223,19 @@ export class OasGen {
       const type = this.visitGet(context, name, operation);
       trace(context, '<- [visitPath]', `out: [${name}] id: ${operation.getOperationId()}`);
 
-      return type;
-    } else if (pathItem.post !== undefined) {
+      paths.push(type);
+    }
+
+    // we can have both 'get' and 'post' defined for the same path
+    if (pathItem.post !== undefined) {
       const operation = pathItem.post;
       trace(context, '-> [visitPath]', `in:  [${name}] id: ${operation.getOperationId()}`);
       const type = this.visitPost(context, name, operation);
       trace(context, '<- [visitPath]', `out: [${name}] id: ${operation.getOperationId()}`);
 
-      return type;
+      paths.push(type);
     }
+
+    return paths;
   }
 }

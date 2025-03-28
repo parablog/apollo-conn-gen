@@ -6,6 +6,7 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 
 export class Get extends Type {
   public resultType?: IType;
@@ -105,7 +106,12 @@ export class Get extends Type {
     const statusCodes = this.operation.getResponseStatusCodes();
 
     if (!statusCodes.includes('200') && !statusCodes.includes('default')) {
-      throw new Error('Could not find a valid 200 response');
+      // we can potentially synthesize an Empty response here:
+      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
+      this.resultType
+
+      return;
+      // TODO: throw new Error('Could not find a valid 200 response');
     }
 
     const responses = this.operation.schema.responses;

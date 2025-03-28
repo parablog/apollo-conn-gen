@@ -13,6 +13,8 @@ import { Response } from './response.js';
 import _, { isArray } from 'lodash';
 
 export class Obj extends Type {
+  synthetic: boolean = false;
+
   constructor(
     parent: IType | undefined,
     name: string,

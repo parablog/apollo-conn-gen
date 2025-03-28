@@ -28,6 +28,7 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { GqlUtils } from '../utils/gql.js';
+import { APOLLO_SYNTHETIC_OBJ } from '../schemas/index.js';
 
 export class Factory {
   public static createGet(name: string, op: Operation): Get {
@@ -64,18 +65,23 @@ export class Factory {
     }
     // array case
     else if (schema.type === 'object') {
+      // it's either a union or a composed object
       if (schema.allOf || schema.oneOf) {
         result = new Composed(parent, _.get(schema, 'name') || parent.name, schema);
-      } else {
+      }
+      // or a plain obj
+      else {
         if (!schema.properties) {
-          warn(
-            null,
+          warn(null,
             '[factory]',
             'Object has no properties: ' + JSON.stringify(schema, null, 2) + ' in: ' + parent.pathToRoot(),
           );
         }
 
         result = new Obj(parent, _.get(schema, 'name') || null, schema);
+        if (schema.format == APOLLO_SYNTHETIC_OBJ) {
+          (result as Obj).synthetic = true;
+        }
       }
     }
     // Composed schema case.

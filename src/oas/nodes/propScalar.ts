@@ -50,10 +50,11 @@ export class PropScalar extends Prop {
     writer
       .append(' '.repeat(context.indent + context.stack.length))
       .append(sanitised)
-      .append('\n');
 
     for (const child of this.children) {
       child.select(context, writer, selection);
     }
+
+    writer.append('\n');
   }
 }

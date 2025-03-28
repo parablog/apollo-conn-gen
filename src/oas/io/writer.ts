@@ -316,7 +316,7 @@ export class Writer {
 
     const verb = op.id.startsWith("get:") ? 'GET' : 'POST';
 
-    if (verb === 'POST') {
+    if (verb === 'POST' && (op as Post).body) {
       builder += ',\n';
       let spacing = ' '.repeat(6);
       builder += spacing + 'body: """\n';
