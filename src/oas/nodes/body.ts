@@ -45,7 +45,7 @@ export class Body extends Type {
     trace(context, '-> [body:select]', `-> in: ${this.parent!.name}`);
 
     if (this.payload) {
-      let spacing = ' '.repeat(6);
+      const spacing = ' '.repeat(6);
       writer
         .append(spacing + 'body: """\n')
         .append(spacing +  "$args.input {\n");
