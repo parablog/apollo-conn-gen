@@ -11,12 +11,16 @@ import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 export class Get extends Type {
   public resultType?: IType;
   public params: Param[] = [];
+  public summary?: string;
+  public description?: string;
 
   constructor(
     name: string,
     public operation: Operation,
   ) {
     super(undefined, name);
+    this.summary = operation.getSummary();
+    this.description = operation.getDescription();
   }
 
   get id(): string {
@@ -44,18 +48,22 @@ export class Get extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `[GET] ${this.name}`;
+    return `[get] ${this.name}: ${this.description || this.summary}`;
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
     context.enter(this);
     trace(context, '-> [get::generate]', `-> in: ${this.name}`);
 
+    const description = this.operation.getDescription();
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
 
-    if (summary || originalPath) {
+    if (description || summary || originalPath) {
       writer.append('  """\n').append('  ');
+      if (description) {
+        writer.append(description).append(' ');
+      }
       if (summary) {
         writer.append(summary).append(' ');
       }
@@ -108,10 +116,7 @@ export class Get extends Type {
     if (!statusCodes.includes('200') && !statusCodes.includes('default')) {
       // we can potentially synthesize an Empty response here:
       this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
-      this.resultType
-
       return;
-      // TODO: throw new Error('Could not find a valid 200 response');
     }
 
     const responses = this.operation.schema.responses;
@@ -138,9 +143,10 @@ export class Get extends Type {
       } else {
         this.visitResponseContent(context, code, json);
       }
-    } else if (code === 'default') {
+    } else if ((code === 'default' || code === '200') && !content) {
       // there is no response for this operation
       // TODO: should we synthesize one?
+      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
     } else {
       throw new Error('Not yet implemented for: ' + JSON.stringify(response));
     }

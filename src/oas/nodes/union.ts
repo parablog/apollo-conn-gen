@@ -84,8 +84,9 @@ export class Union extends Type {
       trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
 
       writer
-        .append('type ')
+        .append(this.kind + ' ')
         .append(Naming.getRefName(this.name))
+        .append(this.nameSuffix())
         .append(' { #### replacement for Union ')
         .append(this.name)
         .append('\n');

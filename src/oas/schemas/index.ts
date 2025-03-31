@@ -11,6 +11,8 @@ export const SYN_SUCCESS_RESPONSE: ResponseObject = {
         format: APOLLO_SYNTHETIC_OBJ,
         properties: {
           'success': {
+            description: 'A synthetic response used when an operation returns no value. ' +
+              'Set to "true" in the connector selection.',
             type: 'boolean',
             default: 'true',
           },

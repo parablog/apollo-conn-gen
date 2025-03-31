@@ -37,6 +37,8 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
 
       result = Array.from(type.props.values());
     }
+    /*
+    // TODO: re-think this
     else if (type instanceof Post) {
       if (!type.visited) type.visit(gen.context!)
       result = gen.expand(type);
@@ -44,7 +46,7 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
       // we need to exclude the body from the selection - not sure we need to generalise this..
       result = _.filter(result, (r) => r !== type.body);
       console.log(result)
-    }
+    }*/
     else {
       // top level paths
       result = gen.expand(type);

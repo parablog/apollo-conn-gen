@@ -45,7 +45,18 @@ export class Body extends Type {
     trace(context, '-> [body:select]', `-> in: ${this.parent!.name}`);
 
     if (this.payload) {
+      let spacing = ' '.repeat(6);
+      writer
+        .append(spacing + 'body: """\n')
+        .append(spacing +  "$args.input {\n");
+
+      context.indent += 2;
       this.payload.select(context, writer, selection);
+      context.indent -= 2;
+
+      writer
+        .append(spacing + '} \n')
+        .append(spacing + '"""\n' + ' '.repeat(5));
     }
 
     trace(context, '<- [body:select]', `-> out: ${this.parent!.name}`);

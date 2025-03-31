@@ -3,7 +3,7 @@ import Oas from 'oas';
 import { ServerObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { CircularRef, Post } from '../nodes/internal.js';
+import { Body, CircularRef, Post } from '../nodes/internal.js';
 import { Composed } from '../nodes/internal.js';
 import { Get } from '../nodes/internal.js';
 import { Obj } from '../nodes/internal.js';
@@ -106,7 +106,7 @@ export class Writer {
           // remove the current path from the selection array
           selection = selection.filter((s) => s !== path);
 
-          if (current instanceof Composed) {
+          if (current && current instanceof Composed) {
             current!.consolidate(selection);
           }
 
@@ -152,7 +152,7 @@ export class Writer {
     }
 
     // process any POST paths, as we need to add the Body as a pendingInputs item
-    Array.from(this.generator.paths.values())
+    /*Array.from(this.generator.paths.values())
       .filter((t) => t instanceof Post)
       .forEach((path) => {
         if (path.body && !pendingInputs.has(path.body.id))
@@ -165,17 +165,17 @@ export class Writer {
 
           while (queue.length > 0) {
             const node = queue.shift()!;
-            const isContainer = this.isContainer(node)
+            const isContainer = this.isContainer(node);
 
             if (isContainer && !pendingInputs.has(node.id)) {
-              pendingInputs.set(node.id, node)
+              pendingInputs.set(node.id, node);
             }
 
             this.generator.expand(node);
             queue.push(...node.children);
           }
         }
-      });
+      });*/
 
     // TODO: do we need to do the same for the pending inputs?
     if (!_.isEmpty(pendingTypes)) {
@@ -244,22 +244,25 @@ export class Writer {
 
   private writeConnector(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
     const indent = 0;
-    const get = type as unknown as Get; // assume type is GetOp
+    const op = type as unknown as Get | Post; // assume type is GetOp
     let spacing = ' '.repeat(indent + 4);
     writer.append(spacing).append('@connect(\n');
 
-    const request = this.buildRequestMethodAndArgs(get);
     spacing = ' '.repeat(indent + 6);
     writer
       .append(spacing)
       .append('source: "api"\n')
       .append(spacing)
-      .append('http: ' + request + '\n')
+      .append('http: ');
+
+    this.requestMethod(context, writer, op, selection);
+
+    writer.append('\n')
       .append(spacing)
       .append('selection: """\n');
 
-    if (get.resultType) {
-      this.writeSelection(context, writer, get.resultType, selection);
+    if (op.resultType) {
+      this.writeSelection(context, writer, op.resultType, selection);
     }
 
     writer.append(spacing).append('"""\n');
@@ -267,10 +270,12 @@ export class Writer {
     writer.append(spacing).append(')\n');
   }
 
-  private buildRequestMethodAndArgs(op: Get | Post): string {
-    let builder = '';
-
-    builder += '"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}');
+  private requestMethod(context: OasContext, writer: Writer, op: Get | Post, selection: string[]): void {
+    // replace every {elem} in the path for {$args.elem}
+    const verb = op.id.startsWith('get:') ? 'GET' : 'POST';
+    writer
+      .append(`{ ${verb}:`)
+      .append('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}'));
 
     if (op.params.length > 0) {
       const params = op.params.filter((p: Param) => {
@@ -278,15 +283,15 @@ export class Writer {
       });
 
       if (params.length > 0) {
-        builder += '?' + params.map((p: Param) => `${p.name}={$args.${Naming.genParamName(p.name)}}`).join('&');
+        writer.append('?' + params.map((p: Param) => `${p.name}={$args.${Naming.genParamName(p.name)}}`).join('&'));
       }
       const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
 
-      builder += '"\n';
+      writer.append('"\n');
 
       if (headers.length > 0) {
         let spacing = ' '.repeat(6);
-        builder += spacing + 'headers: [\n';
+        writer.append(spacing + 'headers: [\n');
         spacing = ' '.repeat(8);
 
         for (const p of headers) {
@@ -304,27 +309,24 @@ export class Writer {
             value = '<placeholder>';
           }
 
-          builder += spacing + `{ name: "${p.name}", value: "${value}" }\n`;
+          writer.append(spacing + `{ name: "${p.name}", value: "${value}" }\n`);
         }
 
         spacing = ' '.repeat(6);
-        builder += spacing + ']';
+        writer.append(spacing + ']');
       }
     } else {
-      builder += '"';
+      writer.append('"');
     }
 
-    const verb = op.id.startsWith("get:") ? 'GET' : 'POST';
-
-    if (verb === 'POST' && (op as Post).body) {
-      builder += ',\n';
-      let spacing = ' '.repeat(6);
-      builder += spacing + 'body: """\n';
-      builder += spacing + '$args.input' + '\n';
-      builder += spacing + '"""\n' + ' '.repeat(5);
+    if (_.has(op, 'body')) {
+      const body = op.body as Body;
+      this.writeBodySelection(context, writer, body, selection);
     }
 
-    return `{ ${verb}: ${builder} }`;
+    writer.append("}")
+    // const verb = op.id.startsWith('get:') ? 'GET' : 'POST';
+    // return `{ ${verb}: ${builder} }`;
   }
 
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
@@ -405,9 +407,6 @@ export class Writer {
 
     const paths = Array.from(this.generator.paths.values());
     const nodes = filtered.map((p) => this.collectPaths(p, paths));
-    /*.map(stack => _.last(stack)!.id)
-      .filter(id => selection.includes(id))
-      .forEach(id => newSelection.add(id));*/
 
     nodes.forEach((stack) => {
       const root = _.last(stack)!;
@@ -440,5 +439,23 @@ export class Writer {
     }
 
     writer.write('}\n\n');
+  }
+
+  private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: string[]): void {
+    writer.append(',\n');
+    context.indent = 6;
+    // let spacing = ' '.repeat(6);
+
+    if (body) {
+      body.select(context, writer, selection);
+    }
+    /*writer.append(spacing + 'body: """\n');
+
+    // TODO: writer.append(spacing + '$args.input' + '\n');
+    // we should check if we have no selection for body? or else just send everything?
+    context.indent = 6;
+    body.select(context, writer, selection);
+
+    writer.append(spacing + '"""\n' + ' '.repeat(5));*/
   }
 }

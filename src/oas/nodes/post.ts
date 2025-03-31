@@ -3,9 +3,11 @@ import { Writer } from '../io/writer.js';
 import { OasContext } from '../oasContext.js';
 import { Operation } from 'oas/operation';
 import { trace, warn } from '../log/trace.js';
-import { SchemaObject } from 'oas/types';
 import { Naming } from '../utils/naming.js';
 
+// TODO: support
+// * select fields in Post BODY?
+// anything else?
 export class Post extends Get {
   public body?: Body;
 
@@ -44,7 +46,7 @@ export class Post extends Get {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `[POST] ${this.name}`;
+    return `[post] ${this.name}: ${this.description || this.summary}`;
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {

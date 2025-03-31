@@ -29,7 +29,7 @@ export class Obj extends Type {
   }
 
   get id(): string {
-    return `obj:${this.name}`;
+    return `obj:${this.kind}:${this.name}`;
   }
 
   public visit(context: OasContext): void {
@@ -77,9 +77,7 @@ export class Obj extends Type {
       .append(this.nameSuffix())
       .append(' {\n');
 
-    const selected = this.kind == "input"
-      ? this.props.values() // select all values for inputs, no selection applies here
-      : this.selectedProps(selection);
+    const selected = this.selectedProps(selection);
 
     for (const prop of selected) {
       trace(context, '-> [obj::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);

@@ -219,6 +219,8 @@ export class Factory {
   }
 
   public static fromBody(_context: OasContext, parent: IType, schema: SchemaObject): IType {
-    return new Body(parent, 'b', schema);
+    const body = new Body(parent, 'b', schema);
+    parent.add(body);
+    return body;
   }
 }
