@@ -17,7 +17,8 @@ import {
   CircularRef,
   Union,
   Response,
-  Param, Body,
+  Param,
+  Body,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
@@ -72,7 +73,8 @@ export class Factory {
       // or a plain obj
       else {
         if (!schema.properties) {
-          warn(null,
+          warn(
+            null,
             '[factory]',
             'Object has no properties: ' + JSON.stringify(schema, null, 2) + ' in: ' + parent.pathToRoot(),
           );

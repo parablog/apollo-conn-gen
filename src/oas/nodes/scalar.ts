@@ -30,10 +30,11 @@ export class Scalar extends Type {
 
   public select(_context: OasContext, writer: Writer, selection: string[]) {
     if (this.schema.default) {
-      writer.append(': ') // We'll append the value as a literal. No type checking for now.
+      writer
+        .append(': ') // We'll append the value as a literal. No type checking for now.
         .append('$(')
         .append(this.schema.default)
-        .append(')')
+        .append(')');
     }
   }
 }

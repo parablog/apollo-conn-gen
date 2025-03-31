@@ -119,18 +119,14 @@ export class Post extends Get {
   }
 
   private generateBodyInput(context: OasContext, writer: Writer) {
-    if (!this.body || !this.body.payload) return
+    if (!this.body || !this.body.payload) return;
 
     const payload = this.body.payload as Type;
 
     writer.append('(');
 
     const name = Naming.getRefName(payload.name!) + payload.nameSuffix();
-    writer
-      .append("input")
-      .append(": ")
-      .append(name)
-      .append("!");
+    writer.append('input').append(': ').append(name).append('!');
 
     writer.append(')');
   }

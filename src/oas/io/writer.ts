@@ -225,7 +225,6 @@ export class Writer {
   }
 
   private writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-
     const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
@@ -249,17 +248,11 @@ export class Writer {
     writer.append(spacing).append('@connect(\n');
 
     spacing = ' '.repeat(indent + 6);
-    writer
-      .append(spacing)
-      .append('source: "api"\n')
-      .append(spacing)
-      .append('http: ');
+    writer.append(spacing).append('source: "api"\n').append(spacing).append('http: ');
 
     this.requestMethod(context, writer, op, selection);
 
-    writer.append('\n')
-      .append(spacing)
-      .append('selection: """\n');
+    writer.append('\n').append(spacing).append('selection: """\n');
 
     if (op.resultType) {
       this.writeSelection(context, writer, op.resultType, selection);
@@ -273,9 +266,7 @@ export class Writer {
   private requestMethod(context: OasContext, writer: Writer, op: Get | Post, selection: string[]): void {
     // replace every {elem} in the path for {$args.elem}
     const verb = op.id.startsWith('get:') ? 'GET' : 'POST';
-    writer
-      .append(`{ ${verb}:`)
-      .append('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}'));
+    writer.append(`{ ${verb}:`).append('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}'));
 
     if (op.params.length > 0) {
       const params = op.params.filter((p: Param) => {
@@ -324,7 +315,7 @@ export class Writer {
       this.writeBodySelection(context, writer, body, selection);
     }
 
-    writer.append("}")
+    writer.append('}');
     // const verb = op.id.startsWith('get:') ? 'GET' : 'POST';
     // return `{ ${verb}: ${builder} }`;
   }
@@ -423,8 +414,12 @@ export class Writer {
     return [...newSelection, ...selection.filter((p) => !expands.includes(p))];
   }
 
-  private writeMutations(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-
+  private writeMutations(
+    context: OasContext,
+    writer: Writer,
+    collected: Map<string, IType>,
+    selection: string[],
+  ): void {
     const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));

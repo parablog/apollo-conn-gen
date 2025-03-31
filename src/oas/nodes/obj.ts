@@ -121,8 +121,7 @@ export class Obj extends Type {
       else if (parent instanceof Response) {
         const op = parent.parent as Get;
         name = op.getGqlOpName() + 'Response';
-      }
-      else if (parent instanceof Body) {
+      } else if (parent instanceof Body) {
         // const op = parent.parent as Post;
         name = this.name + 'Input';
       }
@@ -167,10 +166,10 @@ export class Obj extends Type {
 
     // required can also be set in a separate array too, apparently
     if (_.isArray(this.schema.required)) {
-      this.schema.required.forEach(name => {
+      this.schema.required.forEach((name) => {
         const prop = this.props.get(name);
         if (prop) prop!.required = true;
-      })
+      });
     }
 
     trace(context, '<- [obj::props]', 'out props ' + this.props.size);

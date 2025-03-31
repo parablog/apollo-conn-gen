@@ -122,7 +122,7 @@ export class OasGen {
 
     const collected = new Map<string, IType>();
     for (const [key, pathItem] of filtered) {
-      this.visitPath(context, key, pathItem).forEach(type => collected.set(type.id, type));
+      this.visitPath(context, key, pathItem).forEach((type) => collected.set(type.id, type));
     }
 
     this.paths = collected;

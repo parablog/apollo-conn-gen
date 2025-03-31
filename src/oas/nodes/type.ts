@@ -137,11 +137,10 @@ export abstract class Type implements IType {
   }*/
 
   public selectedProps(selection: string[]) {
-    return Array.from(this.props.values())
-      .filter((prop) => selection.find((s) => s.startsWith(prop.path())));
+    return Array.from(this.props.values()).filter((prop) => selection.find((s) => s.startsWith(prop.path())));
   }
 
   nameSuffix(): string {
-    return this.kind === "input" ? 'Input' : '';
+    return this.kind === 'input' ? 'Input' : '';
   }
 }

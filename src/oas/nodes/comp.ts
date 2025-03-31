@@ -70,7 +70,7 @@ export class Composed extends Type {
 
       if (selected.length > 0) {
         // writer.write('type ');
-        writer.write(this.kind + ' ')
+        writer.write(this.kind + ' ');
         writer.write(Naming.getRefName(this.name));
         writer.append(this.nameSuffix());
         writer.write(' {\n');

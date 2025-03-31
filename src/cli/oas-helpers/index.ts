@@ -36,7 +36,7 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
       (type as Composed | Union).consolidate([]);
 
       result = Array.from(type.props.values());
-    }
+    } else {
     /*
     // TODO: re-think this
     else if (type instanceof Post) {
@@ -47,7 +47,6 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
       result = _.filter(result, (r) => r !== type.body);
       console.log(result)
     }*/
-    else {
       // top level paths
       result = gen.expand(type);
 
