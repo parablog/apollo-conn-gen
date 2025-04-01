@@ -48,7 +48,7 @@ export class Get extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `[get] ${this.name}: ${this.description || this.summary}`;
+    return `[get] ${this.name}`;
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {

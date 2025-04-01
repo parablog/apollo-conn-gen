@@ -46,7 +46,7 @@ export class Post extends Get {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `[post] ${this.name}: ${this.description || this.summary}`;
+    return `[post] ${this.name}`;
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {
