@@ -37,7 +37,7 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
 
       result = Array.from(type.props.values());
     } else {
-    /*
+      /*
     // TODO: re-think this
     else if (type instanceof Post) {
       if (!type.visited) type.visit(gen.context!)
