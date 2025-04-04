@@ -1,4 +1,4 @@
-import { Factory, IType, Type } from './internal.js';
+import { Factory, IType, Type, T } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -54,8 +54,18 @@ export class Response extends Type {
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '-> [res:select]', `-> in: ${this.parent!.name}`);
 
-    if (this.response) {
-      this.response.select(context, writer, selection);
+    const response = this.response;
+    if (response) {
+      if (T.isScalar(response)) {
+        // best attempt to just copy the value that comes out of the service. most likely the
+        // value will have to be replaced by a GQL type. In fact, we could potentially use SYN_ here but
+        // it will have to do for now.
+        writer
+          .append(' '.repeat(context.indent))
+          .append('$\n');
+      }
+      else
+        response.select(context, writer, selection);
     }
 
     trace(context, '<- [res:select]', `-> out: ${this.parent!.name}`);

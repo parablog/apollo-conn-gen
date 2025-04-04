@@ -1,4 +1,4 @@
-import { CircularRef, En, Obj, PropArray, PropScalar } from './internal.js';
+import { CircularRef, En, Obj, PropArray, PropScalar, Scalar } from './internal.js';
 
 import { IType } from './internal.js';
 import _ from 'lodash';
@@ -6,6 +6,7 @@ import _ from 'lodash';
 export class T {
   public static isLeaf(type: IType): boolean {
     return (
+      type instanceof Scalar ||
       type instanceof PropScalar ||
       type instanceof En ||
       type instanceof CircularRef ||
@@ -37,5 +38,9 @@ export class T {
       type.id.startsWith('patch:') ||
       type.id.startsWith('del:')
     );
+  }
+
+  static isScalar(type: IType): boolean {
+    return type.id.startsWith('scalar:');
   }
 }
