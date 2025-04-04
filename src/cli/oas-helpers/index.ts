@@ -1,12 +1,8 @@
 /// internal functions
 import fs from 'fs';
-import { Composed, Post } from '../../oas/nodes/internal.js';
-import { Ref } from '../../oas/nodes/internal.js';
-import { Type } from '../../oas/nodes/internal.js';
-import { Union } from '../../oas/nodes/internal.js';
+import { Ref, Type, Union, IType, Composed, Post } from '../../oas/nodes/internal.js';
 import { OasGen } from '../../oas/oasGen.js';
 import { typesPrompt } from '../../oas/prompts/prompt.js';
-import { IType } from '../../oas/nodes/internal.js';
 import _ from 'lodash';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

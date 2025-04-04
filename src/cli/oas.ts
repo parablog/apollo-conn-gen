@@ -2,9 +2,9 @@ import { Command } from 'commander';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
 
-const originalConsole = {
+const originalConsole = Object.assign({
   log: console.log,
-};
+}, console)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
 async function main(sourceFile: string, opts: any): Promise<void> {
@@ -36,6 +36,9 @@ async function main(sourceFile: string, opts: any): Promise<void> {
     paths = await promptForSelection(gen, opts, pathSet);
   }
 
+  if (opts.verbose)
+    console = originalConsole
+
   console.info('selected :=', JSON.stringify(paths, null, 2));
   console.info('--------------- Apollo Connector schema -----------------');
   console.info(gen.generateSchema(paths));
@@ -51,6 +54,7 @@ program
   .option('-g --grep <regex>', 'Filter the list of paths with the passed expression', '*')
   .option('-p --page-size <num>', 'Number of rows to display in selection mode', '10')
   .option('-s --load-selections <file>', 'Load a JSON file with field selections (other options are ignored)')
+  .option('-v --verbose', 'Log all messages from generator')
   .parse(process.argv);
 
 const source = program.args[0];

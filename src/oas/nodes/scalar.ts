@@ -12,15 +12,20 @@ export class Scalar extends Type {
   ) {
     super(parent, name);
   }
+
+  get id(): string {
+    return `scalar:${this.schema.type}`;
+  }
+
   public visit(_context: OasContext): void {
     this.visited = true;
   }
 
   public forPrompt(_context: OasContext): string {
-    return `Scalar Node - Name: ${this.name}, Value: ${this.schema}`;
+    return String(this.schema.type);
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, _selection: string[]): void {
     context.enter(this);
     trace(context, '-> [scalar::generate]', `-> in: ${this.name}`);
     writer.write(this.name);
@@ -28,7 +33,7 @@ export class Scalar extends Type {
     context.leave(this);
   }
 
-  public select(_context: OasContext, writer: Writer, selection: string[]) {
+  public select(_context: OasContext, writer: Writer, _selection: string[]) {
     if (this.schema.default) {
       writer
         .append(': ') // We'll append the value as a literal. No type checking for now.

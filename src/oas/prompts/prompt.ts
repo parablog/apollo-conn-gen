@@ -22,11 +22,7 @@ import type { PartialDeep } from '@inquirer/type';
 import _ from 'lodash';
 
 import { OasContext } from '../oasContext.js';
-import { CircularRef } from '../nodes/internal.js';
-import { Composed } from '../nodes/internal.js';
-import { En } from '../nodes/internal.js';
-import { PropArray } from '../nodes/internal.js';
-import { PropScalar } from '../nodes/internal.js';
+import { CircularRef, T, Composed } from '../nodes/internal.js';
 import { getMaxLength, isEscapeKey } from './base/utils.js';
 import { CustomTheme, RenderContext } from './theme.js';
 import { IType } from '../nodes/internal.js';
@@ -61,7 +57,7 @@ const baseTheme: CustomTheme = {
 
     const linePrefix = isLast && !context.loop ? this.hierarchySymbols.leaf : this.hierarchySymbols.branch;
 
-    const isLeaf = isTypeLeaf(item);
+    const isLeaf = T.isLeaf(item);
     let line = !isLeaf
       ? `${item.forPrompt(context.context)} ${figures.triangleRight}`
       : `${item.forPrompt(context.context)}`;
@@ -97,14 +93,15 @@ const ANSI_HIDE_CURSOR = '\x1B[?25l';
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface IPromptTheme {}
 
-const isTypeLeaf = (type: IType): boolean => {
+/*const isTypeLeaf = (type: IType): boolean => {
   return (
+    type instanceof Scalar ||
     type instanceof PropScalar ||
     type instanceof En ||
     type instanceof CircularRef ||
     (type instanceof PropArray && type.items instanceof PropScalar)
   );
-};
+};*/
 
 export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, done) => {
   const { pageSize = 40, loop = false, allowCancel = false, cancelText = 'Canceled.' } = config;
@@ -153,19 +150,19 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
 
       const filtered =
         Array.from(children)
-          .filter((child) => isTypeLeaf(child) && !selected.includes(child.path()))
+          .filter((child) => T.isLeaf(child) && !selected.includes(child.path()))
           .map((child) => child.path()) ?? [];
 
       setSelected([...selected, ...filtered]);
     } else if (isSelectNoneKey(key)) {
       const filtered =
         activeItem.parent?.children
-          .filter((child) => isTypeLeaf(child) && selected.includes(child.path()))
+          .filter((child) => T.isLeaf(child) && selected.includes(child.path()))
           .map((child) => child.path()) ?? [];
 
       setSelected(selected.filter((path) => !filtered.includes(path)));
     } else {
-      const isLeaf = isTypeLeaf(activeItem);
+      const isLeaf = T.isLeaf(activeItem);
 
       if ((isSpaceKey(key) || isRightKey(key)) && !isLeaf) {
         setCurrent(activeItem);

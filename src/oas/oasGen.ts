@@ -1,15 +1,14 @@
 import Oas from 'oas';
 import OASNormalize from 'oas-normalize';
 import { Operation, Webhook } from 'oas/operation';
-import { OASDocument } from 'oas/types';
+import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
 import { OasContext } from './oasContext.js';
-import { Factory } from './nodes/internal.js';
+import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
-import { IType } from './nodes/internal.js';
 
 interface IGenOptions {
   skipValidation: boolean;
@@ -117,7 +116,7 @@ export class OasGen {
 
     const paths = parser.getPaths();
     const filtered = Object.entries(paths)
-      .filter(([_key, pathItem]) => pathItem.get !== undefined || pathItem.post !== undefined)
+      .filter(([_key, pathItem]) => this.isSupported(pathItem))
       .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
 
     const collected = new Map<string, IType>();
@@ -126,6 +125,10 @@ export class OasGen {
     }
 
     this.paths = collected;
+  }
+
+  private isSupported(pathItem:  Record<HttpMethods, Webhook | Operation>) {
+    return pathItem.get || pathItem.post || pathItem.put || pathItem.delete || pathItem.patch;
   }
 
   public getContext(): OasContext {
@@ -196,12 +199,39 @@ export class OasGen {
 
   // private methods
 
-  private visitGet(_context: OasContext, name: string, op: Operation): IType {
-    return Factory.createGet(name, op);
+  private visitGet(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitGet]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.createGet(name, op);
+    trace(context, '<- [visitGet]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
   }
 
-  private visitPost(_context: OasContext, name: string, op: Operation): IType {
-    return Factory.createPost(name, op);
+  private visitPost(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitPost]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.fromPost(name, op);
+    trace(context, '<- [visitPost]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
+  }
+
+  private visitPut(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitPut]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.fromPut(name, op);
+    trace(context, '<- [visitPut]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
+  }
+
+  private visitPatch(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitPatch]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.fromPatch(name, op);
+    trace(context, '<- [visitPatch]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
+  }
+
+  private visitDelete(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitDelete]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.fromDelete(name, op);
+    trace(context, '<- [visitDelete]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
   }
 
   private printRefs(values: Map<string, number>): void {
@@ -214,26 +244,26 @@ export class OasGen {
   private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType[] {
     const paths: IType[] = [];
     if (pathItem.get !== undefined) {
-      const operation = pathItem.get as Webhook | Operation;
-      if (operation?.constructor.name === 'Webhook') {
+      if ((pathItem.get as Webhook | Operation)?.constructor.name === 'Webhook') {
         throw new Error('Webhook not supported');
       }
-
-      trace(context, '-> [visitPath]', `in:  [${name}] id: ${operation.getOperationId()}`);
-      const type = this.visitGet(context, name, operation);
-      trace(context, '<- [visitPath]', `out: [${name}] id: ${operation.getOperationId()}`);
-
-      paths.push(type);
+      paths.push(this.visitGet(context, name, pathItem.get as Webhook | Operation));
     }
 
-    // we can have both 'get' and 'post' defined for the same path
     if (pathItem.post !== undefined) {
-      const operation = pathItem.post;
-      trace(context, '-> [visitPath]', `in:  [${name}] id: ${operation.getOperationId()}`);
-      const type = this.visitPost(context, name, operation);
-      trace(context, '<- [visitPath]', `out: [${name}] id: ${operation.getOperationId()}`);
+      paths.push(this.visitPost(context, name, pathItem.post));
+    }
 
-      paths.push(type);
+    if (pathItem.put !== undefined) {
+      paths.push(this.visitPut(context, name, pathItem.put));
+    }
+
+    if (pathItem.patch !== undefined) {
+      paths.push(this.visitPatch(context, name, pathItem.patch));
+    }
+
+    if (pathItem.delete !== undefined) {
+      paths.push(this.visitDelete(context, name, pathItem.delete));
     }
 
     return paths;

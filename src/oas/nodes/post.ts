@@ -4,12 +4,11 @@ import { OasContext } from '../oasContext.js';
 import { Operation } from 'oas/operation';
 import { trace, warn } from '../log/trace.js';
 import { Naming } from '../utils/naming.js';
+import _ from 'lodash';
 
-// TODO: support
-// * select fields in Post BODY?
-// anything else?
 export class Post extends Get {
   public body?: Body;
+  public verb: string = 'POST';
 
   constructor(
     name: string,
@@ -43,6 +42,10 @@ export class Post extends Get {
 
     trace(context, '<- [post:visit]', 'out ' + this.name);
     context.leave(this);
+  }
+
+  public getGqlOpName(): string {
+    return "create" + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 
   public forPrompt(_context: OasContext): string {

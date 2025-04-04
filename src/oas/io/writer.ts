@@ -3,9 +3,9 @@ import Oas from 'oas';
 import { ServerObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { Body, CircularRef, Post } from '../nodes/internal.js';
+import { Body, CircularRef, Op, Post, Put } from '../nodes/internal.js';
+import { IType } from '../nodes/internal.js';
 import { Composed } from '../nodes/internal.js';
-import { Get } from '../nodes/internal.js';
 import { Obj } from '../nodes/internal.js';
 import { Param } from '../nodes/internal.js';
 import { Prop } from '../nodes/internal.js';
@@ -14,8 +14,8 @@ import { PropScalar } from '../nodes/internal.js';
 import { Type } from '../nodes/internal.js';
 import { Union } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
-import { T } from '../utils/typeUtils.js';
-import { IType } from '../nodes/internal.js';
+import { T } from '../nodes/typeUtils.js';
+import { Scalar } from '../nodes/internal.js';
 
 export class Writer {
   public static findNonPropParent(type: IType) {
@@ -58,7 +58,6 @@ export class Writer {
   public writeSchema(writer: Writer, types: Map<string, IType>, inputs: Map<string, IType>, selection: string[]): void {
     const context = this.generator.context!;
     const generatedSet = context.generatedSet;
-    // generatedSet.clear();
 
     this.writeDirectives(writer);
     this.writeJSONScalar(writer);
@@ -79,11 +78,11 @@ export class Writer {
 
     const expanded = [...this.generator.paths];
 
-    const gets = new Map(expanded.filter(([_k, type]) => type.id.startsWith('get:')));
-    const posts = new Map(expanded.filter(([_k, type]) => type.id.startsWith('post:')));
+    const queries = new Map(expanded.filter(([_k, type]) => type.id.startsWith('get:')));
+    const mutations = new Map(expanded.filter(([_k, type]) => T.isMutationType(type)));
 
-    this.writeQuery(context, writer, gets, selection);
-    this.writeMutations(context, writer, posts, selection);
+    this.writeQuery(context, writer, queries, selection);
+    this.writeMutations(context, writer, mutations, selection);
     writer.flush();
   }
 
@@ -121,6 +120,7 @@ export class Writer {
 
         current = collection.find((t) => t.id === part);
         if (!current) {
+          // let's collect the possible paths so we don't have to debug
           throw new Error('Could not find type: ' + part + ' from ' + path + ', last: ' + last?.pathToRoot());
         }
 
@@ -133,7 +133,7 @@ export class Writer {
         i++;
       } while (i < parts.length);
 
-      if (current) {
+      if (current && !(current instanceof Scalar)) {
         // TODO: this seems redundant, we've already walked the parent AND can be also contained in the context stack
         const parentType = Writer.findNonPropParent(current as IType);
 
@@ -178,18 +178,18 @@ export class Writer {
       });*/
 
     // TODO: do we need to do the same for the pending inputs?
-    if (!_.isEmpty(pendingTypes)) {
-      // first pass is to consolidate all Composed & Union nodes
-      const composed: Array<Composed | Union> = Array.from(pendingTypes.values())
-        .filter((t) => t instanceof Composed || t instanceof Union)
-        .map((t) => t as Composed);
+    // if (!_.isEmpty(pendingTypes)) {
+    // first pass is to consolidate all Composed & Union nodes
+    const composed: Array<Composed | Union> = Array.from(pendingTypes.values())
+      .filter((t) => t instanceof Composed || t instanceof Union)
+      .map((t) => t as Composed);
 
-      for (const comp of composed) {
-        comp.consolidate(selection).forEach((id) => pendingTypes.delete(id));
-      }
-
-      this.writeSchema(this, pendingTypes, pendingInputs, selection);
+    for (const comp of composed) {
+      comp.consolidate(selection).forEach((id) => pendingTypes.delete(id));
     }
+
+    this.writeSchema(this, pendingTypes, pendingInputs, selection);
+    // }
   }
 
   public collectPaths(path: string, collection: IType[]): IType[] {
@@ -243,7 +243,7 @@ export class Writer {
 
   private writeConnector(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
     const indent = 0;
-    const op = type as unknown as Get | Post; // assume type is GetOp
+    const op = type as unknown as Op; // assume type is GetOp
     let spacing = ' '.repeat(indent + 4);
     writer.append(spacing).append('@connect(\n');
 
@@ -254,8 +254,9 @@ export class Writer {
 
     writer.append('\n').append(spacing).append('selection: """\n');
 
-    if (op.resultType) {
-      this.writeSelection(context, writer, op.resultType, selection);
+    if (_.has(op, 'resultType')) {
+      // scalar types don't need to be generated?
+      this.writeSelection(context, writer, _.get(op, 'resultType') as Type, selection);
     }
 
     writer.append(spacing).append('"""\n');
@@ -263,10 +264,10 @@ export class Writer {
     writer.append(spacing).append(')\n');
   }
 
-  private requestMethod(context: OasContext, writer: Writer, op: Get | Post, selection: string[]): void {
+  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[]): void {
     // replace every {elem} in the path for {$args.elem}
-    const verb = op.id.startsWith('get:') ? 'GET' : 'POST';
-    writer.append(`{ ${verb}:`).append('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}'));
+    const verb = op.verb;
+    writer.append(`{ ${verb}: `).append('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}'));
 
     if (op.params.length > 0) {
       const params = op.params.filter((p: Param) => {

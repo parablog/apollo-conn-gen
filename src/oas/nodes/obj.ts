@@ -56,7 +56,7 @@ export class Obj extends Type {
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
-    if (this.props.size === 0) {
+    if (_.isEmpty(this.props)) {
       return;
     }
 

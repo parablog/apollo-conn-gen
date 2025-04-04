@@ -19,6 +19,9 @@ import {
   Response,
   Param,
   Body,
+  Put,
+  Patch,
+  Delete
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
@@ -103,19 +106,25 @@ export class Factory {
         else if (GqlUtils.gqlScalar(typeStr as string)) {
           const scalarType = GqlUtils.getGQLScalarType(schema);
           result = new Scalar(parent, scalarType, schema);
-        } else {
+        }
+        // or we have no idea how to handle this
+        else {
           throw new Error(`Cannot handle property type ${typeStr}, schema: ${JSON.stringify(schema)}`);
         }
       } else if (schema.enum != null) {
         result = new En(parent, schema, _.get(schema, 'enum') as string[]);
-      } else {
+      }
+      // or we have no idea how to handle this
+      else {
         throw new Error(`Cannot handle schema ${parent.pathToRoot()}, schema: ${JSON.stringify(schema)}`);
       }
     }
 
     if (result != null) {
       parent.add(result);
-    } else {
+    }
+    // we could not infer a proper type
+    else {
       throw new Error(`Not yet implemented for ${JSON.stringify(schema)}`);
     }
 
@@ -216,8 +225,20 @@ export class Factory {
     return union;
   }
 
-  public static createPost(name: string, op: Operation): Post {
+  public static fromPost(name: string, op: Operation): Post {
     return new Post(name, op);
+  }
+
+  public static fromPut(name: string, op: Operation): Post {
+    return new Put(name, op);
+  }
+
+  public static fromPatch(name: string, op: Operation): Post {
+    return new Patch(name, op);
+  }
+
+  public static fromDelete(name: string, op: Operation): Post {
+    return new Delete(name, op);
   }
 
   public static fromBody(_context: OasContext, parent: IType, schema: SchemaObject): IType {

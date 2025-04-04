@@ -1,4 +1,4 @@
-import { IType, Type, Param, ReferenceObject, Factory } from './internal.js';
+import { IType, Type, Param, ReferenceObject, Factory, Op } from './internal.js';
 import { Operation } from 'oas/operation';
 import { MediaTypeObject, ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
 
@@ -8,7 +8,9 @@ import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 
-export class Get extends Type {
+export class Get extends Type implements Op {
+  public verb: string = 'GET';
+
   public resultType?: IType;
   public params: Param[] = [];
   public summary?: string;
