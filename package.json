@@ -1,6 +1,6 @@
 {
   "name": "apollo-conn-gen",
-  "version": "0.0.15",
+  "version": "0.1.0",
   "description": "Library to generate Apollo connector schemas from OpenAPI specs or JSON payloads. Also includes a CLI to generate connectors from the command line.",
   "author": "Fernando @ Apollo",
   "license": "MIT",
