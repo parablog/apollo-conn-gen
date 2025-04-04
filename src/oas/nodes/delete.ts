@@ -1,4 +1,4 @@
-import { Post } from "./internal.js";
+import { Post } from './internal.js';
 import { Operation } from 'oas/operation';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
@@ -20,6 +20,6 @@ export class Delete extends Post {
   }
 
   public getGqlOpName(): string {
-    return "delete" + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
+    return 'delete' + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 }

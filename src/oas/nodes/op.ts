@@ -7,6 +7,6 @@ export interface Op {
   resultType?: IType;
   summary?: string;
   description?: string;
-  params: Param[]
-  operation: Operation,
+  params: Param[];
+  operation: Operation;
 }

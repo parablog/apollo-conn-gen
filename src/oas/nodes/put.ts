@@ -1,4 +1,4 @@
-import { Post } from "./internal.js";
+import { Post } from './internal.js';
 import { Operation } from 'oas/operation';
 import { OasContext } from '../oasContext.js';
 

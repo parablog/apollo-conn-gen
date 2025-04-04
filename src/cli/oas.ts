@@ -2,9 +2,12 @@ import { Command } from 'commander';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
 
-const originalConsole = Object.assign({
-  log: console.log,
-}, console)
+const originalConsole = Object.assign(
+  {
+    log: console.log,
+  },
+  console,
+);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
 async function main(sourceFile: string, opts: any): Promise<void> {
@@ -36,8 +39,7 @@ async function main(sourceFile: string, opts: any): Promise<void> {
     paths = await promptForSelection(gen, opts, pathSet);
   }
 
-  if (opts.verbose)
-    console = originalConsole
+  if (opts.verbose) console = originalConsole;
 
   console.info('selected :=', JSON.stringify(paths, null, 2));
   console.info('--------------- Apollo Connector schema -----------------');

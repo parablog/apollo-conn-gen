@@ -45,7 +45,7 @@ export class Post extends Get {
   }
 
   public getGqlOpName(): string {
-    return "create" + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
+    return 'create' + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 
   public forPrompt(_context: OasContext): string {

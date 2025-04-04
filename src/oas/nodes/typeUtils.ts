@@ -31,9 +31,11 @@ export class T {
   }
 
   static isMutationType(type: IType): boolean {
-    return type.id.startsWith('post:')
-      || type.id.startsWith('put:')
-      || type.id.startsWith('patch:')
-      || type.id.startsWith('del:');
+    return (
+      type.id.startsWith('post:') ||
+      type.id.startsWith('put:') ||
+      type.id.startsWith('patch:') ||
+      type.id.startsWith('del:')
+    );
   }
 }

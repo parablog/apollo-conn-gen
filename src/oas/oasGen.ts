@@ -127,7 +127,7 @@ export class OasGen {
     this.paths = collected;
   }
 
-  private isSupported(pathItem:  Record<HttpMethods, Webhook | Operation>) {
+  private isSupported(pathItem: Record<HttpMethods, Webhook | Operation>) {
     return pathItem.get || pathItem.post || pathItem.put || pathItem.delete || pathItem.patch;
   }
 

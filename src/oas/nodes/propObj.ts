@@ -88,7 +88,6 @@ export class PropObj extends Prop {
   }
 
   private needsBrackets(child: IType): boolean {
-    return (child instanceof Obj || child instanceof Union || child instanceof Composed)
-      && !_.isEmpty(child.props);
+    return (child instanceof Obj || child instanceof Union || child instanceof Composed) && !_.isEmpty(child.props);
   }
 }

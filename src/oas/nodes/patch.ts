@@ -1,4 +1,4 @@
-import { Post } from "./internal.js";
+import { Post } from './internal.js';
 import { Operation } from 'oas/operation';
 import { OasContext } from '../oasContext.js';
 import _ from 'lodash';
@@ -20,6 +20,6 @@ export class Patch extends Post {
   }
 
   public getGqlOpName(): string {
-    return "update" + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
+    return 'update' + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 }

@@ -21,7 +21,7 @@ import {
   Body,
   Put,
   Patch,
-  Delete
+  Delete,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
