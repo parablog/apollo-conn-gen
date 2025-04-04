@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.1]
+
+### Added
+- Support for `PUT`, `PATCH` and `DELETE` requests
+
 ## [0.0.13]
 
 ### Added
