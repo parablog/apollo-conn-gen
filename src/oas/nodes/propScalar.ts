@@ -47,13 +47,12 @@ export class PropScalar extends Prop {
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '   [prop:select]', this.name);
     const sanitised = Naming.sanitiseFieldForSelect(this.name);
-    writer
-      .append(' '.repeat(context.indent + context.stack.length))
-      .append(sanitised)
-      .append('\n');
+    writer.append(' '.repeat(context.indent + context.stack.length)).append(sanitised);
 
     for (const child of this.children) {
       child.select(context, writer, selection);
     }
+
+    writer.append('\n');
   }
 }

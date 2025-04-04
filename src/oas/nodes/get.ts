@@ -1,4 +1,4 @@
-import { IType, Type, Param, ReferenceObject, Factory } from './internal.js';
+import { IType, Type, Param, ReferenceObject, Factory, Op } from './internal.js';
 import { Operation } from 'oas/operation';
 import { MediaTypeObject, ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
 
@@ -6,16 +6,23 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 
-export class Get extends Type {
+export class Get extends Type implements Op {
+  public verb: string = 'GET';
+
   public resultType?: IType;
   public params: Param[] = [];
+  public summary?: string;
+  public description?: string;
 
   constructor(
     name: string,
     public operation: Operation,
   ) {
     super(undefined, name);
+    this.summary = operation.getSummary();
+    this.description = operation.getDescription();
   }
 
   get id(): string {
@@ -43,18 +50,22 @@ export class Get extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `[GET] ${this.name}`;
+    return `[get] ${this.name}`;
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
     context.enter(this);
     trace(context, '-> [get::generate]', `-> in: ${this.name}`);
 
+    const description = this.operation.getDescription();
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
 
-    if (summary || originalPath) {
+    if (description || summary || originalPath) {
       writer.append('  """\n').append('  ');
+      if (description) {
+        writer.append(description).append(' ');
+      }
       if (summary) {
         writer.append(summary).append(' ');
       }
@@ -85,7 +96,7 @@ export class Get extends Type {
     return Naming.genOperationName(this.operation.path, this.operation);
   }
 
-  private visitParameters(context: OasContext): void {
+  protected visitParameters(context: OasContext): void {
     trace(context, '-> [get::params]', 'in: ' + this.name);
 
     const parameters = this.operation.getParameters();
@@ -101,11 +112,13 @@ export class Get extends Type {
     trace(context, '<- [get::params]', 'out: ' + this.name);
   }
 
-  private visitResponses = (context: OasContext) => {
+  protected visitResponses = (context: OasContext) => {
     const statusCodes = this.operation.getResponseStatusCodes();
 
     if (!statusCodes.includes('200') && !statusCodes.includes('default')) {
-      throw new Error('Could not find a valid 200 response');
+      // we can potentially synthesize an Empty response here:
+      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
+      return;
     }
 
     const responses = this.operation.schema.responses;
@@ -132,9 +145,10 @@ export class Get extends Type {
       } else {
         this.visitResponseContent(context, code, json);
       }
-    } else if (code === 'default') {
+    } else if ((code === 'default' || code === '200') && !content) {
       // there is no response for this operation
       // TODO: should we synthesize one?
+      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
     } else {
       throw new Error('Not yet implemented for: ' + JSON.stringify(response));
     }
@@ -177,7 +191,7 @@ export class Get extends Type {
     trace(context, '<- [get::responses::ref]', `out: ${this.name}, ref: ${ref.$ref}`);
   }
 
-  private generateParameters(context: OasContext, writer: Writer, selection: string[]): void {
+  protected generateParameters(context: OasContext, writer: Writer, selection: string[]): void {
     const sorted = this.params.sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0));
 
     if (sorted.length === 0) {

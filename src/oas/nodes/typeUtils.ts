@@ -1,9 +1,7 @@
-import { CircularRef } from '../nodes/internal.js';
-import { En } from '../nodes/internal.js';
-import { PropArray } from '../nodes/internal.js';
-import { PropScalar } from '../nodes/internal.js';
+import { CircularRef, En, Obj, PropArray, PropScalar } from './internal.js';
 
-import { IType } from '../nodes/internal.js';
+import { IType } from './internal.js';
+import _ from 'lodash';
 
 export class T {
   public static isLeaf(type: IType): boolean {
@@ -11,7 +9,8 @@ export class T {
       type instanceof PropScalar ||
       type instanceof En ||
       type instanceof CircularRef ||
-      (type instanceof PropArray && type.items instanceof PropScalar)
+      (type instanceof PropArray && type.items instanceof PropScalar) ||
+      (type instanceof Obj && _.isEmpty(type.props))
     );
   }
 
@@ -29,5 +28,14 @@ export class T {
     };
 
     traverseNode(node);
+  }
+
+  static isMutationType(type: IType): boolean {
+    return (
+      type.id.startsWith('post:') ||
+      type.id.startsWith('put:') ||
+      type.id.startsWith('patch:') ||
+      type.id.startsWith('del:')
+    );
   }
 }

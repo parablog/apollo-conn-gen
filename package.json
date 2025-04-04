@@ -1,6 +1,6 @@
 {
   "name": "apollo-conn-gen",
-  "version": "0.0.13",
+  "version": "0.0.15",
   "description": "Library to generate Apollo connector schemas from OpenAPI specs or JSON payloads. Also includes a CLI to generate connectors from the command line.",
   "author": "Fernando @ Apollo",
   "license": "MIT",
@@ -38,6 +38,7 @@
     "prebuild": "rm -rf dist",
     "build": "tsc -b",
     "test": "node --import tsx/esm --test 'tests/all.test.ts'",
+    "test:single": "node --import tsx/esm --test 'tests/single.test.ts'",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint",
     "prepare": "npm run build",

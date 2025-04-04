@@ -8,7 +8,8 @@ import { Naming } from '../utils/naming.js';
 
 export class Composed extends Type {
   get id(): string {
-    return `comp:${this.name}`;
+    // return `comp:${this.name}`;
+    return `comp:${this.kind}:${this.name}`;
   }
   constructor(
     parent: IType | undefined,
@@ -68,8 +69,10 @@ export class Composed extends Type {
       const selected = this.selectedProps(selection);
 
       if (selected.length > 0) {
-        writer.write('type ');
+        // writer.write('type ');
+        writer.write(this.kind + ' ');
         writer.write(Naming.getRefName(this.name));
+        writer.append(this.nameSuffix());
         writer.write(' {\n');
 
         for (const prop of selected) {

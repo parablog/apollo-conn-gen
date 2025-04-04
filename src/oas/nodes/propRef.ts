@@ -70,7 +70,8 @@ export class PropRef extends Prop {
   public getValue(_context: OasContext): string {
     const type = this.refType!;
     const name = type ? type.name : this.ref;
-    return Naming.genTypeName(name!);
+
+    return Naming.genTypeName(name!) + this.nameSuffix();
   }
 
   public forPrompt(context: OasContext): string {

@@ -1,4 +1,4 @@
-import { IType } from './internal.js';
+import { IType, Kind } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
@@ -10,6 +10,7 @@ export abstract class Type implements IType {
   public name: string;
   public children: IType[];
   public circularRef?: IType;
+  public kind: Kind;
   public visited: boolean;
 
   private readonly _props: Map<string, Prop>;
@@ -20,6 +21,7 @@ export abstract class Type implements IType {
     this.children = [];
     this.visited = false;
     this._props = new Map<string, Prop>();
+    this.kind = parent?.kind || 'type';
   }
 
   public abstract visit(context: OasContext): void;
@@ -136,5 +138,9 @@ export abstract class Type implements IType {
 
   public selectedProps(selection: string[]) {
     return Array.from(this.props.values()).filter((prop) => selection.find((s) => s.startsWith(prop.path())));
+  }
+
+  nameSuffix(): string {
+    return this.kind === 'input' ? 'Input' : '';
   }
 }

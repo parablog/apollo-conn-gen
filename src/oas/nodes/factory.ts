@@ -1,5 +1,6 @@
 import {
   Get,
+  Post,
   IType,
   Ref,
   ReferenceObject,
@@ -17,6 +18,10 @@ import {
   Union,
   Response,
   Param,
+  Body,
+  Put,
+  Patch,
+  Delete,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
@@ -27,13 +32,14 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { GqlUtils } from '../utils/gql.js';
+import { APOLLO_SYNTHETIC_OBJ } from '../schemas/index.js';
 
 export class Factory {
   public static createGet(name: string, op: Operation): Get {
     return new Get(name, op);
   }
 
-  public static fromSchema(parent: IType, schema: SchemaObject): IType {
+  public static fromSchema(parent: IType, schema: SchemaObject | ReferenceObject): IType {
     let result: IType | null = null;
 
     if ('$ref' in schema) {
@@ -63,9 +69,12 @@ export class Factory {
     }
     // array case
     else if (schema.type === 'object') {
+      // it's either a union or a composed object
       if (schema.allOf || schema.oneOf) {
         result = new Composed(parent, _.get(schema, 'name') || parent.name, schema);
-      } else {
+      }
+      // or a plain obj
+      else {
         if (!schema.properties) {
           warn(
             null,
@@ -75,6 +84,9 @@ export class Factory {
         }
 
         result = new Obj(parent, _.get(schema, 'name') || null, schema);
+        if (schema.format == APOLLO_SYNTHETIC_OBJ) {
+          (result as Obj).synthetic = true;
+        }
       }
     }
     // Composed schema case.
@@ -94,19 +106,25 @@ export class Factory {
         else if (GqlUtils.gqlScalar(typeStr as string)) {
           const scalarType = GqlUtils.getGQLScalarType(schema);
           result = new Scalar(parent, scalarType, schema);
-        } else {
+        }
+        // or we have no idea how to handle this
+        else {
           throw new Error(`Cannot handle property type ${typeStr}, schema: ${JSON.stringify(schema)}`);
         }
       } else if (schema.enum != null) {
         result = new En(parent, schema, _.get(schema, 'enum') as string[]);
-      } else {
+      }
+      // or we have no idea how to handle this
+      else {
         throw new Error(`Cannot handle schema ${parent.pathToRoot()}, schema: ${JSON.stringify(schema)}`);
       }
     }
 
     if (result != null) {
       parent.add(result);
-    } else {
+    }
+    // we could not infer a proper type
+    else {
       throw new Error(`Not yet implemented for ${JSON.stringify(schema)}`);
     }
 
@@ -171,8 +189,6 @@ export class Factory {
   }
 
   public static fromResponse(_context: OasContext, parent: IType, mediaSchema: SchemaObject): IType {
-    // const content = Factory.fromSchema(response, mediaSchema);
-    // response.response = content;
     return new Response(parent, 'r', mediaSchema);
   }
 
@@ -207,5 +223,27 @@ export class Factory {
     const union = new Union(parent, parent.name, oneOfs);
     parent.add(union);
     return union;
+  }
+
+  public static fromPost(name: string, op: Operation): Post {
+    return new Post(name, op);
+  }
+
+  public static fromPut(name: string, op: Operation): Post {
+    return new Put(name, op);
+  }
+
+  public static fromPatch(name: string, op: Operation): Post {
+    return new Patch(name, op);
+  }
+
+  public static fromDelete(name: string, op: Operation): Post {
+    return new Delete(name, op);
+  }
+
+  public static fromBody(_context: OasContext, parent: IType, schema: SchemaObject): IType {
+    const body = new Body(parent, 'b', schema);
+    parent.add(body);
+    return body;
   }
 }

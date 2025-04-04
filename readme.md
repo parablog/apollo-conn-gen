@@ -13,6 +13,10 @@ Key features:
 * Generates an Apollo Connector from an OAS specification, converting all types and `GET` entry points defined in the spec (*only* `GET` methods are supported for now)
 * Generates a schema based on a single or a collection of`JSON` files.
 
+## Changelog
+
+See the [changelog](./CHANGELOG.md) for the latest changes.
+
 ## Prerequisites
 
 * [Node.js](https://nodejs.org/) version 18 or higher. Built using Typescript 5.1.6.

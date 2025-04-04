@@ -1,0 +1,30 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [0.0.13]
+
+### Added
+- Initial support for `POST` requests
+
+### Changed
+- **BREAKING CHANGE**:  the internal format for a `path` now contains the type, either `type` or `input`. This is needed to generate the correct `GraphQL` type and for the body selection in `POST` operations. To fix this, replace the following in your selection `JSON` payloads:
+  - `>obj:` => `>obj:type:` - i.e.: `post:/user>res:r>obj:type:userResponse>prop:scalar:success`
+  - `>comp:` => `>comp:type:`
+  - `>union:` => `>union:type:` 
+
+### Deprecated
+- None
+
+### Fixed
+- Empty responses from GET now return a default `Response` GraphQL type with a `success: Boolean` field mapped to `$(true)` in the selection. Consumers can ignore this value. 
+
+### Security
+- N/A
+
+## [0.0.12] - 2025-03-19
+
+### Added
+- First version, supports `GET` requests only.

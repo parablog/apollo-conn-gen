@@ -1,0 +1,2232 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Mindbody.Products API v2",
+    "version": "2"
+  },
+  "servers": [
+    {
+      "url": "https://www.mindbodyapis.com/products"
+    }
+  ],
+  "paths": {
+    "/v2/subscribers/{subscriberId}/add-ons": {
+      "get": {
+        "tags": [
+          "AddOns"
+        ],
+        "summary": "Gets a paginated list of add ons.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "Gets the subscriber ID for the request.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "Gets an optional list of Add On type IDs to filter by.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "onlyActive",
+            "in": "query",
+            "description": "Gets a value indicating whether to get only active Add Ons.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "First",
+            "in": "query",
+            "description": "Gets the first forward pagination argument to limit the result set by first count of items.",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "After",
+            "in": "query",
+            "description": "Gets the after cursor reference used to page forwards through a result.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Last",
+            "in": "query",
+            "description": "Gets the last pagination argument to limit the result set by last count of items.",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "Before",
+            "in": "query",
+            "description": "Gets the before cursor reference used to page backwards through a result.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse.GetAddOnsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse.GetAddOnsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse.GetAddOnsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "AddOns"
+        ],
+        "summary": "Create an add on for a specific subscriber id.",
+        "description": "This endpoint is not capable of supporting service identity, since it requires the identity user id to be in the authentication token.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddOns"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddOns"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddOns"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddOns"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAppointmentTypesResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAppointmentTypesResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAppointmentTypesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/subscribers/{subscriberId}/appointment-types/{appointmentTypeId}/add-ons": {
+      "get": {
+        "tags": [
+          "AddOns"
+        ],
+        "summary": "Gets a list of add ons that are associated with the appointment type.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "appointmentTypeId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "onlyActive",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GetAddOnsResponse"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GetAddOnsResponse"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GetAddOnsResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/subscribers/{subscriberId}/add-ons/{addOnId}": {
+      "put": {
+        "tags": [
+          "AddOns"
+        ],
+        "summary": "Updates an add on for a specific subscriber id.",
+        "description": "This endpoint is not capable of supporting service identity, since it requires the identity user id to be in the authentication token.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "addonId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAddOns"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAddOns"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAddOns"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAddOns"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAddOnsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAddOnsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAddOnsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/subscribers/{subscriberId}/appointment-types": {
+      "get": {
+        "tags": [
+          "AppointmentTypes"
+        ],
+        "summary": "Gets a paginated list of appointment-types.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "Gets the subscriber ID for the request.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "Gets an optional list of appointment type IDs to filter by.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "onlyActive",
+            "in": "query",
+            "description": "Gets a value indicating whether to get only active appt types.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "First",
+            "in": "query",
+            "description": "Gets the first forward pagination argument to limit the result set by first count of items.",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "After",
+            "in": "query",
+            "description": "Gets the after cursor reference used to page forwards through a result.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Last",
+            "in": "query",
+            "description": "Gets the last pagination argument to limit the result set by last count of items.",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "Before",
+            "in": "query",
+            "description": "Gets the before cursor reference used to page backwards through a result.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse.GetAppointmentTypesResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse.GetAppointmentTypesResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse.GetAppointmentTypesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/subscribers/{subscriberId}/appointment-types/{appointmentTypeId}": {
+      "put": {
+        "tags": [
+          "AppointmentTypes"
+        ],
+        "summary": "Updates an appointment type for a specific subscriber id.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "appointmentTypeId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAppointmentTypes"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAppointmentTypes"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAppointmentTypes"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAppointmentTypes"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAppointmentTypesResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAppointmentTypesResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAppointmentTypesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/information": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Returns information regarding the health of the service and all of its registered dependencies.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/subscribers/{subscriberId}/products/{productId}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Gets a product by ID.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "productId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/subscribers/{subscriberId}/products/time-restrictions": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Gets the time restrictions for a list of productIds.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "productIds",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/subscribers/{subscriberId}/products": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Gets a collection of products by page for a given subscriber.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "Gets the subscriber ID for the request.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "serviceCategoryIds",
+            "in": "query",
+            "description": "Gets the filter service category ids.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          },
+          {
+            "name": "First",
+            "in": "query",
+            "description": "Gets the first forward pagination argument to limit the result set by first count of items.",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "After",
+            "in": "query",
+            "description": "Gets the after cursor reference used to page forwards through a result.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Last",
+            "in": "query",
+            "description": "Gets the last pagination argument to limit the result set by last count of items.",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "Before",
+            "in": "query",
+            "description": "Gets the before cursor reference used to page backwards through a result.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedDataResponse.Product"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedDataResponse.Product"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedDataResponse.Product"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/subscribers/{subscriberId}/pricing-option-types": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get a list of pricing option types by their IDs for a given subscriber.",
+        "parameters": [
+          {
+            "name": "subscriberId",
+            "in": "path",
+            "description": "Subscriber Id.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "Membership Ids.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          },
+          {
+            "name": "isSystem",
+            "in": "query",
+            "description": "IsSystem.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingOptionType"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingOptionType"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingOptionType"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateAddOns": {
+        "required": [
+          "duration",
+          "name",
+          "serviceCategoryId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Gets the name of the add on."
+          },
+          "serviceCategoryId": {
+            "type": "integer",
+            "description": "Gets the service category id associated with the add on.",
+            "format": "int32"
+          },
+          "revenueCategoryId": {
+            "type": "integer",
+            "description": "Gets the revenue category id associated with the add on.",
+            "format": "int32",
+            "nullable": true
+          },
+          "serviceSubTagId": {
+            "type": "integer",
+            "description": "Gets the service sub tag id associated with the add on.",
+            "format": "int32",
+            "nullable": true
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Gets the add on duration in minutes.",
+            "format": "int32"
+          },
+          "description": {
+            "type": "string",
+            "description": "Gets the add on description.",
+            "nullable": true
+          },
+          "descriptionBase64": {
+            "type": "string",
+            "description": "Gets the base64 encoded description.",
+            "nullable": true
+          },
+          "isBookableOnline": {
+            "type": "boolean",
+            "description": "Gets whether or not the add on is bookable online."
+          },
+          "singleSessionPrice": {
+            "type": "number",
+            "description": "Gets the add ons price.",
+            "format": "double",
+            "nullable": true
+          },
+          "defaultAllStaffPrice": {
+            "type": "number",
+            "description": "Gets the default price of the appointment type for all staff members.",
+            "format": "double",
+            "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "description": "Gets the add on color.",
+            "nullable": true
+          },
+          "cptCode": {
+            "type": "string",
+            "description": "Gets the add on CPT code.",
+            "nullable": true
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "Gets the add on capacity.",
+            "format": "int32",
+            "nullable": true
+          },
+          "deducted": {
+            "type": "integer",
+            "description": "Gets the add on deducted.",
+            "format": "int32",
+            "nullable": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "description": "Gets the add on sort order.",
+            "format": "int32",
+            "nullable": true
+          },
+          "associatedAppointmentTypeIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Gets a list of appointment type associations.",
+            "nullable": true
+          },
+          "taxRateIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Gets the IDs of the tax rates selected for the appointment type.",
+            "nullable": true
+          },
+          "backBarAmount": {
+            "type": "number",
+            "description": "Gets the amount deducted from a staff member's pay for their 'back bar' use. These deductions are\r\nused to charge staff members for the supplies or resources they use during the appointment.",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Get create add on request."
+      },
+      "CreateAppointmentTypesResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Gets the ID of the appointment type.",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Create appointment types response object."
+      },
+      "DependencyHealth": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Gets or sets the name of the dependency.",
+            "nullable": true
+          },
+          "isHealthy": {
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether the dependency is healthy."
+          },
+          "duration": {
+            "type": "number",
+            "description": "Gets or sets the health check execution duration.",
+            "format": "double"
+          },
+          "exceptionSource": {
+            "type": "string",
+            "description": "Gets or sets the source from an System.Exception representing the exception that was thrown when checking for status (if any).",
+            "nullable": true
+          },
+          "exceptionMessage": {
+            "type": "string",
+            "description": "Gets or sets the message from an System.Exception representing the exception that was thrown when checking for status (if any).",
+            "nullable": true
+          },
+          "exceptionStackTrace": {
+            "type": "string",
+            "description": "Gets or sets the stack trace from an System.Exception representing the exception that was thrown when checking for status (if any).",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Gets or sets a human-readable description of the status of the component that was checked.",
+            "nullable": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": { },
+            "description": "Gets or sets additional key-value pairs describing the health of the component.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Defines the health of an external dependency."
+      },
+      "GetAddOnsResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Gets the add ons ID.",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "description": "Gets the add ons name.",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Gets or initializes the description of the add-on.",
+            "nullable": true
+          },
+          "serviceCategoryId": {
+            "type": "integer",
+            "description": "Gets the add on's service category id.",
+            "format": "int32"
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "Gets the add on's capacity.",
+            "format": "int32"
+          },
+          "durationInMinutes": {
+            "type": "integer",
+            "description": "Gets the add on duration in minutes.",
+            "format": "int32"
+          },
+          "resourceRequired": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether the add on requires resource or not."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether the add on is active or not."
+          },
+          "isBookableOnline": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether or not the add on is bookable online."
+          },
+          "deducted": {
+            "type": "integer",
+            "description": "Gets how many sessions are deducted from pricing options associated with this add on.",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Get add ons response."
+      },
+      "GetAppointmentTypesResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Gets the appointment type ID.",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "description": "Gets the appointment type name.",
+            "nullable": true
+          },
+          "serviceCategoryId": {
+            "type": "integer",
+            "description": "Gets the appointment type service category id.",
+            "format": "int32"
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "Gets the appointment type capacity.",
+            "format": "int32"
+          },
+          "resourceRequired": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether the appointment type requires resource or not."
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Gets the duration in minutes.",
+            "format": "int32"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether if the appointment type is active or not."
+          },
+          "deducted": {
+            "type": "integer",
+            "description": "Gets how many sessions are deducted from pricing options associated with this appointment type.",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Get appointment type response."
+      },
+      "HealthCheckResponse": {
+        "type": "object",
+        "properties": {
+          "isHealthy": {
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether the application is healthy."
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyHealth"
+            },
+            "description": "Gets or sets a collection of dependency health objects.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response from our /health/information endpoint."
+      },
+      "PaginatedDataResponse.Product": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            },
+            "nullable": true
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "startCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "endCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaginatedResponse.GetAddOnsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetAddOnsResponse"
+            },
+            "description": "Gets the data wrapper for response models.",
+            "nullable": true
+          },
+          "pageInfo": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Pagination response wrapper."
+      },
+      "PaginatedResponse.GetAppointmentTypesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetAppointmentTypesResponse"
+            },
+            "description": "Gets the data wrapper for response models.",
+            "nullable": true
+          },
+          "pageInfo": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Pagination response wrapper."
+      },
+      "PaginationMetadata": {
+        "type": "object",
+        "properties": {
+          "hasNextPage": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether there is another page after this result set."
+          },
+          "hasPreviousPage": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether there is another page before this result set."
+          },
+          "startCursor": {
+            "type": "string",
+            "description": "Gets the cursor that points to the first object in this current result set. It can be used to navigate backwards through a set of results.\r\nWill be null if there are no results before the current result set.",
+            "nullable": true
+          },
+          "endCursor": {
+            "type": "string",
+            "description": "Gets the cursor that points to the last object in this current result set. It can be used to navigate forwards through a set of results.\r\nWill be null if there are no results after the current result set.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Pagination and cursor details to assist with navigating before/after objects in a list."
+      },
+      "PricingOptionProductDetails": {
+        "type": "object",
+        "properties": {
+          "sessionCount": {
+            "type": "integer",
+            "description": "Gets the sessions count associated with this pricing option.",
+            "format": "int32"
+          },
+          "paysForServiceCategoryIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Gets the collection of service category IDs this pricing option can be applied to (this includes the service category ID directly assigned to the pricing option).",
+            "nullable": true
+          },
+          "serviceCategoryId": {
+            "type": "integer",
+            "description": "Gets service category Id.",
+            "format": "int32"
+          },
+          "serviceCategoryName": {
+            "type": "string",
+            "description": "Gets service category name.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Pricing option product details.  Mindbody.Products.Api.Models.ProductViewModel.PricingOptionDetails."
+      },
+      "PricingOptionType": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Id.",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name.",
+            "nullable": true
+          },
+          "iconNumber": {
+            "type": "integer",
+            "description": "Icon Number.",
+            "format": "int32"
+          },
+          "canPurchaseNonMemberPricingOptions": {
+            "type": "boolean",
+            "description": "Can Purchase Non Member Pricing Options."
+          },
+          "canPurchaseNonMemberRetailItems": {
+            "type": "boolean",
+            "description": "Can Purchase Non Member Retail Items."
+          },
+          "pricingOptionDiscountPercentage": {
+            "type": "number",
+            "description": "Pricing Option Discounts Percentage as an int - 20% will return as 20.",
+            "format": "double"
+          },
+          "retailDiscountPercentage": {
+            "type": "number",
+            "description": "Retail Discount Percentage as an int - 20% will return as 20.",
+            "format": "double"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "description": "Sort Order.",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents the pricing option type for a product e.g. count vs time vs membership."
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": { }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "subscriberId": {
+            "type": "integer",
+            "description": "The subscriber ID.",
+            "format": "int32"
+          },
+          "id": {
+            "type": "string",
+            "description": "The Product ID.",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProductType"
+          },
+          "name": {
+            "type": "string",
+            "description": "The product name.",
+            "nullable": true
+          },
+          "businessModePrice": {
+            "type": "number",
+            "description": "The price for business facing workflows.",
+            "format": "double"
+          },
+          "consumerModePrice": {
+            "type": "number",
+            "description": "The price for consumer facing workflows.",
+            "format": "double"
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Gets the duration of the product.",
+            "format": "int32"
+          },
+          "soldAtLocationRestrictions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "The location Ids that this product is restricted to be sold at.",
+            "nullable": true
+          },
+          "retailProductDetails": {
+            "$ref": "#/components/schemas/RetailProductDetails"
+          },
+          "pricingOptionDetails": {
+            "$ref": "#/components/schemas/PricingOptionProductDetails"
+          },
+          "taxes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ids of taxes that apply to the product. (Ex: 1, 2, 3, 4, 5).",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A Product."
+      },
+      "ProductType": {
+        "enum": [
+          "Retail",
+          "PricingOption",
+          "AccountCredit",
+          "GiftCard",
+          "Tip",
+          "ContractRegistrationFee",
+          "Unknown"
+        ],
+        "type": "string"
+      },
+      "RetailProductDetails": {
+        "type": "object",
+        "properties": {
+          "sizeId": {
+            "type": "integer",
+            "description": "Gets the size Id.",
+            "format": "int32",
+            "nullable": true
+          },
+          "sizeName": {
+            "type": "string",
+            "description": "Gets size name.",
+            "nullable": true
+          },
+          "colorId": {
+            "type": "integer",
+            "description": "Gets the color Id.",
+            "format": "int32",
+            "nullable": true
+          },
+          "colorName": {
+            "type": "string",
+            "description": "Gets color name.",
+            "nullable": true
+          },
+          "weight": {
+            "type": "number",
+            "description": "Gets weight.",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Retail product details.  Mindbody.Products.Api.Models.ProductViewModel.RetailProductDetails."
+      },
+      "UpdateAddOns": {
+        "required": [
+          "capacity",
+          "deducted",
+          "duration",
+          "isBookableOnline",
+          "name",
+          "serviceCategoryId",
+          "sortOrder"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Gets the name of the add on."
+          },
+          "serviceCategoryId": {
+            "type": "integer",
+            "description": "Gets the service category id associated with the add on.",
+            "format": "int32"
+          },
+          "serviceSubTagId": {
+            "type": "integer",
+            "description": "Gets the service sub tag id associated with the add on.",
+            "format": "int32",
+            "nullable": true
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Gets the add on duration in minutes.",
+            "format": "int32"
+          },
+          "description": {
+            "type": "string",
+            "description": "Gets the add on description.",
+            "nullable": true
+          },
+          "descriptionBase64": {
+            "type": "string",
+            "description": "Gets the base64 encoded description.",
+            "nullable": true
+          },
+          "isBookableOnline": {
+            "type": "boolean",
+            "description": "Gets whether or not the add on is bookable online."
+          },
+          "cptCode": {
+            "type": "string",
+            "description": "Gets the add on CPT code.",
+            "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "description": "Gets the add on color.",
+            "nullable": true
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "Gets the add on capacity.",
+            "format": "int32"
+          },
+          "deducted": {
+            "type": "integer",
+            "description": "Gets the add on deducted.",
+            "format": "int32"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "description": "Gets the add on sort order.",
+            "format": "int32"
+          },
+          "associatedAppointmentTypeIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Gets a list of appointment type associations.",
+            "nullable": true
+          },
+          "perStaffPricingEnabled": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether or not this add on has per staff pricing feature enabled."
+          },
+          "backBarAmount": {
+            "type": "number",
+            "description": "Gets the amount deducted from a staff member's pay for their 'back bar' use. These deductions are\r\nused to charge staff members for the supplies or resources they use during the appointment.",
+            "format": "double",
+            "nullable": true
+          },
+          "isAddOn": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether or not this appointment type is an add on.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Get update add on request."
+      },
+      "UpdateAddOnsResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Gets the ID of the add on.",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "update add ons response object."
+      },
+      "UpdateAppointmentTypes": {
+        "required": [
+          "capacity",
+          "deducted",
+          "duration",
+          "isAddOn",
+          "isBookableOnline",
+          "name",
+          "perStaffPricingEnabled",
+          "serviceCategoryId",
+          "serviceSubTagId",
+          "sortOrder"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Gets the name of the appointment type."
+          },
+          "serviceCategoryId": {
+            "type": "integer",
+            "description": "Gets the service category id associated with the appointment type.",
+            "format": "int32"
+          },
+          "serviceSubTagId": {
+            "type": "integer",
+            "description": "Gets the service sub tag id associated with the appointment type.",
+            "format": "int32"
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Gets the duration in minutes.",
+            "format": "int32"
+          },
+          "description": {
+            "type": "string",
+            "description": "Gets the appointment type description.",
+            "nullable": true
+          },
+          "descriptionBase64": {
+            "type": "string",
+            "description": "Gets the base64 encoded description.",
+            "nullable": true
+          },
+          "isBookableOnline": {
+            "type": "boolean",
+            "description": "Gets whether or not the appointment type is bookable online."
+          },
+          "cptCode": {
+            "type": "string",
+            "description": "Gets the appointment type CPT code.",
+            "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "description": "Gets the appointment type color.",
+            "nullable": true
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "Gets the appointment type capacity.",
+            "format": "int32"
+          },
+          "deducted": {
+            "type": "integer",
+            "description": "Gets how sessions are deducted from pricing options associated with this appointment type.",
+            "format": "int32"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "description": "Gets the appointment type sort order.",
+            "format": "int32"
+          },
+          "isAddOn": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether or not this appointment type is an add on."
+          },
+          "perStaffPricingEnabled": {
+            "type": "boolean",
+            "description": "Gets a value indicating whether or not this appointment type has per staff pricing enabled."
+          },
+          "backBarAmount": {
+            "type": "number",
+            "description": "Gets the amount deducted from a staff member's pay for their 'back bar' use. These deductions are\r\nused to charge staff members for the supplies or resources they use during the appointment.",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Get update appointment type request."
+      },
+      "UpdateAppointmentTypesResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Gets the ID of the appointment type.",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Update appointment type response object."
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "apiKey",
+        "description": "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        "name": "Authorization",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "Bearer": [
+        "Default"
+      ]
+    }
+  ]
+}

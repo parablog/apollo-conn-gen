@@ -15,7 +15,7 @@ export abstract class Prop extends Type {
     super(parent, name);
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, _selection: string[]): void {
     const description = this.schema.description;
     if (description != null) {
       if (description.includes('\n') || description.includes('\r') || description.includes('"')) {

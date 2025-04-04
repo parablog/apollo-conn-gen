@@ -20,12 +20,10 @@ export class PropObj extends Prop {
       throw new Error('obj parameter is required');
     }
 
-    // TODO: check if reparenting is necessary?!?!
+    // TODO: check if re-parenting is necessary?!?!
     if (obj.parent !== this) {
       obj.parent = this;
     }
-
-    // this.updateName(parent);
   }
 
   public forPrompt(_context: OasContext): string {
@@ -55,6 +53,11 @@ export class PropObj extends Prop {
   }
 
   public getValue(context: OasContext): string {
+    // we'll make an assumption here: that if the child obj has no properties,
+    // then it's a free-form JSON payload. not sure if the right one, but it will
+    // compose for now.
+    if (_.isEmpty(this.obj?.props)) return 'JSON';
+
     return Naming.genTypeName(this.name);
   }
 
@@ -78,33 +81,13 @@ export class PropObj extends Prop {
     if (this.needsBrackets(this.obj!)) {
       context.leave(this);
       writer.append(' '.repeat(context.indent + context.stack.length)).append('}');
-      writer.append('\n');
     }
+    writer.append('\n');
 
     trace(context, '<- [prop-obj:select]', 'out ' + this.name + ', obj: ' + this.obj?.name);
   }
 
   private needsBrackets(child: IType): boolean {
-    return child instanceof Obj || child instanceof Union || child instanceof Composed;
+    return (child instanceof Obj || child instanceof Union || child instanceof Composed) && !_.isEmpty(child.props);
   }
-
-  /*
-  private updateName(parent: IType): void {
-    if (this.name === 'items') {
-      const parentName = parent.name;
-      // if the part is a ref, then use replace for the pointed object
-      if (parent instanceof PropRef) {
-        this.name = parentName.replace('ref:', 'obj:');
-      }
-      // if within an array, synthesize a name
-      else if (parent.constructor.name === 'PropArray') {
-        this.name = parentName + 'Item';
-      }
-      // create a anonymous name
-      else {
-        this.name = `[prop:obj:anonymous:${this.parent?.name}]`;
-      }
-    }
-  }
-*/
 }

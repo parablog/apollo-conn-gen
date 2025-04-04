@@ -3,9 +3,9 @@ import Oas from 'oas';
 import { ServerObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { CircularRef } from '../nodes/internal.js';
+import { Body, CircularRef, Op, Post, Put } from '../nodes/internal.js';
+import { IType } from '../nodes/internal.js';
 import { Composed } from '../nodes/internal.js';
-import { Get } from '../nodes/internal.js';
 import { Obj } from '../nodes/internal.js';
 import { Param } from '../nodes/internal.js';
 import { Prop } from '../nodes/internal.js';
@@ -14,8 +14,8 @@ import { PropScalar } from '../nodes/internal.js';
 import { Type } from '../nodes/internal.js';
 import { Union } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
-import { T } from '../utils/typeUtils.js';
-import { IType } from '../nodes/internal.js';
+import { T } from '../nodes/typeUtils.js';
+import { Scalar } from '../nodes/internal.js';
 
 export class Writer {
   public static findNonPropParent(type: IType) {
@@ -34,6 +34,7 @@ export class Writer {
     }
     return results;
   }
+
   public buffer: string[];
 
   constructor(public generator: OasGen) {
@@ -54,41 +55,40 @@ export class Writer {
     return this.buffer.join('');
   }
 
-  public writeSchema(writer: Writer, pending: Map<string, IType>, selection: string[]): void {
+  public writeSchema(writer: Writer, types: Map<string, IType>, inputs: Map<string, IType>, selection: string[]): void {
     const context = this.generator.context!;
     const generatedSet = context.generatedSet;
-    // generatedSet.clear();
 
     this.writeDirectives(writer);
     this.writeJSONScalar(writer);
 
-    pending.forEach((type: IType) => {
-      if (!generatedSet.has(type.id)) {
+    types.forEach((type: IType) => {
+      if (!generatedSet.has('type:' + type.id)) {
         type.generate(context, this, selection);
-        generatedSet.add(type.id);
+        generatedSet.add('type:' + type.id);
       }
     });
 
-    // TODO: Pending
-    // const counter = new RefCounter(this.context);
-    // counter.addAll(this.collected);
+    inputs.forEach((type: IType) => {
+      if (!generatedSet.has('input:' + type.id)) {
+        type.generate(context, this, selection);
+        generatedSet.add('input:' + type.id);
+      }
+    });
 
-    // const refs = counter.getCount();
-    // this.printRefs(refs);
+    const expanded = [...this.generator.paths];
 
-    // for (const type of this.context.types.ts.values()) {
-    //   if (counter.getCount().has(type.name)) {
-    //     await type.generate(this.context, writer);
-    //     generatedSet.add(type.name);
-    //   }
-    // }
+    const queries = new Map(expanded.filter(([_k, type]) => type.id.startsWith('get:')));
+    const mutations = new Map(expanded.filter(([_k, type]) => T.isMutationType(type)));
 
-    this.writeQuery(context, writer, this.generator.paths, selection);
+    this.writeQuery(context, writer, queries, selection);
+    this.writeMutations(context, writer, mutations, selection);
     writer.flush();
   }
 
   public generate(selection: string[]) {
-    const pending: Map<string, IType> = new Map();
+    const pendingTypes: Map<string, IType> = new Map();
+    const pendingInputs: Map<string, IType> = new Map();
 
     selection = this.collectExpandedPaths(selection);
 
@@ -105,8 +105,8 @@ export class Writer {
           // remove the current path from the selection array
           selection = selection.filter((s) => s !== path);
 
-          if (current instanceof Composed) {
-            current.consolidate(selection);
+          if (current && current instanceof Composed) {
+            current!.consolidate(selection);
           }
 
           // add all the props from the current node and exit loop
@@ -120,6 +120,7 @@ export class Writer {
 
         current = collection.find((t) => t.id === part);
         if (!current) {
+          // let's collect the possible paths so we don't have to debug
           throw new Error('Could not find type: ' + part + ' from ' + path + ', last: ' + last?.pathToRoot());
         }
 
@@ -132,37 +133,63 @@ export class Writer {
         i++;
       } while (i < parts.length);
 
-      if (current) {
-        // TODO: this seems redundant, we've already walked the parent AND can be also
-        // contained in the context stack
+      if (current && !(current instanceof Scalar)) {
+        // TODO: this seems redundant, we've already walked the parent AND can be also contained in the context stack
         const parentType = Writer.findNonPropParent(current as IType);
 
-        if (!pending.has(parentType.id)) {
-          pending.set(parentType.id, parentType);
+        if (!pendingTypes.has(parentType.id)) {
+          pendingTypes.set(parentType.id, parentType);
         }
 
         parentType
           .ancestors()
-          .filter((t) => !pending.has(t.id) && this.isContainer(t))
+          .filter((t) => !pendingTypes.has(t.id) && this.isContainer(t))
           .forEach((dep) => {
             // TODO: potential merge needed?
-            pending.set(dep.id, dep);
+            pendingTypes.set(dep.id, dep);
           });
       }
     }
 
-    if (!_.isEmpty(pending)) {
-      // first pass is to consolidate all Composed & Union nodes
-      const composed: Array<Composed | Union> = Array.from(pending.values())
-        .filter((t) => t instanceof Composed || t instanceof Union)
-        .map((t) => t as Composed);
+    // process any POST paths, as we need to add the Body as a pendingInputs item
+    /*Array.from(this.generator.paths.values())
+      .filter((t) => t instanceof Post)
+      .forEach((path) => {
+        if (path.body && !pendingInputs.has(path.body.id))
+          pendingInputs.set(path.body.id, path.body);
 
-      for (const comp of composed) {
-        comp.consolidate(selection).forEach((id) => pending.delete(id));
-      }
+        if (path.body) {
+          this.generator.expand(path.body!);
 
-      this.writeSchema(this, pending, selection);
+          const queue: IType[] = Array.from(path.body!.children.values());
+
+          while (queue.length > 0) {
+            const node = queue.shift()!;
+            const isContainer = this.isContainer(node);
+
+            if (isContainer && !pendingInputs.has(node.id)) {
+              pendingInputs.set(node.id, node);
+            }
+
+            this.generator.expand(node);
+            queue.push(...node.children);
+          }
+        }
+      });*/
+
+    // TODO: do we need to do the same for the pending inputs?
+    // if (!_.isEmpty(pendingTypes)) {
+    // first pass is to consolidate all Composed & Union nodes
+    const composed: Array<Composed | Union> = Array.from(pendingTypes.values())
+      .filter((t) => t instanceof Composed || t instanceof Union)
+      .map((t) => t as Composed);
+
+    for (const comp of composed) {
+      comp.consolidate(selection).forEach((id) => pendingTypes.delete(id));
     }
+
+    this.writeSchema(this, pendingTypes, pendingInputs, selection);
+    // }
   }
 
   public collectPaths(path: string, collection: IType[]): IType[] {
@@ -198,11 +225,12 @@ export class Writer {
   }
 
   private writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-    writer.write('type Query {\n');
-
     const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
+    if (_.isEmpty(paths)) return;
+
+    writer.write('type Query {\n');
 
     for (const path of paths) {
       path.generate(context, writer, []);
@@ -215,22 +243,20 @@ export class Writer {
 
   private writeConnector(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
     const indent = 0;
-    const get = type as unknown as Get; // assume type is GetOp
+    const op = type as unknown as Op; // assume type is GetOp
     let spacing = ' '.repeat(indent + 4);
     writer.append(spacing).append('@connect(\n');
 
-    const request = this.buildRequestMethodAndArgs(get);
     spacing = ' '.repeat(indent + 6);
-    writer
-      .append(spacing)
-      .append('source: "api"\n')
-      .append(spacing)
-      .append('http: ' + request + '\n')
-      .append(spacing)
-      .append('selection: """\n');
+    writer.append(spacing).append('source: "api"\n').append(spacing).append('http: ');
 
-    if (get.resultType) {
-      this.writeSelection(context, writer, get.resultType, selection);
+    this.requestMethod(context, writer, op, selection);
+
+    writer.append('\n').append(spacing).append('selection: """\n');
+
+    if (_.has(op, 'resultType')) {
+      // scalar types don't need to be generated?
+      this.writeSelection(context, writer, _.get(op, 'resultType') as Type, selection);
     }
 
     writer.append(spacing).append('"""\n');
@@ -238,26 +264,26 @@ export class Writer {
     writer.append(spacing).append(')\n');
   }
 
-  private buildRequestMethodAndArgs(get: Get): string {
-    let builder = '';
+  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[]): void {
+    // replace every {elem} in the path for {$args.elem}
+    const verb = op.verb;
+    writer.append(`{ ${verb}: `).append('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}'));
 
-    builder += '"' + get.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}');
-
-    if (get.params.length > 0) {
-      const params = get.params.filter((p: Param) => {
+    if (op.params.length > 0) {
+      const params = op.params.filter((p: Param) => {
         return p.required && p.parameter.in && p.parameter.in.toLowerCase() === 'query';
       });
 
       if (params.length > 0) {
-        builder += '?' + params.map((p: Param) => `${p.name}={$args.${Naming.genParamName(p.name)}}`).join('&');
+        writer.append('?' + params.map((p: Param) => `${p.name}={$args.${Naming.genParamName(p.name)}}`).join('&'));
       }
-      const headers = get.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
+      const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
 
-      builder += '"\n';
+      writer.append('"\n');
 
       if (headers.length > 0) {
         let spacing = ' '.repeat(6);
-        builder += spacing + 'headers: [\n';
+        writer.append(spacing + 'headers: [\n');
         spacing = ' '.repeat(8);
 
         for (const p of headers) {
@@ -275,17 +301,24 @@ export class Writer {
             value = '<placeholder>';
           }
 
-          builder += spacing + `{ name: "${p.name}", value: "${value}" }\n`;
+          writer.append(spacing + `{ name: "${p.name}", value: "${value}" }\n`);
         }
 
         spacing = ' '.repeat(6);
-        builder += spacing + ']';
+        writer.append(spacing + ']');
       }
     } else {
-      builder += '"';
+      writer.append('"');
     }
 
-    return `{ GET: ${builder} }`;
+    if (_.has(op, 'body')) {
+      const body = op.body as Body;
+      this.writeBodySelection(context, writer, body, selection);
+    }
+
+    writer.append('}');
+    // const verb = op.id.startsWith('get:') ? 'GET' : 'POST';
+    // return `{ ${verb}: ${builder} }`;
   }
 
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
@@ -366,9 +399,6 @@ export class Writer {
 
     const paths = Array.from(this.generator.paths.values());
     const nodes = filtered.map((p) => this.collectPaths(p, paths));
-    /*.map(stack => _.last(stack)!.id)
-      .filter(id => selection.includes(id))
-      .forEach(id => newSelection.add(id));*/
 
     nodes.forEach((stack) => {
       const root = _.last(stack)!;
@@ -383,5 +413,45 @@ export class Writer {
 
     // finally remove the expanded paths from the selection
     return [...newSelection, ...selection.filter((p) => !expands.includes(p))];
+  }
+
+  private writeMutations(
+    context: OasContext,
+    writer: Writer,
+    collected: Map<string, IType>,
+    selection: string[],
+  ): void {
+    const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
+
+    const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
+    if (_.isEmpty(paths)) return;
+
+    writer.write('type Mutation {\n');
+
+    for (const path of paths) {
+      path.generate(context, writer, []);
+      this.writeConnector(context, writer, path, selection);
+      context.generatedSet.add(path.id);
+    }
+
+    writer.write('}\n\n');
+  }
+
+  private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: string[]): void {
+    writer.append(',\n');
+    context.indent = 6;
+    // let spacing = ' '.repeat(6);
+
+    if (body) {
+      body.select(context, writer, selection);
+    }
+    /*writer.append(spacing + 'body: """\n');
+
+    // TODO: writer.append(spacing + '$args.input' + '\n');
+    // we should check if we have no selection for body? or else just send everything?
+    context.indent = 6;
+    body.select(context, writer, selection);
+
+    writer.append(spacing + '"""\n' + ' '.repeat(5));*/
   }
 }

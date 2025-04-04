@@ -1,4 +1,4 @@
-import { IType, Type } from './internal.js';
+import { Body, IType, Post, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -10,8 +10,11 @@ import { Get } from './get.js';
 import { PropArray } from './propArray.js';
 import { Ref } from './ref.js';
 import { Response } from './response.js';
+import _, { isArray } from 'lodash';
 
 export class Obj extends Type {
+  synthetic: boolean = false;
+
   constructor(
     parent: IType | undefined,
     name: string,
@@ -26,7 +29,7 @@ export class Obj extends Type {
   }
 
   get id(): string {
-    return `obj:${this.name}`;
+    return `obj:${this.kind}:${this.name}`;
   }
 
   public visit(context: OasContext): void {
@@ -53,7 +56,7 @@ export class Obj extends Type {
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
-    if (this.props.size === 0) {
+    if (_.isEmpty(this.props)) {
       return;
     }
 
@@ -69,11 +72,13 @@ export class Obj extends Type {
     const refName = Naming.getRefName(this.name);
 
     writer
-      .append('type ')
+      .append(this.kind + ' ')
       .append(sanitised === refName ? refName : sanitised)
+      .append(this.nameSuffix())
       .append(' {\n');
 
     const selected = this.selectedProps(selection);
+
     for (const prop of selected) {
       trace(context, '-> [obj::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
       prop.generate(context, writer, selection);
@@ -116,6 +121,9 @@ export class Obj extends Type {
       else if (parent instanceof Response) {
         const op = parent.parent as Get;
         name = op.getGqlOpName() + 'Response';
+      } else if (parent instanceof Body) {
+        // const op = parent.parent as Post;
+        name = this.name + 'Input';
       }
       // if the parent is an object then we can use the parent name
       else if (parent instanceof Obj) {
@@ -156,57 +164,14 @@ export class Obj extends Type {
       }
     }
 
-    // const propertiesNames = Array.from(collected.values())
-    //   .map((p) => p.forPrompt(context))
-    //   .join(',\n - ');
-    //
-    // const inCompose = context.inContextOf(Composed, this);
-    // const inComposeIdx = Type.findAncestorOf(this, Composed);
-    // const inArrayIdx = Type.findAncestorOf(this, PropArray);
-    //
-    // if (!inCompose || inArrayIdx > inComposeIdx) {
-    //   console.log('Obj.visitProperties HERE');
-    // }
-    //
-    // trace(
-    //   context,
-    //   '   [obj::props]',
-    //   `${this.getSimpleName()} is within compose context? ${inCompose}`
-    // );
-    //
-    // const addAll =
-    //   !inCompose || inArrayIdx > inComposeIdx
-    //     ? await context.prompt.yesNoSelect(
-    //       this.path(),
-    //       ` -> Add all properties from [object] ${this.getOwner()}?: \n - ${propertiesNames}\n`
-    //     )
-    //     : 'y';
-    //
-    // if (addAll === 'y' || addAll === 's') {
-    //   for (const [propertyName, propertySchema] of sorted) {
-    //     const prop = Factory.fromProperty(
-    //       context,
-    //       this,
-    //       propertyName,
-    //       propertySchema
-    //     );
-    //     if (
-    //       addAll === 'y' ||
-    //       (await context.prompt.yesNo(
-    //         prop.path(),
-    //         `Add field '${prop.forPrompt(context)}'?`
-    //       ))
-    //     ) {
-    //       trace(context, '   [obj::props]', 'prop: ' + prop);
-    //       this.props.set(propertyName, prop);
-    //       if (!this.children.includes(prop)) {
-    //         this.add(prop);
-    //       }
-    //     }
-    //   }
-    // }
-    //
-    // this.addDependencies(context);
+    // required can also be set in a separate array too, apparently
+    if (_.isArray(this.schema.required)) {
+      this.schema.required.forEach((name) => {
+        const prop = this.props.get(name);
+        if (prop) prop!.required = true;
+      });
+    }
+
     trace(context, '<- [obj::props]', 'out props ' + this.props.size);
   }
 }

@@ -1,15 +1,14 @@
 import Oas from 'oas';
 import OASNormalize from 'oas-normalize';
 import { Operation, Webhook } from 'oas/operation';
-import { OASDocument } from 'oas/types';
+import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
 import { OasContext } from './oasContext.js';
-import { Factory } from './nodes/internal.js';
+import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
-import { IType } from './nodes/internal.js';
 
 interface IGenOptions {
   skipValidation: boolean;
@@ -117,16 +116,19 @@ export class OasGen {
 
     const paths = parser.getPaths();
     const filtered = Object.entries(paths)
-      .filter(([_key, pathItem]) => pathItem.get !== undefined)
+      .filter(([_key, pathItem]) => this.isSupported(pathItem))
       .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
 
     const collected = new Map<string, IType>();
     for (const [key, pathItem] of filtered) {
-      const result = this.visitPath(context, key, pathItem);
-      collected.set(key, result);
+      this.visitPath(context, key, pathItem).forEach((type) => collected.set(type.id, type));
     }
 
     this.paths = collected;
+  }
+
+  private isSupported(pathItem: Record<HttpMethods, Webhook | Operation>) {
+    return pathItem.get || pathItem.post || pathItem.put || pathItem.delete || pathItem.patch;
   }
 
   public getContext(): OasContext {
@@ -164,6 +166,7 @@ export class OasGen {
     return false;
   }
 
+  /** this seems a bit buggy at the moment, needs more testing **/
   public findPath(path: string): IType | boolean {
     let collection = Array.from(this.paths.values());
     let current: IType | undefined;
@@ -196,10 +199,39 @@ export class OasGen {
 
   // private methods
 
-  private visitGet(_context: OasContext, name: string, op: Operation): IType {
-    // TODO
-    // operation.visit(context);
-    return Factory.createGet(name, op);
+  private visitGet(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitGet]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.createGet(name, op);
+    trace(context, '<- [visitGet]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
+  }
+
+  private visitPost(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitPost]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.fromPost(name, op);
+    trace(context, '<- [visitPost]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
+  }
+
+  private visitPut(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitPut]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.fromPut(name, op);
+    trace(context, '<- [visitPut]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
+  }
+
+  private visitPatch(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitPatch]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.fromPatch(name, op);
+    trace(context, '<- [visitPatch]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
+  }
+
+  private visitDelete(context: OasContext, name: string, op: Operation): IType {
+    trace(context, '-> [visitDelete]', `in:  [${name}] id: ${op.getOperationId()}`);
+    const result = Factory.fromDelete(name, op);
+    trace(context, '<- [visitDelete]', `out: [${name}] id: ${op.getOperationId()}`);
+    return result;
   }
 
   private printRefs(values: Map<string, number>): void {
@@ -209,16 +241,31 @@ export class OasGen {
     });
   }
 
-  private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType {
-    const operation = pathItem.get;
-    if (operation.constructor.name === 'Webhook') {
-      throw new Error('Webhook not supported');
+  private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType[] {
+    const paths: IType[] = [];
+    if (pathItem.get !== undefined) {
+      if ((pathItem.get as Webhook | Operation)?.constructor.name === 'Webhook') {
+        throw new Error('Webhook not supported');
+      }
+      paths.push(this.visitGet(context, name, pathItem.get as Webhook | Operation));
     }
 
-    trace(context, '-> [visitPath]', `in:  [${name}] id: ${operation.getOperationId()}`);
-    const type = this.visitGet(context, name, operation);
-    trace(context, '<- [visitPath]', `out: [${name}] id: ${operation.getOperationId()}`);
+    if (pathItem.post !== undefined) {
+      paths.push(this.visitPost(context, name, pathItem.post));
+    }
 
-    return type;
+    if (pathItem.put !== undefined) {
+      paths.push(this.visitPut(context, name, pathItem.put));
+    }
+
+    if (pathItem.patch !== undefined) {
+      paths.push(this.visitPatch(context, name, pathItem.patch));
+    }
+
+    if (pathItem.delete !== undefined) {
+      paths.push(this.visitDelete(context, name, pathItem.delete));
+    }
+
+    return paths;
   }
 }
