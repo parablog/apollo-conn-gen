@@ -671,7 +671,13 @@ test('test_034_simple-delete', async () => {
   const paths = [
     "del:/pet/{petId}>**"
   ]
-
   await runOasTest(`petstore.yaml`, paths, 19, 1, false, true);
+});
+
+test('test_035_adobe-commerce-delete-address', async () => {
+  const paths = [
+    "del:/V1/addresses/{addressId}>res:r>scalar:boolean"
+  ]
+  await runOasTest(`adobe-commerce-swagger.json`, paths, 586, 0);
 });
 
