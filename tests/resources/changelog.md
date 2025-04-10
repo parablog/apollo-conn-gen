@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.1]
+
+### Fixed
+- Fixed unions: now we don't overwrite the fields when we consolidate them, but rather add a new one. This is because `union` is not yet supported by the Connector spec. 
+
+### Pending
+- Unions should use `->match` and the `discriminator` in the `selection` bit, instead of selecting all fields. 
+
 ## [0.1.3]
 
 ### Fixed
