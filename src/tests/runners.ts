@@ -42,12 +42,13 @@ export async function runOasTest(
 
   const [result, output] = compose(schemaFile, sampleFile);
   if (shouldFail) {
-    assert.ok(result === false);
+    assert.ok(!result);
     assert.ok(output !== undefined);
     return output as unknown as string | undefined;
   } else {
     assert.ok(output === undefined, 'should have been undefined, but it is: ' + output);
-    assert.ok(result === true);
+    assert.ok(result);
+    console.error(schema);
   }
 }
 

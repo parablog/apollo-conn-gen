@@ -22,6 +22,7 @@ import {
   Put,
   Patch,
   Delete,
+  PropComp,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
@@ -70,8 +71,11 @@ export class Factory {
     // array case
     else if (schema.type === 'object') {
       // it's either a union or a composed object
-      if (schema.allOf || schema.oneOf) {
+      if (schema.allOf) {
         result = new Composed(parent, _.get(schema, 'name') || parent.name, schema);
+      } else if (schema.oneOf) {
+        const oneOfs = schema.oneOf || [];
+        result = new Union(parent, _.get(schema, 'name') || parent.name, oneOfs as SchemaObject[]);
       }
       // or a plain obj
       else {
@@ -90,7 +94,10 @@ export class Factory {
       }
     }
     // Composed schema case.
-    else if (schema.allOf || schema.oneOf) {
+    else if (schema.oneOf) {
+      const oneOfs = schema.oneOf || [];
+      result = new Union(parent, _.get(schema, 'name') || parent.name, oneOfs as SchemaObject[]);
+    } else if (schema.allOf) {
       result = new Composed(parent, _.get(schema, 'name') || parent.name, schema);
     }
     // scalar
@@ -175,6 +182,14 @@ export class Factory {
     else if (schema.properties != null) {
       const propType: IType = new Obj(parent, propertyName, schema);
       prop = new PropObj(parent, propertyName, schema, propType);
+    } else if (schema.oneOf) {
+      const propComp: PropComp = new PropComp(parent, propertyName, schema);
+      propComp.comp = new Union(propComp, _.get(schema, 'name') || parent.name, schema.oneOf as SchemaObject[]);
+      prop = propComp;
+    } else if (schema.allOf) {
+      const propComp: PropComp = new PropComp(parent, propertyName, schema);
+      propComp.comp = new Composed(propComp, _.get(schema, 'name') || parent.name, schema);
+      prop = propComp;
     }
     // default case, we don't know what to do so we'll create a scalar of type JSON
     else {

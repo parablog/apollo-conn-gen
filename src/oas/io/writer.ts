@@ -3,16 +3,20 @@ import Oas from 'oas';
 import { ServerObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { Body, CircularRef, Op, Post, Put } from '../nodes/internal.js';
-import { IType } from '../nodes/internal.js';
-import { Composed } from '../nodes/internal.js';
-import { Obj } from '../nodes/internal.js';
-import { Param } from '../nodes/internal.js';
-import { Prop } from '../nodes/internal.js';
-import { PropArray } from '../nodes/internal.js';
-import { PropScalar } from '../nodes/internal.js';
-import { Type } from '../nodes/internal.js';
-import { Union } from '../nodes/internal.js';
+import {
+  IType,
+  Type,
+  Union,
+  Body,
+  CircularRef,
+  Op,
+  PropScalar,
+  Composed,
+  Obj,
+  Prop,
+  Param,
+  PropArray,
+} from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
 import { T } from '../nodes/typeUtils.js';
 import { Scalar } from '../nodes/internal.js';
@@ -55,7 +59,7 @@ export class Writer {
     return this.buffer.join('');
   }
 
-  public writeSchema(writer: Writer, types: Map<string, IType>, inputs: Map<string, IType>, selection: string[]): void {
+  public writeSchema(writer: Writer, types: Map<string, IType>, selection: string[]): void {
     const context = this.generator.context!;
     const generatedSet = context.generatedSet;
 
@@ -63,16 +67,9 @@ export class Writer {
     this.writeJSONScalar(writer);
 
     types.forEach((type: IType) => {
-      if (!generatedSet.has('type:' + type.id)) {
+      if (!generatedSet.has(type.id)) {
         type.generate(context, this, selection);
-        generatedSet.add('type:' + type.id);
-      }
-    });
-
-    inputs.forEach((type: IType) => {
-      if (!generatedSet.has('input:' + type.id)) {
-        type.generate(context, this, selection);
-        generatedSet.add('input:' + type.id);
+        generatedSet.add(type.id);
       }
     });
 
@@ -88,8 +85,6 @@ export class Writer {
 
   public generate(selection: string[]) {
     const pendingTypes: Map<string, IType> = new Map();
-    const pendingInputs: Map<string, IType> = new Map();
-
     selection = this.collectExpandedPaths(selection);
 
     for (const path of selection) {
@@ -151,32 +146,6 @@ export class Writer {
       }
     }
 
-    // process any POST paths, as we need to add the Body as a pendingInputs item
-    /*Array.from(this.generator.paths.values())
-      .filter((t) => t instanceof Post)
-      .forEach((path) => {
-        if (path.body && !pendingInputs.has(path.body.id))
-          pendingInputs.set(path.body.id, path.body);
-
-        if (path.body) {
-          this.generator.expand(path.body!);
-
-          const queue: IType[] = Array.from(path.body!.children.values());
-
-          while (queue.length > 0) {
-            const node = queue.shift()!;
-            const isContainer = this.isContainer(node);
-
-            if (isContainer && !pendingInputs.has(node.id)) {
-              pendingInputs.set(node.id, node);
-            }
-
-            this.generator.expand(node);
-            queue.push(...node.children);
-          }
-        }
-      });*/
-
     // TODO: do we need to do the same for the pending inputs?
     // if (!_.isEmpty(pendingTypes)) {
     // first pass is to consolidate all Composed & Union nodes
@@ -184,11 +153,13 @@ export class Writer {
       .filter((t) => t instanceof Composed || t instanceof Union)
       .map((t) => t as Composed);
 
+    const context = this.generator.context!;
     for (const comp of composed) {
+      if (!comp.visited) comp.visit(context);
       comp.consolidate(selection).forEach((id) => pendingTypes.delete(id));
     }
 
-    this.writeSchema(this, pendingTypes, pendingInputs, selection);
+    this.writeSchema(this, pendingTypes, selection);
     // }
   }
 

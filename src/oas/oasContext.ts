@@ -1,27 +1,35 @@
-import { trace } from './log/trace.js';
+import { trace, warn } from './log/trace.js';
 import Oas from 'oas';
 import { ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
 import { ReferenceObject } from './nodes/internal.js';
 import { Naming } from './utils/naming.js';
 import { IType } from './nodes/internal.js';
 
+export type GenerateOptions = {
+  consolidateUnion: boolean;
+  debugParentInSelection: boolean;
+};
+
 export class OasContext {
   public static readonly COMPONENTS_SCHEMAS: string = '#/components/schemas/';
   public static readonly COMPONENTS_RESPONSES: string = '#/components/responses/';
   public static readonly PARAMETER_SCHEMAS: string = '#/components/parameters/';
-  // private prompt: Prompt;
   public generatedSet: Set<string> = new Set();
   public indent: number;
 
   public stack: IType[] = new Array<IType>();
-  public types: Map<string, IType> = new Map();
+  public types: Map<string, IType | undefined> = new Map();
 
   private parser: Oas;
+  generateOptions: GenerateOptions;
 
   constructor(parser: Oas) {
     this.parser = parser;
-    // this.prompt = prompt;
     this.indent = 0;
+    this.generateOptions = {
+      consolidateUnion: true, // by default, we consolidate fields until unions are supported
+      debugParentInSelection: false, // by default, we don't show where the fields are coming from
+    };
   }
 
   public enter(type: IType): void {
@@ -40,7 +48,11 @@ export class OasContext {
 
   public store(name: string, type: IType): void {
     trace(this, '[context::store]', 'store ' + type.id);
-    this.types.set(name, type);
+    if (this.types.has(name)) {
+      warn(this, '[store]', `${name} is already stored`);
+    }
+
+    this.types.set(name, undefined);
   }
 
   public lookupResponse(ref: string): ResponseObject | ReferenceObject | null {

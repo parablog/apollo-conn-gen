@@ -53,6 +53,10 @@ export class PropScalar extends Prop {
       child.select(context, writer, selection);
     }
 
+    if (context.generateOptions.debugParentInSelection) {
+      writer.append(' # ').append(Naming.getRefName(this.parent!.name));
+    }
+
     writer.append('\n');
   }
 }

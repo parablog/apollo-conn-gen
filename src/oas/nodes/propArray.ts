@@ -1,4 +1,4 @@
-import { Factory, IType, Prop, PropObj, PropRef } from './internal.js';
+import { Factory, IType, Prop, PropComp, PropObj, PropRef, Scalar } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
@@ -72,20 +72,28 @@ export class PropArray extends Prop {
     }
 
     // Select each child of the items Prop.
-    for (const child of this.items!.children) {
-      child.select(context, writer, selection);
+    if (this.needsBrackets(this.items)) {
+      for (const child of this.items!.children) {
+        child.select(context, writer, selection);
+      }
     }
 
     if (this.needsBrackets(this.items!)) {
       context.leave(this);
       writer.append(' '.repeat(context.indent + context.stack.length)).append('}');
     }
+    // writer.append('\n');
+    if (context.generateOptions.debugParentInSelection) {
+      writer.append(' # ').append(Naming.getRefName(this.parent!.name));
+    }
+
     writer.append('\n');
 
     trace(context, '<- [prop:array:select]', 'out');
   }
 
-  public needsBrackets(child: IType): boolean {
-    return child instanceof PropRef || child instanceof PropObj;
+  public needsBrackets(child?: IType): boolean {
+    if (!child) return false;
+    return child instanceof PropRef || child instanceof PropObj || child instanceof PropComp;
   }
 }

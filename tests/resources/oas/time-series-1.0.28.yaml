@@ -1,0 +1,636 @@
+openapi: '3.0.3'
+info:
+  title: 'Price Time Series Domain Service.'
+  description: "\nRESTful service to search historical and intraday price data.\n"
+  contact:
+    name: 'POD Market Data and News'
+    email: 'dl-art-puma-team-smash@ubs.com'
+  license:
+    name: 'UBS AG License'
+    url: 'https://www.ubs.com'
+  version: '1.0.28'
+servers:
+  - url: 'https://app/FHG/1/time-series'
+security:
+  - bearerAuth: []
+paths:
+  /market-data-services/time-series/search:
+    post:
+      tags:
+        - 'Price Time series'
+      summary: "Returns intraday or historic price data for Market Data. Eg. Shares,\
+        \ Bonds, Funds, FX. etc."
+      description: "Returns intraday or historic price data for Market Data. Eg. Shares,\
+        \ Bonds, Funds, FX. etc."
+      operationId: 'getTimeSeriesData'
+      requestBody:
+        description: "request structure and search attributes must be provided in\
+          \ the same body"
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceTimeSeriesRequestBody'
+      responses:
+        200:
+          description: 'Ok'
+          content:
+            application/json; charset=utf-8:
+              schema:
+                $ref: '#/components/schemas/ResultCollection'
+        400:
+          description: 'Search attribute or mandatory attribute is missing or incorrect.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/SearchErrorDescription'
+        401:
+          description: 'Forbidden. You are not authorized to use this function.'
+          content:
+            application/problem+json; charset=utf-8:
+              schema:
+                $ref: '#/components/schemas/Forbidden'
+        403:
+          description: 'Forbidden. You are not authorized to use this function.'
+          content:
+            application/problem+json; charset=utf-8:
+              schema:
+                $ref: '#/components/schemas/Forbidden'
+        500:
+          description: "An exception was thrown by the service while doing the request.\
+            \ A more detailed error description will be given by the service."
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/SearchErrorDescription'
+      security:
+        - bearerAuth: []
+components:
+  schemas:
+    PriceTimeSeriesRequestBody:
+      title: 'PriceTimeSeriesRequestBody'
+      type: 'object'
+      properties:
+        searchCriteria:
+          type: 'array'
+          description: "Maximum number of SearchObjects supported is 5. API throws\
+            \ an exception, if more than 5 SearchObjects are submitted"
+          items:
+            $ref: '#/components/schemas/SearchObject'
+        responseFilter:
+          type: 'array'
+          description: "Using JSONPath, consumers are allowed to filter PriceTimeSeries\
+            \ response object by providing JsonPath expression"
+          items:
+            $ref: '#/components/schemas/JSONPath'
+        responseDataFormat:
+          type: 'string'
+          description: "Three different variations of PriceTimeSeries response data\
+            \ format can be chosen. \n  Normal: Returns data in normal json representation.\
+            \ \n Optimized: Returns data in column-wise representation.\n The attributes\
+            \ are sorted by the order in which the attributes are listed here in the\
+            \ API definition for Normal and Optimized.\n  Highcharts: Returns data\
+            \ which is optimized for Highcharts usage. Attributes are sorted by the\
+            \ order in which the attributes are requested."
+          default: 'normal'
+          enum:
+            - 'normal'
+            - 'optimized'
+            - 'highcharts'
+      description: 'Request body for searching price time series.'
+    SearchObject:
+      title: 'SearchObject'
+      required:
+        - 'currencyId'
+        - 'exchangeId'
+        - 'identifier'
+        - 'identifierType'
+        - 'providerId'
+      type: 'object'
+      properties:
+        identifier:
+          type: 'string'
+          description: "Identifier of the instrument. This covers business keys and\
+            \ technical external identifiers."
+          example: '24476758 or CH0244767585'
+        identifierType:
+          type: 'string'
+          description: 'Identifier type of instrument (ISIN, CH, etc.)'
+          example: 'VALOR'
+          enum:
+            - 'INSTRUMENTID'
+            - 'PRODUCTID'
+            - 'VALOR'
+            - 'ISIN'
+            - 'CUSIP'
+            - 'WKN'
+            - 'FIGI'
+            - 'CH'
+            - 'I-'
+            - 'AT'
+            - 'BE'
+            - 'CA'
+            - 'DE'
+            - 'DK'
+            - 'ES'
+            - 'FR'
+            - 'JP'
+            - 'J*'
+            - 'LU'
+            - 'NL'
+            - 'false'
+            - 'SE'
+            - 'US'
+            - 'XS'
+        providerId:
+          type: 'string'
+          description: "If no provider ID is entered, default 2 (SIX FI) will be selected.\
+            \ \nProviders:\n  * `1` - UBS WMBB\n  * `2` - SIX Financial Information\n\
+            \  * `13`- Morningstar\n  * `35`- Bloomberg\n  * `53`- Tullett Prebon\n\
+            \  * `80`- ATLAS (PM-FX-prices)\n"
+          enum:
+            - '1'
+            - '2'
+            - '13'
+            - '35'
+            - '53'
+            - '80'
+        exchangeId:
+          type: 'string'
+          description: "Exchange code of instrument. Exchange code definition of the\
+            \ selected vendor is applied. \nNo exchangeId shall be entered for identifierType\
+            \ Listing, will be ignored."
+        currencyId:
+          type: 'string'
+          description: "ISO currency code of the listing. In case of identifierType\
+            \ Listing, the content of currency will be ignored."
+          example: 'CHF'
+        dataPreference:
+          type: 'string'
+          description: "AUTO returns data from best data coverage across different\
+            \ vendors\nPROVIDER returns data from selected providerId."
+          default: 'AUTO'
+          enum:
+            - 'AUTO'
+            - 'PROVIDER'
+        alternateCurrency:
+          type: 'string'
+          description: "If provided, all time series data will be converted into respective\
+            \ currency. \n Whenever direct conversion possible then direct conversion\
+            \ otherwise conversion via third currency will be considered. \n If currency\
+            \ conversion is not possible then error will be returned. \n Conversion\
+            \ will be done with the historic currency conversion rates based on the\
+            \ trade date."
+          nullable: true
+          enum:
+            - 'CHF'
+            - 'EUR'
+            - 'USD'
+            - 'GBP'
+            - 'JPY'
+            - 'HKD'
+            - 'SGD'
+        adjustmentType:
+          type: 'string'
+          description: "Adjustment type defines whether adjusted or unadjusted time\
+            \ series data must be provided. For adjusted time series data, split,\
+            \ reverse-Split, Capital in-/decreased are covered."
+          default: 'Adjusted'
+          enum:
+            - 'Adjusted'
+            - 'UnAdjusted'
+        aggregation:
+          type: 'string'
+          description: "Defines granularity of price data points. \nFor the intraday\
+            \ only the aggregation Milli-secondly is supported. Following attributes\
+            \ are recommended to use: identifier, identifierType, providerId,  exchangeId\
+            \ and aggregation. \n\nFor timeseries(open, high, low, close, nav, totalReturn\
+            \ and volume) aggregation Daily to Annually is supported. That means either\
+            \ Daily, Weekly, Monthly, Quarterly or Annually must be selected.\n Aggregation\
+            \ is not supported for Futures, Options, Structures Products and Leveraged\
+            \ Products. This means all available data points will be returned."
+          default: 'Daily'
+          enum:
+            - 'Milli-secondly'
+            - 'Daily'
+            - 'Weekly'
+            - 'Monthly'
+            - 'Quarterly'
+            - 'Annually'
+        aggregationType:
+          type: 'string'
+          description: "AggregationType defines if the First, Last or Both price data\
+            \ points within the selected aggregation period shall be provided. \n\
+            \ For historical price data, if aggregation is selected as Quarterly and\
+            \ aggregationType is select First, then the price data from the first\
+            \ trading day of the quarter will be provided.  If aggregationType is\
+            \ 'Both' then first and last price data of the quarter will be provided."
+          default: 'Last'
+          enum:
+            - 'First'
+            - 'Last'
+            - 'Both'
+        dateFrom:
+          type: 'string'
+          description: "The start date of the historical price data period. If not\
+            \ specified then the service uses 1900-01-01 as dateFrom. For intraday\
+            \ requests the dateFrom will be ignored. The intraday trades of the most\
+            \ recent trading day will be shown by default."
+          format: 'date'
+          nullable: true
+        dateTo:
+          type: 'string'
+          description: "The end date of the historical price data period. If not specified\
+            \ then the service uses the current date of the system. For intraday requests\
+            \ the dateTo will be ignored. The intraday trades of the most recent trading\
+            \ day will be shown by default."
+          format: 'date'
+          nullable: true
+        sortOrder:
+          type: 'string'
+          description: 'Sort order of the time period.'
+          default: 'DESC'
+          enum:
+            - 'ASC'
+            - 'DESC'
+      description: 'Name value '
+    JSONPath:
+      title: 'JSONPath'
+      type: 'object'
+      properties:
+        expression:
+          type: 'string'
+          description: "JSONPath expression for filtering data within PriceTimeSeries\
+            \ response Object.  If not specified then returns full PriceTimeSeries\
+            \ object"
+          example: "$..dataPoints['priceDateTime', 'price', 'volume']"
+      description: 'JSON path expression for attributes selection'
+
+    PriceTimeSeries:
+      title: 'PriceTimeSeries'
+      type: 'object'
+      properties:
+        providerId:
+          type: 'string'
+          description: "If no provider ID is entered, default 2 (SIX FI) will be selected.\
+            \ \nProviders:\n  * `1` - UBS WMBB\n  * `2` - SIX Financial Information\n\
+            \  * `13`- Morningstar\n  * `35`- Bloomberg\n  * `53`- Tullett Prebon\n\
+            \  * `80`- ATLAS (PM-FX-prices)\n"
+          default: '2'
+          enum:
+            - '1'
+            - '2'
+            - '13'
+            - '35'
+            - '53'
+            - '80'
+        exchangeId:
+          type: 'string'
+        currencyId:
+          type: 'string'
+        identifiers:
+          type: 'array'
+          readOnly: true
+          items:
+            $ref: '#/components/schemas/InstrumentIdentifier'
+        dataPoint:
+          discriminator:
+            propertyName: 'dataFormat'
+          oneOf:
+             - $ref: '#/components/schemas/DataPointNormal'
+             - $ref: '#/components/schemas/DataPointOptimized'
+             - $ref: '#/components/schemas/DataPointHighcharts'
+      description: "PriceTimeSeries response object. There are three variations of\
+        \ dataPoint is supported.\n Normal: Returns data in normal json representation.\n\
+        \ Optimized: Returns data in column-wise representation.\n Highcharts: Returns\
+        \ data which is optimized for Highcharts usage.\n\n  For normal and optimized\
+        \ the schema for the intraday response is fixed and has the following attributes\
+        \ in the order specified:\n - priceDateTime\n - price\n - volume\n\n  For\
+        \ highcharts the order of attributes is according to the order in the response\
+        \ filter."
+      # example:
+      #   {
+      #     'providerId': '2',
+      #     'exchangeId': 'string',
+      #     'currencyId': 'EUR',
+      #     'identifiers': [ { 'identifierType': 'string', 'identifier': 'string' } ],
+      #     'dataPoint': {
+      #       "dataFormat": "optimized",
+      #       "priceDateTime": [ "2023-01-01T00:00:00Z", "2023-01-02T12:30:45Z", "2023-01-03T18:15:30Z", "2023-01-04T23:59:59Z" ],
+      #       "open": [ 11.5, 13.2, 15.7, 17.8 ],
+      #       "high": [ 11.5, 13.2, 15.7, 17.8 ],
+      #       "low": [ 11.5, 13.2, 15.7, 17.8 ],
+      #       "close": [ 11.5, 13.2, 15.7, 17.8 ],
+      #       "price": [ 11.5, 13.2, 15.7, 17.8 ],
+      #       "volume": [ 10000, 15000, 8000, 17000 ],
+      #       "netAssetValue": [ 11.5, 13.2, 15.7, 17.8 ],
+      #       "totalReturn": [ 11.5, 13.2, 15.7, 17.8 ],
+      #       "ask": [ 11.5, 13.2, 15.7, 17.8 ],
+      #       "bid": [ 11.5, 13.2, 15.7, 17.8 ]
+      #     }
+      #       #          'dataPoint':
+      #       #            {
+      #       #              'dataFormat': 'string',
+      #       #              'dataPoints':
+      #       #                [
+      #       #                  [
+      #       #                    11.2,
+      #       #                    11.5,
+      #       #                    11.7,
+      #       #                    12.0,
+      #       #                    12.4,
+      #       #                    12.7,
+      #       #                    13.1,
+      #       #                    13.4,
+      #       #                    13.8,
+      #       #                    14.1,
+      #       #                    14.3,
+      #       #                    14.6,
+      #       #                    14.9,
+      #       #                    15.2,
+      #       #                    15.0,
+      #       #                    14.7,
+      #       #                    14.3,
+      #       #                    14.0,
+      #       #                    13.6,
+      #       #                    13.3,
+      #       #                  ],
+      #       #                  [
+      #       #                    13.5,
+      #       #                    13.8,
+      #       #                    14.1,
+      #       #                    14.5,
+      #       #                    14.8,
+      #       #                    15.1,
+      #       #                    15.5,
+      #       #                    15.8,
+      #       #                    16.2,
+      #       #                    16.5,
+      #       #                    16.8,
+      #       #                    17.1,
+      #       #                    17.3,
+      #       #                    17.0,
+      #       #                    16.6,
+      #       #                    16.3,
+      #       #                    15.9,
+      #       #                    15.6,
+      #       #                    15.2,
+      #       #                    14.9,
+      #       #                  ]
+      #       #                ],
+      #       #            },
+      #   }
+
+    InstrumentIdentifier:
+      title: 'InstrumentIdentifier'
+      type: 'object'
+      properties:
+        identifierType:
+          type: 'string'
+        identifier:
+          type: 'string'
+      description: 'InstrumentIdentifier'
+    DataPointNormal:
+      title: 'DataPointNormal'
+      required:
+        - 'dataFormat'
+      type: 'object'
+      properties:
+        dataFormat:
+          type: 'string'
+        dataPoints:
+          type: 'array'
+          description: 'Time series data points'
+          readOnly: true
+          items:
+            $ref: '#/components/schemas/DataPoint'
+    DataPointOptimized:
+      title: 'DataPointOptimized'
+      required:
+        - 'dataFormat'
+      type: 'object'
+      properties:
+        dataFormat:
+          type: 'string'
+        priceDateTime:
+          type: 'array'
+          description: "In case of historical price, the time part of the dateTime\
+            \ must be ignored."
+          nullable: true
+          items:
+            type: 'string'
+            format: 'date-time'
+            nullable: true
+        open:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        high:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        low:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        close:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        price:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        volume:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        netAssetValue:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        totalReturn:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        ask:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+        bid:
+          type: 'array'
+          nullable: true
+          items:
+            type: 'number'
+            nullable: true
+      description: 'Representation of Price time series data'
+    DataPointHighcharts:
+      title: 'DataPointHighcharts'
+      required:
+        - 'dataFormat'
+      type: 'object'
+      properties:
+        dataFormat:
+          type: 'string'
+        dataPoints:
+          type: 'array'
+          description: "Time series data points which are optimized for direct usage\
+            \ in Highcharts chart library. The order of the array elements is according\
+            \ to \"dataPoints\" attribute selection in responseFilter. The array will\
+            \ be empty if no matching attributes are found or response filter is empty\
+            \ or null. \n\n Date/Time is delivered in Epoch time format without time\
+            \ zone.   Date/Time is relative to the selected exchange. "
+          readOnly: true
+          items:
+            type: 'array'
+            items:
+              type: 'number'
+              nullable: true
+          example: |
+            [
+              [11.2, 11.5, 11.7, 12.0, 12.4, 12.7, 13.1, 13.4, 13.8, 14.1, 14.3, 14.6, 14.9, 15.2, 15.0, 14.7, 14.3, 14.0, 13.6, 13.3],
+              [13.5, 13.8, 14.1, 14.5, 14.8, 15.1, 15.5, 15.8, 16.2, 16.5, 16.8, 17.1, 17.3, 17.0, 16.6, 16.3, 15.9, 15.6, 15.2, 14.9],
+              [15.1, 15.4, 15.8, 16.1, 16.5, 16.8, 17.0, 17.3, 17.6, 17.8, 18.0, 17.7, 17.3, 16.9, 16.5, 16.2, 15.8, 15.4, 15.0, 14.7],
+              [14.9, 15.3, 15.7, 16.0, 16.4, 16.7, 16.3, 16.0, 15.6, 15.2, 14.9, 14.5, 14.2, 13.8, 13.5, 13.1, 12.8, 12.4, 12.1, 11.8],
+              [11.9, 12.2, 12.6, 12.9, 13.3, 13.6, 14.0, 14.3, 14.7, 15.0, 15.3, 15.7, 16.0, 16.4, 16.7, 17.0, 17.4, 17.7, 17.9, 18.0]
+            ]
+    DataPoint:
+      title: 'DataPoint'
+      type: 'object'
+      properties:
+        priceDateTime:
+          type: 'string'
+          description: "In case of historical price, the time part of the dateTime\
+            \ must be ignored."
+          format: 'date-time'
+        open:
+          type: 'number'
+          nullable: true
+          example: '12.0'
+        high:
+          type: 'number'
+          nullable: true
+          example: '17.1'
+        low:
+          type: 'number'
+          nullable: true
+          example: '11.5'
+        close:
+          type: 'number'
+          nullable: true
+          example: '14.8'
+        price:
+          type: 'number'
+          nullable: true
+          example: '13.2'
+        volume:
+          type: 'number'
+          nullable: true
+          example: '20000'
+        netAssetValue:
+          type: 'number'
+          nullable: true
+          example: '12.5'
+        totalReturn:
+          type: 'number'
+          nullable: true
+          example: '13.5'
+        ask:
+          type: 'number'
+          nullable: true
+          example: '13.5'
+        bid:
+          type: 'number'
+          nullable: true
+          example: '12.5'
+      description: 'Representation of Price time series data'
+    ResultCollection:
+      type: 'object'
+      properties:
+        _embedded:
+          type: 'object'
+          properties:
+            timeSeries:
+              type: 'array'
+              description: 'Embedded Instrument price time series for the search result'
+              readOnly: true
+              items:
+                $ref: '#/components/schemas/PriceTimeSeries'
+      description: 'Collection of searched time series data result'
+    SearchErrorDescription:
+      title: 'SearchErrorDescription'
+      type: 'object'
+      properties:
+        title:
+          type: 'string'
+        status:
+          type: 'integer'
+        type:
+          type: 'string'
+        detail:
+          type: 'string'
+        createdAt:
+          type: 'string'
+          format: 'date-time'
+        errorData:
+          type: 'string'
+        errorCode:
+          type: 'string'
+      description: 'Price Time service error description'
+    Link:
+      required:
+        - 'href'
+      type: 'object'
+      properties:
+        href:
+          type: 'string'
+          description: 'Location of the linked resource'
+      description: 'Base for HAL links'
+    Forbidden:
+      required:
+        - 'status'
+        - 'title'
+        - 'type'
+      type: 'object'
+      properties:
+        type:
+          type: 'string'
+          description: 'A URI reference that identifies the problem type.'
+          enum:
+            - '/api/status-codes/forbidden'
+        status:
+          maximum: 403
+          minimum: 403
+          type: 'integer'
+          description: 'The HTTP status code.'
+        title:
+          type: 'string'
+          description: "A short, human-readable, translated (see the `Accept-Language`\
+            \ request header) summary\nof the problem type. It SHOULD NOT change from\
+            \ occurrence to occurrence of the problem,\n except for purposes of localization\
+            \ (e.g., using proactive content negotiation; see\n[RFC7231], Section\
+            \ 3.4).\n"
+          example: 'You are not authorized to use this function.'
+      description: 'Forbidden.'
+  securitySchemes:
+    bearerAuth:
+      type: 'http'
+      scheme: 'bearer'
+      bearerFormat: 'JWT'

@@ -7,6 +7,7 @@ import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
+import _ from 'lodash';
 
 export class Get extends Type implements Op {
   public verb: string = 'GET';
@@ -139,7 +140,9 @@ export class Get extends Type implements Op {
     }
     // If the response has a content property, we need to find the JSON content.
     else if (content) {
-      const json = response.content!['application/json']!;
+      const keys = _.first(_.keys(response.content).filter((k) => k.includes('application/json')));
+
+      const json = keys ? response.content![keys] : undefined;
       if (!json) {
         warn(context, `  [${code}]`, 'no entry found for content application/json!');
       } else {

@@ -1,4 +1,4 @@
-import { CircularRef, En, Obj, PropArray, PropScalar, Scalar } from './internal.js';
+import { CircularRef, En, Obj, Prop, PropArray, PropScalar, Ref, Scalar } from './internal.js';
 
 import { IType } from './internal.js';
 import _ from 'lodash';
@@ -42,5 +42,11 @@ export class T {
 
   static isScalar(type: IType): boolean {
     return type.id.startsWith('scalar:');
+  }
+
+  public static containers(node: IType) {
+    return Array.from(node.children.values())
+      .filter((child) => !(child instanceof Prop))
+      .map((child) => (child.id.startsWith('ref:') ? (child as Ref).refType! : child));
   }
 }

@@ -204,9 +204,9 @@ test('test_010_TMF633_IntentOrValue_to_Union', async () => {
   const paths = [
     'get:/product/{id}>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>ref:#/c/s/Entity>comp:type:#/c/s/Entity>ref:#/c/s/Addressable>obj:type:#/c/s/Addressable>prop:scalar:id',
     'get:/product/{id}>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:scalar:name',
-    'get:/product/{id}>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:ref:#intent>comp:type:#/c/s/IntentRefOrValue>union:#/c/s/IntentRefOrValue>ref:#/c/s/Intent>comp:type:#/c/s/Intent>ref:#/c/s/Entity>comp:type:#/c/s/Entity>ref:#/c/s/Addressable>obj:type:#/c/s/Addressable>prop:scalar:id',
-    'get:/product/{id}>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:ref:#intent>comp:type:#/c/s/IntentRefOrValue>union:#/c/s/IntentRefOrValue>ref:#/c/s/IntentRef>comp:type:#/c/s/IntentRef>ref:#/c/s/EntityRef>comp:type:#/c/s/EntityRef>obj:type:[anonymous:#/c/s/EntityRef]>prop:scalar:name',
-    'get:/product/{id}>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:ref:#intent>comp:type:#/c/s/IntentRefOrValue>union:#/c/s/IntentRefOrValue>ref:#/c/s/Intent>comp:type:#/c/s/Intent>obj:type:[anonymous:#/c/s/Intent]>prop:scalar:description',
+    'get:/product/{id}>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:ref:#intent>union:#/c/s/IntentRefOrValue>ref:#/c/s/Intent>comp:type:#/c/s/Intent>ref:#/c/s/Entity>comp:type:#/c/s/Entity>ref:#/c/s/Addressable>obj:type:#/c/s/Addressable>prop:scalar:id',
+    'get:/product/{id}>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:ref:#intent>union:#/c/s/IntentRefOrValue>ref:#/c/s/IntentRef>comp:type:#/c/s/IntentRef>ref:#/c/s/EntityRef>comp:type:#/c/s/EntityRef>obj:type:[anonymous:#/c/s/EntityRef]>prop:scalar:name',
+    'get:/product/{id}>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:ref:#intent>union:#/c/s/IntentRefOrValue>ref:#/c/s/Intent>comp:type:#/c/s/Intent>obj:type:[anonymous:#/c/s/Intent]>prop:scalar:description',
   ];
 
   await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 11);
@@ -260,10 +260,10 @@ test('test_014_testTMF637_TestRecursion', async () => {
     'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>ref:#/c/s/Extensible>obj:type:#/c/s/Extensible>prop:scalar:@schemaLocation',
     'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>ref:#/c/s/Extensible>obj:type:#/c/s/Extensible>prop:scalar:@type',
     'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:scalar:role',
-    'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>comp:type:#/c/s/PartyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:type:#/c/s/Producer>ref:#/c/s/PartyRole>comp:type:#/c/s/PartyRole>ref:#/c/s/Entity>obj:type:#/c/s/Entity>prop:scalar:href',
-    'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>comp:type:#/c/s/PartyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:type:#/c/s/Producer>ref:#/c/s/PartyRole>comp:type:#/c/s/PartyRole>ref:#/c/s/Entity>obj:type:#/c/s/Entity>prop:scalar:id',
-    'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>comp:type:#/c/s/PartyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:type:#/c/s/Producer>ref:#/c/s/PartyRole>comp:type:#/c/s/PartyRole>obj:type:[anonymous:#/c/s/PartyRole]>prop:scalar:name',
-    'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>comp:type:#/c/s/PartyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:type:#/c/s/Producer>ref:#/c/s/PartyRole>comp:type:#/c/s/PartyRole>obj:type:[anonymous:#/c/s/PartyRole]>circular-ref:#prop:array:#relatedParty',
+    'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:type:#/c/s/Producer>ref:#/c/s/PartyRole>comp:type:#/c/s/PartyRole>ref:#/c/s/Entity>obj:type:#/c/s/Entity>prop:scalar:href',
+    'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:type:#/c/s/Producer>ref:#/c/s/PartyRole>comp:type:#/c/s/PartyRole>ref:#/c/s/Entity>obj:type:#/c/s/Entity>prop:scalar:id',
+    'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:type:#/c/s/Producer>ref:#/c/s/PartyRole>comp:type:#/c/s/PartyRole>obj:type:[anonymous:#/c/s/PartyRole]>prop:scalar:name',
+    'get:/productById>res:r>ref:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[anonymous:#/c/s/Product]>prop:array:#relatedParty>prop:ref:#RelatedPartyItem>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[anonymous:#/c/s/RelatedPartyOrPartyRole]>prop:ref:#partyOrPartyRole>union:#/c/s/PartyOrPartyRole>ref:#/c/s/Producer>comp:type:#/c/s/Producer>ref:#/c/s/PartyRole>comp:type:#/c/s/PartyRole>obj:type:[anonymous:#/c/s/PartyRole]>circular-ref:#prop:array:#relatedParty',
   ];
 
   // expect.assertions(6);
@@ -680,4 +680,12 @@ test('test_035_adobe-commerce-delete-address', async () => {
   ]
   await runOasTest(`adobe-commerce-swagger.json`, paths, 586, 0);
 });
+
+test('test_036_time-series', async () => {
+  const paths = [
+    "post:/market-data-services/time-series/search>**"
+  ]
+  await runOasTest('time-series-1.0.28.yaml', paths, 1, 12);
+});
+
 

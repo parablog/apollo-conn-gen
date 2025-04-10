@@ -1,4 +1,4 @@
-import { Factory, IType, Prop, Ref, ReferenceObject, Type } from './internal.js';
+import { Factory, IType, Prop, Ref, ReferenceObject, Type, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';
@@ -7,10 +7,6 @@ import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 
 export class Composed extends Type {
-  get id(): string {
-    // return `comp:${this.name}`;
-    return `comp:${this.kind}:${this.name}`;
-  }
   constructor(
     parent: IType | undefined,
     public name: string,
@@ -18,6 +14,11 @@ export class Composed extends Type {
     public consolidated: boolean = false,
   ) {
     super(parent, name);
+  }
+
+  get id(): string {
+    // return `comp:${this.name}`;
+    return `comp:${this.kind}:${this.name}`;
   }
 
   public forPrompt(_context: OasContext): string {
@@ -44,7 +45,9 @@ export class Composed extends Type {
     }
     // represents a Union type
     else if (composedSchema.oneOf != null) {
-      this.visitOneOfNode(context, composedSchema);
+      throw new Error('Unions should be constructed by its own object');
+      // deprecated
+      // this.visitOneOfNode(context, composedSchema);
     }
     // can't hand this yet
     else {
