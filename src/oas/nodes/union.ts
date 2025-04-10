@@ -202,7 +202,7 @@ export class Union extends Type {
     return ids;
   }
 
-  private updatePropName(prop: Prop, props: Prop[], selection: string[]) {
+  private updatePropName(prop: Prop, props: Prop[], selection: string[] | undefined = undefined): void {
     let name = prop.name;
 
     let counter = 0;
@@ -212,13 +212,43 @@ export class Union extends Type {
 
     if (name !== prop.name) {
       prop.name = name;
-      // we need to extend the selection too, because a new property has been created
-      selection.push(prop.path());
+      if (selection) {
+        // we need to extend the selection too, because a new property has been created
+        selection.push(prop.path());
+      }
     }
   }
 
   private visitProperties(_context: OasContext): void {
     // do nothing?
+    const ids: Set<string> = new Set();
+    const props: Prop[] = [];
+    const discriminator = this.discriminator;
+
+    const queue = T.containers(this);
+    while (queue.length > 0) {
+      const node = queue.shift()!;
+      ids.add(node.id);
+
+      // process each prop, renaming the ones that have a name clash with others. if a selection
+      // is passed, then only add those, otherwise add all.
+      for (const prop of Array.from(node.props.values()) // include all
+        // remove discriminator props
+        .filter((i) => i.name !== discriminator)) {
+        // rename every prop there is if there's a conflict, then add it to props
+        this.updatePropName(prop, props);
+        props.push(prop);
+      }
+
+      // find the other containers and add them to the queue
+      queue.push(...T.containers(node));
+    }
+
+    // add the discriminator, if we have one
+    if (discriminator) props.push(this.children[0].props.get(discriminator)!);
+
+    // and finally sort the props and copy them to our original
+    props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
   }
 
   private updateName(): void {
