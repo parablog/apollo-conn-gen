@@ -180,7 +180,8 @@ export class Union extends Type {
         ? Array.from(node.props.values()) // include all
         : Array.from(node.props.values())
             .filter((i) => selection.find((s) => s.startsWith(i.path()))) // include selected only
-            .filter((i) => i.name !== discriminator)) { // remove discriminator props
+            .filter((i) => i.name !== discriminator)) {
+        // remove discriminator props
         // rename every prop there is if there's a conflict, then add it to props
         this.updatePropName(prop, props, selection);
         props.push(prop);
