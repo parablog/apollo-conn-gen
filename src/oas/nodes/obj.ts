@@ -25,7 +25,7 @@ export class Obj extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `${Naming.getRefName(this.name)} (Obj)`;
+    return `[object] ${Naming.getRefName(this.name)}`;
   }
 
   get id(): string {

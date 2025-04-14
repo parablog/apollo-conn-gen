@@ -75,7 +75,9 @@ export class Factory {
         result = new Composed(parent, _.get(schema, 'name') || parent.name, schema);
       } else if (schema.oneOf) {
         const oneOfs = schema.oneOf || [];
-        result = new Union(parent, _.get(schema, 'name') || parent.name, oneOfs as SchemaObject[]);
+        const union = new Union(parent, _.get(schema, 'name') || parent.name, oneOfs as SchemaObject[]);
+        union.discriminator = _.get(schema, 'discriminator')?.propertyName;
+        result = union;
       }
       // or a plain obj
       else {

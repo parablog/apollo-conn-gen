@@ -40,8 +40,8 @@ export class PropScalar extends Prop {
     return this.type;
   }
 
-  public forPrompt(context: OasContext): string {
-    return `${this.name}: ${this.type}`;
+  public forPrompt(_context: OasContext): string {
+    return `[prop] ${this.name}: ${this.type}`;
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {

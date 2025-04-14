@@ -38,7 +38,7 @@ export class En extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `${Naming.getRefName(this.name)} (Enum): ${this.items.join(', ')}`;
+    return `[enum] ${Naming.getRefName(this.name)}: ${this.items.join(', ')}`;
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {

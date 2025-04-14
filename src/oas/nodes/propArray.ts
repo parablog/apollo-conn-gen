@@ -55,7 +55,7 @@ export class PropArray extends Prop {
   }
 
   public forPrompt(context: OasContext): string {
-    return `${this.name}: [${this.items!.getValue(context)}]`;
+    return `[prop] ${this.name}: [${this.items!.getValue(context)}] (Array)`;
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {

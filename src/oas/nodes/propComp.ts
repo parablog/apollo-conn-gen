@@ -20,8 +20,8 @@ export class PropComp extends Prop {
   }
 
   public forPrompt(_context: OasContext): string {
-    const type: string = this.schema.oneOf ? 'One Of' : this.schema.allOf ? 'All Of' : 'Unknown';
-    return _.lowerFirst(this.name) + ': ' + Naming.getRefName(this.comp!.name) + ` (${type})`;
+    const type: string = this.schema.oneOf ? 'Union' : this.schema.allOf ? 'Composed' : 'Unknown';
+    return '[prop] ' + _.lowerFirst(this.name) + ': ' + Naming.getRefName(this.comp!.name) + ` (${type})`;
   }
 
   get id(): string {

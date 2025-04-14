@@ -27,7 +27,7 @@ export class PropObj extends Prop {
   }
 
   public forPrompt(_context: OasContext): string {
-    return _.lowerFirst(this.name) + ': ' + Naming.getRefName(this.obj.name) + ' (Obj)';
+    return '[prop] ' + _.lowerFirst(this.name) + ': ' + Naming.getRefName(this.obj.name) + ' (Obj)';
   }
 
   get id(): string {

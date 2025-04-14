@@ -35,7 +35,7 @@ export class Arr extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `${Naming.getRefName(this.name)} (Array)`;
+    return `[array] ${Naming.getRefName(this.name)}`;
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {

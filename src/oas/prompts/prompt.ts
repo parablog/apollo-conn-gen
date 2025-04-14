@@ -64,6 +64,8 @@ const baseTheme: CustomTheme = {
 
     if (isLeaf) {
       line = context.selected.includes(item.path()) ? `${figures.radioOn} ${line}` : `${figures.radioOff} ${line}`;
+    } else {
+      line = `  ${line}`; // leave a space
     }
 
     line = `${linePrefix} ${line}`;

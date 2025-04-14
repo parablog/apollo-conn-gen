@@ -27,7 +27,7 @@ export class Ref extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `${Naming.getRefName(this.name)} (Ref)`;
+    return `[ref] ${Naming.getRefName(this.name)}`;
   }
 
   public visit(context: OasContext): void {

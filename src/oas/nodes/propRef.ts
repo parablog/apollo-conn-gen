@@ -75,7 +75,7 @@ export class PropRef extends Prop {
   }
 
   public forPrompt(context: OasContext): string {
-    return `${this.name}: ${Naming.getRefName(this.ref)} (Ref)`;
+    return `[prop] ${this.name}: ${Naming.getRefName(this.ref)} (Ref)`;
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {

@@ -18,7 +18,6 @@ export class Union extends Type {
   ) {
     super(parent, name);
     this.schemas = schemas;
-    this.discriminator = _.get((parent as Prop).schema, 'discriminator')?.propertyName;
     this.updateName();
   }
 
@@ -27,7 +26,7 @@ export class Union extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `${Naming.getRefName(this.name)} (Union)`;
+    return `[union] ${Naming.getRefName(this.name)}`;
   }
 
   public visit(context: OasContext): void {
@@ -179,20 +178,33 @@ export class Union extends Type {
       for (const prop of _.isEmpty(selection)
         ? Array.from(node.props.values()) // include all
         : Array.from(node.props.values())
-            .filter((i) => selection.find((s) => s.startsWith(i.path()))) // include selected only
+            // include selected only
+            .filter((i) => selection.find((s) => s.startsWith(i.path())))
+            // remove discriminator props
             .filter((i) => i.name !== discriminator)) {
-        // remove discriminator props
         // rename every prop there is if there's a conflict, then add it to props
         this.updatePropName(prop, props, selection);
         props.push(prop);
       }
 
       // find the other containers and add them to the queue
-      queue.push(...T.containers(node));
+      const containers = T.containers(node);
+      const filtered = containers.filter((c) => !queue.some((n) => n.id === c.id));
+      // .filter(c => {
+      //   console.log('checking...', c.name)
+      //   return !queue.find(n => {
+      //     console.log('isEqual', n.name, c.name,)
+      //     return _.isEqual(n, c);
+      //   });
+      // });
+
+      queue.push(...filtered);
     }
 
     // add the discriminator, if we have one
-    if (discriminator) props.push(this.children[0].props.get(discriminator)!);
+    if (discriminator) {
+      props.push(this.children[0].props.get(discriminator)!);
+    }
 
     // and finally sort the props and copy them to our original
     props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
@@ -220,8 +232,12 @@ export class Union extends Type {
   }
 
   private visitProperties(_context: OasContext): void {
+    const children: IType[] = this.children.map((child) =>
+      child.id.startsWith('ref:') ? (child as Ref).refType : child,
+    );
+
     // do nothing?
-    const ids: Set<string> = new Set();
+    /*const ids: Set<string> = new Set();
     const props: Prop[] = [];
     const discriminator = this.discriminator;
 
@@ -248,7 +264,7 @@ export class Union extends Type {
     if (discriminator) props.push(this.children[0].props.get(discriminator)!);
 
     // and finally sort the props and copy them to our original
-    props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
+    props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));*/
   }
 
   private updateName(): void {

@@ -22,7 +22,7 @@ export class Composed extends Type {
   }
 
   public forPrompt(_context: OasContext): string {
-    return `${Naming.getRefName(this.name)} (Comp)`;
+    return `[comp] ${Naming.getRefName(this.name)}`;
   }
 
   public visit(context: OasContext): void {
