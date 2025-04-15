@@ -40,8 +40,14 @@ export class PropScalar extends Prop {
     return this.type;
   }
 
-  public forPrompt(_context: OasContext): string {
-    return `[prop] ${this.name}: ${this.type}`;
+  public forPrompt(context: OasContext): string {
+    let result = `[prop] ${this.name}: ${this.type}`;
+
+    if (context.generateOptions.debugParentInSelection) {
+      result = result + ` (${Naming.getRefName(this.parent!.name)})`;
+    }
+
+    return result;
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {

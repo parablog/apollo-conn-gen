@@ -27,8 +27,8 @@ export class OasContext {
     this.parser = parser;
     this.indent = 0;
     this.generateOptions = {
-      consolidateUnion: true, // by default, we consolidate fields until unions are supported
-      debugParentInSelection: false, // by default, we don't show where the fields are coming from
+      consolidateUnion: false, // by default, we consolidate fields until unions are supported
+      debugParentInSelection: true, // by default, we don't show where the fields are coming from
     };
   }
 

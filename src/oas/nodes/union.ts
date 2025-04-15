@@ -1,4 +1,4 @@
-import { Factory, IType, Prop, Ref, T, Type } from './internal.js';
+import { Composed, Factory, Get, IType, Prop, Ref, Response, T, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -75,16 +75,22 @@ export class Union extends Type {
         child.generate(context, writer, selection);
       }
     }
+    else if (context.inContextOf('Response', this)) {
+      writer.append(Naming.genTypeName(this.name));
+      return;
+    }
     // generate traditional union
     else {
       const name = _.upperFirst(Naming.getRefName(this.name));
 
       if (!context.generateOptions.consolidateUnion) {
-        this.children.forEach((child) => {
+        /*this.children.forEach((child) => {
           if (child instanceof Ref) {
             (child as Ref).refType?.generate(context, writer, selection);
-          } else child.generate(context, writer, selection);
-        });
+          } else {
+            child.generate(context, writer, selection);
+          }
+        });*/
 
         // const selected = this.selectedProps(selection);
         writer
@@ -94,7 +100,8 @@ export class Union extends Type {
           .append(' = ')
           .append(this.children.map((child) => Naming.getRefName(child.name)).join(' | '))
           .append('\n\n');
-      } else {
+      }
+      else {
         // When generating this union in GQL it might look like:
         // union MyUnion = Type1 | Type2 | Type3
         writer.append('#### NOT SUPPORTED YET BY CONNECTORS!!! union ').append(name).append(' = ');
@@ -164,11 +171,15 @@ export class Union extends Type {
   }
 
   public consolidate(selection: string[]): Set<string> {
+    T.composables(this).forEach((child) => {
+      (child as (Composed)).consolidate(selection);
+    });
+
     const ids: Set<string> = new Set();
     const props: Prop[] = [];
     const discriminator = this.discriminator;
 
-    const queue = T.containers(this);
+    /*const queue = T.containers(this);
     while (queue.length > 0) {
       const node = queue.shift()!;
       ids.add(node.id);
@@ -190,24 +201,32 @@ export class Union extends Type {
       // find the other containers and add them to the queue
       const containers = T.containers(node);
       const filtered = containers.filter((c) => !queue.some((n) => n.id === c.id));
-      // .filter(c => {
-      //   console.log('checking...', c.name)
-      //   return !queue.find(n => {
-      //     console.log('isEqual', n.name, c.name,)
-      //     return _.isEqual(n, c);
-      //   });
-      // });
 
       queue.push(...filtered);
-    }
+    }*/
 
     // add the discriminator, if we have one
     if (discriminator) {
-      props.push(this.children[0].props.get(discriminator)!);
+      const prop = this.children
+        .map((child) => {
+          return child.props.get(discriminator);
+        })
+        .find((prop) => {
+          return prop !== undefined;
+        });
+
+      if (prop) {
+        props.push(prop);
+      }
+      // props.push(this.children[0].props.get(discriminator)!);
     }
 
     // and finally sort the props and copy them to our original
-    props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
+    props.sort((a, b) => {
+      return a.name.localeCompare(b.name);
+    }).forEach((prop) => {
+      this.props.set(prop.name, prop);
+    });
 
     // and return the types.ts we've used
     this.consolidated = true;
@@ -232,9 +251,9 @@ export class Union extends Type {
   }
 
   private visitProperties(_context: OasContext): void {
-    const children: IType[] = this.children.map((child) =>
-      child.id.startsWith('ref:') ? (child as Ref).refType : child,
-    );
+    // const children: IType[] = this.children.map((child) =>
+    //   child.id.startsWith('ref:') ? (child as Ref).refType : child,
+    // );
 
     // do nothing?
     /*const ids: Set<string> = new Set();
@@ -268,6 +287,15 @@ export class Union extends Type {
   }
 
   private updateName(): void {
-    this.name = this.parent!.name + `Union`;
+    let name = this.name;
+    if (this.parent instanceof Response) {
+      const op = this.parent!.parent as Get;
+      name = op.getGqlOpName() + 'Response';
+    } else {
+      name = this.parent!.name + `Union`;
+    }
+
+    this.name = name;
   }
+
 }

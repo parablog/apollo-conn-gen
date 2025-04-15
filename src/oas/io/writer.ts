@@ -124,33 +124,26 @@ export class Writer {
         last = current;
 
         collection = Array.from(current!.children.values()) || Array.from(current!.props.values()) || [];
-
         i++;
       } while (i < parts.length);
 
       if (current && !(current instanceof Scalar)) {
         // TODO: this seems redundant, we've already walked the parent AND can be also contained in the context stack
         const parentType = Writer.findNonPropParent(current as IType);
-
         if (!pendingTypes.has(parentType.id)) {
           pendingTypes.set(parentType.id, parentType);
         }
 
-        parentType
-          .ancestors()
+        // add all ancestors (of the parent of the prop) that are containers so they are generated accordingly
+        parentType.ancestors()
           .filter((t) => !pendingTypes.has(t.id) && this.isContainer(t))
-          .forEach((dep) => {
-            // TODO: potential merge needed?
-            pendingTypes.set(dep.id, dep);
-          });
+          .forEach((dep) => pendingTypes.set(dep.id, dep));
       }
     }
 
-    // TODO: do we need to do the same for the pending inputs?
-    // if (!_.isEmpty(pendingTypes)) {
     // first pass is to consolidate all Composed & Union nodes
-    const composed: Array<Composed | Union> = Array.from(pendingTypes.values())
-      .filter((t) => t instanceof Composed || t instanceof Union)
+    const composed: Array<Composed> = Array.from(pendingTypes.values())
+      .filter((t) => t instanceof Composed)
       .map((t) => t as Composed);
 
     const context = this.generator.context!;

@@ -1,0 +1,43 @@
+openapi: "3.0.1"
+info:
+  title: Inline AllOf Example API
+  version: "1.0.0"
+paths:
+  /product:
+    get:
+      summary: Retrieve a product with inline properties.
+      responses:
+        '200':
+          description: A product that is the combination of multiple inline object definitions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                    required: [id, name]
+                  - type: object
+                    properties:
+                      price:
+                        type: number
+                      currency:
+                        type: string
+                    required: [price, currency]
+                  - type: object
+                    properties:
+                      inStock:
+                        type: boolean
+                    required: [inStock]
+              examples:
+                productExample:
+                  summary: An example product with inline allOf.
+                  value:
+                    id: 1001
+                    name: "Super Gadget"
+                    price: 99.99
+                    currency: "USD"
+                    inStock: true

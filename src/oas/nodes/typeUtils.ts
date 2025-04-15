@@ -1,4 +1,4 @@
-import { CircularRef, En, Obj, Prop, PropArray, PropScalar, Ref, Scalar } from './internal.js';
+import { CircularRef, Composed, En, Obj, Prop, PropArray, PropScalar, Ref, Scalar, Union } from './internal.js';
 
 import { IType } from './internal.js';
 import _ from 'lodash';
@@ -49,4 +49,27 @@ export class T {
       .filter((child) => !(child instanceof Prop))
       .map((child) => (child.id.startsWith('ref:') ? (child as Ref).refType! : child));
   }
+
+  static composables(node: IType): IType[] {
+    return _.filter(T.containers(node), e => e.id.startsWith('comp:')) // || e.id.startsWith('union:'));
+    // return T.containers(node)
+    //   .mat((t) => t instanceof Composed || t instanceof Union);
+  }
+
+  public static print(node: IType, prefix: string = '', isLast: boolean = true): string {
+    // Build the current line with the appropriate connector.
+    const connector = prefix === '' ? '' : (isLast ? '└─ ' : '├─ ');
+    let result = prefix + connector + node.id + '\n';
+
+    // Prepare the prefix for the children.
+    const childPrefix = prefix + (isLast ? '    ' : '│   ');
+
+    node.children.forEach((child, index) => {
+      const last = index === node.children.length - 1;
+      result += T.print(child, childPrefix, last);
+    });
+
+    return result;
+  }
+
 }

@@ -1,10 +1,11 @@
-import { Factory, IType, Prop, Ref, ReferenceObject, Type, Union } from './internal.js';
+import { Factory, Get, IType, Prop, Ref, ReferenceObject, Response, Type, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import _ from 'lodash';
 
 export class Composed extends Type {
   constructor(
@@ -14,6 +15,7 @@ export class Composed extends Type {
     public consolidated: boolean = false,
   ) {
     super(parent, name);
+    this.updateName();
   }
 
   get id(): string {
@@ -35,7 +37,7 @@ export class Composed extends Type {
 
     // If not in the context of a Composed or Param, log the composed schema.
     if (!context.inContextOf('Composed', this) && !context.inContextOf('Param', this)) {
-      trace(context, '[comp]', 'In composed schema: ' + this.name);
+      trace(context, '[comp]', '   in composed schema: ' + this.name);
     }
 
     const composedSchema = this.schema;
@@ -63,6 +65,11 @@ export class Composed extends Type {
     context.enter(this);
     trace(context, '-> [comp::generate]', `-> in: ${this.name}`);
 
+    if (context.inContextOf('Response', this)) {
+      writer.append(Naming.genTypeName(this.name));
+      return;
+    }
+
     const composedSchema = this.schema;
     if (composedSchema.oneOf != null) {
       if (this.children.length > 0) {
@@ -74,7 +81,7 @@ export class Composed extends Type {
       if (selected.length > 0) {
         // writer.write('type ');
         writer.write(this.kind + ' ');
-        writer.write(Naming.getRefName(this.name));
+        writer.write(_.upperFirst(Naming.getRefName(this.name)));
         writer.append(this.nameSuffix());
         writer.write(' {\n');
 
@@ -140,7 +147,6 @@ export class Composed extends Type {
       props = new Map([...props.entries()].sort());
 
       const children = Array.from(node.children.values()).filter((child) => !(child instanceof Prop));
-
       queue.push(...children);
     }
 
@@ -170,7 +176,6 @@ export class Composed extends Type {
       }
     }
 
-    trace(context, '-> [composed]', 'storing: ' + this.name + ' with: ' + this);
     context.store(this.name, this);
     trace(context, '<- [composed::all-of]', `out: '${this.name}' of: ${allOfs.length} - refs: ${refs}`);
   }
@@ -192,5 +197,42 @@ export class Composed extends Type {
     }
 
     trace(context, '<- [composed::one-of]', `out: OneOf ${this.name} with size: ${oneOfs.length}`);
+  }
+
+
+  add(child: IType) {
+    let name = child.name;
+    let idx = 0;
+
+    // TODO: this should not be applicable to Refs
+    while (this.children.some((c) => c.name === name)) {
+      name = `${child.name}${++idx}`;
+    }
+
+    child.name = name;
+    super.add(child);
+
+
+    /*let idx = -1;
+    let name = child.name;
+    while ((idx = _.findIndex(this.children, c => c.id === child.id)) > -1) {
+      name = child.name + (++idx)
+    }
+
+    super.add(child);*/
+  }
+
+  private updateName(): void {
+    let name = this.name;
+
+    if (this.parent instanceof Response) {
+      const op = this.parent!.parent as Get;
+      name = op.getGqlOpName() + 'Response';
+    }
+    else if (this.parent instanceof Composed) {
+      name = this.parent!.name + 'AllOf';
+    }
+
+    this.name = name;
   }
 }

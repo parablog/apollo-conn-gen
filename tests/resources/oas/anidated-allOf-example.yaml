@@ -1,0 +1,67 @@
+openapi: '3.0.1'
+info:
+  title: Nested AllOf Example API
+  version: '1.0.0'
+paths:
+  /pet:
+    get:
+      summary: Retrieve a pet with detailed features.
+      responses:
+        '200':
+          description: A pet composed using nested allOf constructs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PetBase'
+                  - allOf:
+                      - $ref: '#/components/schemas/AnimalDetails'
+                      - allOf:
+                          - $ref: '#/components/schemas/MammalFeatures'
+                          - $ref: '#/components/schemas/Domestication'
+              examples:
+                petExample:
+                  summary: Example of a domestic mammal pet.
+                  value:
+                    id: 1
+                    name: 'Buddy'
+                    species: 'Dog'
+                    age: 5
+                    sound: 'Bark'
+                    owner: 'Alice'
+components:
+  schemas:
+    PetBase:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        species:
+          type: string
+      required:
+        - id
+        - name
+        - species
+    AnimalDetails:
+      type: object
+      properties:
+        age:
+          type: integer
+      required:
+        - age
+    MammalFeatures:
+      type: object
+      properties:
+        sound:
+          type: string
+      required:
+        - sound
+    Domestication:
+      type: object
+      properties:
+        owner:
+          type: string
+      required:
+        - owner

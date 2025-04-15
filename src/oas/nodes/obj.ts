@@ -1,4 +1,4 @@
-import { Body, IType, Post, Type } from './internal.js';
+import { Body, Composed, IType, Post, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -128,10 +128,15 @@ export class Obj extends Type {
       // if the parent is an object then we can use the parent name
       else if (parent instanceof Obj) {
         name = parentName + 'Obj';
+
+      }
+      // rename if composed & anonymous
+      else if (parent instanceof Composed) {
+        name = parentName + 'AllOf';
       }
       // extreme case -- we synthesize an anonymous name
       else {
-        name = `[anonymous:${this.parent!.name}]`;
+        name = `[inline:${this.parent!.name}]`;
       }
     }
 

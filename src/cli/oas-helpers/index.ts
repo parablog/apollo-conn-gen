@@ -27,10 +27,9 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
 
     let result: IType[];
 
-    if (type instanceof Composed || type instanceof Union) {
+    if (type instanceof Composed) {
       // make sure we gather all the props
-      (type as Composed | Union).consolidate([]);
-
+      (type as Composed).consolidate([]);
       result = Array.from(type.props.values());
     } else {
       /*

@@ -1,0 +1,65 @@
+openapi: "3.0.1"
+info:
+  title: Media Item API
+  version: "1.0.0"
+paths:
+  /item:
+    get:
+      summary: Retrieve a media item.
+      responses:
+        '200':
+          description: A media item, which can be either a Book or a Movie.
+          content:
+            application/json:
+              schema:
+                discriminator:
+                  propertyName: type
+                  mapping:
+                    book: "#/components/schemas/Book"
+                    movie: "#/components/schemas/Movie"
+                oneOf:
+                  - $ref: '#/components/schemas/Book'
+                  - $ref: '#/components/schemas/Movie'
+              examples:
+                bookExample:
+                  summary: An example Book item
+                  value:
+                    id: 101
+                    type: "book"
+                    title: "Example Book Title"
+                    author: "Jane Doe"
+                movieExample:
+                  summary: An example Movie item
+                  value:
+                    id: 202
+                    type: "movie"
+                    title: "Example Movie Title"
+                    director: "John Smith"
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: ["book"]
+        title:
+          type: string
+        author:
+          type: string
+      required: [id, type, title, author]
+    Movie:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: ["movie"]
+        title:
+          type: string
+        director:
+          type: string
+      required: [id, type, title, director]

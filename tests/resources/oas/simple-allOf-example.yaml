@@ -1,0 +1,57 @@
+openapi: 3.0.3
+info:
+  title: AllOf Example API
+  version: 1.0.0
+paths:
+  /user:
+    get:
+      summary: Get a user
+      responses:
+        '200':
+          description: A user object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: "123"
+                username: "johndoe"
+                city: "New York"
+                country: "USA"
+                email: "johndoe@example.com"
+
+components:
+  schemas:
+    BaseUser:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+      required:
+        - id
+        - username
+
+    Address:
+      type: object
+      properties:
+        city:
+          type: string
+        country:
+          type: string
+      required:
+        - city
+        - country
+
+    User:
+      allOf:
+        - $ref: '#/components/schemas/BaseUser'
+        - $ref: '#/components/schemas/Address'
+        - type: object
+          properties:
+            email:
+              type: string
+              format: email
+          required:
+            - email

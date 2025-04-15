@@ -688,4 +688,27 @@ test('test_036_time-series', async () => {
   await runOasTest('time-series-1.0.28.yaml', paths, 1, 12);
 });
 
+test('test_inline-allOf-example', async () => {
+  const paths = [
+    'get:/product>res:r>comp:type:productResponse>obj:type:productResponseComp1>prop:scalar:currency',
+    'get:/product>res:r>comp:type:productResponse>obj:type:productResponseComp>prop:scalar:id',
+    'get:/product>res:r>comp:type:productResponse>obj:type:productResponseComp2>prop:scalar:inStock',
+    'get:/product>res:r>comp:type:productResponse>obj:type:productResponseComp>prop:scalar:name',
+    'get:/product>res:r>comp:type:productResponse>obj:type:productResponseComp1>prop:scalar:price',
+  ];
 
+  await runOasTest('inline-allOf-example.yaml', paths, 1, 4);
+});
+
+test('test_anidated-allOf-example', async () => {
+  const paths = [
+    "get:/pet>res:r>comp:type:petResponse>comp:type:petResponseAllOf>ref:#/c/s/AnimalDetails>obj:type:#/c/s/AnimalDetails>prop:scalar:age",
+    "get:/pet>res:r>comp:type:petResponse>ref:#/c/s/PetBase>obj:type:#/c/s/PetBase>prop:scalar:id",
+    "get:/pet>res:r>comp:type:petResponse>ref:#/c/s/PetBase>obj:type:#/c/s/PetBase>prop:scalar:name",
+    "get:/pet>res:r>comp:type:petResponse>comp:type:petResponseAllOf>comp:type:petResponseAllOfAllOf>ref:#/c/s/Domestication>obj:type:#/c/s/Domestication>prop:scalar:owner",
+    "get:/pet>res:r>comp:type:petResponse>comp:type:petResponseAllOf>comp:type:petResponseAllOfAllOf>ref:#/c/s/MammalFeatures>obj:type:#/c/s/MammalFeatures>prop:scalar:sound",
+    "get:/pet>res:r>comp:type:petResponse>ref:#/c/s/PetBase>obj:type:#/c/s/PetBase>prop:scalar:species"
+  ];
+
+  await runOasTest('anidated-allOf-example.yaml', paths, 1, 7);
+});
