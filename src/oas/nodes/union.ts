@@ -56,6 +56,9 @@ export class Union extends Type {
 
     if (this.name != null) {
       context.store(this.name, this);
+      if (context.generateOptions.consolidateUnion) {
+        this.children.forEach(child => context.generatedSet.add(child.id))
+      }
     }
 
     this.visited = true;
@@ -85,7 +88,8 @@ export class Union extends Type {
 
       if (context.generateOptions.consolidateUnion) {
         if (!this.consolidated) {
-          this.consolidate(selection);
+          // add to generated set
+          this.consolidate(selection).forEach(id => context.generatedSet.add(id))
         }
 
         // When generating this union in GQL it might look like:
@@ -113,10 +117,6 @@ export class Union extends Type {
         }
 
         writer.append('} \n### End replacement for ').append(this.name).append('\n\n');
-
-        // add to generated set
-        this.children.forEach(child => context.generatedSet.add(child.id))
-
       } else {
         // const selected = this.selectedProps(selection);
         writer
@@ -170,9 +170,9 @@ export class Union extends Type {
   }
 
   public consolidate(selection: string[]): Set<string> {
-    /*T.composables(this).forEach((child) => {
+    T.composables(this).forEach((child) => {
       (child as (Composed)).consolidate(selection);
-    });*/
+    });
 
     const ids: Set<string> = new Set();
     const props: Prop[] = [];
@@ -199,6 +199,15 @@ export class Union extends Type {
 
     // and return the types.ts we've used
     this.consolidated = true;
+
+    // now remove every added ID
+    const queue: IType[] = Array.from(this.children.values());
+    while (queue.length > 0) {
+      const node = queue.shift()!;
+      T.containers(node).forEach(c => ids.add(c.id))
+      queue.push(...node.children)
+    }
+
     return ids;
   }
 

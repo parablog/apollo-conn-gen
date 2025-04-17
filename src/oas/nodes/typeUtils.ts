@@ -56,7 +56,7 @@ export class T {
 
   public static containers(node: IType) {
     return Array.from(node.children.values())
-      .filter((child) => !(child instanceof Prop))
+      .filter((child) => !(child instanceof Prop) && T.isContainer(child))
       .map((child) => child);
   }
 
