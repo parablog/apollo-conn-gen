@@ -4,7 +4,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 
-export class Response extends Type {
+export class Res extends Type {
   public schema: SchemaObject;
   public response?: IType;
 

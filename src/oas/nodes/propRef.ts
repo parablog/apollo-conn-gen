@@ -1,6 +1,5 @@
 import { OasContext } from '../oasContext.js';
-import { Arr, CircularRef, Composed, Factory, IType, Obj, Union } from './internal.js';
-import { Prop } from './internal.js';
+import { Arr, Prop, Composed, Factory, IType, Obj, Union } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';

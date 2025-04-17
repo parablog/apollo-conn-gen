@@ -22,7 +22,7 @@ import type { PartialDeep } from '@inquirer/type';
 import _ from 'lodash';
 
 import { OasContext } from '../oasContext.js';
-import { T, Composed, PropCircRef } from '../nodes/internal.js';
+import { T, Composed, PropCircRef, CircularRef } from '../nodes/internal.js';
 import { getMaxLength, isEscapeKey } from './base/utils.js';
 import { CustomTheme, RenderContext } from './theme.js';
 import { IType } from '../nodes/internal.js';
@@ -73,7 +73,7 @@ const baseTheme: CustomTheme = {
     const baseColor = !isLeaf ? this.style.directory : this.style.file;
     const color = context.isActive ? this.style.active : baseColor;
 
-    const isDisabled = item instanceof PropCircRef;
+    const isDisabled = item instanceof PropCircRef || item instanceof CircularRef;
     return isDisabled ? this.style.disabled(`${line} ${this.labels.disabled}`) : color(line);
   },
 };
@@ -137,13 +137,8 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
     if (isEnterKey(key)) {
       setStatus('done');
       done(selected);
-    }
-    else if (isDumpKey(key)) {
-      if (current)
-        console.info(T.print(current.ancestors()[0]))
-    }
-    else if (isSelectKey(key)) {
-      if (activeItem instanceof PropCircRef) {
+    } else if (isSelectKey(key)) {
+      if (activeItem instanceof PropCircRef || activeItem instanceof CircularRef) {
         return;
       }
 
@@ -168,6 +163,9 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
           .map((child) => child.path()) ?? [];
 
       setSelected(selected.filter((path) => !filtered.includes(path)));
+    } else if (isDumpKey(key)) {
+      if (current)
+        console.info(T.print(current.ancestors()[0]))
     } else {
       const isLeaf = T.isLeaf(activeItem);
 

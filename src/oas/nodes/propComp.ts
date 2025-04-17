@@ -1,5 +1,4 @@
-import { IType, Obj, Union } from './internal.js';
-import { Prop } from './prop.js';
+import { IType, Obj, Union, Prop } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
@@ -84,7 +83,8 @@ export class PropComp extends Prop {
   }
 
   private needsBrackets(child: IType): boolean {
-    return child instanceof Union ||
-      (child instanceof Obj || child instanceof Composed && !_.isEmpty(child.props));
+    return child instanceof Union
+      || child instanceof Composed
+      || (child instanceof Obj && !_.isEmpty(child.props));
   }
 }

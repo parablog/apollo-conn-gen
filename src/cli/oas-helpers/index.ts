@@ -1,9 +1,8 @@
 /// internal functions
 import fs from 'fs';
-import { Ref, Type, Union, IType, Composed, Post } from '../../oas/nodes/internal.js';
+import { Type, IType, Composed } from '../../oas/nodes/internal.js';
 import { OasGen } from '../../oas/oasGen.js';
 import { typesPrompt } from '../../oas/prompts/prompt.js';
-import _ from 'lodash';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function generateFromSelection(opts: any, gen: OasGen) {
@@ -53,9 +52,9 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
           child.visit(gen.context!);
         }
 
-        if (child instanceof Ref) {
+        /*if (child instanceof Ref) {
           result = [child.refType!];
-        }
+        }*/
       }
     }
 

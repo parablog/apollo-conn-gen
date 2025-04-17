@@ -1,23 +1,16 @@
-import { Prop } from './prop.js';
-import { IType } from './iType.js';
-import { En } from './en.js';
+import { SchemaObject } from 'oas/types';
+import { IType, Prop } from './internal.js';
 import { Writer } from '../io/writer.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { trace } from '../log/trace.js';
 
 export class PropEn extends Prop {
-  private en: En;
   private type: string;
 
-  dependencies(): IType[] {
-    return [this.en];
-  }
-
-  constructor(parent: IType, name: string, type: string, en: En) {
-    super(parent, name, en.schema);
+  constructor(parent: IType, name: string, type: string, schema: SchemaObject) {
+    super(parent, name, schema);
     this.type = type;
-    this.en = en;
   }
 
   get id(): string {
@@ -33,11 +26,15 @@ export class PropEn extends Prop {
   }
 
   public forPrompt(context: OasContext): string {
-    throw new Error('Method not implemented.');
+    return `[prop] enum: ${Naming.getRefName(this.type)}`;
   }
 
   public getValue(_context: OasContext): string {
     return Naming.getRefName(this.type);
+  }
+
+  dependencies(): IType[] {
+    return Array.from(this.children.values());
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {

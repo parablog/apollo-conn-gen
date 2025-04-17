@@ -1,4 +1,4 @@
-import { Factory, Get, IType, Prop, Ref, ReferenceObject, Response, T, Type, Union } from './internal.js';
+import { Factory, Get, IType, Prop, ReferenceObject, Res, T, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';
@@ -65,7 +65,7 @@ export class Composed extends Type {
     context.enter(this);
     trace(context, '-> [comp::generate]', `-> in: ${this.name}`);
 
-    if (context.inContextOf('Response', this)) {
+    if (context.inContextOf('Res', this)) {
       writer.append(Naming.genTypeName(this.name));
       return;
     }
@@ -123,9 +123,9 @@ export class Composed extends Type {
   }
 
   public consolidate(selection: string[]): Set<string> {
-    T.composables(this).forEach((child) => {
+    /*T.composables(this).forEach((child) => {
       (child as (Composed)).consolidate(selection);
-    });
+    });*/
 
     const ids: Set<string> = new Set();
     let props: Map<string, Prop> = new Map();
@@ -135,8 +135,7 @@ export class Composed extends Type {
 
     while (queue.length > 0) {
       const node = queue.shift()!;
-
-      ids.add(node instanceof Ref ? (node as Ref).refType!.id : node.id);
+      ids.add(node.id)
 
       if (selection.length > 0) {
         node.props.forEach((prop) => {
@@ -225,7 +224,7 @@ export class Composed extends Type {
     let name = this.name;
 
     if (!name) {
-      if (this.parent instanceof Response) {
+      if (this.parent instanceof Res) {
         const op = this.parent!.parent as Get;
         name = op.getGqlOpName() + 'Response';
       } else {

@@ -1,9 +1,8 @@
-import { IType, Kind } from './internal.js';
+import { IType, Kind, Prop } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Factory } from './factory.js';
-import { Prop } from './internal.js';
 
 export abstract class Type implements IType {
   public parent?: IType;
@@ -104,8 +103,21 @@ export abstract class Type implements IType {
   }
 
   public add(child: IType): IType {
-    this.children.push(child);
-    return child;
+    const paths: IType[] = this.ancestors();
+    const contains: boolean = paths.map((p) => p.id).includes(child.id);
+    let pushed = child;
+
+    if (contains) {
+      trace(null, '-> [type:add]', 'already contains child: ' + child.id);
+      const ancestor: IType = paths[paths.map((p) => p.id).indexOf(child.id)];
+      const wrapper = Factory.fromCircularRef(this, ancestor);
+      this.children.push(wrapper);
+      pushed = wrapper;
+    } else {
+      this.children.push(child);
+    }
+
+    return pushed;
   }
 
   public selectedProps(selection: string[]) {

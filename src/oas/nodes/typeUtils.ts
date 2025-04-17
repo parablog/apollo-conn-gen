@@ -1,10 +1,11 @@
 import {
+  CircularRef,
   En,
   Obj,
   Prop,
   PropArray,
+  PropEn,
   PropScalar,
-  Ref,
   Scalar,
 } from './internal.js';
 
@@ -17,6 +18,8 @@ export class T {
       type instanceof Scalar ||
       type instanceof PropScalar ||
       type instanceof En ||
+      type instanceof PropEn ||
+      type instanceof CircularRef ||
       (type instanceof PropArray && type.items instanceof Scalar) ||
       (type instanceof Obj && _.isEmpty(type.props))
     );
@@ -54,7 +57,7 @@ export class T {
   public static containers(node: IType) {
     return Array.from(node.children.values())
       .filter((child) => !(child instanceof Prop))
-      .map((child) => (child.id.startsWith('ref:') ? (child as Ref).refType! : child));
+      .map((child) => child);
   }
 
   public static isContainer(node: IType): boolean {
@@ -62,7 +65,7 @@ export class T {
   }
 
   static composables(node: IType): IType[] {
-    return _.filter(T.containers(node), e => e.id.startsWith('comp:')) // || e.id.startsWith('union:'));
+    return _.filter(T.containers(node), (e: IType) => e.id.startsWith('comp:')) // || e.id.startsWith('union:'));
   }
 
   public static print(node: IType, prefix: string = '', isLast: boolean = true): string {

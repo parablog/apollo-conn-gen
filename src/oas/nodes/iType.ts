@@ -1,4 +1,4 @@
-import { Prop } from './prop.js';
+import { Prop } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 

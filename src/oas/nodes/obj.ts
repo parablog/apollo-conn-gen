@@ -1,16 +1,11 @@
-import { Body, Composed, IType, Post, Type } from './internal.js';
+import { Arr, Body, Factory, Get, IType, PropArray, Type, Res } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import { Arr } from './arr.js';
-import { Factory } from './factory.js';
-import { Get } from './get.js';
-import { PropArray } from './propArray.js';
-import { Ref } from './ref.js';
-import { Response } from './response.js';
-import _, { isArray } from 'lodash';
+
+import _ from 'lodash';
 
 export class Obj extends Type {
   synthetic: boolean = false;
@@ -60,7 +55,7 @@ export class Obj extends Type {
       return;
     }
 
-    if (context.inContextOf('Response', this)) {
+    if (context.inContextOf('Res', this)) {
       writer.append(Naming.genTypeName(this.name));
       return;
     }
@@ -144,17 +139,13 @@ export class Obj extends Type {
       const parent = this.parent;
       const parentName = parent!.name;
 
-      // if the parent is a reference, we can use the name of the obj itself
-      if (parent instanceof Ref) {
-        name = parentName.replace('ref:', 'obj:');
-      }
-      // else is our parent an array?
-      else if (parent instanceof Arr || parent instanceof PropArray) {
+      // is our parent an array?
+      if (parent instanceof Arr || parent instanceof PropArray) {
         // if so, synthesize a name based on the parent name
         name = Naming.genTypeName(Naming.getRefName(parentName) + 'Item');
       }
       // if the parent is a response, we can use the operation name and append "Response"
-      else if (parent instanceof Response) {
+      else if (parent instanceof Res) {
         const op = parent.parent as Get;
         name = op.getGqlOpName() + 'Response';
       }

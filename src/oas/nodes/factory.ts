@@ -19,10 +19,11 @@ import {
   PropScalar,
   Put,
   ReferenceObject,
-  Response,
+  Res,
   Scalar,
   T,
   Union,
+  PropEn,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
@@ -32,7 +33,6 @@ import { warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { GqlUtils } from '../utils/gql.js';
 import { APOLLO_SYNTHETIC_OBJ } from '../schemas/index.js';
-import { PropEn } from './propEn.js';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
 export class Factory {
@@ -95,7 +95,7 @@ export class Factory {
         throw new Error(`Cannot handle property type ${typeStr}, schema: ${JSON.stringify(schema)}`);
       }
     } else if (schema?.enum != null) {
-      return new En(parent, 'enuum', schema, _.get(schema, 'enum') as string[]);
+      return new En(parent, 'enum', schema, _.get(schema, 'enum') as string[]);
     }
     // or we have no idea how to handle this
     else {
@@ -132,10 +132,10 @@ export class Factory {
     return result;
   }
 
-  private static createArrayType(parent: IType | Response, schema: SchemaObject | null, context: OasContext) {
+  private static createArrayType(parent: IType | Res, schema: SchemaObject | null, context: OasContext) {
     // Array schema case.
     let parentName = parent.name;
-    if (parent instanceof Response) {
+    if (parent instanceof Res) {
       const get = parent.parent as Get; // Assume parent.parent is a GetOp.
       parentName = _.upperFirst(get.getGqlOpName());
     }
@@ -209,7 +209,8 @@ export class Factory {
         const stringEnum = _.every(schemaObj.enum, (value: any, _: string) => typeof value === 'string');
         const en: En = new En(parent, ref, schemaObj, stringEnum ? schemaObj.enum as string[] : [])
 
-        prop = new PropEn(parent, propName, ref, en);
+        prop = new PropEn(parent, propName, ref, schemaObj);
+        prop.add(en);
       }
       // 3rd tries for scalar
       else if (GqlUtils.gqlScalar(type as string)) {
@@ -249,7 +250,7 @@ export class Factory {
   }
 
   public static fromResponse(_context: OasContext, parent: IType, mediaSchema: SchemaObject): IType {
-    return new Response(parent, 'r', mediaSchema);
+    return new Res(parent, 'r', mediaSchema);
   }
 
   public static fromParam(context: OasContext, parent: IType, p: ParameterObject | ReferenceObject): Param {

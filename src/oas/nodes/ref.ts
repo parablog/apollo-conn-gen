@@ -66,7 +66,7 @@ export class Ref extends Type {
 
     // If we're in a Response context and the resolved type is an Arr,
     // generate it with array notation.
-    if (context.inContextOf('Response', this) && this.refType instanceof Arr) {
+    if (context.inContextOf('Res', this) && this.refType instanceof Arr) {
       writer.append('[').append(this.firstChild().name).append(']');
     } else {
       // Rewrite terrible names to something more sensible.

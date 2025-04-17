@@ -130,8 +130,7 @@ export class OasGen {
   }
 
   private isSupported(pathItem: Record<HttpMethods, Webhook | Operation>) {
-    // return pathItem.get || pathItem.post || pathItem.put || pathItem.delete || pathItem.patch;
-    return pathItem.get;
+    return pathItem.get || pathItem.post || pathItem.put || pathItem.delete || pathItem.patch;
   }
 
   public getContext(): OasContext {
@@ -253,7 +252,6 @@ export class OasGen {
       paths.push(this.visitGet(context, name, pathItem.get as Webhook | Operation));
     }
 
-    /* TODO: enable this back
     if (pathItem.post !== undefined) {
       paths.push(this.visitPost(context, name, pathItem.post));
     }
@@ -268,7 +266,7 @@ export class OasGen {
 
     if (pathItem.delete !== undefined) {
       paths.push(this.visitDelete(context, name, pathItem.delete));
-    }*/
+    }
 
     return paths;
   }

@@ -1,4 +1,4 @@
-import { Composed, Factory, Get, IType, Prop, Ref, Response, T, Type } from './internal.js';
+import { Composed, Factory, Get, IType, Prop, Res, T, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -75,7 +75,7 @@ export class Union extends Type {
         child.generate(context, writer, selection);
       }
     }
-    else if (context.inContextOf('Response', this)) {
+    else if (context.inContextOf('Res', this)) {
       writer.append(Naming.genTypeName(this.name));
       return;
     }
@@ -170,129 +170,46 @@ export class Union extends Type {
   }
 
   public consolidate(selection: string[]): Set<string> {
-    T.composables(this).forEach((child) => {
+    /*T.composables(this).forEach((child) => {
       (child as (Composed)).consolidate(selection);
-    });
+    });*/
 
     const ids: Set<string> = new Set();
     const props: Prop[] = [];
     const discriminator = this.discriminator;
 
     this.children?.forEach((child) => {
+      ids.add(child.id)
       props.push(...child.props.values())
     })
 
-    /*const queue = T.containers(this);
-    while (queue.length > 0) {
-      const node = queue.shift()!;
-      ids.add(node.id);
-
-      // process each prop, renaming the ones that have a name clash with others. if a selection
-      // is passed, then only add those, otherwise add all.
-      for (const prop of _.isEmpty(selection)
-        ? Array.from(node.props.values()) // include all
-        : Array.from(node.props.values())
-            // include selected only
-            .filter((i) => selection.find((s) => s.startsWith(i.path())))
-            // remove discriminator props
-            .filter((i) => i.name !== discriminator)) {
-        // rename every prop there is if there's a conflict, then add it to props
-        this.updatePropName(prop, props, selection);
-        props.push(prop);
-      }
-
-      // find the other containers and add them to the queue
-      const containers = T.containers(node);
-      const filtered = containers.filter((c) => !queue.some((n) => n.id === c.id));
-
-      queue.push(...filtered);
-    }*/
-
     // add the discriminator, if we have one
     if (discriminator) {
-      const prop = this.children
-        .map((child) => {
-          return child.props.get(discriminator);
-        })
-        .find((prop) => {
-          return prop !== undefined;
-        });
+      const prop = (this.children || [])
+        .map((child) => child.props.get(discriminator))
+        .find((prop) => prop !== undefined);
 
-      if (prop) {
-        props.push(prop);
-      }
-      // props.push(this.children[0].props.get(discriminator)!);
+      if (prop) props.push(prop);
     }
 
     // and finally sort the props and copy them to our original
-    props.sort((a, b) => {
-      return a.name.localeCompare(b.name);
-    }).forEach((prop) => {
-      this.props.set(prop.name, prop);
-    });
+    props
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((prop) => this.props.set(prop.name, prop));
 
     // and return the types.ts we've used
     this.consolidated = true;
     return ids;
   }
 
-  /*private updatePropName(prop: Prop, props: Prop[], selection: string[] | undefined = undefined): void {
-    let name = prop.name;
-
-    let counter = 0;
-    while (props.find((p) => p.name === name)) {
-      name = `${prop.name}${++counter}`;
-    }
-
-    if (name !== prop.name) {
-      prop.name = name;
-      if (selection) {
-        // we need to extend the selection too, because a new property has been created
-        selection.push(prop.path());
-      }
-    }
-  }*/
-
   private visitProperties(_context: OasContext): void {
-    // const children: IType[] = this.children.map((child) =>
-    //   child.id.startsWith('ref:') ? (child as Ref).refType : child,
-    // );
-
-    // do nothing?
-    /*const ids: Set<string> = new Set();
-    const props: Prop[] = [];
-    const discriminator = this.discriminator;
-
-    const queue = T.containers(this);
-    while (queue.length > 0) {
-      const node = queue.shift()!;
-      ids.add(node.id);
-
-      // process each prop, renaming the ones that have a name clash with others. if a selection
-      // is passed, then only add those, otherwise add all.
-      for (const prop of Array.from(node.props.values()) // include all
-        // remove discriminator props
-        .filter((i) => i.name !== discriminator)) {
-        // rename every prop there is if there's a conflict, then add it to props
-        this.updatePropName(prop, props);
-        props.push(prop);
-      }
-
-      // find the other containers and add them to the queue
-      queue.push(...T.containers(node));
-    }
-
-    // add the discriminator, if we have one
-    if (discriminator) props.push(this.children[0].props.get(discriminator)!);
-
-    // and finally sort the props and copy them to our original
-    props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));*/
+    // TODO: pending
   }
 
   private updateName(): void {
     let name = this.name;
     if (!name) {
-      if (this.parent instanceof Response) {
+      if (this.parent instanceof Res) {
         const op = this.parent!.parent as Get;
         name = op.getGqlOpName() + 'Response';
       } else {

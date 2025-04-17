@@ -1,9 +1,8 @@
-import { Composed, Factory, IType, Obj, Prop, PropComp, PropObj, PropRef, Scalar, T, Union } from './internal.js';
+import { IType, Prop, T, Type } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import _ from 'lodash';
 
 export class PropArray extends Prop {
   public items?: IType;
@@ -37,35 +36,15 @@ export class PropArray extends Prop {
 
   public override getValue(context: OasContext): string {
     if (this.items && T.isContainer(this.items)) {
-      return `[${Naming.genTypeName(this.items?.name)}]`;
+      const type = Naming.genTypeName(this.items.name) + (this.items as Type).nameSuffix();
+      return `[${type}]`;
     }
 
     return `[${this.items!.name}]`;
   }
 
-/*  public add(child: IType): IType {
-    const paths: IType[] = this.ancestors();
-    const contains: boolean = paths.map((p) => p.id).includes(child.id);
-
-    trace(null, '-> [prop-array:add]', 'contains child? ' + contains);
-
-    let added: IType = child;
-    if (contains) {
-      const ancestor: IType = paths[paths.map((p) => p.id).indexOf(child.id)];
-      const wrapper: IType = Factory.fromCircularRef(this, ancestor);
-      added = super.add(wrapper);
-      this.visited = true;
-    } else {
-      added = super.add(child);
-    }
-    return added;
-  }*/
-
   public forPrompt(context: OasContext): string {
-    // return `[prop] ${this.name}: [${this.items!.getValue(context)}] (Array)`;
     if (this.items && T.isContainer(this.items)) {
-      // if (_.isEmpty(this.items?.props)) return 'JSON';// TODO: what do we do here
-      // return Naming.genTypeName(this.items?.name);
       return `[prop] ${this.name}: [${Naming.genTypeName(this.items?.name)}] (Array)`;
     }
 
@@ -112,6 +91,5 @@ export class PropArray extends Prop {
   public needsBrackets(child?: IType): boolean {
     if (!child) return false;
     return T.isContainer(child)
-    // return child instanceof Obj || child instanceof Composed || child instanceof Union; // // child instanceof PropRef ||
   }
 }

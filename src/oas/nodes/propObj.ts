@@ -1,5 +1,4 @@
-import { IType, Obj, Union } from './internal.js';
-import { Prop } from './internal.js';
+import { IType, Obj, Union, Prop } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
@@ -58,7 +57,7 @@ export class PropObj extends Prop {
     // compose for now.
     if (_.isEmpty(this.obj?.props)) return 'JSON';
 
-    return Naming.genTypeName(this.obj?.name);
+    return Naming.genTypeName(this.obj!.name!) + (this.obj as Obj).nameSuffix();
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
