@@ -10,7 +10,7 @@ export class T {
       type instanceof PropScalar ||
       type instanceof En ||
       type instanceof CircularRef ||
-      (type instanceof PropArray && type.items instanceof PropScalar) ||
+      (type instanceof PropArray && type.items instanceof Scalar) ||
       (type instanceof Obj && _.isEmpty(type.props))
     );
   }
@@ -62,7 +62,7 @@ export class T {
     let result = prefix + connector + node.id + '\n';
 
     // Prepare the prefix for the children.
-    const childPrefix = prefix + (isLast ? '    ' : '│   ');
+    const childPrefix = prefix + (isLast ? '  ' : '│ ');
 
     node.children.forEach((child, index) => {
       const last = index === node.children.length - 1;

@@ -83,7 +83,7 @@ export class Writer {
     writer.flush();
   }
 
-  public generate(selection: string[]) {
+  public generate(selection: string[]): string[] {
     const pendingTypes: Map<string, IType> = new Map();
     selection = this.collectExpandedPaths(selection);
 
@@ -115,8 +115,11 @@ export class Writer {
 
         current = collection.find((t) => t.id === part);
         if (!current) {
+          const tree = T.print(last!.ancestors()[0]);
+
+
           // let's collect the possible paths so we don't have to debug
-          throw new Error('Could not find type: ' + part + ' from ' + path + ', last: ' + last?.pathToRoot());
+          throw new Error('Could not find type: ' + part + ' from ' + path + '\nlast:\n' + last?.pathToRoot() + "\ntree: " + tree);
         }
 
         // make sure we expand it before we move on to the next part
@@ -153,7 +156,7 @@ export class Writer {
     }
 
     this.writeSchema(this, pendingTypes, selection);
-    // }
+    return selection;
   }
 
   public collectPaths(path: string, collection: IType[]): IType[] {
@@ -367,7 +370,7 @@ export class Writer {
     nodes.forEach((stack) => {
       const root = _.last(stack)!;
       T.traverse(root, (child) => {
-        if (T.isPropScalar(child) || (child instanceof PropArray && child.items instanceof PropScalar)) {
+        if (T.isPropScalar(child) || (child instanceof PropArray && child.items instanceof Scalar)) {
           newSelection.add(child.path());
         } else {
           this.generator.expand(child);

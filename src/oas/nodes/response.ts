@@ -27,7 +27,7 @@ export class Response extends Type {
     context.enter(this);
     trace(context, '-> [res:visit]', 'in ' + this.name);
 
-    this.response = Factory.fromSchema(this, this.schema);
+    this.response = Factory.fromSchema(context, this, this.schema);
     trace(context, '   [res:visit]', 'response type: ' + this.response.id);
     this.visited = true;
 

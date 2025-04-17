@@ -40,93 +40,32 @@ export class Factory {
     return new Get(name, op);
   }
 
-  public static fromSchema(parent: IType, schema: SchemaObject | ReferenceObject): IType {
+  public static fromSchema(context: OasContext, parent: IType, inputSchema: SchemaObject | ReferenceObject): IType {
     let result: IType | null = null;
+    let schema: SchemaObject | ReferenceObject | undefined = inputSchema;
+    let ref: string | undefined;
 
+    // resolve first if reference
     if ('$ref' in schema) {
-      result = new Ref(parent, schema.$ref as string, schema as ReferenceObject);
+      // result = new Ref(parent, schema.$ref as string, schema as ReferenceObject);
+      ref = schema?.$ref;
+      if (ref) schema = context.lookupRef(ref) as SchemaObject;
+    }
+
+    if (!schema) throw new Error('Unknown or undefined schema');
+    const schemaObj: SchemaObject = schema as SchemaObject;
+
+    // array case
+    if (schemaObj.type === 'array' && schemaObj.items) {
+      result = this.createArrayType(parent, schemaObj, context);
     }
     // array case
-    else if (schema.type === 'array' && schema.items) {
-      // Array schema case.
-      let parentName = parent.name;
-      if (parent instanceof Response) {
-        // Assume parent.parent is a GetOp.
-        const get = parent.parent as Get;
-        parentName = _.upperFirst(get.getGqlOpName());
-      } else {
-        trace(null, '[factory]', 'Factory.fromSchema >>> HERE');
-      }
-
-      // result = new Arr(parent, parentName, schema.items as ArraySchemaObject);
-      // (result as Arr).itemsType = Factory.fromSchema(result, schema.items as ArraySchemaObject);
-      const arr = new Arr(parent, parentName);
-
-      const items = schema.items as ArraySchemaObject;
-      arr.items = items;
-      arr.itemsType = Factory.fromSchema(arr, items);
-
-      result = arr;
-    }
-    // array case
-    else if (schema.type === 'object') {
-      // it's either a union or a composed object
-      if (schema.allOf) {
-        result = new Composed(parent, _.get(schema, 'name') || parent.name, schema);
-      } else if (schema.oneOf) {
-        const oneOfs = schema.oneOf || [];
-        const union = new Union(parent, _.get(schema, 'name') || parent.name, oneOfs as SchemaObject[]);
-        union.discriminator = _.get(schema, 'discriminator')?.propertyName;
-        result = union;
-      }
-      // or a plain obj
-      else {
-        if (!schema.properties) {
-          warn(
-            null,
-            '[factory]',
-            'Object has no properties: ' + JSON.stringify(schema, null, 2) + ' in: ' + parent.pathToRoot(),
-          );
-        }
-
-        result = new Obj(parent, _.get(schema, 'name') || null, schema);
-        if (schema.format == APOLLO_SYNTHETIC_OBJ) {
-          (result as Obj).synthetic = true;
-        }
-      }
-    }
-    // Composed schema case.
-    else if (schema.oneOf) {
-      const oneOfs = schema.oneOf || [];
-      result = new Union(parent, _.get(schema, 'name') || parent.name, oneOfs as SchemaObject[]);
-    } else if (schema.allOf) {
-      result = new Composed(parent, _.get(schema, 'name') || parent.name, schema);
+    else if (schemaObj?.type === 'object' || schemaObj?.oneOf || schemaObj?.allOf || !_.isEmpty(schemaObj.properties)) {
+      result = this.createContainerType(parent, schemaObj, ref);
     }
     // scalar
     else {
-      const typeStr = schema.type;
-      if (typeStr != null) {
-        if (typeStr === 'array') {
-          throw new Error(`Should have been handled already? ${typeStr}, schema: ${JSON.stringify(schema)}`);
-        } else if (schema.enum != null) {
-          result = new En(parent, schema, schema.enum! as string[]);
-        }
-        // scalar case
-        else if (GqlUtils.gqlScalar(typeStr as string)) {
-          const scalarType = GqlUtils.getGQLScalarType(schema);
-          result = new Scalar(parent, scalarType, schema);
-        }
-        // or we have no idea how to handle this
-        else {
-          throw new Error(`Cannot handle property type ${typeStr}, schema: ${JSON.stringify(schema)}`);
-        }
-      } else if (schema.enum != null) {
-        result = new En(parent, schema, _.get(schema, 'enum') as string[]);
-      }
-      // or we have no idea how to handle this
-      else {
-        throw new Error(`Cannot handle schema ${parent.pathToRoot()}, schema: ${JSON.stringify(schema)}`);
-      }
+      result = this.createScalarType(schemaObj, parent);
     }
 
     if (result != null) {
@@ -134,68 +73,165 @@ export class Factory {
     }
     // we could not infer a proper type
     else {
-      throw new Error(`Not yet implemented for ${JSON.stringify(schema)}`);
+      throw new Error(`Not yet implemented for ${JSON.stringify(schemaObj)}`);
     }
 
     return result;
   }
 
-  public static fromProp(context: OasContext, parent: IType, propertyName: string, schema: SchemaObject): Prop {
-    if (!schema) {
-      throw new Error(`Should have a schema defined for property '${propertyName}' (parent: '${parent.name}')`);
+  private static createScalarType(schema: SchemaObject | null, parent: IType) {
+    const typeStr = schema?.type;
+    if (typeStr != null) {
+      if (typeStr === 'array') {
+        throw new Error(`Should have been handled already? ${typeStr}, schema: ${JSON.stringify(schema)}`);
+      } else if (schema?.enum != null) {
+        return new En(parent, schema, schema.enum! as string[]);
+      }
+      // scalar case
+      else if (GqlUtils.gqlScalar(typeStr as string)) {
+        const scalarType = GqlUtils.getGQLScalarType(schema!);
+        return new Scalar(parent, scalarType, schema!);
+      }
+      // or we have no idea how to handle this
+      else {
+        throw new Error(`Cannot handle property type ${typeStr}, schema: ${JSON.stringify(schema)}`);
+      }
+    } else if (schema?.enum != null) {
+      return new En(parent, schema, _.get(schema, 'enum') as string[]);
+    }
+    // or we have no idea how to handle this
+    else {
+      throw new Error(`Cannot handle schema ${parent.pathToRoot()}, schema: ${JSON.stringify(schema)}`);
+    }
+  }
+
+  private static createContainerType(parent: IType, schema: SchemaObject, ref?: string) {
+    let result: IType | null = null;
+
+    // composed object
+    if (schema.allOf) {
+      result = new Composed(parent, ref || _.get(schema, 'name'), schema);
+    }
+    // union
+    else if (schema.oneOf) {
+      const oneOfs = schema.oneOf || [];
+      result = new Union(parent, ref || _.get(schema, 'name'), oneOfs as SchemaObject[]);
+    }
+    // or a plain obj
+    else {
+      if (!schema.properties) {
+        warn(null, '[factory]', 'Object has no properties: ' + JSON.stringify(schema, null, 2) + ' in: ' + parent.pathToRoot());
+      }
+
+      result = new Obj(parent, ref || _.get(schema, 'name') || null, schema);
+
+      // if we want to syntethise an object:
+      if (schema.format == APOLLO_SYNTHETIC_OBJ) {
+        (result as Obj).synthetic = true;
+      }
     }
 
-    const type = schema.type;
+    return result;
+  }
+
+  private static createArrayType(parent: IType | Response, schema: SchemaObject | null, context: OasContext) {
+    // Array schema case.
+    let parentName = parent.name;
+    if (parent instanceof Response) {
+      const get = parent.parent as Get; // Assume parent.parent is a GetOp.
+      parentName = _.upperFirst(get.getGqlOpName());
+    }
+
+    const arr = new Arr(parent, parentName);
+    const items = _.get(schema, 'items') as ArraySchemaObject;
+    arr.items = items;
+    arr.itemsType = Factory.fromSchema(context, arr, items);
+
+    return arr;
+  }
+
+  public static fromProp(context: OasContext, parent: IType, propName: string, inputSchema: SchemaObject | ReferenceObject): Prop {
+    if (!inputSchema) {
+      throw new Error(`Should have a schema defined for property '${propName}' (parent: '${parent.name}')`);
+    }
+
+    let schema: SchemaObject | ReferenceObject | null = inputSchema;
+
     let prop: Prop;
+    let ref: string | undefined;
 
-    if (!type && '$ref' in schema) {
-      prop = new PropRef(parent, propertyName, schema, (schema as ReferenceObject).$ref);
+    if (!_.get(schema, 'type') && '$ref' in schema) {
+      ref = (schema as ReferenceObject).$ref;
+      schema = context.lookupRef(ref);
+      // this was a prop ref, but now needs to be returned as the ref directly?
+      // prop = new PropRef(parent, propName, schema, ref);
+      // return prop;
     }
+
     // uses the type of the schema to find out what kind of property it is
-    else if (type) {
+    const schemaObj = schema as SchemaObject;
+    const type = schemaObj.type;
+
+    if (type) {
       // 1st case is if the type is an array
       if (type === 'array') {
-        const array = new PropArray(parent, propertyName, schema);
+        const array = new PropArray(parent, propName, schema!);
+        const itemsName = Naming.genArrayItems(propName);
 
-        const itemsName = Naming.genArrayItems(propertyName);
-        const itemsType = Factory.fromProp(context, array, itemsName, schema.items as ArraySchemaObject);
+        const itemsSchema = _.get(schemaObj, 'items') as ArraySchemaObject;
+        // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
+        const itemsType = Factory.fromSchema(context, array, itemsSchema);
 
         array.setItems(itemsType);
-
         prop = array;
       }
       // 2nd checks for obj property
-      else if (type === 'object') {
-        // the type of the property will be an object, which needs to be added as a child
-        const propType: IType = new Obj(parent, propertyName, schema);
-        prop = new PropObj(parent, propertyName, schema, propType);
+      else if (schemaObj?.type === 'object' || schemaObj?.oneOf || schemaObj?.allOf || !_.isEmpty(schemaObj.properties)) {
+        if (schemaObj.oneOf) {
+          const inner: PropComp = new PropComp(parent, propName, schemaObj);
+          inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
+          prop = inner;
+        } else if (schemaObj.allOf) {
+          const propComp: PropComp = new PropComp(parent, propName, schemaObj);
+          propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
+          prop = propComp;
+        } else if (schemaObj.properties != null) {
+          const propType: IType = new Obj(parent, propName, schemaObj);
+          prop = new PropObj(parent, propName, schemaObj, propType);
+        } else {
+          // the type of the property will be an object, which needs to be added as a child
+          const propType: IType = new Obj(parent, ref || propName, schemaObj);
+          prop = new PropObj(parent, propName, schemaObj, propType);
+        }
       }
       // 3rd tries for scalar
       else if (GqlUtils.gqlScalar(type as string)) {
         const scalar = GqlUtils.gqlScalar(type as string);
-        prop = new PropScalar(parent, propertyName, scalar as string, schema);
+        prop = new PropScalar(parent, propName, scalar as string, schemaObj);
       }
       // or we don't know how to handle this
       else {
         throw new Error('Cannot handle property type ' + type);
       }
     }
-    // otherwise let's use the properties instead and assume an Obj
-    else if (schema.properties != null) {
-      const propType: IType = new Obj(parent, propertyName, schema);
-      prop = new PropObj(parent, propertyName, schema, propType);
-    } else if (schema.oneOf) {
-      const propComp: PropComp = new PropComp(parent, propertyName, schema);
-      propComp.comp = new Union(propComp, _.get(schema, 'name') || parent.name, schema.oneOf as SchemaObject[]);
-      prop = propComp;
-    } else if (schema.allOf) {
-      const propComp: PropComp = new PropComp(parent, propertyName, schema);
-      propComp.comp = new Composed(propComp, _.get(schema, 'name') || parent.name, schema);
-      prop = propComp;
-    }
+      // otherwise let's use the properties instead and assume an Obj
+      /*else if (schemaObj.properties != null) {
+        const propType: IType = new Obj(parent, propName, schemaObj);
+        prop = new PropObj(parent, propName, schemaObj, propType);
+      }
+      else if (schemaObj.oneOf) {
+        const inner: PropComp = new PropComp(parent, propName, schemaObj);
+        inner.comp = new Union(inner, _.get(schemaObj, 'name') || parent.name, schemaObj.oneOf as SchemaObject[]);
+        prop = inner;
+      }
+      else if (schemaObj.allOf) {
+        const propComp: PropComp = new PropComp(parent, propName, schemaObj);
+        propComp.comp = new Composed(propComp, _.get(schemaObj, 'name') || parent.name, schemaObj);
+        prop = propComp;
+      }*/
     // default case, we don't know what to do so we'll create a scalar of type JSON
     else {
-      prop = new PropScalar(parent, propertyName, 'JSON', schema);
+      prop = new PropScalar(parent, propName, 'JSON', schemaObj);
     }
 
     if (parent.ancestors().includes(prop)) {

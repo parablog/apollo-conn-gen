@@ -44,7 +44,7 @@ export class Union extends Type {
     }
 
     for (const refSchema of this.schemas) {
-      const type = Factory.fromSchema(this, refSchema);
+      const type = Factory.fromSchema(context, this, refSchema);
       trace(context, ' [union:visit]', 'of type: ' + type);
 
       type.visit(context);
@@ -83,31 +83,17 @@ export class Union extends Type {
     else {
       const name = _.upperFirst(Naming.getRefName(this.name));
 
-      if (!context.generateOptions.consolidateUnion) {
-        /*this.children.forEach((child) => {
-          if (child instanceof Ref) {
-            (child as Ref).refType?.generate(context, writer, selection);
-          } else {
-            child.generate(context, writer, selection);
-          }
-        });*/
+      if (context.generateOptions.consolidateUnion) {
+        if (!this.consolidated) {
+          this.consolidate(selection);
+        }
 
-        // const selected = this.selectedProps(selection);
-        writer
-          .append('union ')
-          .append(name)
-          .append(this.nameSuffix())
-          .append(' = ')
-          .append(this.children.map((child) => Naming.getRefName(child.name)).join(' | '))
-          .append('\n\n');
-      }
-      else {
         // When generating this union in GQL it might look like:
         // union MyUnion = Type1 | Type2 | Type3
         writer.append('#### NOT SUPPORTED YET BY CONNECTORS!!! union ').append(name).append(' = ');
 
-        const childrenNames = this.children.map((child) => Naming.getRefName(child.name)).join(' | ');
-
+        const childrenTypes = this.children.map((child) => Naming.getRefName(child.name));
+        const childrenNames = childrenTypes.join(' | ');
         writer.append(childrenNames).append('\n\n');
 
         trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
@@ -127,6 +113,19 @@ export class Union extends Type {
         }
 
         writer.append('} \n### End replacement for ').append(this.name).append('\n\n');
+
+        // add to generated set
+        this.children.forEach(child => context.generatedSet.add(child.id))
+
+      } else {
+        // const selected = this.selectedProps(selection);
+        writer
+          .append('union ')
+          .append(name)
+          .append(this.nameSuffix())
+          .append(' = ')
+          .append(this.children.map((child) => Naming.getRefName(child.name)).join(' | '))
+          .append('\n\n');
       }
     }
 
@@ -178,6 +177,10 @@ export class Union extends Type {
     const ids: Set<string> = new Set();
     const props: Prop[] = [];
     const discriminator = this.discriminator;
+
+    this.children?.forEach((child) => {
+      props.push(...child.props.values())
+    })
 
     /*const queue = T.containers(this);
     while (queue.length > 0) {
@@ -233,7 +236,7 @@ export class Union extends Type {
     return ids;
   }
 
-  private updatePropName(prop: Prop, props: Prop[], selection: string[] | undefined = undefined): void {
+  /*private updatePropName(prop: Prop, props: Prop[], selection: string[] | undefined = undefined): void {
     let name = prop.name;
 
     let counter = 0;
@@ -248,7 +251,7 @@ export class Union extends Type {
         selection.push(prop.path());
       }
     }
-  }
+  }*/
 
   private visitProperties(_context: OasContext): void {
     // const children: IType[] = this.children.map((child) =>
@@ -288,11 +291,13 @@ export class Union extends Type {
 
   private updateName(): void {
     let name = this.name;
-    if (this.parent instanceof Response) {
-      const op = this.parent!.parent as Get;
-      name = op.getGqlOpName() + 'Response';
-    } else {
-      name = this.parent!.name + `Union`;
+    if (!name) {
+      if (this.parent instanceof Response) {
+        const op = this.parent!.parent as Get;
+        name = op.getGqlOpName() + 'Response';
+      } else {
+        name = this.parent!.name + `Union`;
+      }
     }
 
     this.name = name;

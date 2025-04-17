@@ -15,6 +15,8 @@ interface IGenOptions {
 }
 
 export class OasGen {
+  public selections: string[] = [];
+
   public static async fromData(
     data: ArrayBuffer,
     options: IGenOptions = {
@@ -106,7 +108,7 @@ export class OasGen {
 
   public generateSchema(paths: string[]): string {
     const writer: Writer = new Writer(this);
-    writer.generate(paths);
+    this.selections = writer.generate(paths);
     return writer.flush();
   }
 
@@ -128,7 +130,8 @@ export class OasGen {
   }
 
   private isSupported(pathItem: Record<HttpMethods, Webhook | Operation>) {
-    return pathItem.get || pathItem.post || pathItem.put || pathItem.delete || pathItem.patch;
+    // return pathItem.get || pathItem.post || pathItem.put || pathItem.delete || pathItem.patch;
+    return pathItem.get;
   }
 
   public getContext(): OasContext {
@@ -250,6 +253,7 @@ export class OasGen {
       paths.push(this.visitGet(context, name, pathItem.get as Webhook | Operation));
     }
 
+    /* TODO: enable this back
     if (pathItem.post !== undefined) {
       paths.push(this.visitPost(context, name, pathItem.post));
     }
@@ -264,7 +268,7 @@ export class OasGen {
 
     if (pathItem.delete !== undefined) {
       paths.push(this.visitDelete(context, name, pathItem.delete));
-    }
+    }*/
 
     return paths;
   }

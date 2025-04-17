@@ -1,4 +1,4 @@
-import { Factory, Get, IType, Prop, Ref, ReferenceObject, Response, Type, Union } from './internal.js';
+import { Factory, Get, IType, Prop, Ref, ReferenceObject, Response, T, Type, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';
@@ -123,9 +123,14 @@ export class Composed extends Type {
   }
 
   public consolidate(selection: string[]): Set<string> {
+    T.composables(this).forEach((child) => {
+      (child as (Composed)).consolidate(selection);
+    });
+
     const ids: Set<string> = new Set();
     let props: Map<string, Prop> = new Map();
 
+    const tree = T.print(this);
     const queue: IType[] = Array.from(this.children.values()).filter((child) => !(child instanceof Prop));
 
     while (queue.length > 0) {
@@ -168,7 +173,7 @@ export class Composed extends Type {
     for (let i = 0; i < allOfs.length; i++) {
       const allOfItemSchema = allOfs[i];
 
-      const type = Factory.fromSchema(this, allOfItemSchema as SchemaObject);
+      const type = Factory.fromSchema(context, this, allOfItemSchema as SchemaObject);
       trace(context, '   [composed::all-of]', 'allOf type: ' + type);
 
       if (type) {
@@ -176,6 +181,7 @@ export class Composed extends Type {
       }
     }
 
+    const tree = T.print(this);
     context.store(this.name, this);
     trace(context, '<- [composed::all-of]', `out: '${this.name}' of: ${allOfs.length} - refs: ${refs}`);
   }
@@ -225,13 +231,17 @@ export class Composed extends Type {
   private updateName(): void {
     let name = this.name;
 
-    if (this.parent instanceof Response) {
-      const op = this.parent!.parent as Get;
-      name = op.getGqlOpName() + 'Response';
+    if (!name) {
+      if (this.parent instanceof Response) {
+        const op = this.parent!.parent as Get;
+        name = op.getGqlOpName() + 'Response';
+      } else {
+        name = `[inline:${this.parent!.name}]`;
+      }
     }
-    else if (this.parent instanceof Composed) {
-      name = this.parent!.name + 'AllOf';
-    }
+    // else if (this.parent instanceof Composed) {
+    //   name = this.parent!.name + 'AllOf';
+    // }
 
     this.name = name;
   }

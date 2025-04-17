@@ -1,11 +1,12 @@
-import { Factory, IType, Prop, PropComp, PropObj, PropRef, Scalar } from './internal.js';
+import { Composed, Factory, IType, Obj, Prop, PropComp, PropObj, PropRef, Scalar, Union } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import _ from 'lodash';
 
 export class PropArray extends Prop {
-  public items?: Prop;
+  public items?: IType;
 
   get id(): string {
     return `prop:array:#${this.name}`;
@@ -27,7 +28,7 @@ export class PropArray extends Prop {
     context.leave(this);
   }
 
-  public setItems(items: Prop): void {
+  public setItems(items: IType): void {
     this.items = items;
     if (!this.children.includes(items)) {
       this.add(items);
@@ -35,7 +36,12 @@ export class PropArray extends Prop {
   }
 
   public override getValue(context: OasContext): string {
-    return `[${this.items!.getValue(context)}]`;
+    if (this.items?.id.startsWith('obj:')) {
+      if (_.isEmpty(this.items?.props)) return 'JSON';
+      return `[${ Naming.genTypeName(this.items?.name) }]`;
+    }
+
+    return `[${this.items!.name}]`;
   }
 
   public add(child: IType): void {
@@ -49,13 +55,21 @@ export class PropArray extends Prop {
       const wrapper: IType = Factory.fromCircularRef(this, ancestor);
       super.add(wrapper);
       this.visited = true;
-    } else {
+    }
+    else {
       super.add(child);
     }
   }
 
   public forPrompt(context: OasContext): string {
-    return `[prop] ${this.name}: [${this.items!.getValue(context)}] (Array)`;
+    // return `[prop] ${this.name}: [${this.items!.getValue(context)}] (Array)`;
+    if (this.items?.id.startsWith('obj:')) {
+      // if (_.isEmpty(this.items?.props)) return 'JSON';// TODO: what do we do here
+      // return Naming.genTypeName(this.items?.name);
+      return `[prop] ${this.name}: [${Naming.genTypeName(this.items?.name)}] (Array)`;
+    }
+
+    return `[prop] ${this.name}: [${this.items!.name}] (Array)`;
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
@@ -73,7 +87,10 @@ export class PropArray extends Prop {
 
     // Select each child of the items Prop.
     if (this.needsBrackets(this.items)) {
-      for (const child of this.items!.children) {
+      const selected = Array.from(this.items!.children.values())
+        .filter((prop) => selection.find((s) => s.startsWith(prop.path())));
+
+      for (const child of selected) {
         child.select(context, writer, selection);
       }
     }
@@ -94,6 +111,6 @@ export class PropArray extends Prop {
 
   public needsBrackets(child?: IType): boolean {
     if (!child) return false;
-    return child instanceof PropRef || child instanceof PropObj || child instanceof PropComp;
+    return child instanceof Obj || child instanceof Composed || child instanceof Union; // // child instanceof PropRef ||
   }
 }

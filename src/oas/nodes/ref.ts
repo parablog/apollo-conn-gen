@@ -7,6 +7,9 @@ import { Naming } from '../utils/naming.js';
 
 import { ReferenceObject } from './referenceObject.js';
 
+/**
+ * @deprecated This class is deprecated and should not be used in new code.
+ */
 export class Ref extends Type {
   public refType?: IType;
 
@@ -45,7 +48,7 @@ export class Ref extends Type {
       throw new Error('Schema not found for ref: ' + ref);
     }
 
-    this.refType = Factory.fromSchema(this, schema);
+    this.refType = Factory.fromSchema(context, this, schema);
     // Set the name of the resolved type to the reference string.
     this.refType.name = ref;
     this.refType.visit(context);

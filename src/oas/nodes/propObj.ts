@@ -58,7 +58,7 @@ export class PropObj extends Prop {
     // compose for now.
     if (_.isEmpty(this.obj?.props)) return 'JSON';
 
-    return Naming.genTypeName(this.name);
+    return Naming.genTypeName(this.obj?.name);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {

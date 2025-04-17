@@ -66,7 +66,7 @@ export class Body extends Type {
     }
     // If the response has a content property, we need to find the JSON content.
     else if (schema) {
-      this.payload = Factory.fromSchema(this, schema as SchemaObject);
+      this.payload = Factory.fromSchema(context, this, schema as SchemaObject);
       this.payload!.name = name;
     }
     // don't know how to handle this yet

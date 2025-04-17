@@ -44,6 +44,11 @@ async function main(sourceFile: string, opts: any): Promise<void> {
   console.info('selected :=', JSON.stringify(paths, null, 2));
   console.info('--------------- Apollo Connector schema -----------------');
   console.info(gen.generateSchema(paths));
+
+  if (opts.printSelections) {
+    console.info('--------------- Selections -----------------');
+    console.info(gen.selections)
+  }
 }
 
 const program = new Command();
@@ -57,6 +62,7 @@ program
   .option('-p --page-size <num>', 'Number of rows to display in selection mode', '10')
   .option('-s --load-selections <file>', 'Load a JSON file with field selections (other options are ignored)')
   .option('-v --verbose', 'Log all messages from generator')
+  .option('-m --print-selections', 'Print selections from generator')
   .parse(process.argv);
 
 const source = program.args[0];

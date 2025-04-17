@@ -7,6 +7,9 @@ import { trace } from '../log/trace.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 
+/**
+ * @deprecated No longer used
+ */
 export class PropRef extends Prop {
   get id(): string {
     return `prop:ref:#${this.name}`;
@@ -51,7 +54,7 @@ export class PropRef extends Prop {
       throw new Error('Schema not found for ref: ' + this.ref);
     }
 
-    const type = Factory.fromSchema(this, schema);
+    const type = Factory.fromSchema(context, this, schema);
     if (!this.refType) {
       this.refType = type;
       type.name = this.ref;

@@ -121,7 +121,9 @@ export class Obj extends Type {
       else if (parent instanceof Response) {
         const op = parent.parent as Get;
         name = op.getGqlOpName() + 'Response';
-      } else if (parent instanceof Body) {
+      }
+      // for posts
+      else if (parent instanceof Body) {
         // const op = parent.parent as Post;
         name = this.name + 'Input';
       }
@@ -163,7 +165,6 @@ export class Obj extends Type {
       const prop = Factory.fromProp(context, this, key, schemaValue);
       this.props.set(prop.name, prop);
 
-      // TODO: we should not be adding this twice
       if (!this.children.includes(prop)) {
         this.add(prop);
       }

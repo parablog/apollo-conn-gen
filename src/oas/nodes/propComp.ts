@@ -48,12 +48,6 @@ export class PropComp extends Prop {
   }
 
   public getValue(_context: OasContext): string {
-    // we'll make an assumption here: that if the child obj has no properties,
-    // then it's a free-form JSON payload. not sure if the right one, but it will
-    // compose for now.
-    if (_.isEmpty(this.comp?.props)) return 'JSON';
-
-    // return Naming.genTypeName(this.name);
     return Naming.genTypeName(this.comp!.name!) + (this.comp as Composed).nameSuffix();
   }
 
@@ -66,7 +60,7 @@ export class PropComp extends Prop {
 
     writer.append(' '.repeat(context.indent + context.stack.length)).append(sanitised);
 
-    if (this.needsBrackets(comp!)) {
+    if (this.needsBrackets(comp)) {
       writer.append(' {').append('\n');
       context.enter(this);
     }
@@ -75,7 +69,7 @@ export class PropComp extends Prop {
       child.select(context, writer, selection);
     }
 
-    if (this.needsBrackets(comp!)) {
+    if (this.needsBrackets(comp)) {
       context.leave(this);
       writer.append(' '.repeat(context.indent + context.stack.length)).append('}');
     }
@@ -90,6 +84,7 @@ export class PropComp extends Prop {
   }
 
   private needsBrackets(child: IType): boolean {
-    return (child instanceof Obj || child instanceof Union || child instanceof Composed) && !_.isEmpty(child.props);
+    return child instanceof Union ||
+      (child instanceof Obj || child instanceof Composed && !_.isEmpty(child.props));
   }
 }

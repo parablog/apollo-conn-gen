@@ -27,7 +27,7 @@ export class OasContext {
     this.parser = parser;
     this.indent = 0;
     this.generateOptions = {
-      consolidateUnion: false, // by default, we consolidate fields until unions are supported
+      consolidateUnion: true, // by default, we consolidate fields until unions are supported
       debugParentInSelection: true, // by default, we don't show where the fields are coming from
     };
   }
@@ -48,10 +48,6 @@ export class OasContext {
 
   public store(name: string, type: IType): void {
     trace(this, '[context::store]', 'store ' + type.id);
-    if (this.types.has(name)) {
-      warn(this, '[store]', `${name} is already stored`);
-    }
-
     this.types.set(name, undefined);
   }
 
