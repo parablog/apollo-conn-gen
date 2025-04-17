@@ -101,50 +101,6 @@ export class Obj extends Type {
     trace(context, '<- [obj::select]', `-> out: ${this.name}`);
   }
 
-  private updateName(): void {
-    let name = this.name;
-    // If we are an inline object named "items", try to create a better name.
-    if (!name || name === 'items') {
-      const parent = this.parent;
-      const parentName = parent!.name;
-
-      // if the parent is a reference, we can use the name of the obj itself
-      if (parent instanceof Ref) {
-        name = parentName.replace('ref:', 'obj:');
-      }
-      // else is our parent an array?
-      else if (parent instanceof Arr || parent instanceof PropArray) {
-        // if so, synthesize a name based on the parent name
-        name = Naming.genTypeName(Naming.getRefName(parentName) + 'Item');
-      }
-      // if the parent is a response, we can use the operation name and append "Response"
-      else if (parent instanceof Response) {
-        const op = parent.parent as Get;
-        name = op.getGqlOpName() + 'Response';
-      }
-      // for posts
-      else if (parent instanceof Body) {
-        // const op = parent.parent as Post;
-        name = this.name + 'Input';
-      }
-      // if the parent is an object then we can use the parent name
-      else if (parent instanceof Obj) {
-        name = parentName + 'Obj';
-
-      }
-      // rename if composed & anonymous
-      else if (parent instanceof Composed) {
-        name = parentName + 'AllOf';
-      }
-      // extreme case -- we synthesize an anonymous name
-      else {
-        name = `[inline:${this.parent!.name}]`;
-      }
-    }
-
-    this.name = name;
-  }
-
   private visitProperties(context: OasContext): void {
     if (!this.schema.properties) {
       return;
@@ -180,4 +136,45 @@ export class Obj extends Type {
 
     trace(context, '<- [obj::props]', 'out props ' + this.props.size);
   }
+
+  private updateName(): void {
+    let name = this.name;
+    // If we are an inline object named "items", try to create a better name.
+    if (!name || name === 'items') {
+      const parent = this.parent;
+      const parentName = parent!.name;
+
+      // if the parent is a reference, we can use the name of the obj itself
+      if (parent instanceof Ref) {
+        name = parentName.replace('ref:', 'obj:');
+      }
+      // else is our parent an array?
+      else if (parent instanceof Arr || parent instanceof PropArray) {
+        // if so, synthesize a name based on the parent name
+        name = Naming.genTypeName(Naming.getRefName(parentName) + 'Item');
+      }
+      // if the parent is a response, we can use the operation name and append "Response"
+      else if (parent instanceof Response) {
+        const op = parent.parent as Get;
+        name = op.getGqlOpName() + 'Response';
+      }
+      // for posts
+      else if (parent instanceof Body) {
+        // const op = parent.parent as Post;
+        name = this.name + 'Input';
+      }
+      // if the parent is an object then we can use the parent name
+      else if (parent instanceof Obj) {
+        name = parentName + 'Obj';
+
+      }
+      // extreme case -- we synthesize an anonymous name
+      else {
+        name = `[inline:${this.parent!.name}]`;
+      }
+    }
+
+    this.name = name;
+  }
+
 }

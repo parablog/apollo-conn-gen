@@ -1,4 +1,12 @@
-import { CircularRef, Composed, En, Obj, Prop, PropArray, PropScalar, Ref, Scalar, Union } from './internal.js';
+import {
+  En,
+  Obj,
+  Prop,
+  PropArray,
+  PropScalar,
+  Ref,
+  Scalar,
+} from './internal.js';
 
 import { IType } from './internal.js';
 import _ from 'lodash';
@@ -9,7 +17,6 @@ export class T {
       type instanceof Scalar ||
       type instanceof PropScalar ||
       type instanceof En ||
-      type instanceof CircularRef ||
       (type instanceof PropArray && type.items instanceof Scalar) ||
       (type instanceof Obj && _.isEmpty(type.props))
     );
@@ -50,10 +57,12 @@ export class T {
       .map((child) => (child.id.startsWith('ref:') ? (child as Ref).refType! : child));
   }
 
+  public static isContainer(node: IType): boolean {
+    return node.id.startsWith('obj:') || node.id.startsWith('comp:') || node.id.startsWith('union:')
+  }
+
   static composables(node: IType): IType[] {
     return _.filter(T.containers(node), e => e.id.startsWith('comp:')) // || e.id.startsWith('union:'));
-    // return T.containers(node)
-    //   .mat((t) => t instanceof Composed || t instanceof Union);
   }
 
   public static print(node: IType, prefix: string = '', isLast: boolean = true): string {
@@ -62,7 +71,7 @@ export class T {
     let result = prefix + connector + node.id + '\n';
 
     // Prepare the prefix for the children.
-    const childPrefix = prefix + (isLast ? '  ' : '│ ');
+    const childPrefix = prefix + (isLast ? '   ' : '│  ');
 
     node.children.forEach((child, index) => {
       const last = index === node.children.length - 1;

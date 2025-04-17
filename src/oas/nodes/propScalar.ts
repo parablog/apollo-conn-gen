@@ -29,8 +29,9 @@ export class PropScalar extends Prop {
 
     context.enter(this);
     if (!this.propType) {
-      this.propType = Factory.fromSchema(context, this, this.schema);
-      // this.propType.visit(context);
+      const type = Factory.fromSchema(context, this, this.schema);
+      this.add(type);
+      this.propType = type;
       this.visited = true;
     }
     context.leave(this);

@@ -23,15 +23,16 @@ import {
   Patch,
   Delete,
   PropComp,
+  T,
+  PropCircRef
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
 import { OpenAPIV3 } from 'openapi-types';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 import _ from 'lodash';
-import { trace, warn } from '../log/trace.js';
+import { warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
-import { Naming } from '../utils/naming.js';
 import { GqlUtils } from '../utils/gql.js';
 import { APOLLO_SYNTHETIC_OBJ } from '../schemas/index.js';
 
@@ -68,11 +69,8 @@ export class Factory {
       result = this.createScalarType(schemaObj, parent);
     }
 
-    if (result != null) {
-      parent.add(result);
-    }
     // we could not infer a proper type
-    else {
+    if (result == null) {
       throw new Error(`Not yet implemented for ${JSON.stringify(schemaObj)}`);
     }
 
@@ -106,7 +104,7 @@ export class Factory {
   }
 
   private static createContainerType(parent: IType, schema: SchemaObject, ref?: string) {
-    let result: IType | null = null;
+    let result: IType | null;
 
     // composed object
     if (schema.allOf) {
@@ -145,7 +143,10 @@ export class Factory {
     const arr = new Arr(parent, parentName);
     const items = _.get(schema, 'items') as ArraySchemaObject;
     arr.items = items;
+
+    // TODO: check this
     arr.itemsType = Factory.fromSchema(context, arr, items);
+    arr.add(arr.itemsType); // add it to the children
 
     return arr;
   }
@@ -176,7 +177,7 @@ export class Factory {
       // 1st case is if the type is an array
       if (type === 'array') {
         const array = new PropArray(parent, propName, schema!);
-        const itemsName = Naming.genArrayItems(propName);
+        // const itemsName = Naming.genArrayItems(propName);
 
         const itemsSchema = _.get(schemaObj, 'items') as ArraySchemaObject;
         // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
@@ -196,7 +197,7 @@ export class Factory {
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
           prop = propComp;
         } else if (schemaObj.properties != null) {
-          const propType: IType = new Obj(parent, propName, schemaObj);
+          const propType: IType = new Obj(parent, ref || propName, schemaObj);
           prop = new PropObj(parent, propName, schemaObj, propType);
         } else {
           // the type of the property will be an object, which needs to be added as a child
@@ -215,27 +216,27 @@ export class Factory {
       }
     }
       // otherwise let's use the properties instead and assume an Obj
-      /*else if (schemaObj.properties != null) {
-        const propType: IType = new Obj(parent, propName, schemaObj);
-        prop = new PropObj(parent, propName, schemaObj, propType);
-      }
-      else if (schemaObj.oneOf) {
-        const inner: PropComp = new PropComp(parent, propName, schemaObj);
-        inner.comp = new Union(inner, _.get(schemaObj, 'name') || parent.name, schemaObj.oneOf as SchemaObject[]);
-        prop = inner;
-      }
-      else if (schemaObj.allOf) {
-        const propComp: PropComp = new PropComp(parent, propName, schemaObj);
-        propComp.comp = new Composed(propComp, _.get(schemaObj, 'name') || parent.name, schemaObj);
-        prop = propComp;
-      }*/
+    // TODO: repeated code
+    else if (schemaObj.oneOf) {
+      const inner: PropComp = new PropComp(parent, propName, schemaObj);
+      inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
+      prop = inner;
+    } else if (schemaObj.allOf) {
+      const propComp: PropComp = new PropComp(parent, propName, schemaObj);
+      propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
+      prop = propComp;
+    } else if (schemaObj.properties != null) {
+      const propType: IType = new Obj(parent, ref || propName, schemaObj);
+      prop = new PropObj(parent, propName, schemaObj, propType);
+    }
     // default case, we don't know what to do so we'll create a scalar of type JSON
     else {
       prop = new PropScalar(parent, propName, 'JSON', schemaObj);
     }
 
-    if (parent.ancestors().includes(prop)) {
-      console.warn('[factory] Recursion detected! Ancestors already contain this type: \n' + prop.pathToRoot());
+    if (parent.ancestors().find(a => a.id === prop.id)) {
+      console.warn('[factory] Recursion detected! Ancestors already contain this type: \n' + prop.id);
+      prop = new PropCircRef(parent, prop);
     }
 
     return prop;
@@ -267,6 +268,8 @@ export class Factory {
   }
 
   public static fromCircularRef(parent: IType, child: IType): IType {
+    const tree = T.print(parent);
+
     const circularRef = new CircularRef(parent, child.name);
     circularRef.ref = child;
     return circularRef;

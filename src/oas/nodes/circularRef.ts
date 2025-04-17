@@ -20,7 +20,7 @@ export class CircularRef extends Type {
     return `${Naming.getRefName(this.ref!.name)} (Circular Ref in: ${this.parent?.id})`;
   }
 
-  public add(_child: IType): void {
+  public add(_child: IType): IType {
     throw new Error('Should not be adding a child to a circular ref');
   }
 

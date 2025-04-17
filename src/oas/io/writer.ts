@@ -3,23 +3,8 @@ import Oas from 'oas';
 import { ServerObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import {
-  IType,
-  Type,
-  Union,
-  Body,
-  CircularRef,
-  Op,
-  PropScalar,
-  Composed,
-  Obj,
-  Prop,
-  Param,
-  PropArray,
-} from '../nodes/internal.js';
+import { Body, Composed, IType, Op, Param, Prop, PropArray, Scalar, Type, T } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
-import { T } from '../nodes/typeUtils.js';
-import { Scalar } from '../nodes/internal.js';
 
 export class Writer {
   public static findNonPropParent(type: IType) {
@@ -139,7 +124,7 @@ export class Writer {
 
         // add all ancestors (of the parent of the prop) that are containers so they are generated accordingly
         parentType.ancestors()
-          .filter((t) => !pendingTypes.has(t.id) && this.isContainer(t))
+          .filter((t) => !pendingTypes.has(t.id) && T.isContainer(t))
           .forEach((dep) => pendingTypes.set(dep.id, dep));
       }
     }
@@ -354,11 +339,6 @@ export class Writer {
       }
     });
   }
-
-  private isContainer(type: IType) {
-    return type instanceof Obj || type instanceof Union || type instanceof Composed || type instanceof CircularRef;
-  }
-
   private collectExpandedPaths(selection: string[]) {
     const newSelection = new Set<string>();
     const expands = selection.filter((p) => p.endsWith('>**'));

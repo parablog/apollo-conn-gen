@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import { oasBasePath, runOasTest } from '../src/tests/runners.js';
 import assert from 'node:assert';
 import fs from 'fs';
+import _ from 'lodash';
 
 // tests that work:
 /*
+ */
 test('test minimal petstore', async () => {
   const paths = [
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id',
@@ -36,7 +38,7 @@ test('test minimal petstore 03 array', async () => {
   await runOasTest(`petstore.yaml`, paths, 19, 1);
 });
 
-test('test minimal petstore 03 array', async () => {
+test('test minimal petstore 03 all GETs', async () => {
   const paths = [
   "get:/pet/{petId}>**",
   "get:/pet/findByStatus>**",
@@ -128,18 +130,18 @@ test('simple-allOf-example', async () => {
   const paths = [
     "get:/user>res:r>comp:type:#/c/s/User>obj:type:#/c/s/Address>prop:scalar:city",
     "get:/user>res:r>comp:type:#/c/s/User>obj:type:#/c/s/BaseUser>prop:scalar:id",
-    "get:/user>res:r>comp:type:#/c/s/User>obj:type:#/c/s/UserAllOf>prop:scalar:email"
+    "get:/user>res:r>comp:type:#/c/s/User>obj:type:[inline:#/c/s/User]>prop:scalar:email"
   ]
   await runOasTest('simple-allOf-example.yaml', paths, 1, 4);
 });
 
 test('inline-allOf-example', async () => {
   const paths = [
-    "get:/product>res:r>comp:type:productResponse>obj:type:productResponseAllOf1>prop:scalar:currency",
-    "get:/product>res:r>comp:type:productResponse>obj:type:productResponseAllOf>prop:scalar:id",
-    "get:/product>res:r>comp:type:productResponse>obj:type:productResponseAllOf2>prop:scalar:inStock",
-    "get:/product>res:r>comp:type:productResponse>obj:type:productResponseAllOf>prop:scalar:name",
-    "get:/product>res:r>comp:type:productResponse>obj:type:productResponseAllOf1>prop:scalar:price"
+    "get:/product>res:r>comp:type:productResponse>obj:type:[inline:productResponse]:1>prop:scalar:currency",
+    "get:/product>res:r>comp:type:productResponse>obj:type:[inline:productResponse]>prop:scalar:id",
+    "get:/product>res:r>comp:type:productResponse>obj:type:[inline:productResponse]:2>prop:scalar:inStock",
+    "get:/product>res:r>comp:type:productResponse>obj:type:[inline:productResponse]>prop:scalar:name",
+    "get:/product>res:r>comp:type:productResponse>obj:type:[inline:productResponse]:1>prop:scalar:price"
   ]
   await runOasTest('inline-allOf-example.yaml', paths, 1, 4);
 });
@@ -246,16 +248,15 @@ test('anidated-allOf-example-**', async () => {
   ]
   await runOasTest('anidated-allOf-example.yaml', paths, 1, 4);
 });
- */
 
 test('test_010_TMF633_IntentOrValue_to_Union', async () => {
   const paths = [
     "get:/product/{id}>res:r>comp:type:#/c/s/Product>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id",
-    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:#/c/s/ProductAllOf>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/IntentRef>comp:type:#/c/s/EntityRef>obj:type:#/c/s/EntityRefAllOf>prop:scalar:@referredType",
-    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:#/c/s/ProductAllOf>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/IntentRef>comp:type:#/c/s/EntityRef>obj:type:#/c/s/EntityRefAllOf>prop:scalar:id",
-    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:#/c/s/ProductAllOf>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:#/c/s/IntentAllOf>prop:scalar:name",
-    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:#/c/s/ProductAllOf>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id",
-    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:#/c/s/ProductAllOf>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:#/c/s/IntentAllOf>prop:scalar:description"
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/IntentRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:@referredType",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/IntentRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:id",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:name",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:description"
   ];
   await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 11);
 });
@@ -266,4 +267,69 @@ test('test_010_TMF633_IntentOrValue_to_Union_Full', async () => {
   ];
 
   await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 11);
+});
+
+test('test_011_TMF637_001_ComposedTest', async () => {
+  const paths = [
+    'get:/product/{id}>**',
+  ];
+
+  await runOasTest('TMF637-001-ComposedTest.yaml', paths, 1, 9);
+});
+
+test('test_011_TMF637_001_ComposedTest', async () => {
+  const paths = [
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:scalar:name",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>comp:type:#/c/s/EntityRef>obj:type:#/c/s/Extensible>prop:scalar:@baseType",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:@referredType",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>comp:type:#/c/s/EntityRef>obj:type:#/c/s/Extensible>prop:scalar:@schemaLocation",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>comp:type:#/c/s/EntityRef>obj:type:#/c/s/Extensible>prop:scalar:@type",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:href",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:id",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:name",
+    "get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>obj:type:[inline:#/c/s/BillingAccountRef]>prop:scalar:ratingType"
+  ];
+
+  await runOasTest('TMF637-001-ComposedTest.yaml', paths, 1, 9);
+});
+
+test('test_013_testTMF637_TestSimpleRecursion no type found', async () => {
+  const paths = [
+    "get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:scalar:sku",
+    "get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:relatedProduct>obj:type:[inline:#/c/s/Product]>prop:scalar:sku"
+  ];
+
+  // two checks in the runOasTest function + 1 here
+  // expect.assertions(4);
+  try {
+    await runOasTest('TMF637-002-SimpleRecursionTest.yaml', paths, 1, 2, true);
+  } catch (error) {
+    console.error(error);
+    assert.ok(error !== undefined);
+
+    const message = _.get(error, 'message') ?? '';
+    assert.ok((message).includes('Could not find type'));
+  }
+});
+
+test('test_014_testTMF637_TestRecursion', async () => {
+  const paths =
+    [
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:#/c/s/Entity>prop:scalar:id',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:scalar:terminationDate',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:#/c/s/Extensible>prop:scalar:@baseType',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:#/c/s/Extensible>prop:scalar:@schemaLocation',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:#/c/s/Extensible>prop:scalar:@type',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:scalar:role',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:#/c/s/Entity>prop:scalar:href',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:#/c/s/Entity>prop:scalar:id',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:[inline:#/c/s/PartyRole]>prop:scalar:name',
+    // 'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:[inline:#/c/s/PartyRole]>prop:circular-ref:#relatedParty'
+  ];
+
+  // expect.assertions(6);
+  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 10);
+  // expect(error).toContain("Circular reference detected in `@connect(selection:)` on `Query.productById`");
 });

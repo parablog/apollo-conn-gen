@@ -174,6 +174,8 @@ export class Composed extends Type {
       const allOfItemSchema = allOfs[i];
 
       const type = Factory.fromSchema(context, this, allOfItemSchema as SchemaObject);
+      this.add(type);
+
       trace(context, '   [composed::all-of]', 'allOf type: ' + type);
 
       if (type) {
@@ -206,26 +208,17 @@ export class Composed extends Type {
   }
 
 
-  add(child: IType) {
+  add(child: IType): IType {
     let name = child.name;
     let idx = 0;
 
     // TODO: this should not be applicable to Refs
     while (this.children.some((c) => c.name === name)) {
-      name = `${child.name}${++idx}`;
+      name = `${child.name}:${++idx}`;
     }
 
     child.name = name;
-    super.add(child);
-
-
-    /*let idx = -1;
-    let name = child.name;
-    while ((idx = _.findIndex(this.children, c => c.id === child.id)) > -1) {
-      name = child.name + (++idx)
-    }
-
-    super.add(child);*/
+    return super.add(child);
   }
 
   private updateName(): void {

@@ -16,7 +16,7 @@ export interface IType {
 
   forPrompt(context: OasContext): string;
 
-  add(child: IType): void;
+  add(child: IType): IType;
 
   ancestors(): IType[];
 

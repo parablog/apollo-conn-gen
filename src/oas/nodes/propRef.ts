@@ -25,22 +25,25 @@ export class PropRef extends Prop {
     super(parent, name, schema);
   }
 
-  public override add(child: IType): void {
+/*  public override add(child: IType): IType {
     child.name = this.ref;
     const paths: IType[] = this.ancestors();
     const contains: boolean = paths.map((p) => p.id).includes(child.id);
 
     trace(null, '-> [prop-ref:add]', 'contains child? ' + contains);
+    let added: IType = child;
     if (contains) {
       const ancestor: IType = paths[paths.map((p) => p.id).indexOf(child.id)];
       const wrapper = Factory.fromCircularRef(this, ancestor);
-      super.add(wrapper);
+      added = super.add(wrapper);
       this.visited = true;
       this.refType = wrapper;
     } else {
-      super.add(child);
+      added = super.add(child);
     }
-  }
+
+    return added;
+  }*/
 
   public visit(context: OasContext): void {
     if (this.visited) {
@@ -56,6 +59,7 @@ export class PropRef extends Prop {
 
     const type = Factory.fromSchema(context, this, schema);
     if (!this.refType) {
+      this.add(type);
       this.refType = type;
       type.name = this.ref;
       type.visit(context);
@@ -105,7 +109,7 @@ export class PropRef extends Prop {
     trace(context, '<- [prop-ref:select]', 'out ' + this.name + ', ref: ' + this.ref);
   }
 
-  protected generateValue(context: OasContext, writer: Writer): void {
+   generateValue(context: OasContext, writer: Writer): void {
     const type = this.refType;
 
     if (type && (type as IType) instanceof Arr) {
@@ -122,6 +126,6 @@ export class PropRef extends Prop {
     if (child instanceof Arr) {
       return this.needsBrackets(child.itemsType!);
     }
-    return child instanceof Obj || child instanceof Union || child instanceof Composed || child instanceof CircularRef;
+    return child instanceof Obj || child instanceof Union || child instanceof Composed;
   }
 }

@@ -45,9 +45,9 @@ export class Union extends Type {
 
     for (const refSchema of this.schemas) {
       const type = Factory.fromSchema(context, this, refSchema);
-      trace(context, ' [union:visit]', 'of type: ' + type);
+      this.add(type);
 
-      type.visit(context);
+      trace(context, ' [union:visit]', 'of type: ' + type);
     }
 
     if (!context.inContextOf('Param', this)) {
@@ -152,7 +152,7 @@ export class Union extends Type {
       });
     }
 
-    /* TODO:
+    /* TODO: better selection for Unions
     dataPoints: dataFormat->match(
     ["raw", $.dataPoints],
     ["normal", $.dataPoints {

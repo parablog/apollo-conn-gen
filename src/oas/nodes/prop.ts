@@ -38,7 +38,7 @@ export abstract class Prop extends Type {
 
   public abstract getValue(context: OasContext): string;
 
-  protected generateValue(context: OasContext, writer: Writer): void {
+  generateValue(context: OasContext, writer: Writer): void {
     writer.append(this.getValue(context));
   }
 }

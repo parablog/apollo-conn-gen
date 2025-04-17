@@ -48,7 +48,9 @@ export class Ref extends Type {
       throw new Error('Schema not found for ref: ' + ref);
     }
 
-    this.refType = Factory.fromSchema(context, this, schema);
+    const type = Factory.fromSchema(context, this, schema);
+    this.add(type);
+    this.refType = type;
     // Set the name of the resolved type to the reference string.
     this.refType.name = ref;
     this.refType.visit(context);

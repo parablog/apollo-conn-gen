@@ -74,6 +74,7 @@ export abstract class Type implements IType {
   get id() {
     return this.name;
   }
+
   get props() {
     return this._props;
   }
@@ -102,39 +103,10 @@ export abstract class Type implements IType {
     return builder;
   }
 
-  public add(child: IType): void {
-    const paths: IType[] = this.ancestors();
-    const contains: boolean = paths.map((p) => p.id).includes(child.id);
-
-    if (contains) {
-      trace(null, '-> [type:add]', 'already contains child: ' + child.id);
-      const ancestor: IType = paths[paths.map((p) => p.id).indexOf(child.id)];
-      const wrapper = Factory.fromCircularRef(this, ancestor);
-      this.children.push(wrapper);
-    } else {
-      this.children.push(child);
-    }
+  public add(child: IType): IType {
+    this.children.push(child);
+    return child;
   }
-
-  /*
-    remove = (value: IType): void => {
-      const index = this.children.findIndex(child => child === value);
-      if (index !== -1) {
-        this.children.splice(index, 1);
-      }
-    };
-
-*/
-
-  /*traverseB(callback: (node: IType) => void): void {
-    const queue: IType[] = [this];
-
-    while (queue.length > 0) {
-      const node = queue.shift()!;
-      callback(node);
-      queue.push(...node.children);
-    }
-  }*/
 
   public selectedProps(selection: string[]) {
     return Array.from(this.props.values()).filter((prop) => selection.find((s) => s.startsWith(prop.path())));

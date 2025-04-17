@@ -1,4 +1,4 @@
-import { Composed, Factory, IType, Obj, Prop, PropComp, PropObj, PropRef, Scalar, Union } from './internal.js';
+import { Composed, Factory, IType, Obj, Prop, PropComp, PropObj, PropRef, Scalar, T, Union } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
@@ -36,34 +36,34 @@ export class PropArray extends Prop {
   }
 
   public override getValue(context: OasContext): string {
-    if (this.items?.id.startsWith('obj:')) {
-      if (_.isEmpty(this.items?.props)) return 'JSON';
-      return `[${ Naming.genTypeName(this.items?.name) }]`;
+    if (this.items && T.isContainer(this.items)) {
+      return `[${Naming.genTypeName(this.items?.name)}]`;
     }
 
     return `[${this.items!.name}]`;
   }
 
-  public add(child: IType): void {
+/*  public add(child: IType): IType {
     const paths: IType[] = this.ancestors();
     const contains: boolean = paths.map((p) => p.id).includes(child.id);
 
     trace(null, '-> [prop-array:add]', 'contains child? ' + contains);
 
+    let added: IType = child;
     if (contains) {
       const ancestor: IType = paths[paths.map((p) => p.id).indexOf(child.id)];
       const wrapper: IType = Factory.fromCircularRef(this, ancestor);
-      super.add(wrapper);
+      added = super.add(wrapper);
       this.visited = true;
+    } else {
+      added = super.add(child);
     }
-    else {
-      super.add(child);
-    }
-  }
+    return added;
+  }*/
 
   public forPrompt(context: OasContext): string {
     // return `[prop] ${this.name}: [${this.items!.getValue(context)}] (Array)`;
-    if (this.items?.id.startsWith('obj:')) {
+    if (this.items && T.isContainer(this.items)) {
       // if (_.isEmpty(this.items?.props)) return 'JSON';// TODO: what do we do here
       // return Naming.genTypeName(this.items?.name);
       return `[prop] ${this.name}: [${Naming.genTypeName(this.items?.name)}] (Array)`;
@@ -111,6 +111,7 @@ export class PropArray extends Prop {
 
   public needsBrackets(child?: IType): boolean {
     if (!child) return false;
-    return child instanceof Obj || child instanceof Composed || child instanceof Union; // // child instanceof PropRef ||
+    return T.isContainer(child)
+    // return child instanceof Obj || child instanceof Composed || child instanceof Union; // // child instanceof PropRef ||
   }
 }

@@ -22,7 +22,7 @@ import type { PartialDeep } from '@inquirer/type';
 import _ from 'lodash';
 
 import { OasContext } from '../oasContext.js';
-import { CircularRef, T, Composed } from '../nodes/internal.js';
+import { T, Composed, PropCircRef } from '../nodes/internal.js';
 import { getMaxLength, isEscapeKey } from './base/utils.js';
 import { CustomTheme, RenderContext } from './theme.js';
 import { IType } from '../nodes/internal.js';
@@ -73,7 +73,7 @@ const baseTheme: CustomTheme = {
     const baseColor = !isLeaf ? this.style.directory : this.style.file;
     const color = context.isActive ? this.style.active : baseColor;
 
-    const isDisabled = item instanceof CircularRef;
+    const isDisabled = item instanceof PropCircRef;
     return isDisabled ? this.style.disabled(`${line} ${this.labels.disabled}`) : color(line);
   },
 };
@@ -137,8 +137,13 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
     if (isEnterKey(key)) {
       setStatus('done');
       done(selected);
-    } else if (isSelectKey(key)) {
-      if (activeItem instanceof CircularRef) {
+    }
+    else if (isDumpKey(key)) {
+      if (current)
+        console.info(T.print(current.ancestors()[0]))
+    }
+    else if (isSelectKey(key)) {
+      if (activeItem instanceof PropCircRef) {
         return;
       }
 
@@ -246,5 +251,7 @@ const isSelectKey = (key: KeypressEvent): boolean => key.name === 'x';
 const isSelectAllKey = (key: KeypressEvent): boolean => key.name === 'a';
 
 const isSelectNoneKey = (key: KeypressEvent): boolean => key.name === 'n';
+
+const isDumpKey = (key: KeypressEvent): boolean => key.name === 'd';
 
 const isInvertKey = (key: KeypressEvent): boolean => key.name === 'a';
