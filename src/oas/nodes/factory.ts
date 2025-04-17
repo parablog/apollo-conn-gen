@@ -1,40 +1,39 @@
 import {
-  Get,
-  Post,
-  IType,
-  Ref,
-  ReferenceObject,
   Arr,
+  Body,
+  CircularRef,
   Composed,
-  Obj,
+  Delete,
   En,
-  Scalar,
+  Get,
+  IType,
+  Obj,
+  Param,
+  Patch,
+  Post,
   Prop,
-  PropRef,
   PropArray,
+  PropCircRef,
+  PropComp,
   PropObj,
   PropScalar,
-  CircularRef,
-  Union,
-  Response,
-  Param,
-  Body,
   Put,
-  Patch,
-  Delete,
-  PropComp,
+  ReferenceObject,
+  Response,
+  Scalar,
   T,
-  PropCircRef
+  Union,
 } from './internal.js';
 import { Operation } from 'oas/operation';
 import { ParameterObject, SchemaObject } from 'oas/types';
 import { OpenAPIV3 } from 'openapi-types';
-import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 import _ from 'lodash';
 import { warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { GqlUtils } from '../utils/gql.js';
 import { APOLLO_SYNTHETIC_OBJ } from '../schemas/index.js';
+import { PropEn } from './propEn.js';
+import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
 export class Factory {
   public static createGet(name: string, op: Operation): Get {
@@ -82,8 +81,9 @@ export class Factory {
     if (typeStr != null) {
       if (typeStr === 'array') {
         throw new Error(`Should have been handled already? ${typeStr}, schema: ${JSON.stringify(schema)}`);
-      } else if (schema?.enum != null) {
-        return new En(parent, schema, schema.enum! as string[]);
+      }
+      else if (schema?.enum != null) {
+        return new En(parent, 'enum', schema, schema.enum! as string[]);
       }
       // scalar case
       else if (GqlUtils.gqlScalar(typeStr as string)) {
@@ -95,7 +95,7 @@ export class Factory {
         throw new Error(`Cannot handle property type ${typeStr}, schema: ${JSON.stringify(schema)}`);
       }
     } else if (schema?.enum != null) {
-      return new En(parent, schema, _.get(schema, 'enum') as string[]);
+      return new En(parent, 'enuum', schema, _.get(schema, 'enum') as string[]);
     }
     // or we have no idea how to handle this
     else {
@@ -204,6 +204,12 @@ export class Factory {
           const propType: IType = new Obj(parent, ref || propName, schemaObj);
           prop = new PropObj(parent, propName, schemaObj, propType);
         }
+      }
+      else if (ref && schemaObj?.enum) {
+        const stringEnum = _.every(schemaObj.enum, (value: any, _: string) => typeof value === 'string');
+        const en: En = new En(parent, ref, schemaObj, stringEnum ? schemaObj.enum as string[] : [])
+
+        prop = new PropEn(parent, propName, ref, en);
       }
       // 3rd tries for scalar
       else if (GqlUtils.gqlScalar(type as string)) {

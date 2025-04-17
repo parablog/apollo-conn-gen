@@ -28,6 +28,7 @@ import { Union } from './union.js';
 import { T } from './typeUtils.js';
 import { Op } from './op.js';
 import { PropCircRef } from './propCircRef.js';
+import { PropEn } from './propEn.js';
 
 export * from './iType.js';
 export { Type } from './type.js';
@@ -56,5 +57,6 @@ export { PropComp } from './propComp.js';
 export { PropRef } from './propRef.js';
 export { PropScalar } from './propScalar.js';
 export { PropCircRef } from './propCircRef.js';
+export { PropEn } from './propEn.js';
 export { T } from './typeUtils.js';
 export { type Op } from './op.js';

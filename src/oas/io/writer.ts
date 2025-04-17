@@ -1,4 +1,4 @@
-import _ from 'lodash';
+import _, { forEach } from 'lodash';
 import Oas from 'oas';
 import { ServerObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
@@ -114,6 +114,12 @@ export class Writer {
         collection = Array.from(current!.children.values()) || Array.from(current!.props.values()) || [];
         i++;
       } while (i < parts.length);
+
+      // optional hook -- if the type in question has deps, add them here
+      const deps: IType[] = _.invoke(current, 'dependencies');
+      if (deps) {
+        deps.filter(i => !pendingTypes.has(i.id)).forEach(i => pendingTypes.set(i.id, i))
+      }
 
       if (current && !(current instanceof Scalar)) {
         // TODO: this seems redundant, we've already walked the parent AND can be also contained in the context stack

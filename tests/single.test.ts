@@ -333,3 +333,10 @@ test('test_014_testTMF637_TestRecursion', async () => {
   const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 10);
   // expect(error).toContain("Circular reference detected in `@connect(selection:)` on `Query.productById`");
 });
+
+test('test_015_testTMF637_ProductStatusEnum', async () => {
+  const paths = [
+    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:enum:status',
+  ];
+  const output = await runOasTest('TMF637-ProductInventory-v5.0.0.oas.yaml', paths, 12, 6);
+});

@@ -37,7 +37,7 @@ export class PropScalar extends Prop {
     context.leave(this);
   }
 
-  public getValue(context: OasContext): string {
+  public getValue(_context: OasContext): string {
     return this.type;
   }
 

@@ -9,10 +9,11 @@ import { Naming } from '../utils/naming.js';
 export class En extends Type {
   constructor(
     parent: IType,
+    name: string = 'enum',
     public schema: SchemaObject,
     public items: string[] = [],
   ) {
-    super(parent, 'enum');
+    super(parent, name);
   }
 
   get id(): string {
