@@ -81,8 +81,7 @@ export class Factory {
     if (typeStr != null) {
       if (typeStr === 'array') {
         throw new Error(`Should have been handled already? ${typeStr}, schema: ${JSON.stringify(schema)}`);
-      }
-      else if (schema?.enum != null) {
+      } else if (schema?.enum != null) {
         return new En(parent, 'enum', schema, schema.enum! as string[]);
       }
       // scalar case
@@ -118,7 +117,11 @@ export class Factory {
     // or a plain obj
     else {
       if (!schema.properties) {
-        warn(null, '[factory]', 'Object has no properties: ' + JSON.stringify(schema, null, 2) + ' in: ' + parent.pathToRoot());
+        warn(
+          null,
+          '[factory]',
+          'Object has no properties: ' + JSON.stringify(schema, null, 2) + ' in: ' + parent.pathToRoot(),
+        );
       }
 
       result = new Obj(parent, ref || _.get(schema, 'name') || null, schema);
@@ -151,7 +154,12 @@ export class Factory {
     return arr;
   }
 
-  public static fromProp(context: OasContext, parent: IType, propName: string, inputSchema: SchemaObject | ReferenceObject): Prop {
+  public static fromProp(
+    context: OasContext,
+    parent: IType,
+    propName: string,
+    inputSchema: SchemaObject | ReferenceObject,
+  ): Prop {
     if (!inputSchema) {
       throw new Error(`Should have a schema defined for property '${propName}' (parent: '${parent.name}')`);
     }
@@ -187,7 +195,12 @@ export class Factory {
         prop = array;
       }
       // 2nd checks for obj property
-      else if (schemaObj?.type === 'object' || schemaObj?.oneOf || schemaObj?.allOf || !_.isEmpty(schemaObj.properties)) {
+      else if (
+        schemaObj?.type === 'object' ||
+        schemaObj?.oneOf ||
+        schemaObj?.allOf ||
+        !_.isEmpty(schemaObj.properties)
+      ) {
         if (schemaObj.oneOf) {
           const inner: PropComp = new PropComp(parent, propName, schemaObj);
           inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
@@ -204,10 +217,10 @@ export class Factory {
           const propType: IType = new Obj(parent, ref || propName, schemaObj);
           prop = new PropObj(parent, propName, schemaObj, propType);
         }
-      }
-      else if (ref && schemaObj?.enum) {
+      } else if (ref && schemaObj?.enum) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
         const stringEnum = _.every(schemaObj.enum, (value: any, _: string) => typeof value === 'string');
-        const en: En = new En(parent, ref, schemaObj, stringEnum ? schemaObj.enum as string[] : [])
+        const en: En = new En(parent, ref, schemaObj, stringEnum ? (schemaObj.enum as string[]) : []);
 
         prop = new PropEn(parent, propName, ref, schemaObj);
         prop.add(en);
@@ -222,7 +235,7 @@ export class Factory {
         throw new Error('Cannot handle property type ' + type);
       }
     }
-      // otherwise let's use the properties instead and assume an Obj
+    // otherwise let's use the properties instead and assume an Obj
     // TODO: repeated code
     else if (schemaObj.oneOf) {
       const inner: PropComp = new PropComp(parent, propName, schemaObj);
@@ -241,7 +254,7 @@ export class Factory {
       prop = new PropScalar(parent, propName, 'JSON', schemaObj);
     }
 
-    if (parent.ancestors().find(a => a.id === prop.id)) {
+    if (parent.ancestors().find((a) => a.id === prop.id)) {
       console.warn('[factory] Recursion detected! Ancestors already contain this type: \n' + prop.id);
       prop = new PropCircRef(parent, prop);
     }
@@ -275,7 +288,7 @@ export class Factory {
   }
 
   public static fromCircularRef(parent: IType, child: IType): IType {
-    const tree = T.print(parent);
+    const _tree = T.print(parent);
 
     const circularRef = new CircularRef(parent, child.name);
     circularRef.ref = child;

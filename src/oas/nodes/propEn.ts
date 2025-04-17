@@ -40,9 +40,7 @@ export class PropEn extends Prop {
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '   [prop:select]', this.name);
     const sanitised = Naming.sanitiseFieldForSelect(this.name);
-    writer
-      .append(' '.repeat(context.indent + context.stack.length))
-      .append(sanitised);
+    writer.append(' '.repeat(context.indent + context.stack.length)).append(sanitised);
 
     if (context.generateOptions.debugParentInSelection) {
       writer.append(' # ').append(Naming.getRefName(this.parent!.name));

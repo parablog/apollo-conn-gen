@@ -135,7 +135,7 @@ export class Composed extends Type {
 
     while (queue.length > 0) {
       const node = queue.shift()!;
-      ids.add(node.id)
+      ids.add(node.id);
 
       if (selection.length > 0) {
         node.props.forEach((prop) => {
@@ -205,7 +205,6 @@ export class Composed extends Type {
 
     trace(context, '<- [composed::one-of]', `out: OneOf ${this.name} with size: ${oneOfs.length}`);
   }
-
 
   add(child: IType): IType {
     let name = child.name;

@@ -57,7 +57,7 @@ export class Union extends Type {
     if (this.name != null) {
       context.store(this.name, this);
       if (context.generateOptions.consolidateUnion) {
-        this.children.forEach(child => context.generatedSet.add(child.id))
+        this.children.forEach((child) => context.generatedSet.add(child.id));
       }
     }
 
@@ -77,8 +77,7 @@ export class Union extends Type {
       for (const child of this.children) {
         child.generate(context, writer, selection);
       }
-    }
-    else if (context.inContextOf('Res', this)) {
+    } else if (context.inContextOf('Res', this)) {
       writer.append(Naming.genTypeName(this.name));
       return;
     }
@@ -89,7 +88,7 @@ export class Union extends Type {
       if (context.generateOptions.consolidateUnion) {
         if (!this.consolidated) {
           // add to generated set
-          this.consolidate(selection).forEach(id => context.generatedSet.add(id))
+          this.consolidate(selection).forEach((id) => context.generatedSet.add(id));
         }
 
         // When generating this union in GQL it might look like:
@@ -171,7 +170,7 @@ export class Union extends Type {
 
   public consolidate(selection: string[]): Set<string> {
     T.composables(this).forEach((child) => {
-      (child as (Composed)).consolidate(selection);
+      (child as Composed).consolidate(selection);
     });
 
     const ids: Set<string> = new Set();
@@ -179,9 +178,9 @@ export class Union extends Type {
     const discriminator = this.discriminator;
 
     this.children?.forEach((child) => {
-      ids.add(child.id)
-      props.push(...child.props.values())
-    })
+      ids.add(child.id);
+      props.push(...child.props.values());
+    });
 
     // add the discriminator, if we have one
     if (discriminator) {
@@ -193,9 +192,7 @@ export class Union extends Type {
     }
 
     // and finally sort the props and copy them to our original
-    props
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .forEach((prop) => this.props.set(prop.name, prop));
+    props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
 
     // and return the types.ts we've used
     this.consolidated = true;
@@ -204,8 +201,8 @@ export class Union extends Type {
     const queue: IType[] = Array.from(this.children.values());
     while (queue.length > 0) {
       const node = queue.shift()!;
-      T.containers(node).forEach(c => ids.add(c.id))
-      queue.push(...node.children)
+      T.containers(node).forEach((c) => ids.add(c.id));
+      queue.push(...node.children);
     }
 
     return ids;
@@ -228,5 +225,4 @@ export class Union extends Type {
 
     this.name = name;
   }
-
 }

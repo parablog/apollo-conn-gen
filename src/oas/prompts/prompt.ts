@@ -164,8 +164,7 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
 
       setSelected(selected.filter((path) => !filtered.includes(path)));
     } else if (isDumpKey(key)) {
-      if (current)
-        console.info(T.print(current.ancestors()[0]))
+      if (current) console.info(T.print(current.ancestors()[0]));
     } else {
       const isLeaf = T.isLeaf(activeItem);
 

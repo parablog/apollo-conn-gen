@@ -24,7 +24,7 @@ export class PropRef extends Prop {
     super(parent, name, schema);
   }
 
-/*  public override add(child: IType): IType {
+  /*  public override add(child: IType): IType {
     child.name = this.ref;
     const paths: IType[] = this.ancestors();
     const contains: boolean = paths.map((p) => p.id).includes(child.id);
@@ -108,7 +108,7 @@ export class PropRef extends Prop {
     trace(context, '<- [prop-ref:select]', 'out ' + this.name + ', ref: ' + this.ref);
   }
 
-   generateValue(context: OasContext, writer: Writer): void {
+  generateValue(context: OasContext, writer: Writer): void {
     const type = this.refType;
 
     if (type && (type as IType) instanceof Arr) {

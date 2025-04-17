@@ -1,13 +1,4 @@
-import {
-  CircularRef,
-  En,
-  Obj,
-  Prop,
-  PropArray,
-  PropEn,
-  PropScalar,
-  Scalar,
-} from './internal.js';
+import { CircularRef, En, Obj, Prop, PropArray, PropEn, PropScalar, Scalar } from './internal.js';
 
 import { IType } from './internal.js';
 import _ from 'lodash';
@@ -61,16 +52,16 @@ export class T {
   }
 
   public static isContainer(node: IType): boolean {
-    return node.id.startsWith('obj:') || node.id.startsWith('comp:') || node.id.startsWith('union:')
+    return node.id.startsWith('obj:') || node.id.startsWith('comp:') || node.id.startsWith('union:');
   }
 
   static composables(node: IType): IType[] {
-    return _.filter(T.containers(node), (e: IType) => e.id.startsWith('comp:')) // || e.id.startsWith('union:'));
+    return _.filter(T.containers(node), (e: IType) => e.id.startsWith('comp:')); // || e.id.startsWith('union:'));
   }
 
   public static print(node: IType, prefix: string = '', isLast: boolean = true): string {
     // Build the current line with the appropriate connector.
-    const connector = prefix === '' ? '' : (isLast ? '└─ ' : '├─ ');
+    const connector = prefix === '' ? '' : isLast ? '└─ ' : '├─ ';
     let result = prefix + connector + node.id + '\n';
 
     // Prepare the prefix for the children.
@@ -83,5 +74,4 @@ export class T {
 
     return result;
   }
-
 }

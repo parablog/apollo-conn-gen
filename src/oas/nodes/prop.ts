@@ -18,7 +18,12 @@ export abstract class Prop extends Type {
   public generate(context: OasContext, writer: Writer, _selection: string[]): void {
     const description = this.schema.description;
     if (description != null) {
-      if (description.includes('\n') || description.includes('\r') || description.includes('"') || description.includes('\\')) {
+      if (
+        description.includes('\n') ||
+        description.includes('\r') ||
+        description.includes('"') ||
+        description.includes('\\')
+      ) {
         writer.append('  """\n').append('  ').append(description).append('\n  """\n');
       } else {
         writer.append('  "').append(description).append('"\n');

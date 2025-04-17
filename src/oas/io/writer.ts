@@ -102,9 +102,10 @@ export class Writer {
         if (!current) {
           const tree = T.print(last!.ancestors()[0]);
 
-
           // let's collect the possible paths so we don't have to debug
-          throw new Error('Could not find type: ' + part + ' from ' + path + '\nlast:\n' + last?.pathToRoot() + "\ntree: " + tree);
+          throw new Error(
+            'Could not find type: ' + part + ' from ' + path + '\nlast:\n' + last?.pathToRoot() + '\ntree: ' + tree,
+          );
         }
 
         // make sure we expand it before we move on to the next part
@@ -118,7 +119,7 @@ export class Writer {
       // optional hook -- if the type in question has deps, add them here
       const deps: IType[] = _.invoke(current, 'dependencies');
       if (deps) {
-        deps.filter(i => !pendingTypes.has(i.id)).forEach(i => pendingTypes.set(i.id, i))
+        deps.filter((i) => !pendingTypes.has(i.id)).forEach((i) => pendingTypes.set(i.id, i));
       }
 
       if (current && !(current instanceof Scalar)) {
@@ -129,7 +130,8 @@ export class Writer {
         }
 
         // add all ancestors (of the parent of the prop) that are containers so they are generated accordingly
-        parentType.ancestors()
+        parentType
+          .ancestors()
           .filter((t) => !pendingTypes.has(t.id) && T.isContainer(t))
           .forEach((dep) => pendingTypes.set(dep.id, dep));
       }

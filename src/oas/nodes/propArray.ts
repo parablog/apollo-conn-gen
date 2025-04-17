@@ -66,8 +66,9 @@ export class PropArray extends Prop {
 
     // Select each child of the items Prop.
     if (this.needsBrackets(this.items)) {
-      const selected = Array.from(this.items!.children.values())
-        .filter((prop) => selection.find((s) => s.startsWith(prop.path())));
+      const selected = Array.from(this.items!.children.values()).filter((prop) =>
+        selection.find((s) => s.startsWith(prop.path())),
+      );
 
       for (const child of selected) {
         child.select(context, writer, selection);
@@ -90,6 +91,6 @@ export class PropArray extends Prop {
 
   public needsBrackets(child?: IType): boolean {
     if (!child) return false;
-    return T.isContainer(child)
+    return T.isContainer(child);
   }
 }

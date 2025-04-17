@@ -31,7 +31,6 @@ export class PropCircRef extends Prop {
     return `[prop] ${this.name}: Circular reference to: ${this.ref.forPrompt(context)} `;
   }
 
-
   generateValue(context: OasContext, writer: Writer) {
     writer.append('# ');
     this.ref.generateValue(context, writer);

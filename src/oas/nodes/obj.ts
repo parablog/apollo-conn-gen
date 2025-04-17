@@ -157,7 +157,6 @@ export class Obj extends Type {
       // if the parent is an object then we can use the parent name
       else if (parent instanceof Obj) {
         name = parentName + 'Obj';
-
       }
       // extreme case -- we synthesize an anonymous name
       else {
@@ -167,5 +166,4 @@ export class Obj extends Type {
 
     this.name = name;
   }
-
 }

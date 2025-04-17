@@ -47,7 +47,7 @@ async function main(sourceFile: string, opts: any): Promise<void> {
 
   if (opts.printSelections) {
     console.info('--------------- Selections -----------------');
-    console.info(gen.selections)
+    console.info(gen.selections);
   }
 }
 
