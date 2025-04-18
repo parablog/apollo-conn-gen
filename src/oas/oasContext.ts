@@ -6,8 +6,8 @@ import { Naming } from './utils/naming.js';
 import { IType } from './nodes/internal.js';
 
 export type GenerateOptions = {
-  consolidateUnion: boolean;
-  debugParentInSelection: boolean;
+  consolidateUnions: boolean;
+  showParentInSelections: boolean;
 };
 
 export class OasContext {
@@ -19,16 +19,16 @@ export class OasContext {
 
   public stack: IType[] = new Array<IType>();
   public types: Map<string, IType | undefined> = new Map();
+  public generateOptions: GenerateOptions;
 
   private parser: Oas;
-  generateOptions: GenerateOptions;
 
   constructor(parser: Oas) {
     this.parser = parser;
     this.indent = 0;
     this.generateOptions = {
-      consolidateUnion: true, // by default, we consolidate fields until unions are supported
-      debugParentInSelection: true, // by default, we don't show where the fields are coming from
+      consolidateUnions: true, // by default, we consolidate fields until unions are supported
+      showParentInSelections: true, // by default, we don't show where the fields are coming from
     };
   }
 

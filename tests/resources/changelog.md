@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.1]
+
+### Changes
+- minor change to add two options to `OasGen`: 
+  1. `consolidateUnions`: consolidate all `OneOf` types into a single GraphQL `type`. This is a work-around until the Connectors spec supports `union`s.
+  2. `showParentInSelections`: adds a comment in each field of the selection section to identify where the field is being pulled from. Useful for debugging purposes only.
+
+
 ## [0.3.0] Removed `Ref` node (breaking)
 
 ### Changes

@@ -73,7 +73,7 @@ export class PropComp extends Prop {
       writer.append(' '.repeat(context.indent + context.stack.length)).append('}');
     }
     // writer.append('\n');
-    if (context.generateOptions.debugParentInSelection) {
+    if (context.generateOptions.showParentInSelections) {
       writer.append(' # ').append(Naming.getRefName(this.parent!.name));
     }
 

@@ -19,7 +19,11 @@ export async function runOasTest(
   shouldFail: boolean = false,
   skipValidation: boolean = false,
 ): Promise<string | undefined> {
-  const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, { skipValidation });
+  const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
+    skipValidation,
+    consolidateUnions: true,
+    showParentInSelections: false,
+  });
   await gen.visit();
 
   assert.ok(gen.paths !== undefined);

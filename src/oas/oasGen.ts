@@ -5,13 +5,15 @@ import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
-import { OasContext } from './oasContext.js';
+import { GenerateOptions, OasContext } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
 
 interface IGenOptions {
   skipValidation: boolean;
+  consolidateUnions: boolean;
+  showParentInSelections: boolean;
 }
 
 export class OasGen {
@@ -21,6 +23,8 @@ export class OasGen {
     data: ArrayBuffer,
     options: IGenOptions = {
       skipValidation: false,
+      consolidateUnions: true,
+      showParentInSelections: false,
     },
   ): Promise<OasGen> {
     const normalizer: OASNormalize = new OASNormalize(data, {
@@ -45,14 +49,15 @@ export class OasGen {
     console.log('converted');
 
     const parser: Oas = new Oas(json as OASDocument);
-    // return new ConnectorGen(oas, prompt);
-    return new OasGen(parser);
+    return new OasGen(parser, options);
   }
 
   public static async fromFile(
     sourceFile: string,
     options: IGenOptions = {
       skipValidation: false,
+      consolidateUnions: true,
+      showParentInSelections: false,
     },
     // prompt: Prompt
   ): Promise<OasGen> {
@@ -84,8 +89,7 @@ export class OasGen {
     console.log('converted');
 
     const parser: Oas = new Oas(json as OASDocument);
-    // return new ConnectorGen(oas, prompt);
-    return new OasGen(parser);
+    return new OasGen(parser, options);
   }
 
   public parser: Oas;
@@ -93,7 +97,7 @@ export class OasGen {
   public context?: OasContext;
   public paths: Map<string, IType> = new Map();
 
-  constructor(parser: Oas) {
+  constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
     // this.prompt = prompt;
   }

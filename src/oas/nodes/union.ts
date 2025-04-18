@@ -56,7 +56,7 @@ export class Union extends Type {
 
     if (this.name != null) {
       context.store(this.name, this);
-      if (context.generateOptions.consolidateUnion) {
+      if (context.generateOptions.consolidateUnions) {
         this.children.forEach((child) => context.generatedSet.add(child.id));
       }
     }
@@ -85,7 +85,7 @@ export class Union extends Type {
     else {
       const name = _.upperFirst(Naming.getRefName(this.name));
 
-      if (context.generateOptions.consolidateUnion) {
+      if (context.generateOptions.consolidateUnions) {
         if (!this.consolidated) {
           // add to generated set
           this.consolidate(selection).forEach((id) => context.generatedSet.add(id));
@@ -135,7 +135,7 @@ export class Union extends Type {
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '-> [union::select]', `-> in: ${this.name}`);
 
-    if (context.generateOptions.consolidateUnion) {
+    if (context.generateOptions.consolidateUnions) {
       if (!this.consolidated) {
         this.consolidate(selection);
       }

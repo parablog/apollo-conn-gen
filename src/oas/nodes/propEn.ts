@@ -42,7 +42,7 @@ export class PropEn extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(this.name);
     writer.append(' '.repeat(context.indent + context.stack.length)).append(sanitised);
 
-    if (context.generateOptions.debugParentInSelection) {
+    if (context.generateOptions.showParentInSelections) {
       writer.append(' # ').append(Naming.getRefName(this.parent!.name));
     }
 

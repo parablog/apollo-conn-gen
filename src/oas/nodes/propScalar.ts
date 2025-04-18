@@ -43,7 +43,7 @@ export class PropScalar extends Prop {
   public forPrompt(context: OasContext): string {
     let result = `[prop] ${this.name}: ${this.type}`;
 
-    if (context.generateOptions.debugParentInSelection) {
+    if (context.generateOptions.showParentInSelections) {
       result = result + ` (${Naming.getRefName(this.parent!.name)})`;
     }
 
@@ -59,7 +59,7 @@ export class PropScalar extends Prop {
       child.select(context, writer, selection);
     }
 
-    if (context.generateOptions.debugParentInSelection) {
+    if (context.generateOptions.showParentInSelections) {
       writer.append(' # ').append(Naming.getRefName(this.parent!.name));
     }
 
