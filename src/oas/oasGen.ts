@@ -96,7 +96,7 @@ export class OasGen {
   // public prompt: Prompt;
   public context?: OasContext;
   public paths: Map<string, IType> = new Map();
-  options: GenerateOptions;
+  public options: GenerateOptions;
 
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
@@ -112,6 +112,9 @@ export class OasGen {
   }
 
   public generateSchema(paths: string[]): string {
+    // make sure we pass the latest options to our context for the generation
+    this.context!.generateOptions = this.options;
+
     const writer: Writer = new Writer(this);
     this.selections = writer.generate(paths);
     return writer.flush();
