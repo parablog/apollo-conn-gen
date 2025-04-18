@@ -96,10 +96,11 @@ export class OasGen {
   // public prompt: Prompt;
   public context?: OasContext;
   public paths: Map<string, IType> = new Map();
+  options: GenerateOptions;
 
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
-    // this.prompt = prompt;
+    this.options = options;
   }
 
   public title(): string {
@@ -139,7 +140,7 @@ export class OasGen {
 
   public getContext(): OasContext {
     if (!this.context) {
-      this.context = new OasContext(this.parser);
+      this.context = new OasContext(this.parser, this.options);
     }
     return this.context;
   }
