@@ -60,36 +60,31 @@ export class Post extends Get {
     context.enter(this);
     trace(context, '-> [post::generate]', `-> in: ${this.name}`);
 
-    // generate body type before anything else
-    // if (this.body) {
-    //   this.body.generate(context, writer, selection);
-    // }
-
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
 
     if (summary || originalPath) {
-      writer.append('  """\n').append('  ');
+      writer.write('  """\n').write('  ');
       if (summary) {
-        writer.append(summary).append(' ');
+        writer.write(summary).write(' ');
       }
       if (originalPath) {
-        writer.append('(').append(originalPath).append(')');
+        writer.write('(').write(originalPath).write(')');
       }
-      writer.append('\n  """\n');
+      writer.write('\n  """\n');
     }
 
-    writer.append('  ').append(this.getGqlOpName());
+    writer.write('  ').write(this.getGqlOpName());
 
     this.generateParameters(context, writer, selection);
     this.generateBodyInput(context, writer);
 
     if (this.resultType) {
-      writer.append(': ');
+      writer.write(': ');
       this.resultType.generate(context, writer, selection);
     }
 
-    writer.append('\n');
+    writer.write('\n');
     trace(context, '<- [post::generate]', `-> out: ${this.name}`);
     context.leave(this);
   }
@@ -126,11 +121,11 @@ export class Post extends Get {
 
     const payload = this.body.payload as Type;
 
-    writer.append('(');
+    writer.write('(');
 
     const name = Naming.getRefName(payload.name!) + payload.nameSuffix();
-    writer.append('input').append(': ').append(name).append('!');
+    writer.write('input').write(': ').write(name).write('!');
 
-    writer.append(')');
+    writer.write(')');
   }
 }

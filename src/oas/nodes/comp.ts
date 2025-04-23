@@ -19,7 +19,6 @@ export class Composed extends Type {
   }
 
   get id(): string {
-    // return `comp:${this.name}`;
     return `comp:${this.kind}:${this.name}`;
   }
 
@@ -48,8 +47,6 @@ export class Composed extends Type {
     // represents a Union type
     else if (composedSchema.oneOf != null) {
       throw new Error('Unions should be constructed by its own object');
-      // deprecated
-      // this.visitOneOfNode(context, composedSchema);
     }
     // can't hand this yet
     else {
@@ -66,23 +63,18 @@ export class Composed extends Type {
     trace(context, '-> [comp::generate]', `-> in: ${this.name}`);
 
     if (context.inContextOf('Res', this)) {
-      writer.append(Naming.genTypeName(this.name));
+      writer.write(Naming.genTypeName(this.name));
       return;
     }
 
     const composedSchema = this.schema;
-    if (composedSchema.oneOf != null) {
-      if (this.children.length > 0) {
-        this.children[0].generate(context, writer, selection);
-      }
-    } else if (composedSchema.allOf != null) {
+    if (composedSchema.allOf != null) {
       const selected = this.selectedProps(selection);
 
       if (selected.length > 0) {
-        // writer.write('type ');
         writer.write(this.kind + ' ');
         writer.write(_.upperFirst(Naming.getRefName(this.name)));
-        writer.append(this.nameSuffix());
+        writer.write(this.nameSuffix());
         writer.write(' {\n');
 
         for (const prop of selected) {
@@ -123,10 +115,6 @@ export class Composed extends Type {
   }
 
   public consolidate(selection: string[]): Set<string> {
-    /*T.composables(this).forEach((child) => {
-      (child as (Composed)).consolidate(selection);
-    });*/
-
     const ids: Set<string> = new Set();
     let props: Map<string, Prop> = new Map();
 
@@ -159,7 +147,7 @@ export class Composed extends Type {
 
     this.consolidated = true;
 
-    // and return the types.ts we've used
+    // and return the types we've used
     return ids;
   }
 

@@ -1,0 +1,982 @@
+{
+  "search-results": {
+    "opensearch:totalResults": "319939",
+    "opensearch:startIndex": "0",
+    "opensearch:itemsPerPage": "25",
+    "opensearch:Query": {
+      "@role": "request",
+      "@searchTerms": "thermodynamics",
+      "@startPage": "0"
+    },
+    "link": [
+      {
+        "@_fa": "true",
+        "@ref": "self",
+        "@href": "https://api.elsevier.com/content/search/sciencedirect?start=0&count=25&query=thermodynamics&apiKey=7f59af901d2d86f78a1fd60c1bf9426a",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "first",
+        "@href": "https://api.elsevier.com/content/search/sciencedirect?start=0&count=25&query=thermodynamics&apiKey=7f59af901d2d86f78a1fd60c1bf9426a",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "next",
+        "@href": "https://api.elsevier.com/content/search/sciencedirect?start=25&count=25&query=thermodynamics&apiKey=7f59af901d2d86f78a1fd60c1bf9426a",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "last",
+        "@href": "https://api.elsevier.com/content/search/sciencedirect?start=5975&count=25&query=thermodynamics&apiKey=7f59af901d2d86f78a1fd60c1bf9426a",
+        "@type": "application/json"
+      }
+    ],
+    "entry": [
+      {
+        "@_fa": "true",
+        "load-date": "2025-03-27T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0370269325001789"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0370269325001789?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.physletb.2025.139418",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0370269325001789",
+        "dc:title": "Thermodynamics of Bardeen black holes in restricted phase space",
+        "dc:creator": "Yahya Ladghami",
+        "prism:publicationName": "Physics Letters B",
+        "prism:volume": "864",
+        "prism:coverDate": "2025-05-31",
+        "prism:startingPage": "139418",
+        "prism:doi": "10.1016/j.physletb.2025.139418",
+        "openaccess": true,
+        "pii": "S0370269325001789",
+        "authors": {
+          "author": [
+            {
+              "$": "Yahya Ladghami"
+            },
+            {
+              "$": "Brahim Asfour"
+            },
+            {
+              "$": "Taoufik Ouali"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-03-08T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S000925092500329X"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S000925092500329X?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.ces.2025.121506",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S000925092500329X",
+        "dc:title": "Development of mass, energy, and thermodynamics constrained steady-state and dynamic neural networks for interconnected chemical systems",
+        "dc:creator": "Angan Mukherjee",
+        "prism:publicationName": "Chemical Engineering Science",
+        "prism:volume": "309",
+        "prism:coverDate": "2025-05-01",
+        "prism:startingPage": "121506",
+        "prism:doi": "10.1016/j.ces.2025.121506",
+        "openaccess": false,
+        "pii": "S000925092500329X",
+        "authors": {
+          "author": [
+            {
+              "$": "Angan Mukherjee"
+            },
+            {
+              "$": "Debangsu Bhattacharyya"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-03-13T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S1004954125001119"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S1004954125001119?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.cjche.2024.12.024",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S1004954125001119",
+        "dc:title": "Thermodynamics insights into the gas-phase synthesis of glycolide from methyl glycolate",
+        "dc:creator": "Dai Zhang",
+        "prism:publicationName": "Chinese Journal of Chemical Engineering",
+        "prism:coverDate": "2025-03-13",
+        "prism:doi": "10.1016/j.cjche.2024.12.024",
+        "openaccess": false,
+        "pii": "S1004954125001119",
+        "authors": {
+          "author": [
+            {
+              "$": "Dai Zhang"
+            },
+            {
+              "$": "Xiaofeng Xu"
+            },
+            {
+              "$": "Xinggui Zhou"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-01-03T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S2949908924003303"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S2949908924003303?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.jgsce.2024.205534",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S2949908924003303",
+        "dc:title": "Impact of depletion rate on the thermodynamics of gas condensates: Experimental insights and analysis",
+        "dc:creator": "Desmond Batsa Dorhjie",
+        "prism:publicationName": "Gas Science and Engineering",
+        "prism:volume": "134",
+        "prism:coverDate": "2025-02-28",
+        "prism:startingPage": "205534",
+        "prism:doi": "10.1016/j.jgsce.2024.205534",
+        "openaccess": false,
+        "pii": "S2949908924003303",
+        "authors": {
+          "author": [
+            {
+              "$": "Desmond Batsa Dorhjie"
+            },
+            {
+              "$": "Timur Aminev"
+            },
+            {
+              "$": "Alexey Cheremisin"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-03-10T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S055032132500077X"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S055032132500077X?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.nuclphysb.2025.116868",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S055032132500077X",
+        "dc:title": "Thermodynamics of high order correction for Schwarzschild-AdS black hole in non-commutative geometry",
+        "dc:creator": "Baoyu Tan",
+        "prism:publicationName": "Nuclear Physics B",
+        "prism:volume": "1014",
+        "prism:coverDate": "2025-05-31",
+        "prism:startingPage": "116868",
+        "prism:doi": "10.1016/j.nuclphysb.2025.116868",
+        "openaccess": true,
+        "pii": "S055032132500077X",
+        "authors": {
+          "author": "Baoyu Tan"
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-01-13T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S2214404825000060"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S2214404825000060?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.jheap.2025.01.006",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S2214404825000060",
+        "dc:title": "Exploring embedded wormhole solutions and thermodynamics in extended teleparallel gravity",
+        "dc:creator": "Allah Ditta",
+        "prism:publicationName": "Journal of High Energy Astrophysics",
+        "prism:volume": "45",
+        "prism:coverDate": "2025-03-31",
+        "prism:startingPage": "350",
+        "prism:endingPage": "358",
+        "prism:doi": "10.1016/j.jheap.2025.01.006",
+        "openaccess": false,
+        "pii": "S2214404825000060",
+        "authors": {
+          "author": [
+            {
+              "$": "Allah Ditta"
+            },
+            {
+              "$": "G. Mustafa"
+            },
+            {
+              "$": "Asif Mahmood"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-02-28T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0550321325000665"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0550321325000665?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.nuclphysb.2025.116857",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0550321325000665",
+        "dc:title": "Analyzing WGC and WCCC through charged scalar fields fluxes with charged AdS black holes surrounded by perfect fluid dark matter in the CFT thermodynamics",
+        "dc:creator": "Ankit Anand",
+        "prism:publicationName": "Nuclear Physics B",
+        "prism:volume": "1013",
+        "prism:coverDate": "2025-04-30",
+        "prism:startingPage": "116857",
+        "prism:doi": "10.1016/j.nuclphysb.2025.116857",
+        "openaccess": true,
+        "pii": "S0550321325000665",
+        "authors": {
+          "author": [
+            {
+              "$": "Ankit Anand"
+            },
+            {
+              "$": "Saeed Noori Gashti"
+            },
+            {
+              "$": "Mohammad Ali S. Afshar"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-04-08T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0375960125003111"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0375960125003111?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.physleta.2025.130531",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0375960125003111",
+        "dc:title": "Gibbs paradox and thermodynamics of colloids",
+        "dc:creator": "Yong Tao",
+        "prism:publicationName": "Physics Letters A",
+        "prism:volume": "547",
+        "prism:coverDate": "2025-07-05",
+        "prism:startingPage": "130531",
+        "prism:doi": "10.1016/j.physleta.2025.130531",
+        "openaccess": false,
+        "pii": "S0375960125003111",
+        "authors": {
+          "author": "Yong Tao"
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-03-08T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0749641925000622"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0749641925000622?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.ijplas.2025.104303",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0749641925000622",
+        "dc:title": "Hierarchical Nonequilibrium Thermodynamics of Thermally Activated Dislocation Plasticity of Metals and Alloys",
+        "dc:creator": "David L. McDowell",
+        "prism:publicationName": "International Journal of Plasticity",
+        "prism:volume": "188",
+        "prism:coverDate": "2025-05-31",
+        "prism:startingPage": "104303",
+        "prism:doi": "10.1016/j.ijplas.2025.104303",
+        "openaccess": false,
+        "pii": "S0749641925000622",
+        "authors": {
+          "author": [
+            {
+              "$": "David L. McDowell"
+            },
+            {
+              "$": "Zi-Kui Liu"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-04-19T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S1383586625016338"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S1383586625016338?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.seppur.2025.133036",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S1383586625016338",
+        "dc:title": "Sorption of C<ce:inf loc=post>2</ce:inf>H<ce:inf loc=post>6</ce:inf>/CO<ce:inf loc=post>2</ce:inf> gas mixtures in amorphous glassy polyphenylene oxide: Modelling of thermodynamics and of the multicomponent diffusion process",
+        "dc:creator": "V. Loianno",
+        "prism:publicationName": "Separation and Purification Technology",
+        "prism:coverDate": "2025-04-19",
+        "prism:startingPage": "133036",
+        "prism:doi": "10.1016/j.seppur.2025.133036",
+        "openaccess": false,
+        "pii": "S1383586625016338",
+        "authors": {
+          "author": [
+            {
+              "$": "V. Loianno"
+            },
+            {
+              "$": "G. Scherillo"
+            },
+            {
+              "$": "G. Mensitieri"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-04-03T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0266352X25001910"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0266352X25001910?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.compgeo.2025.107242",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0266352X25001910",
+        "dc:title": "Thermodynamics-based bounding surface model for gas hydrate-bearing sediments and its numerical implementation",
+        "dc:creator": "Zengchun Sun",
+        "prism:publicationName": "Computers and Geotechnics",
+        "prism:volume": "183",
+        "prism:coverDate": "2025-07-31",
+        "prism:startingPage": "107242",
+        "prism:doi": "10.1016/j.compgeo.2025.107242",
+        "openaccess": false,
+        "pii": "S0266352X25001910",
+        "authors": {
+          "author": [
+            {
+              "$": "Zengchun Sun"
+            },
+            {
+              "$": "Yue Peng"
+            },
+            {
+              "$": "Henghui Fan"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-01-28T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0370269325000498"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0370269325000498?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.physletb.2025.139289",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0370269325000498",
+        "dc:title": "EGUP corrected thermodynamics of RN-AdS black hole with quintessence matter",
+        "dc:creator": "Baoyu Tan",
+        "prism:publicationName": "Physics Letters B",
+        "prism:volume": "861",
+        "prism:coverDate": "2025-02-28",
+        "prism:startingPage": "139289",
+        "prism:doi": "10.1016/j.physletb.2025.139289",
+        "openaccess": true,
+        "pii": "S0370269325000498",
+        "authors": {
+          "author": "Baoyu Tan"
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-02-28T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S221268642500069X"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S221268642500069X?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.dark.2025.101875",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S221268642500069X",
+        "dc:title": "Probing thermodynamics of Einstein–Maxwell scalar black hole through exponential corrected entropy",
+        "dc:creator": "Shamaila Rani",
+        "prism:publicationName": "Physics of the Dark Universe",
+        "prism:volume": "48",
+        "prism:coverDate": "2025-05-31",
+        "prism:startingPage": "101875",
+        "prism:doi": "10.1016/j.dark.2025.101875",
+        "openaccess": false,
+        "pii": "S221268642500069X",
+        "authors": {
+          "author": [
+            {
+              "$": "Shamaila Rani"
+            },
+            {
+              "$": "Ayesha Siddiqa"
+            },
+            {
+              "$": "Sanjar Shaymatov"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-03-13T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0550321325000768"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0550321325000768?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.nuclphysb.2025.116867",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0550321325000768",
+        "dc:title": "Thermodynamics of the most generalized form of holographic dark energy and some particular cases with corrected entropies",
+        "dc:creator": "Sanghati Saha",
+        "prism:publicationName": "Nuclear Physics B",
+        "prism:volume": "1014",
+        "prism:coverDate": "2025-05-31",
+        "prism:startingPage": "116867",
+        "prism:doi": "10.1016/j.nuclphysb.2025.116867",
+        "openaccess": true,
+        "pii": "S0550321325000768",
+        "authors": {
+          "author": [
+            {
+              "$": "Sanghati Saha"
+            },
+            {
+              "$": "Ertan Güdekli"
+            },
+            {
+              "$": "Gizem Dilara Açan Yildiz"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2024-11-14T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S2212686424003066"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S2212686424003066?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.dark.2024.101724",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S2212686424003066",
+        "dc:title": "Holographic thermodynamics of BTZ black holes and Tsallis entropy",
+        "dc:creator": "Yahya Ladghami",
+        "prism:publicationName": "Physics of the Dark Universe",
+        "prism:volume": "46",
+        "prism:coverDate": "2024-12-31",
+        "prism:startingPage": "101724",
+        "prism:doi": "10.1016/j.dark.2024.101724",
+        "openaccess": false,
+        "pii": "S2212686424003066",
+        "authors": {
+          "author": [
+            {
+              "$": "Yahya Ladghami"
+            },
+            {
+              "$": "Brahim Asfour"
+            },
+            {
+              "$": "G. Mustafa"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-02-11T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S235249282500399X"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S235249282500399X?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.mtcomm.2025.111887",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S235249282500399X",
+        "dc:title": "New strategy for preparation of high quality borophene and thermodynamics analysis",
+        "dc:creator": "Bo Yong",
+        "prism:publicationName": "Materials Today Communications",
+        "prism:volume": "44",
+        "prism:coverDate": "2025-03-31",
+        "prism:startingPage": "111887",
+        "prism:doi": "10.1016/j.mtcomm.2025.111887",
+        "openaccess": false,
+        "pii": "S235249282500399X",
+        "authors": {
+          "author": [
+            {
+              "$": "Bo Yong"
+            },
+            {
+              "$": "Yinyin Li"
+            },
+            {
+              "$": "Shichang Sun"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-03-07T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0550321325000689"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0550321325000689?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.nuclphysb.2025.116859",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0550321325000689",
+        "dc:title": "Thermodynamics of Euler-Heisenberg AdS black hole surrounded by quintessence field using shadow",
+        "dc:creator": "Debojyoti Mondal",
+        "prism:publicationName": "Nuclear Physics B",
+        "prism:volume": "1014",
+        "prism:coverDate": "2025-05-31",
+        "prism:startingPage": "116859",
+        "prism:doi": "10.1016/j.nuclphysb.2025.116859",
+        "openaccess": true,
+        "pii": "S0550321325000689",
+        "authors": {
+          "author": [
+            {
+              "$": "Debojyoti Mondal"
+            },
+            {
+              "$": "Tanusree Roy"
+            },
+            {
+              "$": "Ujjal Debnath"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-01-27T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0952197625001083"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0952197625001083?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.engappai.2025.110108",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0952197625001083",
+        "dc:title": "Graph neural networks informed locally by thermodynamics",
+        "dc:creator": "Alicia Tierz",
+        "prism:publicationName": "Engineering Applications of Artificial Intelligence",
+        "prism:volume": "144",
+        "prism:coverDate": "2025-03-15",
+        "prism:startingPage": "110108",
+        "prism:doi": "10.1016/j.engappai.2025.110108",
+        "openaccess": false,
+        "pii": "S0952197625001083",
+        "authors": {
+          "author": [
+            {
+              "$": "Alicia Tierz"
+            },
+            {
+              "$": "Icíar Alfaro"
+            },
+            {
+              "$": "Elías Cueto"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2024-11-24T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0921453424001825"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0921453424001825?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.physc.2024.1354618",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0921453424001825",
+        "dc:title": "Does the Meissner effect violate the second law of thermodynamics?",
+        "dc:creator": "J. E. Hirsch",
+        "prism:publicationName": "Physica C: Superconductivity and its Applications",
+        "prism:volume": "629",
+        "prism:coverDate": "2025-02-15",
+        "prism:startingPage": "1354618",
+        "prism:doi": "10.1016/j.physc.2024.1354618",
+        "openaccess": true,
+        "pii": "S0921453424001825",
+        "authors": {
+          "author": "J. E. Hirsch"
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-01-10T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0550321325000069"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0550321325000069?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.nuclphysb.2025.116796",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0550321325000069",
+        "dc:title": "Thermodynamics of black holes with Rényi entropy from classical gravity",
+        "dc:creator": "Ratchaphat Nakarachinda",
+        "prism:publicationName": "Nuclear Physics B",
+        "prism:volume": "1011",
+        "prism:coverDate": "2025-02-28",
+        "prism:startingPage": "116796",
+        "prism:doi": "10.1016/j.nuclphysb.2025.116796",
+        "openaccess": true,
+        "pii": "S0550321325000069",
+        "authors": {
+          "author": [
+            {
+              "$": "Ratchaphat Nakarachinda"
+            },
+            {
+              "$": "Chatchai Promsiri"
+            },
+            {
+              "$": "Pitayuth Wongjun"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-04-10T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S1383586625014364"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S1383586625014364?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.seppur.2025.132839",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S1383586625014364",
+        "dc:title": "Modelling sorption thermodynamics of gases, vapors and gas mixtures in glassy polymers using a non-equilibrium version of PC-SAFT accounting for specific interactions and volume change",
+        "dc:creator": "A. Baldanza",
+        "prism:publicationName": "Separation and Purification Technology",
+        "prism:volume": "367",
+        "prism:coverDate": "2025-09-07",
+        "prism:startingPage": "132839",
+        "prism:doi": "10.1016/j.seppur.2025.132839",
+        "openaccess": false,
+        "pii": "S1383586625014364",
+        "authors": {
+          "author": [
+            {
+              "$": "A. Baldanza"
+            },
+            {
+              "$": "C. Brondi"
+            },
+            {
+              "$": "G. Scherillo"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-01-26T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S2211379725000221"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S2211379725000221?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.rinp.2025.108128",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S2211379725000221",
+        "dc:title": "Influence of entropy changes on first passage time in the thermodynamics of trajectories",
+        "dc:creator": "V. V. Ryazanov",
+        "prism:publicationName": "Results in Physics",
+        "prism:volume": "69",
+        "prism:coverDate": "2025-02-28",
+        "prism:startingPage": "108128",
+        "prism:doi": "10.1016/j.rinp.2025.108128",
+        "openaccess": true,
+        "pii": "S2211379725000221",
+        "authors": {
+          "author": "V. V. Ryazanov"
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-01-04T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S2212686424003832"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S2212686424003832?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.dark.2024.101800",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S2212686424003832",
+        "dc:title": "Geodesics and thermodynamics of Einstein-Power-Yang–Mills AdS black holes",
+        "dc:creator": "Saheb Soroushfar",
+        "prism:publicationName": "Physics of the Dark Universe",
+        "prism:volume": "47",
+        "prism:coverDate": "2025-02-28",
+        "prism:startingPage": "101800",
+        "prism:doi": "10.1016/j.dark.2024.101800",
+        "openaccess": false,
+        "pii": "S2212686424003832",
+        "authors": {
+          "author": [
+            {
+              "$": "Saheb Soroushfar"
+            },
+            {
+              "$": "Ali Iloon Kashkooli"
+            },
+            {
+              "$": "Behnam Pourhassan"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2024-10-20T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0378775324015477"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0378775324015477?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.jpowsour.2024.235595",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0378775324015477",
+        "dc:title": "Out-of-equilibrium thermodynamics analysis of lithium-ion batteries upon non-linear voltammetry fast charging",
+        "dc:creator": "Shiqi Li",
+        "prism:publicationName": "Journal of Power Sources",
+        "prism:volume": "624",
+        "prism:coverDate": "2024-12-30",
+        "prism:startingPage": "235595",
+        "prism:doi": "10.1016/j.jpowsour.2024.235595",
+        "openaccess": false,
+        "pii": "S0378775324015477",
+        "authors": {
+          "author": [
+            {
+              "$": "Shiqi Li"
+            },
+            {
+              "$": "Jimmy Chih-Hsien Peng"
+            },
+            {
+              "$": "Rachid Yazami"
+            }
+          ]
+        }
+      },
+      {
+        "@_fa": "true",
+        "load-date": "2025-03-20T00:00:00.000Z",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/article/pii/S0003491625000831"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scidir",
+            "@href": "https://www.sciencedirect.com/science/article/pii/S0003491625000831?dgcid=api_sd_search-api-endpoint"
+          }
+        ],
+        "dc:identifier": "DOI:10.1016/j.aop.2025.170002",
+        "prism:url": "https://api.elsevier.com/content/article/pii/S0003491625000831",
+        "dc:title": "Impact of EUP correction on thermodynamics of <mml:math altimg=si132.svg display=inline id=d1e1409><mml:mrow><mml:mi>A</mml:mi><mml:mi>d</mml:mi><mml:mi>S</mml:mi></mml:mrow></mml:math> black hole",
+        "dc:creator": "C. S. Varsha",
+        "prism:publicationName": "Annals of Physics",
+        "prism:volume": "477",
+        "prism:coverDate": "2025-06-30",
+        "prism:startingPage": "170002",
+        "prism:doi": "10.1016/j.aop.2025.170002",
+        "openaccess": false,
+        "pii": "S0003491625000831",
+        "authors": {
+          "author": [
+            {
+              "$": "C. S. Varsha"
+            },
+            {
+              "$": "V. Venkatesha"
+            },
+            {
+              "$": "Dharm Veer Singh"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

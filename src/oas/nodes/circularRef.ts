@@ -40,10 +40,8 @@ export class CircularRef extends Type {
     trace(context, '-> [circular-ref:select]', `-> in: ${this.name}`);
 
     writer
-      .append(' '.repeat(context.indent + context.stack.length))
-      .append(
-        `# Circular reference to '${this.name}' detected! Please re-visit the schema and remove the reference.\n`,
-      );
+      .write(' '.repeat(context.indent + context.stack.length))
+      .write(`# Circular reference to '${this.name}' detected! Please re-visit the schema and remove the reference.\n`);
 
     trace(context, '<- [circular-ref:select]', `-> out: ${this.name}`);
   }

@@ -17,26 +17,40 @@ export class JsonScalar extends JsonType {
   }
 
   public write(context: JsonContext, writer: IWriter): void {
-    trace(context, '[scalar:write]', '-> in: ' + this.getName());
+    const name = this.getName();
+    const isProtectedName = this.protectedName;
+
+    trace(context, '[scalar:write]', '-> in: ' + name);
     writer.write(this.indent(context));
 
-    const field = sanitiseField(this.getName());
+    const field = isProtectedName ? "_value" : sanitiseField(name);
     writer.write(field);
 
     writer.write(': ');
     writer.write(this.getType());
+
+    // add a comment that you cannot use that name
+    if (isProtectedName)
+      writer.write(` # '${name}' cannot be used as a field name, it's been replaced by '_value'`);
+
     writer.write('\n');
-    trace(context, '[scalar:write]', '<- out: ' + this.getName());
+    trace(context, '[scalar:write]', '<- out: ' + name);
   }
 
   public select(context: JsonContext, writer: IWriter): void {
     trace(context, '[scalar:select]', '-> in: ' + this.getName());
 
-    const originalName = this.getName();
-    const fieldName = sanitiseFieldForSelect(originalName);
-
     writer.write(this.indent(context));
-    writer.write(fieldName);
+
+    if (!this.protectedName) {
+      const originalName = this.getName();
+      const fieldName = sanitiseFieldForSelect(originalName);
+      writer.write(fieldName);
+    }
+    else {
+      writer.write(`_value: ${this.getName()}`);
+    }
+
     writer.write('\n');
 
     trace(context, '[scalar:select]', '<- out: ' + this.getName());
@@ -49,21 +63,4 @@ export class JsonScalar extends JsonType {
   public id(): string {
     return 'scalar:#' + super.id();
   }
-
-  // public equals(o: any): boolean {
-  //   if (this === o) return true;
-  //   if (!(o instanceof Scalar)) return false;
-  //   const nameIsEqual = this.getName() === o.getName();
-  //   const typeIsEqual = this.type === o.type;
-  //   return nameIsEqual && typeIsEqual;
-  // }
-
-  // public hashCode(): number {
-  //   let hash = 0;
-  //   const str = this.type;
-  //   for (let i = 0; i < str.length; i++) {
-  //     hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
-  //   }
-  //   return hash;
-  // }
 }

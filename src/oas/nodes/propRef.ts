@@ -88,10 +88,10 @@ export class PropRef extends Prop {
     trace(context, '-> [prop-ref:select]', 'in ' + this.name + ', ref: ' + this.ref);
     const fieldName = this.name;
     const sanitised = Naming.sanitiseFieldForSelect(fieldName);
-    writer.append(' '.repeat(context.indent + context.stack.length)).append(sanitised);
+    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
     if (this.refType && this.needsBrackets(this.refType)) {
-      writer.append(' {').append('\n');
+      writer.write(' {').write('\n');
       context.enter(this);
     }
 
@@ -101,10 +101,10 @@ export class PropRef extends Prop {
 
     if (this.refType && this.needsBrackets(this.refType)) {
       context.leave(this);
-      writer.append(' '.repeat(context.indent + context.stack.length)).append('}');
+      writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
     }
 
-    writer.append('\n');
+    writer.write('\n');
     trace(context, '<- [prop-ref:select]', 'out ' + this.name + ', ref: ' + this.ref);
   }
 
@@ -112,12 +112,12 @@ export class PropRef extends Prop {
     const type = this.refType;
 
     if (type && (type as IType) instanceof Arr) {
-      writer.append('[');
+      writer.write('[');
       const items = (type as Arr).itemsType;
-      writer.append(_.upperFirst(items!.name));
-      writer.append(']');
+      writer.write(_.upperFirst(items!.name));
+      writer.write(']');
     } else {
-      writer.append(this.getValue(context));
+      writer.write(this.getValue(context));
     }
   }
 

@@ -65,8 +65,6 @@ export class OasGen {
       throw new Error('Source not found: ' + sourceFile);
     }
 
-    // const options = { resolve: true, resolveCombinators: false };
-    // const oas = new OpenAPIV3Parser().read(source, null, options);
     const normalizer: OASNormalize = new OASNormalize(sourceFile, {
       enablePaths: true,
     });
@@ -242,13 +240,6 @@ export class OasGen {
     const result = Factory.fromDelete(name, op);
     trace(context, '<- [visitDelete]', `out: [${name}] id: ${op.getOperationId()}`);
     return result;
-  }
-
-  private printRefs(values: Map<string, number>): void {
-    console.log('----------- ref count -------------- ');
-    values.forEach((value, key) => {
-      console.log(key + ' -> ' + value);
-    });
   }
 
   private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType[] {

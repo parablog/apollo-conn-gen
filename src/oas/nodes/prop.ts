@@ -24,26 +24,26 @@ export abstract class Prop extends Type {
         description.includes('"') ||
         description.includes('\\')
       ) {
-        writer.append('  """\n').append('  ').append(description).append('\n  """\n');
+        writer.write('  """\n').write('  ').write(description).write('\n  """\n');
       } else {
-        writer.append('  "').append(description).append('"\n');
+        writer.write('  "').write(description).write('"\n');
       }
     }
 
-    writer.append('  ').append(Naming.sanitiseField(this.name)).append(': ');
+    writer.write('  ').write(Naming.sanitiseField(this.name)).write(': ');
 
     this.generateValue(context, writer);
 
     if (this.required) {
-      writer.append('!');
+      writer.write('!');
     }
 
-    writer.append('\n');
+    writer.write('\n');
   }
 
   public abstract getValue(context: OasContext): string;
 
   generateValue(context: OasContext, writer: Writer): void {
-    writer.append(this.getValue(context));
+    writer.write(this.getValue(context));
   }
 }

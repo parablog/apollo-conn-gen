@@ -16,32 +16,6 @@ export class JsonGen {
     return this.context;
   }
 
-  // // Walks the provided file or folder (synchronously)
-  // public walk(fileOrFolder: string): void {
-  //   const stats = fs.statSync(fileOrFolder);
-  //   if (stats.isDirectory()) {
-  //     const sources = fs
-  //       .readdirSync(fileOrFolder)
-  //       .filter((name) => name.toLowerCase().endsWith('.json'));
-  //     for (const source of sources) {
-  //       const fullPath = path.join(fileOrFolder, source);
-  //       this.walkSourceFile(fullPath);
-  //     }
-  //   } else {
-  //     this.walkSourceFile(fileOrFolder);
-  //   }
-  // }
-
-  // Factory method from file or folder
-  // public static fromFileOrFolder(fileOrFolder: string): Walker {
-  //   if (!fs.existsSync(fileOrFolder)) {
-  //     throw new Error('Argument does not exist');
-  //   }
-  //   const walker = new Walker();
-  //   walker.walk(fileOrFolder);
-  //   return walker;
-  // }
-
   public static new(): JsonGen {
     return new JsonGen();
   }
@@ -128,14 +102,6 @@ export class JsonGen {
       }
     }
   }
-
-  // // Walk a source file (given by path)
-  // private walkSourceFile(source: string): void {
-  //   trace(this.context, '-> [walkSource]', 'in: ' + path.basename(source));
-  //   const fileContent = fs.readFileSync(source, 'utf-8');
-  //   this.walkReader(fileContent);
-  //   trace(this.context, '<- [walkSource]', 'out: ' + path.basename(source));
-  // }
 
   // Walk the JSON provided as a string
   public walkJson(json: string): void {

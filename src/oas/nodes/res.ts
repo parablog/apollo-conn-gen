@@ -63,7 +63,7 @@ export class Res extends Type {
         // best attempt to just copy the value that comes out of the service. most likely the
         // value will have to be replaced by a GQL type. In fact, we could potentially use SYN_ here but
         // it will have to do for now.
-        writer.append(' '.repeat(context.indent)).append('$\n');
+        writer.write(' '.repeat(context.indent)).write('$\n');
       } else response.select(context, writer, selection);
     }
 

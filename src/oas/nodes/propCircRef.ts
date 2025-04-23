@@ -32,14 +32,14 @@ export class PropCircRef extends Prop {
   }
 
   generateValue(context: OasContext, writer: Writer) {
-    writer.append('# ');
+    writer.write('# ');
     this.ref.generateValue(context, writer);
-    writer.append(`# Circular reference detected! Please re-visit the schema and remove the reference.\n`);
+    writer.write(`# Circular reference detected! Please re-visit the schema and remove the reference.\n`);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
     // do nothing
-    writer.append('# ');
+    writer.write('# ');
     this.ref.select(context, writer, selection);
   }
 }

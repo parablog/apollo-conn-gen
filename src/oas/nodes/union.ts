@@ -78,7 +78,7 @@ export class Union extends Type {
         child.generate(context, writer, selection);
       }
     } else if (context.inContextOf('Res', this)) {
-      writer.append(Naming.genTypeName(this.name));
+      writer.write(Naming.genTypeName(this.name));
       return;
     }
     // generate traditional union
@@ -93,21 +93,21 @@ export class Union extends Type {
 
         // When generating this union in GQL it might look like:
         // union MyUnion = Type1 | Type2 | Type3
-        writer.append('#### NOT SUPPORTED YET BY CONNECTORS!!! union ').append(name).append(' = ');
+        writer.write('#### NOT SUPPORTED YET BY CONNECTORS!!! union ').write(name).write(' = ');
 
         const childrenTypes = this.children.map((child) => Naming.getRefName(child.name));
         const childrenNames = childrenTypes.join(' | ');
-        writer.append(childrenNames).append('\n\n');
+        writer.write(childrenNames).write('\n\n');
 
         trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
 
         writer
-          .append(this.kind + ' ')
-          .append(name)
-          .append(this.nameSuffix())
-          .append(' { #### replacement for Union ')
-          .append(name)
-          .append('\n');
+          .write(this.kind + ' ')
+          .write(name)
+          .write(this.nameSuffix())
+          .write(' { #### replacement for Union ')
+          .write(name)
+          .write('\n');
 
         const selected = this.selectedProps(selection);
         for (const prop of selected) {
@@ -115,16 +115,16 @@ export class Union extends Type {
           prop.generate(context, writer, selection);
         }
 
-        writer.append('} \n### End replacement for ').append(this.name).append('\n\n');
+        writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
       } else {
         // const selected = this.selectedProps(selection);
         writer
-          .append('union ')
-          .append(name)
-          .append(this.nameSuffix())
-          .append(' = ')
-          .append(this.children.map((child) => Naming.getRefName(child.name)).join(' | '))
-          .append('\n\n');
+          .write('union ')
+          .write(name)
+          .write(this.nameSuffix())
+          .write(' = ')
+          .write(this.children.map((child) => Naming.getRefName(child.name)).join(' | '))
+          .write('\n\n');
       }
     }
 

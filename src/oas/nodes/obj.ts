@@ -56,7 +56,7 @@ export class Obj extends Type {
     }
 
     if (context.inContextOf('Res', this)) {
-      writer.append(Naming.genTypeName(this.name));
+      writer.write(Naming.genTypeName(this.name));
       return;
     }
 
@@ -67,10 +67,10 @@ export class Obj extends Type {
     const refName = Naming.getRefName(this.name);
 
     writer
-      .append(this.kind + ' ')
-      .append(sanitised === refName ? refName : sanitised)
-      .append(this.nameSuffix())
-      .append(' {\n');
+      .write(this.kind + ' ')
+      .write(sanitised === refName ? refName : sanitised)
+      .write(this.nameSuffix())
+      .write(' {\n');
 
     const selected = this.selectedProps(selection);
 
@@ -79,7 +79,7 @@ export class Obj extends Type {
       prop.generate(context, writer, selection);
     }
 
-    writer.append('}\n\n');
+    writer.write('}\n\n');
 
     trace(context, '<- [obj::generate]', `-> out: ${this.name}`);
     context.leave(this);

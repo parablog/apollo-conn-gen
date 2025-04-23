@@ -63,28 +63,28 @@ export class Get extends Type implements Op {
     const originalPath = this.operation.path;
 
     if (description || summary || originalPath) {
-      writer.append('  """\n').append('  ');
+      writer.write('  """\n').write('  ');
       if (description) {
-        writer.append(description).append(' ');
+        writer.write(description).write(' ');
       }
       if (summary) {
-        writer.append(summary).append(' ');
+        writer.write(summary).write(' ');
       }
       if (originalPath) {
-        writer.append('(').append(originalPath).append(')');
+        writer.write('(').write(originalPath).write(')');
       }
-      writer.append('\n  """\n');
+      writer.write('\n  """\n');
     }
 
-    writer.append('  ').append(this.getGqlOpName());
+    writer.write('  ').write(this.getGqlOpName());
     this.generateParameters(context, writer, selection);
 
     if (this.resultType) {
-      writer.append(': ');
+      writer.write(': ');
       this.resultType.generate(context, writer, selection);
     }
 
-    writer.append('\n');
+    writer.write('\n');
     trace(context, '<- [get::generate]', `-> out: ${this.name}`);
     context.leave(this);
   }
@@ -201,16 +201,16 @@ export class Get extends Type implements Op {
       return;
     }
 
-    writer.append('(');
+    writer.write('(');
 
     sorted.forEach((parameter, index) => {
       if (index > 0) {
-        writer.append(', ');
+        writer.write(', ');
       }
       parameter.generate(context, writer, selection);
     });
 
-    writer.append(')');
+    writer.write(')');
   }
 
   private visitParameter(context: OasContext, parent: Type, p: ParameterObject): Param {

@@ -46,13 +46,13 @@ export class Body extends Type {
 
     if (this.payload) {
       const spacing = ' '.repeat(6);
-      writer.append(spacing + 'body: """\n').append(spacing + '$args.input {\n');
+      writer.write(spacing + 'body: """\n').write(spacing + '$args.input {\n');
 
       context.indent += 2;
       this.payload.select(context, writer, selection);
       context.indent -= 2;
 
-      writer.append(spacing + '} \n').append(spacing + '"""\n' + ' '.repeat(5));
+      writer.write(spacing + '} \n').write(spacing + '"""\n' + ' '.repeat(5));
     }
 
     trace(context, '<- [body:select]', `-> out: ${this.parent!.name}`);

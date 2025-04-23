@@ -3,13 +3,9 @@ import { JsonType } from './jsonType.js';
 import { JsonScalar } from './jsonScalar.js';
 import { JsonObj } from './jsonObj.js';
 import { JsonContext } from '../jsonContext.js';
-import { sanitiseField, sanitiseFieldForSelect } from '../naming.js';
+import { sanitiseField, sanitiseFieldForSelect, upperFirst } from '../naming.js';
 import { IWriter } from '../../io/writer.js';
-
-function capitalize(s: string): string {
-  if (!s) return s;
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+import _ from 'lodash';
 
 export class JsonArray extends JsonType {
   private arrayType: JsonType | null = null;
@@ -45,7 +41,7 @@ export class JsonArray extends JsonType {
     } else if (itemsType instanceof JsonObj) {
       writer.write(itemsType.getType());
     } else {
-      writer.write(capitalize(itemsType.getName()));
+      writer.write(upperFirst(itemsType.getName()));
     }
 
     writer.write(']');
@@ -81,21 +77,4 @@ export class JsonArray extends JsonType {
   public id(): string {
     return 'array:#' + super.id();
   }
-
-  //   public equals(o: any): boolean {
-  //     if (this === o) return true;
-  //     if (!(o instanceof ArrayType)) return false;
-  //     const other = o as ArrayType;
-  //     if (this.arrayType === null && other.arrayType === null) return true;
-  //     if (this.arrayType === null || other.arrayType === null) return false;
-  //     return this.arrayType.equals(other.arrayType);
-  //   }
-
-  //   public hashCode(): number {
-  //     let hash = super.hashCode();
-  //     if (this.arrayType !== null) {
-  //       hash = (Math.imul(31, hash) + this.arrayType.hashCode()) | 0;
-  //     }
-  //     return hash;
-  //   }
 }

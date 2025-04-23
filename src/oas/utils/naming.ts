@@ -38,17 +38,6 @@ class CapitalisePartsConverter extends AbstractConverter {
   public process(input: string): string {
     return Naming.capitaliseParts(input, /[-_.]/);
   }
-
-  // private capitaliseParts(cleanedPath: string, splitRegex: RegExp): string {
-  //   const parts = cleanedPath.split(splitRegex);
-  //   let formattedPath = '';
-  //   for (const part of parts) {
-  //     if (part) {
-  //       formattedPath += part.charAt(0).toUpperCase() + part.substring(1);
-  //     }
-  //   }
-  //   return formattedPath;
-  // }
 }
 
 class FinalFirstLowerCaseConverter extends AbstractConverter {

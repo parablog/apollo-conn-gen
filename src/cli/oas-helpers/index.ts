@@ -31,16 +31,6 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
       (type as Composed).consolidate([]);
       result = Array.from(type.props.values());
     } else {
-      /*
-    // TODO: re-think this
-    else if (type instanceof Post) {
-      if (!type.visited) type.visit(gen.context!)
-      result = gen.expand(type);
-
-      // we need to exclude the body from the selection - not sure we need to generalise this..
-      result = _.filter(result, (r) => r !== type.body);
-      console.log(result)
-    }*/
       // top level paths
       result = gen.expand(type);
 
@@ -51,10 +41,6 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
         if (!(child as Type).visited) {
           child.visit(gen.context!);
         }
-
-        /*if (child instanceof Ref) {
-          result = [child.refType!];
-        }*/
       }
     }
 

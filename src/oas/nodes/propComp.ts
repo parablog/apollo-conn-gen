@@ -57,10 +57,10 @@ export class PropComp extends Prop {
     const fieldName = this.name;
     const sanitised = Naming.sanitiseFieldForSelect(fieldName);
 
-    writer.append(' '.repeat(context.indent + context.stack.length)).append(sanitised);
+    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
     if (this.needsBrackets(comp)) {
-      writer.append(' {').append('\n');
+      writer.write(' {').write('\n');
       context.enter(this);
     }
 
@@ -70,14 +70,14 @@ export class PropComp extends Prop {
 
     if (this.needsBrackets(comp)) {
       context.leave(this);
-      writer.append(' '.repeat(context.indent + context.stack.length)).append('}');
+      writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
     }
     // writer.append('\n');
     if (context.generateOptions.showParentInSelections) {
-      writer.append(' # ').append(Naming.getRefName(this.parent!.name));
+      writer.write(' # ').write(Naming.getRefName(this.parent!.name));
     }
 
-    writer.append('\n');
+    writer.write('\n');
 
     trace(context, '<- [prop-comp:select]', 'out ' + this.name + ', obj: ' + comp?.name);
   }

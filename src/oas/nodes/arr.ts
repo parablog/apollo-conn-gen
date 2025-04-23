@@ -42,11 +42,11 @@ export class Arr extends Type {
     context.enter(this);
     trace(context, '-> [array::generate]', `-> in: ${this.name}`);
 
-    writer.append('[');
+    writer.write('[');
     if (this.itemsType) {
       this.itemsType.generate(context, writer, selection);
     }
-    writer.append(']');
+    writer.write(']');
 
     trace(context, '<- [array::generate]', `-> out: ${this.name}`);
     context.leave(this);

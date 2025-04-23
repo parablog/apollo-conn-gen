@@ -1,4 +1,5 @@
 import { IWriter } from '../../io/index.js';
+import { isProtected } from '../naming.js';
 
 export interface Context {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -9,9 +10,13 @@ export abstract class JsonType {
   private readonly name: string;
   private readonly parent: JsonType | null;
 
+  // if the name is a protected name and should be escaped
+  protected readonly protectedName: boolean;
+
   constructor(name: string, parent: JsonType | null) {
     this.name = name;
     this.parent = parent;
+    this.protectedName = isProtected(name);
   }
 
   public getName(): string {
@@ -28,7 +33,7 @@ export abstract class JsonType {
     return ' '.repeat(context.getStack().length);
   }
 
-  protected indentWithSubstract(context: Context, subtract: number): string {
+  protected indentWith(context: Context, subtract: number): string {
     return ' '.repeat(context.getStack().length - subtract);
   }
 
@@ -43,19 +48,4 @@ export abstract class JsonType {
     }
     return paths + '/' + this.getName();
   }
-
-  // public equals(o: any): boolean {
-  //   if (this === o) return true;
-  //   if (!(o instanceof Type)) return false;
-  //   return this.id() === o.id();
-  // }
-
-  // public hashCode(): number {
-  //   let hash = 0;
-  //   const id = this.id();
-  //   for (let i = 0; i < id.length; i++) {
-  //     hash = (Math.imul(31, hash) + id.charCodeAt(i)) | 0;
-  //   }
-  //   return hash;
-  // }
 }
