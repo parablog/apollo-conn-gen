@@ -23,15 +23,14 @@ export class JsonScalar extends JsonType {
     trace(context, '[scalar:write]', '-> in: ' + name);
     writer.write(this.indent(context));
 
-    const field = isProtectedName ? "_value" : sanitiseField(name);
+    const field = isProtectedName ? '_value' : sanitiseField(name);
     writer.write(field);
 
     writer.write(': ');
     writer.write(this.getType());
 
     // add a comment that you cannot use that name
-    if (isProtectedName)
-      writer.write(` # '${name}' cannot be used as a field name, it's been replaced by '_value'`);
+    if (isProtectedName) writer.write(` # '${name}' cannot be used as a field name, it's been replaced by '_value'`);
 
     writer.write('\n');
     trace(context, '[scalar:write]', '<- out: ' + name);
@@ -46,8 +45,7 @@ export class JsonScalar extends JsonType {
       const originalName = this.getName();
       const fieldName = sanitiseFieldForSelect(originalName);
       writer.write(fieldName);
-    }
-    else {
+    } else {
       writer.write(`_value: ${this.getName()}`);
     }
 

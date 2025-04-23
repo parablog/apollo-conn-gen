@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.0]
+
+### Changes
+- Refactored `writer` and cleaned up for better maintainability
+
+## [0.3.2]
+
+### Changes
+- Made options public for better accessibility
+- Passed options to context for improved configuration handling
+
 ## [0.3.1]
 
 ### Changes

@@ -3,7 +3,7 @@
  */
 import _ from 'lodash';
 
-const PROTECTED_NAMES = ['$']
+const PROTECTED_NAMES = ['$'];
 
 function capitaliseParts(cleanedPath: string, splitChar: string): string {
   // Split the string using a regular expression based on splitChar.
@@ -12,7 +12,7 @@ function capitaliseParts(cleanedPath: string, splitChar: string): string {
   for (const part of parts) {
     if (part) {
       // Capitalize the first letter of each part
-      formattedPath += upperFirst(part)
+      formattedPath += upperFirst(part);
     }
   }
   return formattedPath;
@@ -20,7 +20,7 @@ function capitaliseParts(cleanedPath: string, splitChar: string): string {
 
 function lowerFirst(s: string): string {
   if (!s) return s;
-  return _.lowerFirst(s)
+  return _.lowerFirst(s);
 }
 
 export function genParamName(param: string): string {
