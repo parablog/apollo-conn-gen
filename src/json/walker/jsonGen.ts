@@ -44,6 +44,7 @@ export class JsonGen {
   // Writes selection using a given Writer
   public writeSelection(): string {
     const writer = new StringWriter();
+    this.context.setIndent(6);
 
     const types = this.context.getTypes();
     const root = types.find((t: JsonType) => t.getParent() === null);

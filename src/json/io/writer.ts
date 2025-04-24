@@ -52,8 +52,10 @@ export class ConnectorWriter {
     );
 
     writer.write(walker.writeSelection());
-    writer.write(`"""
-)}
-`);
+
+    const ctx = walker.getContext();
+
+    writer.write(ctx.getIndent() + '"""\n');
+    writer.write(ctx.getIndentWith(2) + ')}');
   }
 }

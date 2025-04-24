@@ -32,7 +32,7 @@ export class JsonArray extends JsonType {
       return;
     }
 
-    writer.write(this.indent(context));
+    writer.write(context.getIndent());
     writer.write(field);
     writer.write(': [');
 
@@ -62,7 +62,7 @@ export class JsonArray extends JsonType {
       itemsType.select(context, writer);
     } else {
       const fieldName = sanitiseFieldForSelect(this.getName());
-      writer.write(this.indent(context));
+      writer.write(context.getIndent());
       writer.write(fieldName);
       writer.write('\n');
     }

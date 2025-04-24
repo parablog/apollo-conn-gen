@@ -1,8 +1,7 @@
-import { JsonContext } from '../jsonContext.js';
+import { JsonType, Context } from './jsonType.js';
+import { IWriter } from '../../io/writer.js';
 import { trace } from '../log/trace.js';
 import { sanitiseField, sanitiseFieldForSelect } from '../naming.js';
-import { JsonType } from './jsonType.js';
-import { IWriter } from '../../io/writer.js';
 
 export class JsonScalar extends JsonType {
   private readonly type: string;
@@ -16,12 +15,12 @@ export class JsonScalar extends JsonType {
     return this.type;
   }
 
-  public write(context: JsonContext, writer: IWriter): void {
+  public write(context: Context, writer: IWriter): void {
     const name = this.getName();
     const isProtectedName = this.protectedName;
 
     trace(context, '[scalar:write]', '-> in: ' + name);
-    writer.write(this.indent(context));
+    writer.write(context.getIndent());
 
     const field = isProtectedName ? '_value' : sanitiseField(name);
     writer.write(field);
@@ -36,10 +35,10 @@ export class JsonScalar extends JsonType {
     trace(context, '[scalar:write]', '<- out: ' + name);
   }
 
-  public select(context: JsonContext, writer: IWriter): void {
+  public select(context: Context, writer: IWriter): void {
     trace(context, '[scalar:select]', '-> in: ' + this.getName());
 
-    writer.write(this.indent(context));
+    writer.write(context.getIndent());
 
     if (!this.protectedName) {
       const originalName = this.getName();

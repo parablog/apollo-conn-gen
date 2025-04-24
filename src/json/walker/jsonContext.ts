@@ -4,6 +4,7 @@ import { JsonType } from '../walker/types/jsonType.js';
 export class JsonContext {
   private stack: JsonType[];
   private types: Map<string, JsonType>;
+  private indent: number = 0;
 
   constructor() {
     this.stack = [];
@@ -12,6 +13,18 @@ export class JsonContext {
 
   public getStack(): JsonType[] {
     return this.stack;
+  }
+
+  public getIndent(): string {
+    return ' '.repeat(this.stack.length + this.indent);
+  }
+
+  public getIndentWith(subtract: number): string {
+    return ' '.repeat(this.stack.length - subtract + this.indent);
+  }
+
+  public setIndent(indent: number): void {
+    this.indent = indent;
   }
 
   public enter(element: JsonType): void {

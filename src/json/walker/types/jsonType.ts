@@ -1,10 +1,8 @@
 import { IWriter } from '../../io/index.js';
 import { isProtected } from '../naming.js';
+import { JsonContext } from '../jsonContext.js';
 
-export interface Context {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getStack(): any[];
-}
+export type Context = JsonContext;
 
 export abstract class JsonType {
   private readonly name: string;
@@ -28,14 +26,6 @@ export abstract class JsonType {
   }
 
   public abstract write(context: Context, writer: IWriter): void;
-
-  protected indent(context: Context): string {
-    return ' '.repeat(context.getStack().length);
-  }
-
-  protected indentWith(context: Context, subtract: number): string {
-    return ' '.repeat(context.getStack().length - subtract);
-  }
 
   public abstract select(context: Context, writer: IWriter): void;
 

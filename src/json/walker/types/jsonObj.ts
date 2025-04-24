@@ -1,7 +1,6 @@
-import { JsonContext } from '../jsonContext.js';
 import { trace } from '../log/trace.js';
 import { sanitiseField, sanitiseFieldForSelect, upperFirst } from '../naming.js';
-import { JsonType } from './jsonType.js';
+import { JsonType, Context } from './jsonType.js';
 import { IWriter } from '../../io/index.js';
 import _ from 'lodash';
 
@@ -36,7 +35,7 @@ export class JsonObj extends JsonType {
     this.type = type;
   }
 
-  public write(context: JsonContext, writer: IWriter): void {
+  public write(context: Context, writer: IWriter): void {
     if (this.fields.size === 0) return;
     trace(context, '[obj:write]', '-> in: ' + this.getType());
     context.enter(this);
@@ -45,24 +44,24 @@ export class JsonObj extends JsonType {
     for (const field of this.fields.values()) {
       if (field instanceof JsonObj) {
         const name = sanitiseField(field.getName());
-        writer.write(this.indent(context) + name + ': ' + field.getType() + '\n');
+        writer.write(context.getIndent() + name + ': ' + field.getType() + '\n');
       } else {
         field.write(context, writer);
       }
     }
 
-    writer.write('}\n\n');
+    writer.write(context.getIndentWith(1) + '}\n\n');
     context.leave(this);
     trace(context, '[obj:write]', '<- out: ' + this.getType());
   }
 
-  public select(context: JsonContext, writer: IWriter): void {
+  public select(context: Context, writer: IWriter): void {
     if (this.fields.size === 0) return;
     trace(context, '[obj:select]', '-> in: ' + this.getName());
     context.enter(this);
 
     if (this.getParent() !== null) {
-      writer.write(this.indentWith(context, 1) + sanitiseFieldForSelect(this.getName()) + ' {\n');
+      writer.write(context.getIndentWith(1) + sanitiseFieldForSelect(this.getName()) + ' {\n');
     }
 
     for (const field of this.fields.values()) {
@@ -70,7 +69,7 @@ export class JsonObj extends JsonType {
     }
 
     if (this.getParent() !== null) {
-      writer.write(this.indentWith(context, 1) + '}\n');
+      writer.write(context.getIndentWith(1) + '}\n');
     }
 
     context.leave(this);
