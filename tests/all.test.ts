@@ -114,6 +114,10 @@ test('test/all/2023-12-23_15_00.json', async () => {
   await runJsonTest('test/names_with_colon.json');
 });
 
+test('test/null_fields.json', async () => {
+  await runJsonTest('test/null_fields.json');
+});
+
 /// OAS TESTS
 test('test_001_oas_test minimal petstore', async () => {
   const paths = [

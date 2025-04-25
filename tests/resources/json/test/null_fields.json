@@ -1,0 +1,16 @@
+{
+  "MaxAddresses": 8,
+  "AddressCount": 2,
+  "MaxContacts": 3,
+  "ContactCount": 1,
+  "DependantCount": 2,
+  "MemberID": "300008765378",
+  "RegID": "0667122066",
+  "PolicyRegistrationId": null,
+  "GroupId": "55313506816",
+  "GroupName": "ACME CORPORATION LIMITED",
+  "MemberTitle": "42",
+  "MemberFirstName": "John",
+  "MemberMiddleName": "Q",
+  "MemberLastName": "Doe"
+}

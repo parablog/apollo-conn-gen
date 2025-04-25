@@ -124,6 +124,9 @@ export class JsonGen {
       result = this.walkArray(context, parent, name, element);
     } else if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
       result = this.walkPrimitive(context, parent, name, element);
+    } else if (element === null) {
+      // we'll treat null as a string
+      result = this.walkPrimitive(context, parent, name, 'string');
     } else {
       throw new Error("Cannot yet handle '" + name + "' of type " + typeof element);
     }
