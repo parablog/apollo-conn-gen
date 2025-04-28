@@ -74,4 +74,16 @@ export class T {
 
     return result;
   }
+
+  public static isRef(name: string) {
+    return name.startsWith('#/components/');
+  }
+
+  public static findNonPropParent(type: IType) {
+    let parent = type;
+    while (parent instanceof Prop) {
+      parent = parent.parent!;
+    }
+    return parent;
+  }
 }

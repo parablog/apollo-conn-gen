@@ -55,7 +55,7 @@ export class PropArray extends Prop {
     trace(context, '-> [prop-array:select]', 'in: ' + this.name);
 
     const fieldName = this.name;
-    const sanitised = Naming.sanitiseFieldForSelect(fieldName);
+    const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
     if (this.needsBrackets(this.items!)) {

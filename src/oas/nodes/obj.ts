@@ -1,4 +1,4 @@
-import { Arr, Body, Factory, Get, IType, PropArray, Type, Res } from './internal.js';
+import { Arr, Body, Factory, Get, IType, PropArray, Type, Res, T } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -9,6 +9,7 @@ import _ from 'lodash';
 
 export class Obj extends Type {
   synthetic: boolean = false;
+  nameConflict: boolean = false;
 
   constructor(
     parent: IType | undefined,
@@ -39,11 +40,17 @@ export class Obj extends Type {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
+    // do we have a name conflict?
+    if (context.types.has(this.name) && !T.isRef(this.name) && this.synthetic) {
+      this.resolveNameConflict(context);
+    }
+
     this.visitProperties(context);
     this.visited = true;
 
     if (this.name) {
-      context.store(this.name, this);
+      if (!T.isRef(this.name) && context.types.has(this.name)) this.nameConflict = true;
+      else context.store(this.name, this);
     }
 
     trace(context, '<- [obj:visit]', 'out ' + this.name);
@@ -142,6 +149,7 @@ export class Obj extends Type {
       // is our parent an array?
       if (parent instanceof Arr || parent instanceof PropArray) {
         // if so, synthesize a name based on the parent name
+        this.synthetic = true;
         name = Naming.genTypeName(Naming.getRefName(parentName) + 'Item');
       }
       // if the parent is a response, we can use the operation name and append "Response"
@@ -165,5 +173,10 @@ export class Obj extends Type {
     }
 
     this.name = name;
+  }
+
+  private resolveNameConflict(context: OasContext) {
+    const container = T.findNonPropParent(this.parent!);
+    this.name = container.name + '_' + this.name;
   }
 }

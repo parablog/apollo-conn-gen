@@ -95,18 +95,18 @@ export class Naming {
     return Naming.genParamName(fieldName);
   }
 
-  public static sanitiseFieldForSelect(name: string): string {
+  public static sanitiseFieldForSelect(name: string, isInput: boolean = false): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
     const sanitised = Naming.genParamName(fieldName);
     if (sanitised === name) {
       return sanitised;
     } else {
       const needsQuotes = /[:_\-.]/.test(fieldName) || name.startsWith('@');
-      let builder = sanitised + ': ';
+      let builder = (isInput ? fieldName : sanitised) + ': ';
       if (needsQuotes) {
         builder += '"';
       }
-      builder += name.startsWith('@') ? name : fieldName;
+      builder += name.startsWith('@') ? name : isInput ? sanitised : fieldName;
       if (needsQuotes) {
         builder += '"';
       }

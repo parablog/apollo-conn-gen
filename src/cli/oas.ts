@@ -41,13 +41,13 @@ async function main(sourceFile: string, opts: any): Promise<void> {
 
   if (opts.verbose) console = originalConsole;
 
-  console.info('selected :=', JSON.stringify(paths, null, 2));
-  console.info('--------------- Apollo Connector schema -----------------');
   console.info(gen.generateSchema(paths));
 
   if (opts.printSelections) {
     console.info('--------------- Selections -----------------');
     console.info(gen.selections);
+    console.info('--------------- Paths -----------------');
+    console.info('paths =', JSON.stringify(paths, null, 2));
   }
 }
 

@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { OasGen } from '../oasGen.js';
-import { Composed, IType, Scalar, T } from '../nodes/internal.js';
+import { Composed, IType, Obj, Scalar, T } from '../nodes/internal.js';
 import { OperationWriter } from './operationWriter.js';
 import { PathCollector } from './pathCollector.js';
 import { SchemaWriter } from './schemaWriter.js';
@@ -25,31 +25,6 @@ export class Writer {
 
   public flush(): string {
     return this.buffer.join('');
-  }
-
-  public writeSchema(writer: Writer, types: Map<string, IType>, selection: string[]): void {
-    const context = this.gen.context!;
-    const generatedSet = context.generatedSet;
-
-    this.schemaWriter.writeDirectives(writer);
-    this.schemaWriter.writeJSONScalar(writer);
-
-    types.forEach((type: IType) => {
-      if (!generatedSet.has(type.id)) {
-        type.generate(context, this, selection);
-        generatedSet.add(type.id);
-      }
-    });
-
-    const expanded = [...this.gen.paths];
-
-    const queries = new Map(expanded.filter(([_k, type]) => type.id.startsWith('get:')));
-    const mutations = new Map(expanded.filter(([_k, type]) => T.isMutationType(type)));
-
-    this.operationWriter.writeQuery(context, writer, queries, selection);
-    this.operationWriter.writeMutations(context, writer, mutations, selection);
-
-    writer.flush();
   }
 
   public generate(selection: string[]): string[] {
@@ -108,7 +83,6 @@ export class Writer {
       }
 
       if (current && !(current instanceof Scalar)) {
-        // TODO: this seems redundant, we've already walked the parent AND can be also contained in the context stack
         const parentType = PathCollector.findNonPropParent(current as IType);
         if (!pendingTypes.has(parentType.id)) {
           pendingTypes.set(parentType.id, parentType);
@@ -135,5 +109,30 @@ export class Writer {
 
     this.writeSchema(this, pendingTypes, selection);
     return selection;
+  }
+
+  public writeSchema(writer: Writer, types: Map<string, IType>, selection: string[]): void {
+    const context = this.gen.context!;
+    const generatedSet = context.generatedSet;
+
+    this.schemaWriter.writeDirectives(writer);
+    this.schemaWriter.writeJSONScalar(writer);
+
+    types.forEach((type: IType) => {
+      if (!generatedSet.has(type.id)) {
+        type.generate(context, this, selection);
+        generatedSet.add(type.id);
+      }
+    });
+
+    const expanded = [...this.gen.paths];
+
+    const queries = new Map(expanded.filter(([_k, type]) => type.id.startsWith('get:')));
+    const mutations = new Map(expanded.filter(([_k, type]) => T.isMutationType(type)));
+
+    this.operationWriter.writeQuery(context, writer, queries, selection);
+    this.operationWriter.writeMutations(context, writer, mutations, selection);
+
+    writer.flush();
   }
 }

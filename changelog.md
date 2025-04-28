@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.3]
+
+### Fixes
+- Name conflict resolution for synthetic object types. Conflicting names will be renamed with the first non-parent prop. Selections are updated accordingly.
+- Fixed issue in body input selection (uppercase to lowercase mapping in body input fields)
+- OAS CLI can now print selection and paths
+
 ## [0.4.2]
 
 ### Fixes

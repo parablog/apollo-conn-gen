@@ -588,7 +588,7 @@ test('test_037_oas_test_022_common-room_01', async () => {
   ];
 
   // last 2 args: don't expect to fail, and skip validation
-  await runOasTest('common-room-core.json', paths, 22, 16, false, true);
+  await runOasTest('common-room-core.json', paths, 22, 17, false, true);
   // await runOasTest("common-room-original.json", paths, 9, 19, false, true);
 });
 
