@@ -1,19 +1,16 @@
-import _ from 'lodash';
 import { OasGen } from '../oasGen.js';
-import { Composed, IType, Obj, Scalar, T } from '../nodes/internal.js';
+import { IType, T } from '../nodes/internal.js';
 import { OperationWriter } from './operationWriter.js';
-import { PathCollector } from './pathCollector.js';
 import { SchemaWriter } from './schemaWriter.js';
+import { TypesCollector } from '../generator/typesCollector.js';
 
 export class Writer {
-  private pathCollector: PathCollector;
   private schemaWriter: SchemaWriter;
   private operationWriter: OperationWriter;
   public buffer: string[];
 
   constructor(public gen: OasGen) {
     this.buffer = [];
-    this.pathCollector = new PathCollector(gen);
     this.schemaWriter = new SchemaWriter(gen);
     this.operationWriter = new OperationWriter(gen);
   }
@@ -27,87 +24,15 @@ export class Writer {
     return this.buffer.join('');
   }
 
-  public generate(selection: string[]): string[] {
-    const pendingTypes: Map<string, IType> = new Map();
+  public generate(paths: string[]): string[] {
+    const collector = new TypesCollector(this.gen);
+    collector.collect(paths);
 
-    selection = this.pathCollector.collectExpandedPaths(selection);
+    return this.generateWith(collector.types, collector.expanded);
+  }
 
-    for (const path of selection) {
-      let collection = Array.from(this.gen.paths.values());
-      let current: IType | undefined;
-      let last: IType | undefined;
-
-      let i = 0;
-      const parts = path.split('>');
-      do {
-        const part = parts[i].replace(/#\/c\/s/g, '#/components/schemas');
-        if (part === '*') {
-          // remove the current path from the selection array
-          selection = selection.filter((s) => s !== path);
-
-          if (current && current instanceof Composed) {
-            current!.consolidate(selection);
-          }
-
-          // add all the props from the current node and exit loop
-          current?.props.forEach((child) => {
-            if (T.isLeaf(child)) {
-              selection.push(child.path());
-            }
-          });
-          break;
-        }
-
-        current = collection.find((t) => t.id === part);
-        if (!current) {
-          const tree = T.print(last!.ancestors()[0]);
-
-          // let's collect the possible paths so we don't have to debug
-          throw new Error(
-            'Could not find type: ' + part + ' from ' + path + '\nlast:\n' + last?.pathToRoot() + '\ntree: ' + tree,
-          );
-        }
-
-        // make sure we expand it before we move on to the next part
-        this.gen.expand(current);
-        last = current;
-
-        collection = Array.from(current!.children.values()) || Array.from(current!.props.values()) || [];
-        i++;
-      } while (i < parts.length);
-
-      // optional hook -- if the type in question has deps, add them here
-      const deps: IType[] = _.invoke(current, 'dependencies');
-      if (deps) {
-        deps.filter((i) => !pendingTypes.has(i.id)).forEach((i) => pendingTypes.set(i.id, i));
-      }
-
-      if (current && !(current instanceof Scalar)) {
-        const parentType = PathCollector.findNonPropParent(current as IType);
-        if (!pendingTypes.has(parentType.id)) {
-          pendingTypes.set(parentType.id, parentType);
-        }
-
-        // add all ancestors (of the parent of the prop) that are containers so they are generated accordingly
-        parentType
-          .ancestors()
-          .filter((t) => !pendingTypes.has(t.id) && T.isContainer(t))
-          .forEach((dep) => pendingTypes.set(dep.id, dep));
-      }
-    }
-
-    // first pass is to consolidate all Composed & Union nodes
-    const composed: Array<Composed> = Array.from(pendingTypes.values())
-      .filter((t) => t instanceof Composed)
-      .map((t) => t as Composed);
-
-    const context = this.gen.context!;
-    for (const comp of composed) {
-      if (!comp.visited) comp.visit(context);
-      comp.consolidate(selection).forEach((id) => pendingTypes.delete(id));
-    }
-
-    this.writeSchema(this, pendingTypes, selection);
+  public generateWith(types: Map<string, IType>, selection: string[]) {
+    this.writeSchema(this, types, selection);
     return selection;
   }
 

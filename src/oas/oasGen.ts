@@ -9,6 +9,7 @@ import { GenerateOptions, OasContext } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
+import { TypesCollector } from './generator/typesCollector.js';
 
 interface IGenOptions {
   skipValidation: boolean;
@@ -95,10 +96,12 @@ export class OasGen {
   public context?: OasContext;
   public paths: Map<string, IType> = new Map();
   public options: GenerateOptions;
+  private collector: TypesCollector
 
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
     this.options = options;
+    this.collector = new TypesCollector(this);
   }
 
   public title(): string {
@@ -109,12 +112,25 @@ export class OasGen {
     return this.parser.getDefinition().info.version;
   }
 
+  public selection(paths: string[]): string[] {
+    this.collector!.collect(paths);
+    return this.collector!.expanded;
+  }
+
+  public getTypes(paths: string[]): Map<string, IType> {
+    // make sure we pass the latest options to our context for the generation
+    this.context!.generateOptions = this.options;
+    this.collector!.collect(paths);
+    return this.collector.types;
+  }
+
   public generateSchema(paths: string[]): string {
     // make sure we pass the latest options to our context for the generation
     this.context!.generateOptions = this.options;
+    this.collector!.collect(paths);
 
     const writer: Writer = new Writer(this);
-    this.selections = writer.generate(paths);
+    this.selections = writer.generateWith(this.collector!.types, this.collector!.expanded);
     return writer.flush();
   }
 

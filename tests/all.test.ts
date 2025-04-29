@@ -162,7 +162,7 @@ test('test_004_oas_test minimal petstore 03 all GETs', async () => {
     'get:/user/logout>**',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 7);
+  await runOasTest(`petstore.yaml`, paths, 19, 6);
 });
 
 test('test_005_oas_test full get petstore', async () => {
@@ -221,7 +221,7 @@ test('test_006_oas_test_003_testConsumerJourney', async () => {
     'get:/consumer/{id}>res:r>obj:type:#/c/s/Consumer>prop:scalar:lastName',
   ];
 
-  await runOasTest('js-mva-consumer-info_v1.yaml', paths, 1, 2);
+  await runOasTest('js-mva-consumer-info_v1.yaml', paths, 1, 1);
 });
 
 test('test_007_oas_test_004_testConsumerJourneyScalarsOnly', async () => {
@@ -235,7 +235,7 @@ test('test_007_oas_test_004_testConsumerJourneyScalarsOnly', async () => {
     'get:/consumer/{id}>res:r>obj:type:#/c/s/Consumer>prop:scalar:title',
   ];
 
-  await runOasTest('js-mva-consumer-info_v1.yaml', paths, 1, 2);
+  await runOasTest('js-mva-consumer-info_v1.yaml', paths, 1, 1);
 });
 
 test('test_008_oas_simple-allOf-example', async () => {
@@ -244,7 +244,7 @@ test('test_008_oas_simple-allOf-example', async () => {
     'get:/user>res:r>comp:type:#/c/s/User>obj:type:#/c/s/BaseUser>prop:scalar:id',
     'get:/user>res:r>comp:type:#/c/s/User>obj:type:[inline:#/c/s/User]>prop:scalar:email',
   ];
-  await runOasTest('simple-allOf-example.yaml', paths, 1, 4);
+  await runOasTest('simple-allOf-example.yaml', paths, 1, 1);
 });
 
 test('test_009_oas_inline-allOf-example', async () => {
@@ -255,7 +255,7 @@ test('test_009_oas_inline-allOf-example', async () => {
     'get:/product>res:r>comp:type:productResponse>obj:type:[inline:productResponse]>prop:scalar:name',
     'get:/product>res:r>comp:type:productResponse>obj:type:[inline:productResponse]:1>prop:scalar:price',
   ];
-  await runOasTest('inline-allOf-example.yaml', paths, 1, 4);
+  await runOasTest('inline-allOf-example.yaml', paths, 1, 1);
 });
 
 test('test_010_oas_anidated-allOf-example', async () => {
@@ -267,7 +267,7 @@ test('test_010_oas_anidated-allOf-example', async () => {
     'get:/pet>res:r>comp:type:petResponse>comp:type:[inline:petResponse]>comp:type:[inline:[inline:petResponse]]>obj:type:#/c/s/MammalFeatures>prop:scalar:sound',
     'get:/pet>res:r>comp:type:petResponse>obj:type:#/c/s/PetBase>prop:scalar:species',
   ];
-  await runOasTest('anidated-allOf-example.yaml', paths, 1, 7);
+  await runOasTest('anidated-allOf-example.yaml', paths, 1, 1);
 });
 
 test('test_011_oas_test_004_testAccountSegment', async () => {
@@ -277,7 +277,7 @@ test('test_011_oas_test_004_testAccountSegment', async () => {
     'get:/consumer/{id}>res:r>obj:type:#/c/s/Consumer>prop:scalar:lastName',
   ];
 
-  await runOasTest('js-mva-consumer-info_v1.yaml', paths, 1, 4);
+  await runOasTest('js-mva-consumer-info_v1.yaml', paths, 1, 3);
 });
 
 test('test_012_oas_test_005_testHomepageProductSelector', async () => {
@@ -351,12 +351,12 @@ test('test_017_oas_test_009_Customer360_ScalarsOnly', async () => {
     'get:/customer360/{id}>res:r>comp:type:#/c/s/Customer360>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
   ];
 
-  await runOasTest('TMF717_Customer360-v5.0.0.oas.yaml', paths, 8, 5);
+  await runOasTest('TMF717_Customer360-v5.0.0.oas.yaml', paths, 8, 1);
 });
 
 test('test_018_oas_anidated-allOf-example-**', async () => {
   const paths = ['get:/pet>**'];
-  await runOasTest('anidated-allOf-example.yaml', paths, 1, 7);
+  await runOasTest('anidated-allOf-example.yaml', paths, 1, 1);
 });
 
 test('test_019_oas_test_010_TMF633_IntentOrValue_to_Union', async () => {
@@ -368,19 +368,19 @@ test('test_019_oas_test_010_TMF633_IntentOrValue_to_Union', async () => {
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:description',
   ];
-  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 11);
+  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 4);
 });
 
 test('test_020_oas_test_010_TMF633_IntentOrValue_to_Union_Full', async () => {
   const paths = ['get:/product/{id}>**'];
 
-  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 11);
+  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 4);
 });
 
 test('test_021_oas_test_011_TMF637_001_ComposedTest', async () => {
   const paths = ['get:/product/{id}>**'];
 
-  await runOasTest('TMF637-001-ComposedTest.yaml', paths, 1, 9);
+  await runOasTest('TMF637-001-ComposedTest.yaml', paths, 1, 2);
 });
 
 test('test_022_oas_test_011_TMF637_001_ComposedTest', async () => {
@@ -397,7 +397,7 @@ test('test_022_oas_test_011_TMF637_001_ComposedTest', async () => {
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>obj:type:[inline:#/c/s/BillingAccountRef]>prop:scalar:ratingType',
   ];
 
-  await runOasTest('TMF637-001-ComposedTest.yaml', paths, 1, 9);
+  await runOasTest('TMF637-001-ComposedTest.yaml', paths, 1, 2);
 });
 
 test('test_023_oas_test_013_testTMF637_TestSimpleRecursion no type found', async () => {
@@ -435,13 +435,13 @@ test('test_024_oas_test_014_testTMF637_TestRecursion', async () => {
   ];
 
   // expect.assertions(6);
-  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 10);
+  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 4);
   // expect(error).toContain("Circular reference detected in `@connect(selection:)` on `Query.productById`");
 });
 
 test('test_025_oas_test_015_testTMF637_ProductStatusEnum', async () => {
   const paths = ['get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:enum:status'];
-  const output = await runOasTest('TMF637-ProductInventory-v5.0.0.oas.yaml', paths, 12, 5);
+  const output = await runOasTest('TMF637-ProductInventory-v5.0.0.oas.yaml', paths, 12, 2);
 });
 
 test('test_026_oas_test_016_testMostPopularProductScalarsOnly', async () => {
@@ -522,19 +522,19 @@ test('test_031_oas_test_018_testTMF637_01', async () => {
     'get:/product>res:r>array:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>obj:type:[inline:#/c/s/BillingAccountRef]>prop:scalar:ratingType',
     'get:/product>res:r>array:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:billingAccount>comp:type:#/c/s/BillingAccountRef>comp:type:#/c/s/EntityRef>obj:type:#/c/s/Addressable>prop:scalar:id',
   ];
-  await runOasTest('TMF637-ProductInventory-v5.0.0.oas.yaml', paths, 12, 11);
+  await runOasTest('TMF637-ProductInventory-v5.0.0.oas.yaml', paths, 12, 3);
 });
 
 test('test_032_oas_test_018_testTMF637_02', async () => {
   const paths = [
     'get:/product>res:r>array:#/c/s/Product>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#agreementItem>comp:type:#/c/s/AgreementItemRef>obj:type:#/c/s/Extensible>prop:scalar:@baseType',
   ];
-  await runOasTest('TMF637-ProductInventory-v5.0.0.oas.yaml', paths, 12, 7);
+  await runOasTest('TMF637-ProductInventory-v5.0.0.oas.yaml', paths, 12, 2);
 });
 
 test('test_033_oas_test_018_testTMF637_SimpleRecursion', async () => {
   const paths = ['get:/productById>**'];
-  await runOasTest('TMF637-002-SimpleRecursionTest.yaml', paths, 1, 3);
+  await runOasTest('TMF637-002-SimpleRecursionTest.yaml', paths, 1, 1);
 });
 
 test('test_034_oas_test_019_testUnionInParam', async () => {
@@ -551,7 +551,7 @@ test('test_034_oas_test_019_testUnionInParam', async () => {
     'get:/consumer/{id}>res:r>obj:type:#/c/s/Consumer>prop:scalar:title',
   ];
 
-  await runOasTest('js-mva-consumer-info_v1.yaml', paths, 1, 3);
+  await runOasTest('js-mva-consumer-info_v1.yaml', paths, 1, 2);
 });
 
 test('test_035_oas_test_020_testDuplicateRefPath_test', async () => {
@@ -588,7 +588,7 @@ test('test_037_oas_test_022_common-room_01', async () => {
   ];
 
   // last 2 args: don't expect to fail, and skip validation
-  await runOasTest('common-room-core.json', paths, 22, 17, false, true);
+  await runOasTest('common-room-core.json', paths, 22, 12, false, true);
   // await runOasTest("common-room-original.json", paths, 9, 19, false, true);
 });
 
@@ -597,7 +597,7 @@ test('test_038_oas_test_024_TMF632_IndividualIdentification', async () => {
     'get:/individual/{id}>res:r>comp:type:#/c/s/Individual>comp:type:#/c/s/Party>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
     'get:/individual/{id}>res:r>comp:type:#/c/s/Individual>obj:type:[inline:#/c/s/Individual]>prop:array:#individualIdentification>comp:type:#/c/s/IndividualIdentification>obj:type:[inline:#/c/s/IndividualIdentification]>prop:scalar:identificationId',
   ];
-  await runOasTest('TMF632-Party_Management-v5.0.0.oas.yaml', paths, 20, 9);
+  await runOasTest('TMF632-Party_Management-v5.0.0.oas.yaml', paths, 20, 2);
 });
 
 test('test_039_oas_test_025_AdobeCommerce', async () => {
@@ -631,7 +631,7 @@ test('test_040_oas_test_025_AdobeCommerce_customer-paths', async () => {
     'get:/V1/customers/me/shippingAddress>**',
     'get:/V1/customers/search>**',
   ];
-  await runOasTest('adobe-commerce-swagger.json', paths, 586, 18);
+  await runOasTest('adobe-commerce-swagger.json', paths, 586, 15);
 });
 
 test('test_041_oas_test_026_petstore-paths', async () => {
@@ -646,7 +646,7 @@ test('test_041_oas_test_026_petstore-paths', async () => {
     'get:/user/logout>**',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 7);
+  await runOasTest(`petstore.yaml`, paths, 19, 6);
 });
 
 // TODO: we should have a proper Enum status here
@@ -664,7 +664,7 @@ test('test_042_oas_test_026_petstore-status-enum', async () => {
 test('test_043_oas_test_027_petstore-simple-post', async () => {
   const paths = ['post:/pet>**'];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 3);
+  await runOasTest(`petstore.yaml`, paths, 19, 6);
 });
 
 test('test_044_oas_test_028_post-with-no-body', async () => {
@@ -689,7 +689,7 @@ test('test_045_oas_test_029_post-simple-body-selection', async () => {
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:name',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 3);
+  await runOasTest(`petstore.yaml`, paths, 19, 4);
 });
 
 test('test_046_oas_test_029_post-complex-body-selection', async () => {
@@ -708,7 +708,7 @@ test('test_046_oas_test_029_post-complex-body-selection', async () => {
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:scalar:status',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 3);
+  await runOasTest(`petstore.yaml`, paths, 19, 4);
 });
 
 test('test_047_oas_test_030_post-body-allOf', async () => {
@@ -720,7 +720,7 @@ test('test_047_oas_test_030_post-body-allOf', async () => {
     'post:/user>res:r>obj:type:createUserResponse>prop:scalar:success',
   ];
 
-  await runOasTest(`post-sample.yaml`, paths, 3, 4);
+  await runOasTest(`post-sample.yaml`, paths, 3, 2);
 });
 
 test('test_048_oas_test_031_post-body-oneOf', async () => {
@@ -733,13 +733,13 @@ test('test_049_oas_test_032_mindbody-JSON', async () => {
   // 'data' field should be generated as JSON
   const paths = ['get:/health/information>**'];
 
-  await runOasTest(`mindbody.json`, paths, 11, 3, false, true);
+  await runOasTest(`mindbody.json`, paths, 11, 2, false, true);
 });
 
 test('test_050_oas_test_033_initial-support-for-put', async () => {
   const paths = ['put:/pet>**'];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 3, false, true);
+  await runOasTest(`petstore.yaml`, paths, 19, 6, false, true);
 });
 
 test('test_051_oas_test_034_simple-delete', async () => {

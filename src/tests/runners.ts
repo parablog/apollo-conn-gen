@@ -29,9 +29,13 @@ export async function runOasTest(
   assert.ok(gen.paths !== undefined);
   assert.ok(gen.paths.size === pathsSize, `${gen.paths.size} is not equal to ${pathsSize}`);
 
-  const schema = gen.generateSchema(paths);
-  assert.ok(gen.context?.types.size === typesSize, `${gen.context?.types.size} is not equal to ${typesSize}`);
+  const types = gen.getTypes(paths);
+  assert.ok(
+    types.size === typesSize,
+    `${types.size} is not equal to ${typesSize}:  ${Array.from(types.keys()).join(',\n')}`,
+  );
 
+  const schema = gen.generateSchema(paths);
   assert.ok(schema !== undefined);
 
   const schemaFile = path.join(os.tmpdir(), file.replace(/yaml|json|yml/, 'graphql'));
