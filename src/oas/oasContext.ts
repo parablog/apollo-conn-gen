@@ -14,12 +14,14 @@ export class OasContext {
   public static readonly COMPONENTS_SCHEMAS: string = '#/components/schemas/';
   public static readonly COMPONENTS_RESPONSES: string = '#/components/responses/';
   public static readonly PARAMETER_SCHEMAS: string = '#/components/parameters/';
+
   public generatedSet: Set<string> = new Set();
   public indent: number;
 
   public stack: IType[] = new Array<IType>();
   public types: Map<string, IType | undefined> = new Map();
   public generateOptions: GenerateOptions;
+  public refCount: Map<string, number> = new Map();
 
   private parser: Oas;
 
@@ -65,12 +67,25 @@ export class OasContext {
 
   public lookupRef(ref: string | null): SchemaObject | null {
     if (ref && ref.startsWith(OasContext.COMPONENTS_SCHEMAS)) {
+      const currentCount = this.refCount.get(ref) || 0;
+      this.refCount.set(ref, currentCount + 1);
+
       const definition = this.parser.getDefinition();
       const schemas = definition.components?.schemas ?? {};
 
       return schemas ? schemas[Naming.getRefName(ref)!] : null;
     }
+
     return null;
+  }
+
+  public decRefCount(ref: string): void {
+    if (ref && ref.startsWith(OasContext.COMPONENTS_SCHEMAS)) {
+      const currentCount = this.refCount.get(ref) || 0;
+      if (currentCount > 0) {
+        this.refCount.set(ref, currentCount - 1);
+      }
+    }
   }
 
   public lookupParam(ref: string): ParameterObject | boolean {

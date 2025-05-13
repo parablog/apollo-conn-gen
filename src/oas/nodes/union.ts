@@ -47,6 +47,7 @@ export class Union extends Type {
       const type = Factory.fromSchema(context, this, refSchema);
       this.add(type);
 
+      type.visit(context);
       trace(context, ' [union:visit]', 'of type: ' + type);
     }
 
@@ -57,7 +58,7 @@ export class Union extends Type {
     if (this.name != null) {
       context.store(this.name, this);
       if (context.generateOptions.consolidateUnions) {
-        this.children.forEach((child) => context.generatedSet.add(child.id));
+        this.children.forEach((child) => context.decRefCount(child.name));
       }
     }
 
@@ -87,8 +88,7 @@ export class Union extends Type {
 
       if (context.generateOptions.consolidateUnions) {
         if (!this.consolidated) {
-          // add to generated set
-          this.consolidate(selection).forEach((id) => context.generatedSet.add(id));
+          this.consolidate(selection).forEach((type) => context.decRefCount(type.name));
         }
 
         // When generating this union in GQL it might look like:
@@ -110,20 +110,28 @@ export class Union extends Type {
           .write('\n');
 
         const selected = this.selectedProps(selection);
+        const generated = new Set<string>();
         for (const prop of selected) {
           trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-          prop.generate(context, writer, selection);
+          if (!generated.has(prop.id))
+            prop.generate(context, writer, selection);
+          generated.add(prop.id);
         }
 
         writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
       } else {
-        // const selected = this.selectedProps(selection);
+        // add the prop parent paths to a set so we can only include those parents that have been selected
+        const propParentsPathSet = new Set(this.selectedProps(selection).map(p => p.parent!.path()));
+
+        // we should only include the names of those properties that have been selected
+        const filtered = this.children.filter(c => propParentsPathSet.has(c.path()));
+
         writer
           .write('union ')
           .write(name)
           .write(this.nameSuffix())
           .write(' = ')
-          .write(this.children.map((child) => Naming.getRefName(child.name)).join(' | '))
+          .write(filtered.map((child) => Naming.getRefName(child.name)).join(' | '))
           .write('\n\n');
       }
     }
@@ -135,21 +143,41 @@ export class Union extends Type {
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '-> [union::select]', `-> in: ${this.name}`);
 
-    if (context.generateOptions.consolidateUnions) {
+    if (!this.consolidated) {
+      this.consolidate(selection);
+    }
+
+    const selected = this.selectedProps(selection);
+    const generated = new Set<string>();
+    for (const prop of selected) {
+      if (!generated.has(prop.id))
+        prop.select(context, writer, selection);
+      generated.add(prop.id);
+    }
+
+    /*if (context.generateOptions.consolidateUnions) {
       if (!this.consolidated) {
         this.consolidate(selection);
       }
 
       const selected = this.selectedProps(selection);
+      const generated = new Set<string>();
       for (const prop of selected) {
-        prop.select(context, writer, selection);
+        if (!generated.has(prop.id))
+          prop.select(context, writer, selection);
+        generated.add(prop.id);
       }
     } else {
-      // collect all property names from children and write them here
-      this.children.forEach((child) => {
-        child.select(context, writer, selection);
-      });
-    }
+      // add the prop parent paths to a set so we can only include those parents that have been selected
+      const propParentsPathSet = new Set(this.selectedProps(selection).map(p => p.parent!.path()));
+
+      // we should only include the names of those properties that have been selected
+      this.children
+        .filter(c => propParentsPathSet.has(c.path()))
+        .forEach((child) => {
+          child.select(context, writer, selection);
+        });
+    }*/
 
     /* TODO: better selection for Unions
     dataPoints: dataFormat->match(
@@ -168,18 +196,24 @@ export class Union extends Type {
     trace(context, '<- [union::select]', `-> out: ${this.name}`);
   }
 
-  public consolidate(selection: string[]): Set<string> {
+  public consolidate(selection: string[]): Set<IType> {
     T.composables(this).forEach((child) => {
       (child as Composed).consolidate(selection);
     });
 
-    const ids: Set<string> = new Set();
+    const ids: Set<IType> = new Set();
     const props: Prop[] = [];
     const discriminator = this.discriminator;
 
     this.children?.forEach((child) => {
-      ids.add(child.id);
-      props.push(...child.props.values());
+      // .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
+      ids.add(child);
+
+      Array.from(child.props.values())
+        .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
+        .forEach(prop => props.push(prop));
+
+      // props.push(...child.props.values());
     });
 
     // add the discriminator, if we have one
@@ -201,8 +235,9 @@ export class Union extends Type {
     const queue: IType[] = Array.from(this.children.values());
     while (queue.length > 0) {
       const node = queue.shift()!;
-      T.containers(node).forEach((c) => ids.add(c.id));
-      queue.push(...node.children);
+      const containers = T.containers(node);
+      containers.forEach((c) => ids.add(c));
+      // queue.push(...node.children);
     }
 
     return ids;
@@ -210,6 +245,18 @@ export class Union extends Type {
 
   private visitProperties(_context: OasContext): void {
     // TODO: pending
+  }
+
+  public selectedProps(selection: string[]) {
+    const collected: Prop[] = [];
+
+    this.children.forEach((child) => {
+      Array.from(child.props.values())
+        .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
+        .forEach(prop => collected.push(prop));
+    });
+
+    return collected;
   }
 
   private updateName(): void {

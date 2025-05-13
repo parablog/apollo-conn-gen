@@ -112,7 +112,7 @@ export class OasGen {
     return this.parser.getDefinition().info.version;
   }
 
-  public selection(paths: string[]): string[] {
+  public expanded(paths: string[]): string[] {
     this.collector!.collect(paths);
     return this.collector!.expanded;
   }

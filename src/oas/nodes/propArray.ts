@@ -43,7 +43,7 @@ export class PropArray extends Prop {
     return `[${this.items!.name}]`;
   }
 
-  public forPrompt(context: OasContext): string {
+  public forPrompt(_context: OasContext): string {
     if (this.items && T.isContainer(this.items)) {
       return `[prop] ${this.name}: [${Naming.genTypeName(this.items?.name)}] (Array)`;
     }
@@ -64,16 +64,8 @@ export class PropArray extends Prop {
       context.enter(this);
     }
 
-    // Select each child of the items Prop.
-    if (this.needsBrackets(this.items)) {
-      const selected = Array.from(this.items!.children.values()).filter((prop) =>
-        selection.find((s) => s.startsWith(prop.path())),
-      );
-
-      for (const child of selected) {
-        child.select(context, writer, selection);
-      }
-    }
+    // now allow the items type to select its properties
+    this.items!.select(context, writer, selection);
 
     if (this.needsBrackets(this.items!)) {
       context.leave(this);

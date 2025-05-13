@@ -137,7 +137,6 @@ export class Naming {
     return ref ? Naming.REF_CONVERTER.convert(ref) : '';
   }
 
-  // internal stuff
   public static formatPath(path: string, parameters: string[]): string {
     if (!path) {
       return path;
@@ -149,7 +148,15 @@ export class Naming {
     cleanedPath = Naming.capitaliseParts(cleanedPath, /[:\-.+]+/); // using regex similar to "[:\-\.]+"
 
     // Step 2: Split the path by "/" and capitalize each part.
-    return Naming.capitaliseParts(cleanedPath, '/');
+    const capitalisedParts = Naming.capitaliseParts(cleanedPath, '/');
+
+    // Step 3: Check if the path starts with a number and remove it if so
+    // the pattern we are looking for is like so: /2.3.0/entrypoint
+    if (/^\d/.test(capitalisedParts)) {
+      return capitalisedParts.replace(/^\d+(?=[a-zA-Z])/g, '');
+    }
+
+    return capitalisedParts;
   }
 
   public static capitaliseParts(input: string, splitPattern: RegExp | string): string {
@@ -171,6 +178,9 @@ export class Naming {
   );
 
   private static readonly REF_CONVERTER: Converter = new RemoveRefConverter(new FinalConverter());
+
+  // internal stuff
+  private static readonly NUMBER_PREFIX = '_';
 
   public formatPath(path: string, parameters: string[]): string {
     // Replace with your actual formatting logic.

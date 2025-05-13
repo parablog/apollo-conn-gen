@@ -756,3 +756,13 @@ test('test_053_oas_test_036_time-series', async () => {
   const paths = ['post:/market-data-services/time-series/search>**'];
   await runOasTest('time-series-1.0.28.yaml', paths, 1, 12);
 });
+
+test('test_054_oas_test-better-naming', async () => {
+  const paths = [
+    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:scalar:count',
+    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
+    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name'
+  ]
+
+  await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 5);
+});

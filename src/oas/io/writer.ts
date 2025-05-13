@@ -3,6 +3,7 @@ import { IType, T } from '../nodes/internal.js';
 import { OperationWriter } from './operationWriter.js';
 import { SchemaWriter } from './schemaWriter.js';
 import { TypesCollector } from '../generator/typesCollector.js';
+import _ from 'lodash';
 
 export class Writer {
   private schemaWriter: SchemaWriter;
@@ -44,10 +45,16 @@ export class Writer {
     this.schemaWriter.writeJSONScalar(writer);
 
     types.forEach((type: IType) => {
-      if (!generatedSet.has(type.id)) {
+      const count = context.refCount.get(type.name) !== undefined
+        ? context.refCount.get(type.name)!
+        : Infinity;
+
+      if (!generatedSet.has(type.id) && count > 0) {
         type.generate(context, this, selection);
         generatedSet.add(type.id);
       }
+
+      context.decRefCount(type.name);
     });
 
     const expanded = [...this.gen.paths];

@@ -40,11 +40,12 @@ export class Composed extends Type {
     }
 
     const composedSchema = this.schema;
+
     // this will be a type declaration
     if (composedSchema.allOf != null) {
       this.visitAllOfNode(context, composedSchema);
     }
-    // represents a Union type
+    // represents a Union type and should be handled elsewhere
     else if (composedSchema.oneOf != null) {
       throw new Error('Unions should be constructed by its own object');
     }
@@ -67,8 +68,7 @@ export class Composed extends Type {
       return;
     }
 
-    const composedSchema = this.schema;
-    if (composedSchema.allOf != null) {
+    if (this.schema.allOf != null) {
       const selected = this.selectedProps(selection);
 
       if (selected.length > 0) {
@@ -175,25 +175,6 @@ export class Composed extends Type {
     trace(context, '<- [composed::all-of]', `out: '${this.name}' of: ${allOfs.length} - refs: ${refs}`);
   }
 
-  private visitOneOfNode(context: OasContext, schema: SchemaObject): void {
-    const oneOfs = schema.oneOf || [];
-    trace(context, '-> [composed::one-of]', `in: OneOf ${this.name} with size: ${oneOfs.length}`);
-
-    const result = Factory.fromUnion(context, this, oneOfs as SchemaObject[]);
-    if (!result) {
-      throw new Error('Failed to create union type');
-    }
-
-    result.visit(context);
-
-    trace(context, '-> [composed::one-of]', `storing: ${this.name} with: ${this}`);
-    if (this.name != null) {
-      context.store(this.name, this);
-    }
-
-    trace(context, '<- [composed::one-of]', `out: OneOf ${this.name} with size: ${oneOfs.length}`);
-  }
-
   add(child: IType): IType {
     let name = child.name;
     let idx = 0;
@@ -215,12 +196,15 @@ export class Composed extends Type {
         const op = this.parent!.parent as Get;
         name = op.getGqlOpName() + 'Response';
       } else {
-        name = `[inline:${this.parent!.name}]`;
+        if (this.schema?.allOf?.length === 1) {
+          // because we are going to consolidate the children anyway, we can assume the name of the child.
+          // this avoids having a comp with name '[inline:...]' which does not generate properly
+          name = _.get(this.schema?.allOf[0], '$ref') as string;
+        }
+        else
+          name = `[inline:${this.parent!.name}]`;
       }
     }
-    // else if (this.parent instanceof Composed) {
-    //   name = this.parent!.name + 'AllOf';
-    // }
 
     this.name = name;
   }

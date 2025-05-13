@@ -21,7 +21,7 @@ export async function runOasTest(
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
-    consolidateUnions: true,
+    consolidateUnions: false,
     showParentInSelections: false,
   });
   await gen.visit();

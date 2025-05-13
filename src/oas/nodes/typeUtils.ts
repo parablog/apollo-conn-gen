@@ -1,6 +1,4 @@
-import { CircularRef, En, Obj, Prop, PropArray, PropEn, PropScalar, Scalar } from './internal.js';
-
-import { IType } from './internal.js';
+import { Arr, CircularRef, En, IType, Obj, Prop, PropArray, PropEn, PropScalar, Scalar } from './internal.js';
 import _ from 'lodash';
 
 export class T {
@@ -12,7 +10,8 @@ export class T {
       type instanceof PropEn ||
       type instanceof CircularRef ||
       (type instanceof PropArray && type.items instanceof Scalar) ||
-      (type instanceof Obj && _.isEmpty(type.props))
+      (type instanceof Obj && _.isEmpty(type.props)) ||
+      T.isScalarArray(type)
     );
   }
 
@@ -85,5 +84,9 @@ export class T {
       parent = parent.parent!;
     }
     return parent;
+  }
+
+  public static isScalarArray(type: IType) {
+    return type instanceof Arr && type.itemsType instanceof Scalar;
   }
 }

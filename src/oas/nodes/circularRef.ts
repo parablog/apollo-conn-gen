@@ -13,7 +13,6 @@ export class CircularRef extends Type {
 
   get id(): string {
     return `circular-ref:#${this.ref?.id}`;
-    // return this.child.id;
   }
 
   public forPrompt(_: OasContext): string {

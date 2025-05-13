@@ -59,7 +59,7 @@ export class TypesCollector {
       } while (i < parts.length);
 
       // optional hook -- if the type in question has deps, add them here
-      const deps: IType[] = _.invoke(current, 'dependencies');
+      const deps: IType[] = _.invoke(current, 'dependencies', [this.gen.context]);
       if (deps) {
         deps.filter((i) => !pendingTypes.has(i.id)).forEach((i) => pendingTypes.set(i.id, i));
       }
@@ -93,10 +93,6 @@ export class TypesCollector {
     this.expanded = expanded;
   }
 }
-
-// import _ from 'lodash';
-// import { OasGen } from '../oasGen.js';
-// import { Composed, IType, Prop, PropArray, Scalar, Type, T } from '../nodes/internal.js';
 
 class PathsCollector {
   constructor(private gen: OasGen) {}
@@ -168,40 +164,4 @@ class PathsCollector {
     // finally remove the expanded paths from the selection
     return [...newSelection, ...selection.filter((p) => !expands.includes(p))];
   }
-
-/*
-  public traverseTree(current: IType, selection: string[], pending: Map<string, IType>) {
-    // we might be in a node far from the root, so we need to traverse upwards
-    // as well and add the props that we can find on the way
-    const source = current as Type;
-
-    source
-      .ancestors()
-      .filter((t) => t instanceof Prop)
-      .map((p) => T.findNonPropParent(p))
-      .forEach((parent) => pending.set(parent.id, parent));
-
-    T.traverse(source, (child) => {
-      if (T.isLeaf(child)) {
-        // this is a weird take but if the child is an array of scalars
-        // then we want to avoid adding it twice
-        if (T.isLeaf(child.parent!)) {
-          return;
-        }
-        selection.push(child.path());
-
-        const parentType = T.findNonPropParent(child);
-        if (!pending.has(parentType.id)) {
-          pending.set(parentType.id, parentType);
-        }
-      } else {
-        this.gen.expand(child);
-
-        if (child instanceof Composed) {
-          child.consolidate(selection);
-        }
-      }
-    });
-  }
-*/
 }
