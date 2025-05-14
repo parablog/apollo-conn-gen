@@ -34,6 +34,15 @@ export class OasContext {
     };
   }
 
+  // reset the state of the context
+  public reset(): void {
+    this.indent = 0;
+    this.stack = new Array<IType>();
+    this.types.clear();
+    this.refCount.clear();
+    this.generatedSet.clear();
+  }
+
   public enter(type: IType): void {
     this.stack.push(type);
     trace(this, '-> [context::enter]', type.id);
