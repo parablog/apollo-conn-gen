@@ -63,11 +63,20 @@ test('test_048_oas_test_031_post-body-oneOf', async () => {
 
 test('test_053_oas_test_036_time-series', async () => {
   const paths = [
+    "post:/market-data-services/time-series/search>body:b>obj:input:#/c/s/PriceTimeSeriesRequestBody>prop:scalar:responseDataFormat",
     "post:/market-data-services/time-series/search>res:r>obj:type:#/c/s/ResultCollection>prop:obj:_embedded>obj:type:_embedded>prop:array:#timeSeries>obj:type:#/c/s/PriceTimeSeries>prop:comp:dataPoint>union:dataPointUnion>obj:type:#/c/s/DataPointHighcharts>prop:scalar:dataFormat",
     "post:/market-data-services/time-series/search>res:r>obj:type:#/c/s/ResultCollection>prop:obj:_embedded>obj:type:_embedded>prop:array:#timeSeries>obj:type:#/c/s/PriceTimeSeries>prop:comp:dataPoint>union:dataPointUnion>obj:type:#/c/s/DataPointHighcharts>prop:array:#dataPoints>array:Float"
   ]
-  await runOasTest('time-series-1.0.28.yaml', paths, 1, 12);
+  await runOasTest('time-series-1.0.28.yaml', paths, 1, 7);
 });
+
+/*
+test('test_028_oas_test_017_testMostPopularProduct_star', async () => {
+  const paths = ['get:/emailed/{period}.json>res:r>obj:type:emailedByPeriodJsonResponse>*'];
+  await runOasTest('most-popular-product.yaml', paths, 4, 1);
+});
+*/
+
 
 /*
 test('test_054_oas_test-better-naming', async () => {

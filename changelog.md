@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.4]
+
+### Fixes
+- Fixed issues with unions and their handling in the schema generation
+- Improved collection of paths and expanded selections
+- Added test spec for Launch Library 2 API and fixed issues with it
+
 ## [0.4.3]
 
 ### Fixes

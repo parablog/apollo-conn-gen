@@ -5,10 +5,9 @@ import { OasGen } from '../oasGen.js';
 
 export class TypesCollector {
   types: Map<string, IType> = new Map();
-  expanded: string[] = []
+  expanded: string[] = [];
 
-  constructor(private gen: OasGen) {
-  }
+  constructor(private gen: OasGen) {}
 
   public collect(selection: string[]): void {
     const pendingTypes: Map<string, IType> = new Map();
@@ -61,7 +60,11 @@ export class TypesCollector {
       // optional hook -- if the type in question has deps, add them here
       const deps: IType[] = _.invoke(current, 'dependencies', [this.gen.context]);
       if (deps) {
-        deps.filter((i) => !pendingTypes.has(i.id)).forEach((i) => pendingTypes.set(i.id, i));
+        deps
+          .filter((i) => !pendingTypes.has(i.id))
+          .forEach((i) => {
+            pendingTypes.set(i.id, i);
+          });
       }
 
       if (current && !(current instanceof Scalar)) {
@@ -74,7 +77,9 @@ export class TypesCollector {
         parentType
           .ancestors()
           .filter((t) => !pendingTypes.has(t.id) && T.isContainer(t))
-          .forEach((dep) => pendingTypes.set(dep.id, dep));
+          .forEach((dep) => {
+            pendingTypes.set(dep.id, dep);
+          });
       }
     }
 

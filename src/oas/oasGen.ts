@@ -96,7 +96,7 @@ export class OasGen {
   public context?: OasContext;
   public paths: Map<string, IType> = new Map();
   public options: GenerateOptions;
-  private collector: TypesCollector
+  private collector: TypesCollector;
 
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;

@@ -1,8 +1,9 @@
-import { IType, Prop, T, Type } from './internal.js';
+import { Arr, IType, Prop, T, Type } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { context } from 'esbuild';
 
 export class PropArray extends Prop {
   public items?: IType;
@@ -31,6 +32,21 @@ export class PropArray extends Prop {
     this.items = items;
     if (!this.children.includes(items)) {
       this.add(items);
+    }
+  }
+
+  generateValue(context: OasContext, writer: Writer) {
+    if (T.isScalarArray(this.items!)) {
+      const arr: Arr = this.items as Arr;
+
+      writer.write('[');
+      arr.generate(context, writer, []);
+      writer.write(']\n');
+
+      // because it's a scalar array, we can assume that's all we need to generate
+      context.generatedSet.add(this.items!.id);
+    } else {
+      super.generateValue(context, writer);
     }
   }
 

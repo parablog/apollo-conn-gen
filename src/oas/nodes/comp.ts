@@ -200,9 +200,7 @@ export class Composed extends Type {
           // because we are going to consolidate the children anyway, we can assume the name of the child.
           // this avoids having a comp with name '[inline:...]' which does not generate properly
           name = _.get(this.schema?.allOf[0], '$ref') as string;
-        }
-        else
-          name = `[inline:${this.parent!.name}]`;
+        } else name = `[inline:${this.parent!.name}]`;
       }
     }
 

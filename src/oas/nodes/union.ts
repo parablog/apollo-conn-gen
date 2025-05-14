@@ -113,18 +113,17 @@ export class Union extends Type {
         const generated = new Set<string>();
         for (const prop of selected) {
           trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-          if (!generated.has(prop.id))
-            prop.generate(context, writer, selection);
+          if (!generated.has(prop.id)) prop.generate(context, writer, selection);
           generated.add(prop.id);
         }
 
         writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
       } else {
         // add the prop parent paths to a set so we can only include those parents that have been selected
-        const propParentsPathSet = new Set(this.selectedProps(selection).map(p => p.parent!.path()));
+        const propParentsPathSet = new Set(this.selectedProps(selection).map((p) => p.parent!.path()));
 
         // we should only include the names of those properties that have been selected
-        const filtered = this.children.filter(c => propParentsPathSet.has(c.path()));
+        const filtered = this.children.filter((c) => propParentsPathSet.has(c.path()));
 
         writer
           .write('union ')
@@ -150,8 +149,7 @@ export class Union extends Type {
     const selected = this.selectedProps(selection);
     const generated = new Set<string>();
     for (const prop of selected) {
-      if (!generated.has(prop.id))
-        prop.select(context, writer, selection);
+      if (!generated.has(prop.id)) prop.select(context, writer, selection);
       generated.add(prop.id);
     }
 
@@ -211,7 +209,7 @@ export class Union extends Type {
 
       Array.from(child.props.values())
         .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
-        .forEach(prop => props.push(prop));
+        .forEach((prop) => props.push(prop));
 
       // props.push(...child.props.values());
     });
@@ -253,7 +251,7 @@ export class Union extends Type {
     this.children.forEach((child) => {
       Array.from(child.props.values())
         .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
-        .forEach(prop => collected.push(prop));
+        .forEach((prop) => collected.push(prop));
     });
 
     return collected;

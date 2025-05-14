@@ -45,9 +45,7 @@ export class Writer {
     this.schemaWriter.writeJSONScalar(writer);
 
     types.forEach((type: IType) => {
-      const count = context.refCount.get(type.name) !== undefined
-        ? context.refCount.get(type.name)!
-        : Infinity;
+      const count = context.refCount.get(type.name) !== undefined ? context.refCount.get(type.name)! : Infinity;
 
       if (!generatedSet.has(type.id) && count > 0) {
         type.generate(context, this, selection);
