@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.6]
+
+### Added
+- Added `reset()` method to `OasGen` class to properly reset generator state between generations
+- Added test case to verify reset functionality works correctly
+
+### Changed
+- CLI now always uses `consolidateUnions` and `showParentInSelections` options
+- Cleaned up test suite by removing commented-out test cases
+
 ## [0.4.5]
 
 ### Added

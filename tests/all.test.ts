@@ -2,7 +2,7 @@ import _ from 'lodash';
 import fs from 'fs';
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { JsonGen } from '../src/index.js';
+import { JsonGen, OasGen } from '../src/index.js';
 import { JsonContext, JsonType } from '../src/json/index.js';
 import { oasBasePath, runJsonTest, runOasTest } from '../src/tests/runners.js';
 
@@ -765,4 +765,39 @@ test('test_054_oas_test-better-naming', async () => {
   ]
 
   await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 5);
+});
+
+test('test_055_test-parser-reset', async () => {
+  const file = 'launch_Library_2-docs-v2.3.0.json';
+  const oasBasePath = '/Users/fernando/Development/Apollo/connectors/projects/gen/tests/resources/oas';
+
+  const content = fs.readFileSync(`${oasBasePath}/${file}`)
+
+  const gen = await OasGen.fromData(content as ArrayBuffer, {
+    skipValidation: false,
+    consolidateUnions: true,
+    showParentInSelections: false,
+  });
+
+  await gen.reset();
+
+  // 1st pass
+  const paths = [
+    "get:/2.3.0/agencies/>res:r>obj:type:#/c/s/PaginatedPolymorphicAgencyEndpointList>prop:array:#results>union:#/c/s/PolymorphicAgencyEndpoint>obj:type:#/c/s/AgencyMini>prop:scalar:id"
+  ]
+
+  const types = gen.getTypes(paths);
+  const schema = gen.generateSchema(paths);
+  // const g1 = _.cloneDeep(gen);
+  console.log(schema);
+
+  // reset context
+  await gen.reset();
+
+  // 2nd pass
+  const types2 = gen.getTypes(paths);
+  const schema2 = gen.generateSchema(paths);
+
+  assert.ok(_.isEqual(schema, schema2), "Schema should be equal");
+  assert.ok(_.isEqual(Array.from(types.keys()), Array.from(types2.keys())), "Types keys should be equal")
 });

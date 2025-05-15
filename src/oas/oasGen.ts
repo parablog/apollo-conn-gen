@@ -221,6 +221,12 @@ export class OasGen {
     return new Writer(this);
   }
 
+  public async reset() {
+    this.selections = [];
+    this.context = new OasContext(this.parser, this.options);
+    this.collector = new TypesCollector(this);
+    await this.visit();
+  }
   // private methods
 
   private visitGet(context: OasContext, name: string, op: Operation): IType {

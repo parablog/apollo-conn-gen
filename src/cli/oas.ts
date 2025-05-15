@@ -13,7 +13,12 @@ const originalConsole = Object.assign(
 async function main(sourceFile: string, opts: any): Promise<void> {
   console.log = () => {};
 
-  const gen = await OasGen.fromFile(sourceFile, opts);
+  const gen = await OasGen.fromFile(sourceFile, {
+    ...opts,
+    consolidateUnions: true,
+    showParentInSelections: true,
+  });
+
   await gen.visit();
 
   let pathSet = Array.from(gen.paths.values());
