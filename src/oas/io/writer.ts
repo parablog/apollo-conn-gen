@@ -41,18 +41,20 @@ export class Writer {
     const context = this.gen.context!;
     const generatedSet = context.generatedSet;
 
+    // make our own copy of the refCount, so it doesn't get modified by the writing process
+    const refCount = _.cloneDeep(context.refCount);
+
     this.schemaWriter.writeDirectives(writer);
     this.schemaWriter.writeJSONScalar(writer);
 
     types.forEach((type: IType) => {
-      const count = context.refCount.get(type.name) !== undefined ? context.refCount.get(type.name)! : Infinity;
+      const count = refCount.get(type.name) !== undefined ? refCount.get(type.name)! : Infinity;
 
       if (!generatedSet.has(type.id) && count > 0) {
         type.generate(context, this, selection);
         generatedSet.add(type.id);
+        refCount.set(type.name, count - 1);
       }
-
-      context.decRefCount(type.name);
     });
 
     const expanded = [...this.gen.paths];

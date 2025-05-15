@@ -4,18 +4,41 @@ import { OasGen } from '../src/oas/oasGen.js';
 import fs from 'fs';
 import _ from 'lodash';
 import assert from 'assert';
-import diff from 'deep-diff';
+// import diff from 'deep-diff';
 // import { stringify } from 'flatted';
-import { stringify } from 'superjson'
+// import { stringify } from 'superjson'
 
-/*test('test_054_oas_test-better-naming', async () => {
+test('test_055_test-parser-reset', async () => {
+  const file = 'launch_Library_2-docs-v2.3.0.json';
+  const oasBasePath = '/Users/fernando/Development/Apollo/connectors/projects/gen/tests/resources/oas';
 
+  const content = fs.readFileSync(`${oasBasePath}/${file}`)
+
+  const gen = await OasGen.fromData(content as ArrayBuffer, {
+    skipValidation: false,
+    consolidateUnions: true,
+    showParentInSelections: false,
+  });
+
+  await gen.visit();
+
+  // 1st pass
   const paths = [
-    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:scalar:count',
-    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
-    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name'
+    "get:/2.3.0/agencies/>res:r>obj:type:#/c/s/PaginatedPolymorphicAgencyEndpointList>prop:array:#results>union:#/c/s/PolymorphicAgencyEndpoint>obj:type:#/c/s/AgencyMini>prop:scalar:id"
   ]
 
-  await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 5);
+  const types = gen.getTypes(paths);
+  const schema = gen.generateSchema(paths);
+  // const g1 = _.cloneDeep(gen);
+  console.log(schema);
+
+  // 2nd pass
+  const types2 = gen.getTypes(paths);
+  const schema2 = gen.generateSchema(paths);
+
+  // fs.writeFileSync('schema1.graphql', schema);
+  // fs.writeFileSync('schema2.graphql', schema2);
+
+  assert.ok(_.isEqual(schema, schema2), "Schema should be equal");
+  assert.ok(_.isEqual(Array.from(types.keys()), Array.from(types2.keys())), "Types keys should be equal")
 });
-*/

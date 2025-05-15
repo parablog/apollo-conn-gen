@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.7]
+
+### Added
+- Added `visitSync()` method to `OasGen` for synchronous path visiting
+
+### Changed
+- Improved reference counting in `Writer` class by using a copy of the refCount map
+- Simplified `reset()` method in `OasContext` to only clear the generatedSet
+- Improved state management in `OasGen` with better context handling
+- Updated test cases to reflect new reset behavior
+- Cleaned up unused imports and commented code
+
 ## [0.4.6]
 
 ### Added

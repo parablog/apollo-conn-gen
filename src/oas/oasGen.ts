@@ -19,6 +19,7 @@ interface IGenOptions {
 
 export class OasGen {
   public selections: string[] = [];
+  private visited: boolean = false;
 
   public static async fromData(
     data: ArrayBuffer,
@@ -113,28 +114,54 @@ export class OasGen {
   }
 
   public expanded(paths: string[]): string[] {
-    this.collector!.collect(paths);
-    return this.collector!.expanded;
+    this.collector.collect(paths);
+    return this.collector.expanded;
   }
 
   public getTypes(paths: string[]): Map<string, IType> {
     // make sure we pass the latest options to our context for the generation
-    this.context!.generateOptions = this.options;
-    this.collector!.collect(paths);
+    const context = this.getContext();
+    context.generateOptions = this.options;
+
+    this.collector.collect(paths);
+
     return this.collector.types;
   }
 
   public generateSchema(paths: string[]): string {
     // make sure we pass the latest options to our context for the generation
-    this.context!.generateOptions = this.options;
-    this.collector!.collect(paths);
+    const context = this.getContext();
+    context.reset();
+    context.generateOptions = this.options;
+
+    this.collector.collect(paths);
 
     const writer: Writer = new Writer(this);
-    this.selections = writer.generateWith(this.collector!.types, this.collector!.expanded);
+    this.selections = writer.generateWith(this.collector.types, this.collector.expanded);
+
     return writer.flush();
   }
 
   public async visit(): Promise<void> {
+    const parser = this.parser;
+    const context = this.getContext();
+
+    const paths = parser.getPaths();
+    const filtered = Object.entries(paths)
+      .filter(([_key, pathItem]) => this.isSupported(pathItem))
+      .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
+
+    const collected = new Map<string, IType>();
+    for (const [key, pathItem] of filtered) {
+      this.visitPath(context, key, pathItem).forEach((type) => collected.set(type.id, type));
+    }
+
+    this.paths = collected;
+  }
+
+  public visitSync(): void {
+    if (this.visited) return;
+
     const parser = this.parser;
     const context = this.getContext();
 
@@ -221,14 +248,7 @@ export class OasGen {
     return new Writer(this);
   }
 
-  public async reset() {
-    this.selections = [];
-    this.context = new OasContext(this.parser, this.options);
-    this.collector = new TypesCollector(this);
-    await this.visit();
-  }
   // private methods
-
   private visitGet(context: OasContext, name: string, op: Operation): IType {
     trace(context, '-> [visitGet]', `in:  [${name}] id: ${op.getOperationId()}`);
     const result = Factory.createGet(name, op);

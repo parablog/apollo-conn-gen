@@ -779,7 +779,7 @@ test('test_055_test-parser-reset', async () => {
     showParentInSelections: false,
   });
 
-  await gen.reset();
+  await gen.visit();
 
   // 1st pass
   const paths = [
@@ -788,11 +788,6 @@ test('test_055_test-parser-reset', async () => {
 
   const types = gen.getTypes(paths);
   const schema = gen.generateSchema(paths);
-  // const g1 = _.cloneDeep(gen);
-  console.log(schema);
-
-  // reset context
-  await gen.reset();
 
   // 2nd pass
   const types2 = gen.getTypes(paths);
