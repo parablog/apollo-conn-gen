@@ -60,7 +60,7 @@ export class Factory {
       result = this.createArrayType(parent, schemaObj, context);
     }
     // array case
-    else if (schemaObj?.type === 'object' || schemaObj?.oneOf || schemaObj?.allOf || !_.isEmpty(schemaObj.properties)) {
+    else if (schemaObj?.type === 'object' || schemaObj?.oneOf || schemaObj?.allOf || schemaObj?.anyOf || !_.isEmpty(schemaObj.properties)) {
       result = this.createContainerType(parent, schemaObj, ref);
     }
     // scalar
@@ -110,7 +110,7 @@ export class Factory {
       result = new Composed(parent, ref || _.get(schema, 'name'), schema);
     }
     // union
-    else if (schema.oneOf) {
+    else if (schema.oneOf || schema.anyOf) {
       const oneOfs = schema.oneOf || [];
       result = new Union(parent, ref || _.get(schema, 'name'), oneOfs as SchemaObject[]);
     }

@@ -1,17 +1,18 @@
-# Generator library and CLI for Apollo Connectors 
+# Generator library and CLI for Apollo Connectors
 
 ## Introduction
 
 This project is a library designed to generate an an [Apollo Connector](https://www.apollographql.com/graphos/apollo-connectors) schema from either
+
 - an OpenAPI Specification (OAS) file (YAML or JSON), or
-- a set of JSON payloads. 
+- a set of JSON payloads.
 
 It also includes CLI tools to facilitate this conversion process.
 
 Key features:
 
-* Generates an Apollo Connector from an OAS specification, converting all types and `GET` entry points defined in the spec (*only* `GET` methods are supported for now)
-* Generates a schema based on a single or a collection of`JSON` files.
+- Generates an Apollo Connector from an OAS specification, converting all types and `GET` entry points defined in the spec (*only* `GET` methods are supported for now)
+- Generates a schema based on a single or a collection of`JSON` files.
 
 ## Changelog
 
@@ -19,7 +20,7 @@ See the [changelog](./CHANGELOG.md) for the latest changes.
 
 ## Prerequisites
 
-* [Node.js](https://nodejs.org/) version 18 or higher. Built using Typescript 5.1.6.
+- [Node.js](https://nodejs.org/) version 18 or higher. Built using Typescript 5.1.6.
 
 ## Installation
 
@@ -100,9 +101,9 @@ Will result in the following Apollo connector schema:
 
 ```graphql
 extend schema
-  @link(url: "https://specs.apollo.dev/federation/v2.10", import: ["@key"])
+  @link(url: "https://specs.apollo.dev/federation/v2.11", import: ["@key"])
   @link(
-    url: "https://specs.apollo.dev/connect/v0.1"
+    url: "https://specs.apollo.dev/connect/v0.2"
     import: ["@connect", "@source"]
   )
   @source(name: "api", http: { baseURL: "http://localhost:4010" })
@@ -132,8 +133,8 @@ type Query {
 
 The library provides two entry classes:
 
-* `OasGen`, for generating from OAS specifications, and
-* `JsonGen` for working with `JSON` files
+- `OasGen`, for generating from OAS specifications, and
+- `JsonGen` for working with `JSON` files
 
 ### Installation for JS/TS projects
 
@@ -156,8 +157,8 @@ import { JsonGen } from "apollo-conn-gen/json"
 
 Navigate using the `arrow` keys and select the fields you want to include in the generated connector schema using the 'x' key. Other options are:
 
-* `a` to select all fields in the current type, or
-* `n` key to deselect all fields.
+- `a` to select all fields in the current type, or
+- `n` key to deselect all fields.
 
 Once you've made your selection, press the `Enter` key to generate the Apollo Connector.
 
@@ -165,9 +166,9 @@ Here's an example of the output when selecting all the fields from `[GET] /pet/{
 
 ```graphql
 extend schema
-  @link(url: "https://specs.apollo.dev/federation/v2.10", import: ["@key"])
+  @link(url: "https://specs.apollo.dev/federation/v2.11", import: ["@key"])
   @link(
-    url: "https://specs.apollo.dev/connect/v0.1"
+    url: "https://specs.apollo.dev/connect/v0.2"
     import: ["@connect", "@source"]
   )
   @source(name: "api", http: { baseURL: "https://petstore3.swagger.io/v3" })
@@ -222,9 +223,9 @@ type Query {
 
 ## Options
 
-* `-i, --skip-validation`: Skip the validation step (default: `false`).
-* `-n, --skip-selection`: Generate all filtered paths without prompting for selection (default: `false`).
-* `-l, --list-paths`: Only list the paths that can be generated (default: `false`).
+- `-i, --skip-validation`: Skip the validation step (default: `false`).
+- `-n, --skip-selection`: Generate all filtered paths without prompting for selection (default: `false`).
+- `-l, --list-paths`: Only list the paths that can be generated (default: `false`).
 
 For a complete list of options, run:
 
@@ -309,9 +310,9 @@ will output the following:
 ```graphql
 --------------- Apollo Connector schema -----------------
 extend schema
-  @link(url: "https://specs.apollo.dev/federation/v2.10", import: ["@key"])
+  @link(url: "https://specs.apollo.dev/federation/v2.11", import: ["@key"])
   @link(
-    url: "https://specs.apollo.dev/connect/v0.1"
+    url: "https://specs.apollo.dev/connect/v0.2"
     import: ["@connect", "@source"]
   )
   @source(name: "api", http: { baseURL: "https://petstore3.swagger.io/v3" })
@@ -351,6 +352,7 @@ type Query {
 The tool supports the use of wildcards in selection sets. For example, to select all fields in a `type`, you can use the `*` character. For example, the two selection sets below will produce the same result:
 
 `./tests/resources/sample-petstore-selection.json`:
+
 ```json
 [
   "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:scalar:id",
@@ -361,6 +363,7 @@ The tool supports the use of wildcards in selection sets. For example, to select
 ```
 
 `./tests/resources/wildcard-petstore-selection.json`:
+
 ```json
 [
   "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>*"
@@ -389,9 +392,9 @@ will output the following:
 
 ```graphql
 extend schema
-  @link(url: "https://specs.apollo.dev/federation/v2.10", import: ["@key"])
+  @link(url: "https://specs.apollo.dev/federation/v2.11", import: ["@key"])
   @link(
-    url: "https://specs.apollo.dev/connect/v0.1"
+    url: "https://specs.apollo.dev/connect/v0.2"
     import: ["@connect", "@source"]
   )
   @source(name: "api", http: { baseURL: "https://petstore3.swagger.io/v3" })
@@ -446,7 +449,6 @@ type Query {
 }
 ```
 
-
 This is particularly useful for specifications that are bound to change often.
 
 will select all fields in the `Pet` type:
@@ -489,8 +491,8 @@ Options:
 
 The CLI options affect what is generated by the tool. There are three possibilities:
 
-* generate the whole connector schema,
-* generate only the types for the schema, or
-* generate the selection set
+- generate the whole connector schema,
+- generate only the types for the schema, or
+- generate the selection set
 
 The `-o` (or `--output-file`) allows sending the output to a file instead of the console.

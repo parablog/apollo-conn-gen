@@ -97,8 +97,17 @@ export class Post extends Get {
       return;
     }
 
-    const body = this.operation.getRequestBody('application/json');
-    if (!body) return;
+    const mediaType = _.first(mediaTypes.filter((k) => /^application\/(?:.*\+)?json/i.test(k)));
+    if (!mediaType) {
+      warn(context, '  [post::visitBody]', `No JSON media type found!`);
+      return;
+    }
+
+    const body = this.operation.getRequestBody(mediaType);
+    if (!body) {
+      warn(context, '  [post::visitBody]', `No valid body found!`);
+      return;
+    }
 
     // if it is an array, throw an error for now
     if (Array.isArray(body)) {

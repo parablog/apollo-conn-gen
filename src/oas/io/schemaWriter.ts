@@ -15,9 +15,9 @@ export class SchemaWriter {
     const host = this.getServerUrl(api.getDefinition().servers?.[0]);
     writer
       .write('extend schema\n')
-      .write('  @link(url: "https://specs.apollo.dev/federation/v2.10", import: ["@key"])\n')
+      .write('  @link(url: "https://specs.apollo.dev/federation/v2.11", import: ["@key"])\n')
       .write('  @link(\n')
-      .write('    url: "https://specs.apollo.dev/connect/v0.1"\n')
+      .write('    url: "https://specs.apollo.dev/connect/v0.2"\n')
       .write('    import: ["@connect", "@source"]\n')
       .write('  )\n')
       .write('  @source(name: "api", http: { baseURL: "')
