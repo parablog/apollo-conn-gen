@@ -141,11 +141,11 @@ export class Get extends Type implements Op {
     // If the response has a content property, we need to find the JSON content.
     else if (content) {
       const availableKeys = _.keys(response.content);
-      
+
       warn(context, `  [${code}]`, `Available content types: ${availableKeys.join(', ')}`);
       const keys = _.first(availableKeys.filter((k) => /^application\/(?:.*\+)?json/i.test(k)));
       warn(context, `  [${code}]`, `Matched JSON key: ${keys || 'none'}`);
-      
+
       const json = keys ? response.content![keys] : undefined;
       if (!json) {
         warn(context, `  [${code}]`, 'No JSON content found!');

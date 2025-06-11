@@ -60,7 +60,13 @@ export class Factory {
       result = this.createArrayType(parent, schemaObj, context);
     }
     // array case
-    else if (schemaObj?.type === 'object' || schemaObj?.oneOf || schemaObj?.allOf || schemaObj?.anyOf || !_.isEmpty(schemaObj.properties)) {
+    else if (
+      schemaObj?.type === 'object' ||
+      schemaObj?.oneOf ||
+      schemaObj?.allOf ||
+      schemaObj?.anyOf ||
+      !_.isEmpty(schemaObj.properties)
+    ) {
       result = this.createContainerType(parent, schemaObj, ref);
     }
     // scalar
