@@ -81,17 +81,17 @@ export class OperationWriter {
         writer.write('\n');
         let spacing = ' '.repeat(6);
 
-        writer.write(spacing).write(`queryParams: """\n`)
-        spacing = ' '.repeat(8)
-        writer.write(spacing).write(`$args {\n`)
-        spacing = ' '.repeat(10)
+        writer.write(spacing).write(`queryParams: """\n`);
+        spacing = ' '.repeat(8);
+        writer.write(spacing).write(`$args {\n`);
+        spacing = ' '.repeat(10);
         for (const p of queryParams) {
-          writer.write(spacing).write(`"${p.name}": ${Naming.genParamName(p.name)}\n`)
+          writer.write(spacing).write(`"${p.name}": ${Naming.genParamName(p.name)}\n`);
         }
         spacing = ' '.repeat(8);
-        writer.write(spacing).write("}\n")
+        writer.write(spacing).write('}\n');
         spacing = ' '.repeat(6);
-        writer.write(spacing).write('"""\n')
+        writer.write(spacing).write('"""\n');
       }
 
       const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
