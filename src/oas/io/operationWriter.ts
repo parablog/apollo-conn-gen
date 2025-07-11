@@ -51,7 +51,7 @@ export class OperationWriter {
     spacing = ' '.repeat(indent + 6);
     writer.write(spacing).write('source: "api"\n').write(spacing).write('http: ');
 
-    this.requestMethod(context, writer, op, selection);
+    this.requestMethod(context, writer, op, selection, indent);
 
     writer.write('\n').write(spacing).write('selection: """\n');
 
@@ -65,22 +65,36 @@ export class OperationWriter {
     writer.write(spacing).write(')\n');
   }
 
-  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[]): void {
+  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], indent: number): void {
     // replace every {elem} in the path for {$args.elem}
     const verb = op.verb;
-    writer.write(`{ ${verb}: `).write('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}'));
+    writer.write(`{ ${verb}: `).write('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}') + '"');
 
     if (op.params.length > 0) {
-      const params = op.params.filter((p: Param) => {
-        return p.required && p.parameter.in && p.parameter.in.toLowerCase() === 'query';
+      // we now include all query params, not just required ones. if they are not set,
+      // then the connectors will not include them in the request.
+      const queryParams = op.params.filter((p: Param) => {
+        return p.parameter.in && p.parameter.in.toLowerCase() === 'query';
       });
 
-      if (params.length > 0) {
-        writer.write('?' + params.map((p: Param) => `${p.name}={$args.${Naming.genParamName(p.name)}}`).join('&'));
-      }
-      const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
+      if (queryParams.length > 0) {
+        writer.write('\n');
+        let spacing = ' '.repeat(6);
 
-      writer.write('"\n');
+        writer.write(spacing).write(`queryParams: """\n`)
+        spacing = ' '.repeat(8)
+        writer.write(spacing).write(`$args {\n`)
+        spacing = ' '.repeat(10)
+        for (const p of queryParams) {
+          writer.write(spacing).write(`"${p.name}": ${Naming.genParamName(p.name)}\n`)
+        }
+        spacing = ' '.repeat(8);
+        writer.write(spacing).write("}\n")
+        spacing = ' '.repeat(6);
+        writer.write(spacing).write('"""\n')
+      }
+
+      const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
 
       if (headers.length > 0) {
         let spacing = ' '.repeat(6);
@@ -108,8 +122,6 @@ export class OperationWriter {
         spacing = ' '.repeat(6);
         writer.write(spacing + ']');
       }
-    } else {
-      writer.write('"');
     }
 
     if (_.has(op, 'body')) {
