@@ -17,6 +17,16 @@ import {
   Scalar,
   Type,
   Union,
+  T,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Body,
+  PropComp,
+  PropCircRef,
+  PropEn,
+  Op,
 } from './nodes/internal.js';
 
 export { OasGen } from './oasGen.js';
@@ -39,4 +49,14 @@ export {
   Res,
   Scalar,
   Union,
+  T,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Body,
+  PropComp,
+  PropCircRef,
+  PropEn,
+  Op,
 };

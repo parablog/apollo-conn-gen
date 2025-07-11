@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.10]
+
+### Added
+- Added missing type exports to `src/oas/index.ts` to ensure all types from `internal.ts` are properly re-exported: `Post`, `Put`, `Patch`, `Delete`, `Body`, `PropComp`, `PropCircRef`, `PropEn`, and `Op`
+
 ## [0.4.8]
 
 ### Changed
