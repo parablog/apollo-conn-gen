@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.8]
+
+### Changed
+- Improved query parameter handling in Apollo Connectors by using the `queryParams` field instead of appending parameters to the URL
+- updated Federation to version `2.11` and connectors to `0.2`
+
 ## [0.4.7]
 
 ### Added
