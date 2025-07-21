@@ -51,7 +51,13 @@ test('test_053_oas_test_036_time-series', async () => {
 //   assert.ok(_.isEqual(Array.from(types.keys()), Array.from(types2.keys())), "Types keys should be equal")
 // });
 
-test('test_054_oas_fhir-simple', async () => {
-  const paths = ['get:/Account>**'];
-  await runOasTest('FHIR-baseR4.yaml', paths, 4306, 0);
+// test('test_054_oas_fhir-simple', async () => {
+//   const paths = ['get:/Account>**'];
+//   await runOasTest('FHIR-baseR4.yaml', paths, 4306, 0);
+// });
+
+
+test('test_053_oas_test_036_time-series', async () => {
+  const paths = ['post:/market-data-services/time-series/search>**'];
+  await runOasTest('time-series-1.0.28.yaml', paths, 1, 12);
 });

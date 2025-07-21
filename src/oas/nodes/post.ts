@@ -74,7 +74,7 @@ export class Post extends Get {
       writer.write('\n  """\n');
     }
 
-    writer.write('  ').write(this.getGqlOpName());
+    this.writeOpName(context, writer);
 
     this.generateParameters(context, writer, selection);
     this.generateBodyInput(context, writer);

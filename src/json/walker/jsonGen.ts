@@ -1,34 +1,46 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import _ from 'lodash';
+import { DEFAULT_VERSIONS } from '../../versions.js';
 import { ConnectorWriter, JsonArray, JsonContext, JsonObj, JsonScalar, JsonType, StringWriter } from '../index.js';
 import { trace, warn } from './log/trace.js';
 import { sanitiseField } from './naming.js';
 
+export interface JsonGenOptions {
+  federationVersion?: string;
+  connectorSpecVersion?: string;
+}
+
 export class JsonGen {
   private readonly context: JsonContext;
+  private readonly options: JsonGenOptions;
 
   // Private constructor
-  private constructor() {
+  private constructor(options: JsonGenOptions = {}) {
     this.context = new JsonContext();
+    this.options = {
+      federationVersion: DEFAULT_VERSIONS.federationVersion,
+      connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
+      ...options
+    };
   }
 
   public getContext(): JsonContext {
     return this.context;
   }
 
-  public static new(): JsonGen {
-    return new JsonGen();
+  public static new(options?: JsonGenOptions): JsonGen {
+    return new JsonGen(options);
   }
 
   // Factory method from a JSON string
-  public static fromReader(json: string): JsonGen {
-    const walker = new JsonGen();
+  public static fromReader(json: string, options?: JsonGenOptions): JsonGen {
+    const walker = new JsonGen(options);
     walker.walkJson(json);
     return walker;
   }
 
-  public static fromJsons(jsons: string[]): JsonGen {
-    const walker = new JsonGen();
+  public static fromJsons(jsons: string[], options?: JsonGenOptions): JsonGen {
+    const walker = new JsonGen(options);
     for (const json of jsons) {
       walker.walkJson(json);
     }
@@ -37,7 +49,7 @@ export class JsonGen {
 
   public generateSchema(): string {
     const writer = new StringWriter();
-    ConnectorWriter.write(this, writer);
+    ConnectorWriter.write(this, writer, this.options);
     return writer.flush();
   }
 

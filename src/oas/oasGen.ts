@@ -5,6 +5,7 @@ import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
+import { DEFAULT_VERSIONS } from '../versions.js';
 import { GenerateOptions, OasContext } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
@@ -15,6 +16,9 @@ interface IGenOptions {
   skipValidation: boolean;
   consolidateUnions: boolean;
   showParentInSelections: boolean;
+  federationVersion?: string;
+  connectorSpecVersion?: string;
+  postName?: string;
 }
 
 export class OasGen {
@@ -27,6 +31,9 @@ export class OasGen {
       skipValidation: false,
       consolidateUnions: true,
       showParentInSelections: false,
+      federationVersion: DEFAULT_VERSIONS.federationVersion,
+      connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
+      postName: undefined,
     },
   ): Promise<OasGen> {
     const normalizer: OASNormalize = new OASNormalize(data, {
@@ -60,6 +67,9 @@ export class OasGen {
       skipValidation: false,
       consolidateUnions: true,
       showParentInSelections: false,
+      federationVersion: DEFAULT_VERSIONS.federationVersion,
+      connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
+      postName: undefined,
     },
     // prompt: Prompt
   ): Promise<OasGen> {

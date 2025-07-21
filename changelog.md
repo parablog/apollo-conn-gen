@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.11]
+
+### Added
+- Added `--post-name` CLI option to apply regex transformations to operation names (e.g., `"apiV1(.*):api_v1_$1"` to convert `"apiV1SomeOperation"` to `"api_v1_SomeOperation"`)
+- Added `--federation-version` CLI option to specify Federation version (default: `v2.11`)
+- Added `--connector-spec-version` CLI option to specify Connector spec version (default: `v0.2`)
+- Updated README documentation with complete CLI options reference
+
 ## [0.4.10]
 
 ### Added

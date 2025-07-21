@@ -1,6 +1,7 @@
 import { trace, warn } from './log/trace.js';
 import Oas from 'oas';
 import { ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
+import { DEFAULT_VERSIONS } from '../versions.js';
 import { ReferenceObject } from './nodes/internal.js';
 import { Naming } from './utils/naming.js';
 import { IType } from './nodes/internal.js';
@@ -8,6 +9,9 @@ import { IType } from './nodes/internal.js';
 export type GenerateOptions = {
   consolidateUnions: boolean;
   showParentInSelections: boolean;
+  federationVersion?: string;
+  connectorSpecVersion?: string;
+  postName?: string;
 };
 
 export class OasContext {
@@ -31,6 +35,9 @@ export class OasContext {
     this.generateOptions = options || {
       consolidateUnions: true, // by default, we consolidate fields until unions are supported
       showParentInSelections: true, // by default, we don't show where the fields are coming from
+      federationVersion: DEFAULT_VERSIONS.federationVersion,
+      connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
+      postName: undefined,
     };
   }
 
