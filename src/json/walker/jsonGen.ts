@@ -20,7 +20,7 @@ export class JsonGen {
     this.options = {
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
-      ...options
+      ...options,
     };
   }
 
