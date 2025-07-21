@@ -1,5 +1,6 @@
 import Oas from 'oas';
 import { ServerObject } from 'oas/types';
+import { DEFAULT_VERSIONS } from '../../versions.js';
 import { OasGen } from '../oasGen.js';
 import { Writer } from './writer.js';
 
@@ -13,11 +14,13 @@ export class SchemaWriter {
   public writeDirectives(writer: Writer): void {
     const api: Oas = this.gen.parser;
     const host = this.getServerUrl(api.getDefinition().servers?.[0]);
+    const federationVersion = this.gen.options.federationVersion || DEFAULT_VERSIONS.federationVersion;
+    const connectorSpecVersion = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
     writer
       .write('extend schema\n')
-      .write('  @link(url: "https://specs.apollo.dev/federation/v2.11", import: ["@key"])\n')
+      .write(`  @link(url: "https://specs.apollo.dev/federation/${federationVersion}", import: ["@key"])\n`)
       .write('  @link(\n')
-      .write('    url: "https://specs.apollo.dev/connect/v0.2"\n')
+      .write(`    url: "https://specs.apollo.dev/connect/${connectorSpecVersion}"\n`)
       .write('    import: ["@connect", "@source"]\n')
       .write('  )\n')
       .write('  @source(name: "api", http: { baseURL: "')

@@ -76,7 +76,7 @@ export class Get extends Type implements Op {
       writer.write('\n  """\n');
     }
 
-    writer.write('  ').write(this.getGqlOpName());
+    this.writeOpName(context, writer);
     this.generateParameters(context, writer, selection);
 
     if (this.resultType) {
@@ -95,6 +95,18 @@ export class Get extends Type implements Op {
 
   public getGqlOpName(): string {
     return Naming.genOperationName(this.operation.path, this.operation);
+  }
+
+  protected writeOpName(context: OasContext, writer: Writer): void {
+    let name = this.getGqlOpName();
+
+    if (context.generateOptions.postName) {
+      const [pattern, replacement] = context.generateOptions.postName.split(':');
+      const regex = new RegExp(pattern);
+      name = name.replace(regex, replacement || '$1');
+    }
+
+    writer.write('  ').write(_.lowerFirst(name));
   }
 
   protected visitParameters(context: OasContext): void {

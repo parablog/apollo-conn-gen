@@ -1,0 +1,4 @@
+[
+  "get:/api/v1/markets>**",
+  "get:/api/v1/markets/{marketId}/models>**"
+]

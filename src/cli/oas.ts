@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
 
@@ -17,6 +18,9 @@ async function main(sourceFile: string, opts: any): Promise<void> {
     ...opts,
     consolidateUnions: true,
     showParentInSelections: true,
+    federationVersion: opts.federationVersion,
+    connectorSpecVersion: opts.connectorSpecVersion,
+    postName: opts.postName,
   });
 
   await gen.visit();
@@ -68,6 +72,9 @@ program
   .option('-s --load-selections <file>', 'Load a JSON file with field selections (other options are ignored)')
   .option('-v --verbose', 'Log all messages from generator')
   .option('-m --print-selections', 'Print selections from generator')
+  .option('-r --post-name <pattern>', 'Apply a regex to transform operation names (e.g., "apiV1(.*):api_v1_$1" to convert "apiV1SomeOperation" to "api_v1_SomeOperation")')
+  .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
+  .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .parse(process.argv);
 
 const source = program.args[0];

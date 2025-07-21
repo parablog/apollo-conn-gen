@@ -226,6 +226,14 @@ type Query {
 - `-i, --skip-validation`: Skip the validation step (default: `false`).
 - `-n, --skip-selection`: Generate all filtered paths without prompting for selection (default: `false`).
 - `-l, --list-paths`: Only list the paths that can be generated (default: `false`).
+- `-g, --grep <regex>`: Filter the list of paths with the passed expression (default: `*`).
+- `-p, --page-size <num>`: Number of rows to display in selection mode (default: `10`).
+- `-s, --load-selections <file>`: Load a JSON file with field selections (other options are ignored).
+- `-v, --verbose`: Log all messages from generator.
+- `-m, --print-selections`: Print selections from generator.
+- `-r, --post-name <pattern>`: Apply a regex to transform operation names (e.g., `"apiV1(.*):api_v1_$1"` to convert `"apiV1SomeOperation"` to `"api_v1_SomeOperation"`).
+- `--federation-version <version>`: Federation version to use (default: `v2.11`).
+- `--connector-spec-version <version>`: Connector spec version to use (default: `v0.2`).
 
 For a complete list of options, run:
 

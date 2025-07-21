@@ -1,3 +1,4 @@
+import { DEFAULT_VERSIONS } from '../../versions.js';
 import { JsonGen } from '../walker/jsonGen.js';
 
 export interface IWriter {
@@ -20,18 +21,25 @@ export class StringWriter implements IWriter {
   }
 }
 
+export interface ConnectorWriterOptions {
+  federationVersion?: string;
+  connectorSpecVersion?: string;
+}
+
 export class ConnectorWriter {
-  public static write(walker: JsonGen, writer: IWriter): void {
-    this.writeConnector(writer);
+  public static write(walker: JsonGen, writer: IWriter, options?: ConnectorWriterOptions): void {
+    this.writeConnector(writer, options);
     writer.write(walker.writeTypes());
     this.writeQuery(walker, writer);
   }
 
-  private static writeConnector(writer: IWriter): void {
+  private static writeConnector(writer: IWriter, options?: ConnectorWriterOptions): void {
+    const federationVersion = options?.federationVersion || DEFAULT_VERSIONS.federationVersion;
+    const connectorSpecVersion = options?.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
     writer.write(`extend schema
-  @link(url: "https://specs.apollo.dev/federation/v2.11", import: ["@key"])
+  @link(url: "https://specs.apollo.dev/federation/${federationVersion}", import: ["@key"])
   @link(
-    url: "https://specs.apollo.dev/connect/v0.2"
+    url: "https://specs.apollo.dev/connect/${connectorSpecVersion}"
     import: ["@connect", "@source"]
   )
   @source(name: "api", http: { baseURL: "http://localhost:4010" })

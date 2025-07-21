@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { DEFAULT_VERSIONS } from '../versions.js';
 import { JsonGen } from '../json/index.js';
 
 import { Command } from 'commander';
@@ -12,6 +13,11 @@ async function main(fileOrFolder: string, opts: any): Promise<void> {
     return;
   }
 
+  const jsonOptions = {
+    federationVersion: opts.federationVersion,
+    connectorSpecVersion: opts.connectorSpecVersion,
+  };
+
   // generator
   let gen: JsonGen;
 
@@ -19,10 +25,10 @@ async function main(fileOrFolder: string, opts: any): Promise<void> {
   if (fs.lstatSync(fileOrFolder).isFile()) {
     // read contents
     const contents = fs.readFileSync(fileOrFolder, 'utf-8');
-    gen = JsonGen.fromReader(contents);
+    gen = JsonGen.fromReader(contents, jsonOptions);
   } else {
     // iterate through the files found in the target folder and load all the contents
-    gen = JsonGen.new();
+    gen = JsonGen.new(jsonOptions);
     fs.readdirSync(fileOrFolder).forEach((file) => {
       const contents = fs.readFileSync(fileOrFolder + '/' + file, 'utf-8');
       gen.walkJson(contents);
@@ -52,6 +58,8 @@ program
   .option('-s --schema-types', 'Output the GraphQL schema types', false)
   .option('-e --selection-set', 'Output the Apollo Connector selection set', false)
   .option('-o --output-file <file>', 'Where to write the output', 'stdout')
+  .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
+  .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .parse(process.argv);
 
 const source = program.args[0];
