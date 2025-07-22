@@ -100,10 +100,9 @@ export class Get extends Type implements Op {
   protected writeOpName(context: OasContext, writer: Writer): void {
     let name = this.getGqlOpName();
 
-    if (context.generateOptions.postName) {
-      const [pattern, replacement] = context.generateOptions.postName.split(':');
-      const regex = new RegExp(pattern);
-      name = name.replace(regex, replacement || '$1');
+    // Use the new name mapper if available, otherwise fall back to legacy postName
+    if (context.generateOptions.mapper) {
+      name = context.generateOptions.mapper.operationName(name);
     }
 
     writer.write('  ').write(_.lowerFirst(name));

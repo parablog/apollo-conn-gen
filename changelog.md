@@ -4,13 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.0]
+
+Added support for loading transformation rules from JSON files. This allows loading multiple transformation rules from a JSON file to apply complex name transformations to operation names (e.g., `createPet` → `create_Pet`, `updateUserByUsername` → `updateUser`, etc.). Check `tests/resources/transform-rules-example.json` for example rules.
+
+### Added
+- Support for name transformation rules
+
+### Deprecated
+- **BREAKING**: Removed `postName` property from `GenerateOptions` and `IGenOptions` interfaces
+
+### Changed
+- **BREAKING**: `PUT` operations now correctly generate an `update` GQL operation
+- **BREAKING**: `PATCH` operations now generate a `patch` GQL operation to avoid collisions with `PUT`
+
 ## [0.4.11]
 
 ### Added
 - Added `--post-name` CLI option to apply regex transformations to operation names (e.g., `"apiV1(.*):api_v1_$1"` to convert `"apiV1SomeOperation"` to `"api_v1_SomeOperation"`)
+- Added `--transform-rules` CLI option to load multiple transform rules from a JSON file for complex name transformations
 - Added `--federation-version` CLI option to specify Federation version (default: `v2.11`)
 - Added `--connector-spec-version` CLI option to specify Connector spec version (default: `v0.2`)
-- Updated README documentation with complete CLI options reference
+- Added transform rules system with support for multiple rules, rule descriptions, and enable/disable flags
+- Renamed `OperationNameTransformer` to `OperationNameMapper` for better clarity
+- Updated README documentation with complete CLI options reference and transform rules documentation
 
 ## [0.4.10]
 

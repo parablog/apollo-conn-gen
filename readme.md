@@ -232,6 +232,7 @@ type Query {
 - `-v, --verbose`: Log all messages from generator.
 - `-m, --print-selections`: Print selections from generator.
 - `-r, --post-name <pattern>`: Apply a regex to transform operation names (e.g., `"apiV1(.*):api_v1_$1"` to convert `"apiV1SomeOperation"` to `"api_v1_SomeOperation"`).
+- `-t, --transform-rules <file>`: Load transform rules from a JSON file to apply multiple name transformations.
 - `--federation-version <version>`: Federation version to use (default: `v2.11`).
 - `--connector-spec-version <version>`: Connector spec version to use (default: `v0.2`).
 
@@ -240,6 +241,56 @@ For a complete list of options, run:
 ```bash
 node ./dist/cli/oas -h
 ```
+
+### Transform Rules
+
+The tool supports loading multiple transform rules from a JSON file to apply complex name transformations. This is useful when you need to apply multiple transformations in sequence or maintain a set of consistent naming rules.
+
+#### Transform Rules File Format
+
+Create a JSON file with the following structure:
+
+```json
+{
+  "description": "Example transform rules for operation names",
+  "rules": [
+    {
+      "pattern": "apiV1(.*)",
+      "replacement": "api_v1_$1"
+    },
+    {
+      "pattern": "get(.*)",
+      "replacement": "fetch$1"
+    },
+    {
+      "pattern": "([a-z])([A-Z])",
+      "replacement": "$1_$2",
+      "enabled": false
+    }
+  ]
+}
+```
+
+#### Using Transform Rules
+
+```bash
+# Apply transform rules from a file
+node ./dist/cli/oas petstore.yaml --transform-rules ./transform-rules.json --grep ".*" --skip-selection
+```
+
+#### Rule Properties
+
+- `pattern`: The regex pattern to match
+- `replacement`: The replacement string (supports capture groups like `$1`, `$2`, etc.)
+- `description`: Optional description of what the rule does
+- `enabled`: Optional boolean to enable/disable the rule (default: `true` - rules are enabled by default)
+
+#### Example Transformations
+
+- `apiV1GetUser` → `api_v1_GetUser` → `api_v1_fetchUser`
+- `apiV1CreatePet` → `api_v1_CreatePet` → `api_v1_fetchCreatePet`
+
+Rules are applied in the order they appear in the file, allowing for complex transformation chains.
 
 ### Filtering paths
 

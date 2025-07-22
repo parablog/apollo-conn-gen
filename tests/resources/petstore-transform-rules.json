@@ -1,0 +1,13 @@
+{
+  "description": "Example transform rules for operation names",
+  "rules": [
+    {
+      "pattern": "create(.*)",
+      "replacement": "create_$1"
+    },    
+    {
+      "pattern": "updateUserByUsername",
+      "replacement": "updateUser"
+    }
+  ]
+} 

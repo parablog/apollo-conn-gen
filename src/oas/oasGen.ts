@@ -11,6 +11,7 @@ import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
 import { TypesCollector } from './generator/typesCollector.js';
+import { Mapper } from './mapper/types.js';
 
 interface IGenOptions {
   skipValidation: boolean;
@@ -18,7 +19,7 @@ interface IGenOptions {
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
-  postName?: string;
+  mapper?: Mapper;
 }
 
 export class OasGen {
@@ -33,7 +34,7 @@ export class OasGen {
       showParentInSelections: false,
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
-      postName: undefined,
+      mapper: undefined,
     },
   ): Promise<OasGen> {
     const normalizer: OASNormalize = new OASNormalize(data, {
@@ -69,7 +70,7 @@ export class OasGen {
       showParentInSelections: false,
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
-      postName: undefined,
+      mapper: undefined,
     },
     // prompt: Prompt
   ): Promise<OasGen> {

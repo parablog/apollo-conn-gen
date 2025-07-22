@@ -6,12 +6,14 @@ import { ReferenceObject } from './nodes/internal.js';
 import { Naming } from './utils/naming.js';
 import { IType } from './nodes/internal.js';
 
+import { Mapper } from './mapper/index.js';
+
 export type GenerateOptions = {
   consolidateUnions: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
-  postName?: string;
+  mapper?: Mapper;
 };
 
 export class OasContext {
@@ -37,7 +39,6 @@ export class OasContext {
       showParentInSelections: true, // by default, we don't show where the fields are coming from
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
-      postName: undefined,
     };
   }
 
