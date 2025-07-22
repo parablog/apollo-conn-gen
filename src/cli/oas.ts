@@ -22,8 +22,7 @@ function loadRules(opts: any): Mapper | undefined {
       console.error(`Error loading transform rules: ${error}`);
       return undefined;
     }
-  }
-    else if (opts.postName) {
+  } else if (opts.postName) {
     // Backward compatibility with legacy --post-name
     mapper = OpNameMapper.fromPattern(opts.postName);
   }
@@ -100,10 +99,7 @@ program
     '-r --post-name <pattern>',
     'Apply a regex to transform operation names (e.g., "apiV1(.*):api_v1_$1" to convert "apiV1SomeOperation" to "api_v1_SomeOperation")',
   )
-  .option(
-    '-t --transform-rules <file>',
-    'Load transform rules from a JSON file to apply multiple name transformations',
-  )
+  .option('-t --transform-rules <file>', 'Load transform rules from a JSON file to apply multiple name transformations')
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .parse(process.argv);

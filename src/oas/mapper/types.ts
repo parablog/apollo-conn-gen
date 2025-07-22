@@ -13,4 +13,4 @@ export interface MapRules {
 
 export interface Mapper {
   operationName(name: string): string;
-} 
+}
