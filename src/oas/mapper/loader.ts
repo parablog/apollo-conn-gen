@@ -7,12 +7,16 @@ export class RulesLoader {
       throw new Error(`Transform rules file not found: ${filePath}`);
     }
 
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const rules: MapRules = JSON.parse(content);
+    const content: string = fs.readFileSync(filePath, 'utf-8');
+    return RulesLoader.fromString(content);
+  }
+
+  public static fromString(json: string): MapRules {
+    const rules: MapRules = JSON.parse(json);
 
     // Validate the structure
     if (!rules.rules || !Array.isArray(rules.rules)) {
-      throw new Error('Invalid transform rules file: missing or invalid "rules" array');
+      throw new Error('Invalid transform rules: missing or invalid "rules" array');
     }
 
     // Validate each rule
@@ -24,17 +28,6 @@ export class RulesLoader {
         throw new Error(`Invalid rule at index ${index}: missing or invalid "replacement"`);
       }
     });
-
-    return rules;
-  }
-
-  public static loadFromString(content: string): MapRules {
-    const rules: MapRules = JSON.parse(content);
-
-    // Validate the structure
-    if (!rules.rules || !Array.isArray(rules.rules)) {
-      throw new Error('Invalid transform rules: missing or invalid "rules" array');
-    }
 
     return rules;
   }

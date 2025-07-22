@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.1]
+
+### Changed
+- We can now create a `Mapper` with `OpNameMapper.fromString`
+
 ## [0.5.0]
 
 Added support for loading transformation rules from JSON files. This allows loading multiple transformation rules from a JSON file to apply complex name transformations to operation names (e.g., `createPet` → `create_Pet`, `updateUserByUsername` → `updateUser`, etc.). Check `tests/resources/transform-rules-example.json` for example rules.
