@@ -1,3 +1,4 @@
+import { RulesLoader } from './loader.js';
 import { MapRules as MapRules, Mapper } from './types.js';
 
 export class OpNameMapper implements Mapper {
@@ -29,6 +30,11 @@ export class OpNameMapper implements Mapper {
     }
 
     return mappedName;
+  }
+
+  public static fromString(json: string): OpNameMapper {
+    const rules = RulesLoader.fromString(json);
+    return new OpNameMapper(rules);
   }
 
   public static fromRules(rules: MapRules): OpNameMapper {
