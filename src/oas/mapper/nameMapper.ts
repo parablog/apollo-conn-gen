@@ -5,13 +5,13 @@ export class OpNameMapper implements Mapper {
 
   constructor(rules: MapRules) {
     this.rules = rules.rules
-      .filter(rule => rule.enabled !== false)
+      .filter((rule) => rule.enabled !== false)
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)) // Higher priority first
-      .map(rule => {
+      .map((rule) => {
         try {
           return {
             regex: new RegExp(rule.pattern),
-            replacement: rule.replacement
+            replacement: rule.replacement,
           };
         } catch (error) {
           console.warn(`Invalid regex pattern "${rule.pattern}": ${error}`);
@@ -38,11 +38,13 @@ export class OpNameMapper implements Mapper {
   public static fromPattern(pattern: string): OpNameMapper {
     const [regexPattern, replacement] = pattern.split(':');
     const rules: MapRules = {
-      rules: [{
-        pattern: regexPattern,
-        replacement: replacement || '$1'
-      }]
+      rules: [
+        {
+          pattern: regexPattern,
+          replacement: replacement || '$1',
+        },
+      ],
     };
     return new OpNameMapper(rules);
   }
-} 
+}

@@ -30,7 +30,7 @@ export class RulesLoader {
 
   public static loadFromString(content: string): MapRules {
     const rules: MapRules = JSON.parse(content);
-    
+
     // Validate the structure
     if (!rules.rules || !Array.isArray(rules.rules)) {
       throw new Error('Invalid transform rules: missing or invalid "rules" array');
@@ -38,4 +38,4 @@ export class RulesLoader {
 
     return rules;
   }
-} 
+}
