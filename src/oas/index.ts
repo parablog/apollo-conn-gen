@@ -28,6 +28,7 @@ import {
   PropEn,
   Op,
 } from './nodes/internal.js';
+import { Mapper, MapRules, MapRule, RulesLoader, OpNameMapper } from './mapper/index.js';
 
 export { OasGen } from './oasGen.js';
 export {
@@ -60,3 +61,5 @@ export {
   PropEn,
   Op,
 };
+
+export { Mapper, MapRules, MapRule, RulesLoader, OpNameMapper } from './mapper/index.js';

@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
+import { RulesLoader, OpNameMapper, MapRules, Mapper } from '../oas/mapper/index.js';
 
 const originalConsole = Object.assign(
   {
@@ -10,9 +11,31 @@ const originalConsole = Object.assign(
   console,
 );
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadRules(opts: any): Mapper | undefined {
+  let mapper;
+  if (opts.transformRules) {
+    try {
+      const rules = RulesLoader.fromFile(opts.transformRules);
+      mapper = OpNameMapper.fromRules(rules);
+    } catch (error) {
+      console.error(`Error loading transform rules: ${error}`);
+      return undefined;
+    }
+  }
+    else if (opts.postName) {
+    // Backward compatibility with legacy --post-name
+    mapper = OpNameMapper.fromPattern(opts.postName);
+  }
+
+  return mapper;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
 async function main(sourceFile: string, opts: any): Promise<void> {
   console.log = () => {};
+
+  const mapper = loadRules(opts);
 
   const gen = await OasGen.fromFile(sourceFile, {
     ...opts,
@@ -21,6 +44,7 @@ async function main(sourceFile: string, opts: any): Promise<void> {
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
     postName: opts.postName,
+    mapper: mapper,
   });
 
   await gen.visit();
@@ -75,6 +99,10 @@ program
   .option(
     '-r --post-name <pattern>',
     'Apply a regex to transform operation names (e.g., "apiV1(.*):api_v1_$1" to convert "apiV1SomeOperation" to "api_v1_SomeOperation")',
+  )
+  .option(
+    '-t --transform-rules <file>',
+    'Load transform rules from a JSON file to apply multiple name transformations',
   )
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)

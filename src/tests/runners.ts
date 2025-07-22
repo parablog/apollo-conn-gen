@@ -5,6 +5,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import { execSync, spawnSync } from 'child_process';
+import { Mapper } from '../oas/mapper/types.js';
 import _ from 'lodash';
 
 export const oasBasePath = './tests/resources/oas';
@@ -18,11 +19,13 @@ export async function runOasTest(
   typesSize: number,
   shouldFail: boolean = false,
   skipValidation: boolean = false,
+  mapper?: Mapper,
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
     consolidateUnions: true,
     showParentInSelections: false,
+    mapper,
   });
   await gen.visit();
 
