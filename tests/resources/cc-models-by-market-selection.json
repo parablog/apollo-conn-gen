@@ -1,3 +1,12 @@
 [
-  "get:/api/v1/markets>**" 
+  "get:/api/v1/markets>**",
+  "get:/api/v1/markets/{marketId}/models>**",
+  "get:/api/v1/markets/{marketId}/pre-configured-vehicles>**",
+  "get:/api/v1/markets/{marketId}/models/{modelId}>**",
+  "get:/api/v1/markets/{marketId}/models/{modelId}/technical-values>**",
+  "get:/api/v1/markets/{marketId}/models/{modelId}/configurations/initial>**",
+  "get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}>**",
+  "get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/technical-values>**",
+  "get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>**",
+  "get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/technical-information>**"
 ]

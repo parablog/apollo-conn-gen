@@ -12,7 +12,8 @@ It also includes CLI tools to facilitate this conversion process.
 Key features:
 
 - Generates an Apollo Connector from an OAS specification, converting all types and `GET` entry points defined in the spec (*only* `GET` methods are supported for now)
-- Generates a schema based on a single or a collection of`JSON` files.
+- Generates a schema based on a single or a collection of`JSON` files
+- Full support for OpenAPI `additionalProperties` - converts map/dictionary patterns into GraphQL-compatible key-value entry arrays
 
 ## Changelog
 
@@ -284,13 +285,14 @@ node ./dist/cli/oas petstore.yaml --transform-rules ./transform-rules.json --gre
 - `replacement`: The replacement string (supports capture groups like `$1`, `$2`, etc.)
 - `description`: Optional description of what the rule does
 - `enabled`: Optional boolean to enable/disable the rule (default: `true` - rules are enabled by default)
+- `priority`: Optional number to control the order of rule application (higher numbers = higher priority, default: `0`)
 
 #### Example Transformations
 
 - `apiV1GetUser` → `api_v1_GetUser` → `api_v1_fetchUser`
 - `apiV1CreatePet` → `api_v1_CreatePet` → `api_v1_fetchCreatePet`
 
-Rules are applied in the order they appear in the file, allowing for complex transformation chains.
+Rules are applied in priority order (highest number first), then in the order they appear in the file for rules with the same priority, allowing for complex transformation chains.
 
 ### Filtering paths
 
@@ -511,6 +513,80 @@ type Query {
 This is particularly useful for specifications that are bound to change often.
 
 will select all fields in the `Pet` type:
+
+## OpenAPI `additionalProperties` Support
+
+The tool now fully supports OpenAPI `additionalProperties` for handling map/dictionary patterns in your schemas. When an object type uses `additionalProperties`, it gets converted into a GraphQL-compatible key-value array structure.
+
+### How it works
+
+OpenAPI schemas with `additionalProperties` like this:
+
+```yaml
+VehicleComponentTree:
+  type: object
+  additionalProperties:
+    $ref: "#/components/schemas/VehicleComponent"
+```
+
+Are automatically converted to GraphQL types like this:
+
+```graphql
+type VehicleComponentTree {
+  vehicleComponents: [VehicleComponentsEntry]!
+}
+
+type VehicleComponentsEntry {
+  key: String
+  value: VehicleComponent
+}
+```
+
+### Supported patterns
+
+- **Object maps**: `additionalProperties` pointing to object references
+- **Array maps**: `additionalProperties` containing arrays of objects
+- **Scalar maps**: `additionalProperties` with primitive types
+- **Empty schemas**: `additionalProperties: {}` (treated as JSON)
+
+### GraphQL structure
+
+Each map is converted to an array of entry objects with:
+- `key: String` - The map key
+- `value: <Type>` - The map value (can be objects, arrays, or scalars)
+
+This allows GraphQL clients to work with map data while maintaining type safety and GraphQL schema compatibility.
+
+## Development and Testing
+
+### Testing a local Supergraph
+
+When running tests, the tool automatically generates a `run-rover.sh` script in the system's temporary directory (`/${TMP_DIR}$/oas-test/run-rover.sh` on Unix systems). This script can be used to start a local supergraph with the generated schema.
+
+The script includes:
+- Environment variable validation for `APOLLO_KEY` and `APOLLO_GRAPH_REF`
+- Both `rover supergraph compose` and `rover dev` commands
+- Helpful error messages if required environment variables are missing
+
+To use the script:
+
+1. **Set your Apollo Studio credentials**:
+   ```bash
+   export APOLLO_KEY=your_apollo_studio_key
+   export APOLLO_GRAPH_REF=your_graph_ref
+   ```
+
+2. **Run the generated script**:
+   ```bash
+   # Navigate to the test directory
+   cd /${SYSTEM_TMP_DIR}$/oas-test
+   
+   # Make the script executable and run it
+   chmod +x run-rover.sh
+   ./run-rover.sh
+   ```
+
+The script will validate your environment variables and start a local supergraph development server with your generated schema.
 
 ## Generating all paths
 

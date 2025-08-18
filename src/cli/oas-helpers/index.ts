@@ -12,7 +12,8 @@ export function generateFromSelection(opts: any, gen: OasGen) {
     return;
   }
 
-  console.info('--------------- Apollo Connector schema -----------------');
+  console.info('# --------------- Apollo Connector schema -----------------');
+  console.info(`# Generated at: ${new Date().toISOString()}`);
   console.info(gen.generateSchema(selections));
   return;
 }

@@ -915,3 +915,87 @@ test('test_057_oas_test_petstore_with_transform_rules', async () => {
   await runOasTest('petstore.yaml', paths, 19, 6, false, false, mapper);
 });
 
+test('test_058_oas_test_mb_cc_with_transform_rules', async () => {
+  // Load the mb-cc transform rules
+  const rules = RulesLoader.fromFile('./tests/resources/mb-cc-transform-rules.json');
+  const mapper = OpNameMapper.fromRules(rules);
+  
+  // Test that the mapper correctly transforms operation names with exact matching
+  assert.strictEqual(mapper.operationName('apiV1Markets'), 'markets');
+  assert.strictEqual(mapper.operationName('marketsByMarketIdModels'), 'marketModels');
+  assert.strictEqual(mapper.operationName('marketsByMarketIdByModelIdModelsByMarketIdByModelId'), 'vehicleModel');
+  assert.strictEqual(mapper.operationName('modelByMarketIdAndModelIdConfigurationsInitial'), 'initialVehicleConfiguration');
+  assert.strictEqual(mapper.operationName('marketsByMarketIdByModelIdByConfigurationIdModelsByMarketIdByModelIdByConfigurationIdConfigurationsByMarketIdByModelIdByConfigurationId'), 'vehicleConfiguration');
+  
+  // Test that the mapper doesn't transform unrelated names
+  assert.strictEqual(mapper.operationName('getUser'), 'getUser');
+  assert.strictEqual(mapper.operationName('createPet'), 'createPet');
+  
+  // Test that the mapper doesn't transform partial matches (this was the problem before anchors)
+  assert.strictEqual(mapper.operationName('apiV1MarketsExtended'), 'apiV1MarketsExtended');
+  assert.strictEqual(mapper.operationName('ExtendedApiV1Markets'), 'ExtendedApiV1Markets');
+  assert.strictEqual(mapper.operationName('marketsByMarketIdModelsExtended'), 'marketsByMarketIdModelsExtended');
+  assert.strictEqual(mapper.operationName('ExtendedMarketsByMarketIdModels'), 'ExtendedMarketsByMarketIdModels');
+});
+
+test('test_059_oas_test_mb_cc_problematic_rules_without_anchors', async () => {
+  // Create rules without anchors to demonstrate the problem
+  const problematicRules = {
+    description: "Problematic rules without anchors",
+    rules: [
+      { "pattern": "apiV1Markets", "replacement": "markets" },
+      { "pattern": "marketsByMarketIdModels", "replacement": "marketModels" }
+    ]
+  };
+  
+  const mapper = OpNameMapper.fromRules(problematicRules);
+  
+  // This shows the problem: rules without anchors affect multiple names
+  assert.strictEqual(mapper.operationName('apiV1Markets'), 'markets');
+  assert.strictEqual(mapper.operationName('apiV1MarketsExtended'), 'marketsExtended'); // ❌ Problem: partial match
+  assert.strictEqual(mapper.operationName('ExtendedApiV1Markets'), 'ExtendedApiV1Markets'); // This doesn't match because pattern is at start
+  
+  assert.strictEqual(mapper.operationName('marketsByMarketIdModels'), 'marketModels');
+  assert.strictEqual(mapper.operationName('marketsByMarketIdModelsExtended'), 'marketModelsExtended'); // ❌ Problem: partial match
+  
+  // Let's show a better example of the problem with a pattern that could match anywhere
+  const problematicRules2 = {
+    description: "Problematic rules that could match anywhere",
+    rules: [
+      { "pattern": "Markets", "replacement": "MarketsFixed" },
+      { "pattern": "Models", "replacement": "ModelsFixed" }
+    ]
+  };
+  
+  const mapper2 = OpNameMapper.fromRules(problematicRules2);
+  
+  // This shows the real problem: patterns match anywhere in the string
+  assert.strictEqual(mapper2.operationName('apiV1Markets'), 'apiV1MarketsFixed');
+  assert.strictEqual(mapper2.operationName('ExtendedApiV1Markets'), 'ExtendedApiV1MarketsFixed'); // ❌ Problem: matches anywhere
+  assert.strictEqual(mapper2.operationName('marketsByMarketIdModels'), 'marketsByMarketIdModelsFixed'); // ❌ Problem: matches "Models" anywhere
+});
+
+test('test_060_oas_test_additionalProperties_support', async () => {
+  // Test additionalProperties support with VehicleComponentTree
+  const paths = [
+    'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
+  ];
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 17);
+});
+
+test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
+  // Test vehicleComponents map specifically (object -> VehicleComponent)
+  const paths = [
+    'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
+  ];
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 17);
+});
+
+test('test_062_oas_test_images_additionalProperties', async () => {
+  // Test images map specifically (object -> array of VehicleComponentImage)
+  const paths = [
+    'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>prop:map:images>**',
+  ];
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5);
+});
+

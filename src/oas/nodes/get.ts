@@ -153,9 +153,9 @@ export class Get extends Type implements Op {
     else if (content) {
       const availableKeys = _.keys(response.content);
 
-      warn(context, `  [${code}]`, `Available content types: ${availableKeys.join(', ')}`);
+      trace(context, `  [${code}]`, `Available content types: ${availableKeys.join(', ')}`);
       const keys = _.first(availableKeys.filter((k) => /^application\/(?:.*\+)?json/i.test(k)));
-      warn(context, `  [${code}]`, `Matched JSON key: ${keys || 'none'}`);
+      trace(context, `  [${code}]`, `Matched JSON key: ${keys || 'none'}`);
 
       const json = keys ? response.content![keys] : undefined;
       if (!json) {

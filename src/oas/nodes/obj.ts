@@ -104,31 +104,38 @@ export class Obj extends Type {
   }
 
   private visitProperties(context: OasContext): void {
-    if (!this.schema.properties) {
+    const hasProperties = this.schema.properties && Object.keys(this.schema.properties).length > 0;
+    const hasAdditionalProperties = this.schema.additionalProperties && typeof this.schema.additionalProperties === 'object';
+
+    if (!hasProperties && !hasAdditionalProperties) {
       return;
     }
 
-    const properties = this.schema.properties as Record<string, SchemaObject>;
-    const propKeys = Object.keys(properties);
-    trace(context, '-> [obj::props]', 'in props ' + (propKeys.length === 0 ? '0' : propKeys.length.toString()));
+    trace(context, '-> [obj::props]', `processing ${hasProperties ? 'properties' : ''}${hasProperties && hasAdditionalProperties ? ' and ' : ''}${hasAdditionalProperties ? 'additionalProperties' : ''}`);
 
-    if (propKeys.length === 0) {
-      trace(context, '<- [obj::props]', 'no props ' + this.props.size);
-      return;
-    }
+    if (hasProperties) {
+      const properties = this.schema.properties as Record<string, SchemaObject>;
+      const sorted = Object.entries(properties).sort((a, b) => a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
 
-    const sorted = Object.entries(properties).sort((a, b) => a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
+      for (const [key, schemaValue] of sorted) {
+        const prop = Factory.fromProp(context, this, key, schemaValue);
+        this.props.set(prop.name, prop);
 
-    for (const [key, schemaValue] of sorted) {
-      const prop = Factory.fromProp(context, this, key, schemaValue);
-      this.props.set(prop.name, prop);
-
-      if (!this.children.includes(prop)) {
-        this.add(prop);
+        if (!this.children.includes(prop)) {
+          this.add(prop);
+        }
       }
     }
 
-    // required can also be set in a separate array too, apparently
+    if (hasAdditionalProperties) {
+      const additionalProp = Factory.fromProp(context, this, '[key: string]', this.schema.additionalProperties as SchemaObject);
+      this.props.set(additionalProp.name, additionalProp);
+
+      if (!this.children.includes(additionalProp)) {
+        this.add(additionalProp);
+      }
+    }
+
     if (_.isArray(this.schema.required)) {
       this.schema.required.forEach((name) => {
         const prop = this.props.get(name);
