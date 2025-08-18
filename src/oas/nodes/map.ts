@@ -72,9 +72,9 @@ export class Map extends Type {
 
     // Generate the map as an array of key-value pairs
     writer
-      .write('  key: String\n')  // Keys are always present in maps, but not necessarily required in schema
+      .write('  key: String\n') // Keys are always present in maps, but not necessarily required in schema
       .write('  value: ');
-    
+
     // Write the value type name without hardcoded required markers
     if (this.valueType) {
       if (this.valueType instanceof Arr) {
@@ -114,7 +114,7 @@ export class Map extends Type {
     }
 
     const additionalProps = this.schema.additionalProperties as SchemaObject;
-    
+
     // If additionalProperties is an empty object, create a JSON scalar type
     if (Object.keys(additionalProps).length === 0) {
       trace(context, '-> [map::additionalProps]', 'empty additionalProperties schema, using JSON');
@@ -140,7 +140,7 @@ export class Map extends Type {
 
   private updateName(): void {
     let name = this.name;
-    
+
     // If we don't have a name, try to create one based on the parent
     if (!name || name === 'items') {
       const parent = this.parent;
