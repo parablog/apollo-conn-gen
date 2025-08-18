@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.0]
+
+### Added
+- Initial support for OpenAPI `additionalProperties` - automatically converts map/dictionary patterns into GraphQL-compatible key-value entry arrays
+- Enhanced test infrastructure with organized temporary file management and rover script generation
+
+### Fixed
+- Fixed transform rules for operation name mapping to include missing patterns
+
 ## [0.5.1]
 
 ### Changed

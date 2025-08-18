@@ -26,6 +26,8 @@ import { Ref } from './ref.js';
 import { Res } from './res.js';
 import { Scalar } from './scalar.js';
 import { Union } from './union.js';
+import { Map } from './map.js';
+import { PropMap } from './propMap.js';
 import { T } from './typeUtils.js';
 import { Op } from './op.js';
 
@@ -55,5 +57,7 @@ export { PropComp } from './propComp.js';
 export { PropCircRef } from './propCircRef.js';
 export { PropEn } from './propEn.js';
 export { PropScalar } from './propScalar.js';
+export { Map } from './map.js';
+export { PropMap } from './propMap.js';
 export { T } from './typeUtils.js';
 export { type Op } from './op.js';

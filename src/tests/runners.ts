@@ -41,12 +41,18 @@ export async function runOasTest(
   const schema = gen.generateSchema(paths);
   assert.ok(schema !== undefined);
 
-  const schemaFile = path.join(os.tmpdir(), file.replace(/yaml|json|yml/, 'graphql'));
+  // Create a dedicated folder inside tmp for OAS test files
+  const oasTestDir = path.join(os.tmpdir(), 'oas-test');
+  if (!fs.existsSync(oasTestDir)) {
+    fs.mkdirSync(oasTestDir, { recursive: true });
+  }
+
+  const schemaFile = path.join(oasTestDir, file.replace(/yaml|json|yml/, 'graphql'));
   fs.writeFileSync(schemaFile, schema, { encoding: 'utf-8', flag: 'w' });
 
   // need to write another graphql file but this only with a sample query otherwise composition
   // will fail for mutations
-  const sampleFile = path.join(os.tmpdir(), 'simple-query.graphql');
+  const sampleFile = path.join(oasTestDir, 'simple-query.graphql');
   if (!fs.existsSync(sampleFile)) {
     fs.writeFileSync(sampleFile, 'type Query { hello: String }', { encoding: 'utf-8', flag: 'w' });
   }
@@ -151,7 +157,7 @@ function compose(schemaPath: string, samplePath?: string) {
     throw new Error('Rover is not available');
   }
 
-  const supergraphFile = path.join(os.tmpdir(), 'supergraph.yaml');
+  const supergraphFile = path.join(os.tmpdir(), 'oas-test', 'supergraph.yaml');
   let content: string = `
 federation_version: =2.11.0
 subgraphs:
@@ -172,6 +178,35 @@ subgraphs:
   fs.writeFileSync(supergraphFile, content, { encoding: 'utf-8', flag: 'w' });
 
   const cmd = `${rover[1]} supergraph compose --config ${supergraphFile} --elv2-license accept`;
+
+  // Write the rover command to a bash script for easy re-execution
+  const scriptFile = path.join(os.tmpdir(), 'oas-test', 'run-rover.sh');
+
+  // Generate script with environment variables and dev command
+  const devCmd = `APOLLO_KEY=\${APOLLO_KEY} APOLLO_GRAPH_REF=\${APOLLO_GRAPH_REF} ${rover[1]} dev --supergraph-config ${supergraphFile}`;
+  const scriptContent = `#!/bin/bash
+
+# Generated rover compose command (original)
+# ${cmd}
+
+# Alternative rover dev command with environment variables
+# Check if required environment variables are set
+if [ -z "\${APOLLO_KEY}" ]; then
+    echo "Error: APOLLO_KEY environment variable is not set"
+    echo "Please set it with: export APOLLO_KEY=your_apollo_key"
+    exit 1
+fi
+
+if [ -z "\${APOLLO_GRAPH_REF}" ]; then
+    echo "Error: APOLLO_GRAPH_REF environment variable is not set"
+    echo "Please set it with: export APOLLO_GRAPH_REF=your_graph_ref"
+    exit 1
+fi
+
+echo "Running rover dev with Apollo Studio integration..."
+${devCmd}
+`;
+  fs.writeFileSync(scriptFile, scriptContent, { encoding: 'utf-8', flag: 'w' });
 
   let output;
   try {

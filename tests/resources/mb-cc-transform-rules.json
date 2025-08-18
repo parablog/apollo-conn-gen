@@ -1,0 +1,17 @@
+{
+  "description": "Example transform rules for operation names",
+  "rules": [
+    { "pattern": "^apiV1Markets$", "replacement": "markets" },
+    { "pattern": "^marketsByMarketIdModels$", "replacement": "marketModels" },
+    { "pattern": "^apiV1MarketsByMarketIdModels$", "replacement": "marketModels" },
+    { "pattern": "^marketsByMarketIdByModelIdModelsByMarketIdByModelId$", "replacement": "vehicleModel" },
+    { "pattern": "^apiV1MarketsByMarketIdByModelIdModelsByMarketIdByModelId$", "replacement": "vehicleModel" },
+    { "pattern": "^modelByMarketIdAndModelIdConfigurationsInitial$", "replacement": "initialVehicleConfiguration" },
+    { "pattern": "^apiV1MarketsByMarketIdByModelIdModelsByMarketIdByModelIdConfigurationsInitial$", "replacement": "initialVehicleConfiguration" },
+    { "pattern": "^marketsByMarketIdByModelIdByConfigurationIdModelsByMarketIdByModelIdByConfigurationIdConfigurationsByMarketIdByModelIdByConfigurationId$", "replacement": "vehicleConfiguration" },
+    { "pattern": "^apiV1MarketsByMarketIdByModelIdByConfigurationIdModelsByMarketIdByModelIdByConfigurationIdConfigurationsByMarketIdByModelIdByConfigurationId$", "replacement": "vehicleConfiguration" },
+    { "pattern": "^apiV1MarketsByMarketIdByModelIdByConfigurationIdModelsByMarketIdByModelIdByConfigurationIdConfigurationsByMarketIdByModelIdByConfigurationIdTechnicalInformation$", "replacement": "configurationTechnicalInformation" },
+    { "pattern": "^apiV1MarketsByMarketIdByBaumusterPreConfiguredVehicles$", "replacement": "marketPreConfiguredVehicles" },
+    { "pattern": "^apiV1MarketsByMarketIdByModelIdByConfigurationIdModelsByMarketIdByModelIdByConfigurationIdConfigurationsByMarketIdByModelIdByConfigurationIdSelectables$", "replacement": "configurationSelectables" }
+  ]
+} 

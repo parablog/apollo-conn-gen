@@ -51,7 +51,7 @@ export class T {
   }
 
   public static isContainer(node: IType): boolean {
-    return node.id.startsWith('obj:') || node.id.startsWith('comp:') || node.id.startsWith('union:');
+    return node.id.startsWith('obj:') || node.id.startsWith('comp:') || node.id.startsWith('union:') || node.id.startsWith('map:');
   }
 
   static composables(node: IType): IType[] {

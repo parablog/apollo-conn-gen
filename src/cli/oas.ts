@@ -39,7 +39,7 @@ async function main(sourceFile: string, opts: any): Promise<void> {
   const gen = await OasGen.fromFile(sourceFile, {
     ...opts,
     consolidateUnions: true,
-    showParentInSelections: true,
+    showParentInSelections: false,
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
     postName: opts.postName,
@@ -76,9 +76,9 @@ async function main(sourceFile: string, opts: any): Promise<void> {
   console.info(gen.generateSchema(paths));
 
   if (opts.printSelections) {
-    console.info('--------------- Selections -----------------');
+    console.info('# --------------- Selections -----------------');
     console.info(gen.selections);
-    console.info('--------------- Paths -----------------');
+    console.info('# --------------- Paths -----------------');
     console.info('paths =', JSON.stringify(paths, null, 2));
   }
 }
@@ -94,11 +94,7 @@ program
   .option('-p --page-size <num>', 'Number of rows to display in selection mode', '10')
   .option('-s --load-selections <file>', 'Load a JSON file with field selections (other options are ignored)')
   .option('-v --verbose', 'Log all messages from generator')
-  .option('-m --print-selections', 'Print selections from generator')
-  .option(
-    '-r --post-name <pattern>',
-    'Apply a regex to transform operation names (e.g., "apiV1(.*):api_v1_$1" to convert "apiV1SomeOperation" to "api_v1_SomeOperation")',
-  )
+  .option('-m --print-selections', 'Print selections from generator')  
   .option('-t --transform-rules <file>', 'Load transform rules from a JSON file to apply multiple name transformations')
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)

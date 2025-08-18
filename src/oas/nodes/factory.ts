@@ -7,6 +7,7 @@ import {
   En,
   Get,
   IType,
+  Map,
   Obj,
   Param,
   Patch,
@@ -15,6 +16,7 @@ import {
   PropArray,
   PropCircRef,
   PropComp,
+  PropMap,
   PropObj,
   PropScalar,
   Put,
@@ -120,6 +122,10 @@ export class Factory {
       const oneOfs = schema.oneOf || [];
       result = new Union(parent, ref || _.get(schema, 'name'), oneOfs as SchemaObject[]);
     }
+    // map (object with only additionalProperties)
+    else if (this.isMapSchema(schema)) {
+      result = new Map(parent, ref || _.get(schema, 'name') || null, schema);
+    }
     // or a plain obj
     else {
       if (!schema.properties) {
@@ -139,6 +145,17 @@ export class Factory {
     }
 
     return result;
+  }
+
+  private static isMapSchema(schema: SchemaObject): boolean {
+    // A schema is considered a map if:
+    // 1. It has additionalProperties defined as an object
+    // 2. It has no explicit properties OR has empty properties
+    return Boolean(
+      schema.additionalProperties &&
+      typeof schema.additionalProperties === 'object' &&
+      (!schema.properties || _.isEmpty(schema.properties))
+    );
   }
 
   private static createArrayType(parent: IType | Res, schema: SchemaObject | null, context: OasContext) {
@@ -215,6 +232,11 @@ export class Factory {
           const propComp: PropComp = new PropComp(parent, propName, schemaObj);
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
           prop = propComp;
+        } else if (this.isMapSchema(schemaObj)) {
+          console.log('isMapSchema', schemaObj);
+          // Map property: object with only additionalProperties
+          const mapType: Map = new Map(parent, ref || propName, schemaObj);
+          prop = new PropMap(parent, propName, schemaObj, mapType);
         } else if (schemaObj.properties != null) {
           const propType: IType = new Obj(parent, ref || propName, schemaObj);
           prop = new PropObj(parent, propName, schemaObj, propType);
@@ -251,6 +273,10 @@ export class Factory {
       const propComp: PropComp = new PropComp(parent, propName, schemaObj);
       propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
       prop = propComp;
+    } else if (this.isMapSchema(schemaObj)) {
+      // Map property: object with only additionalProperties (no explicit type)
+      const mapType: Map = new Map(parent, ref || propName, schemaObj);
+      prop = new PropMap(parent, propName, schemaObj, mapType);
     } else if (schemaObj.properties != null) {
       const propType: IType = new Obj(parent, ref || propName, schemaObj);
       prop = new PropObj(parent, propName, schemaObj, propType);
