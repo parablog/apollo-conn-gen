@@ -105,13 +105,18 @@ export class Obj extends Type {
 
   private visitProperties(context: OasContext): void {
     const hasProperties = this.schema.properties && Object.keys(this.schema.properties).length > 0;
-    const hasAdditionalProperties = this.schema.additionalProperties && typeof this.schema.additionalProperties === 'object';
+    const hasAdditionalProperties =
+      this.schema.additionalProperties && typeof this.schema.additionalProperties === 'object';
 
     if (!hasProperties && !hasAdditionalProperties) {
       return;
     }
 
-    trace(context, '-> [obj::props]', `processing ${hasProperties ? 'properties' : ''}${hasProperties && hasAdditionalProperties ? ' and ' : ''}${hasAdditionalProperties ? 'additionalProperties' : ''}`);
+    trace(
+      context,
+      '-> [obj::props]',
+      `processing ${hasProperties ? 'properties' : ''}${hasProperties && hasAdditionalProperties ? ' and ' : ''}${hasAdditionalProperties ? 'additionalProperties' : ''}`,
+    );
 
     if (hasProperties) {
       const properties = this.schema.properties as Record<string, SchemaObject>;
@@ -128,7 +133,12 @@ export class Obj extends Type {
     }
 
     if (hasAdditionalProperties) {
-      const additionalProp = Factory.fromProp(context, this, '[key: string]', this.schema.additionalProperties as SchemaObject);
+      const additionalProp = Factory.fromProp(
+        context,
+        this,
+        '[key: string]',
+        this.schema.additionalProperties as SchemaObject,
+      );
       this.props.set(additionalProp.name, additionalProp);
 
       if (!this.children.includes(additionalProp)) {

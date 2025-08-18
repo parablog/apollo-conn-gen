@@ -153,8 +153,8 @@ export class Factory {
     // 2. It has no explicit properties OR has empty properties
     return Boolean(
       schema.additionalProperties &&
-      typeof schema.additionalProperties === 'object' &&
-      (!schema.properties || _.isEmpty(schema.properties))
+        typeof schema.additionalProperties === 'object' &&
+        (!schema.properties || _.isEmpty(schema.properties)),
     );
   }
 

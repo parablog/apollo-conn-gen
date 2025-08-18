@@ -62,7 +62,8 @@ export class PropMap extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(fieldName);
 
     // because we are in a map, we need to write the key-value structure
-    writer.write(' '.repeat(context.indent + context.stack.length))
+    writer
+      .write(' '.repeat(context.indent + context.stack.length))
       .write(sanitised)
       .write(': ')
       .write(sanitised);
@@ -70,11 +71,11 @@ export class PropMap extends Prop {
     // For maps, we need to select the key-value structure
     writer.write('->entries {').write('\n');
     context.enter(this);
-    
+
     // Generate the key-value selection structure
     writer.write(' '.repeat(context.indent + context.stack.length)).write('key\n');
     writer.write(' '.repeat(context.indent + context.stack.length)).write('value');
-    
+
     // If the value type has complex structure, we need to expand it
     if (this.map.valueType && this.needsValueSelection()) {
       writer.write(' {').write('\n');
@@ -84,7 +85,7 @@ export class PropMap extends Prop {
       writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
     }
     writer.write('\n');
-    
+
     context.leave(this);
     writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
 

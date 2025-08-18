@@ -94,7 +94,7 @@ program
   .option('-p --page-size <num>', 'Number of rows to display in selection mode', '10')
   .option('-s --load-selections <file>', 'Load a JSON file with field selections (other options are ignored)')
   .option('-v --verbose', 'Log all messages from generator')
-  .option('-m --print-selections', 'Print selections from generator')  
+  .option('-m --print-selections', 'Print selections from generator')
   .option('-t --transform-rules <file>', 'Load transform rules from a JSON file to apply multiple name transformations')
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
