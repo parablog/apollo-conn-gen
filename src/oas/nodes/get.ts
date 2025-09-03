@@ -116,6 +116,11 @@ export class Get extends Type implements Op {
     if (parameters && parameters.length > 0) {
       this.params = parameters
         .filter((p) => !p.in || (p.in && (p.in as string).toLowerCase() !== 'header'))
+        .filter((p: ParameterObject) => {
+          // If skipOptionalArgs is true, only include required parameters
+          // Otherwise, include all parameters
+          return context.generateOptions?.skipOptionalArgs ? p.required : true;
+        })
         .map((p: ParameterObject) => this.visitParameter(context, this, p));
     } else {
       this.params = [];
