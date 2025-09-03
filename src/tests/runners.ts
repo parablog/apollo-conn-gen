@@ -20,12 +20,14 @@ export async function runOasTest(
   shouldFail: boolean = false,
   skipValidation: boolean = false,
   mapper?: Mapper,
+  skipOptionalArgs: boolean = false,
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
     consolidateUnions: true,
     showParentInSelections: false,
     mapper,
+    skipOptionalArgs,
   });
   await gen.visit();
 

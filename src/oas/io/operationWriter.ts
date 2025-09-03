@@ -73,9 +73,14 @@ export class OperationWriter {
     if (op.params.length > 0) {
       // we now include all query params, not just required ones. if they are not set,
       // then the connectors will not include them in the request.
-      const queryParams = op.params.filter((p: Param) => {
+      let queryParams = op.params.filter((p: Param) => {
         return p.parameter.in && p.parameter.in.toLowerCase() === 'query';
       });
+      
+      // Skip optional params if skipOptionalArgs is true
+      if (context.generateOptions?.skipOptionalArgs) {
+        queryParams = queryParams.filter((p: Param) => p.required);
+      }
 
       if (queryParams.length > 0) {
         writer.write('\n');

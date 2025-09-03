@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.1]
+
+### Added
+- Added `--skip-optional-args` to OAS CLI and `skipOptionalArgs` to `OasGen` to skip optional arguments in generated queries (default: `false`)
+
 ## [0.6.0]
 
 ### Added
