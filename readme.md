@@ -11,9 +11,8 @@ It also includes CLI tools to facilitate this conversion process.
 
 Key features:
 
-- Generates an Apollo Connector from an OAS specification, converting all types and `GET` entry points defined in the spec (*only* `GET` methods are supported for now)
+- Generates an Apollo Connector from an OAS specification, converting all types and HTTP entry points defined in the spec (supports `GET`, `POST`, `PUT`, `PATCH`, `DELETE` methods)
 - Generates a schema based on a single or a collection of`JSON` files
-- Full support for OpenAPI `additionalProperties` - converts map/dictionary patterns into GraphQL-compatible key-value entry arrays
 
 ## Changelog
 
@@ -28,8 +27,8 @@ See the [changelog](./CHANGELOG.md) for the latest changes.
 1. **Clone the Repository**:
 
    ```bash
-   git clone https://github.com/fernando-apollo/oas-to-connector.git
-   cd oas-helpers-to-connector
+   git clone https://github.com/fernando-apollo/apollo-conn-gen.git
+   cd apollo-conn-gen
    ```
 
 2. **Install Dependencies**:
@@ -38,7 +37,7 @@ See the [changelog](./CHANGELOG.md) for the latest changes.
    npm install
    ```
 
-3. **Build the Project**:
+3. **Build the Project** (optional):
 
    ```bash
    npm run build
@@ -74,6 +73,22 @@ node ./dist/cli/json <file|folder>
 ```
 
 Replace `<file|folder>` with a path to a `JSON` file or a folder that contains `JSON` files.
+
+#### Additional JSON CLI Examples
+
+```bash
+# Generate only types and save to file
+node ./dist/cli/json ./tests/resources/json/test/test.json --schema-types --output-file types.graphql
+
+# Generate selection set for debugging
+node ./dist/cli/json ./tests/resources/json/test/merge/ --selection-set
+
+# Use custom Federation version
+node ./dist/cli/json ./tests/resources/json/test/test.json --federation-version v2.10
+
+# Use custom Connector spec version
+node ./dist/cli/json ./tests/resources/json/test/test.json --connector-spec-version v0.1
+```
 
 ### Example with the following `JSON` payload
 
@@ -139,17 +154,202 @@ The library provides two entry classes:
 
 ### Installation for JS/TS projects
 
-In your project, run
+In your project, run to install the library:
 
 ```shell
-npm i "apollo-conn-gen`
+npm i apollo-conn-gen@latest
 ```
 
-to install the library. Next, in your JS/TS file yu can import the tools using
+Next, in your JS/TS file, you can import the tools using
 
 ```typescript
 import { OasGen } from "apollo-conn-gen/oas"
 import { JsonGen } from "apollo-conn-gen/json"
+```
+
+### OasGen Library Usage Examples
+
+```typescript
+// Basic usage - load and process an OAS file
+const gen = await OasGen.fromFile('./petstore.yaml', {
+  skipValidation: false,
+  consolidateUnions: true,
+  showParentInSelections: false,
+  federationVersion: 'v2.11',
+  connectorSpecVersion: 'v0.2',
+  skipOptionalArgs: false  // Include all query parameters (default)
+});
+
+// Process the specification to build internal structures
+await gen.visit();
+
+// Generate schema for all available paths
+const allPaths = Array.from(gen.paths.values()).map(p => p.path() + '>**');
+const fullSchema = gen.generateSchema(allPaths);
+console.log(fullSchema);
+
+// Generate schema for specific selections
+const specificPaths = [
+  'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id',
+  'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:name'
+];
+const customSchema = gen.generateSchema(specificPaths);
+
+// Get type information without generating full schema
+const types = gen.getTypes(specificPaths);
+
+// Load from data buffer instead of file
+const fileBuffer = fs.readFileSync('./api-spec.yaml');
+const genFromData = await OasGen.fromData(fileBuffer, { skipValidation: true });
+```
+
+### JsonGen Library Usage Examples
+
+```typescript
+// Generate from a single JSON string
+const jsonData = '{"user": {"id": 1, "name": "John", "email": "john@example.com"}}';
+const jsonGen = JsonGen.fromReader(jsonData, {
+  federationVersion: 'v2.11',
+  connectorSpecVersion: 'v0.2'
+});
+
+// Generate full Apollo Connector schema
+const connectorSchema = jsonGen.generateSchema();
+console.log(connectorSchema);
+
+// Generate only GraphQL types
+const typesOnly = jsonGen.writeTypes();
+console.log(typesOnly);
+
+// Generate only the selection set
+const selectionOnly = jsonGen.writeSelection();
+console.log(selectionOnly);
+
+// Generate from multiple JSON files/strings
+const multipleJsons = [
+  '{"product": {"id": 1, "name": "Widget"}}',
+  '{"product": {"id": 2, "price": 19.99}}'
+];
+const multiGen = JsonGen.fromJsons(multipleJsons);
+const mergedSchema = multiGen.generateSchema();
+
+// Add JSON data to existing generator
+const gen = JsonGen.new();
+gen.walkJson('{"order": {"id": 1, "total": 50.00}}');
+gen.walkJson('{"order": {"id": 2, "items": ["book", "pen"]}}');
+const combinedSchema = gen.generateSchema();
+```
+
+### Advanced Library Features
+
+#### OasGen Advanced Methods
+
+Beyond the basic usage, `OasGen` provides additional methods for advanced use cases:
+
+```typescript
+const gen = await OasGen.fromFile('./api.yaml');
+await gen.visit();
+
+// Advanced path finding and navigation
+const foundType = gen.find('get:/pet/{petId}>res:r>obj:type:#/c/s/Pet');
+const pathType = gen.findPath('get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id');
+
+// Get type information without generating full schema
+const typeMap = gen.getTypes(['get:/pet/{petId}>**']);
+console.log('Available types:', Array.from(typeMap.keys()));
+
+// Get expanded selections for debugging
+const expandedPaths = gen.expanded(['get:/pet/{petId}>**']);
+console.log('Expanded paths:', expandedPaths);
+
+// Custom schema generation with Writer
+const writer = gen.writer();
+// Use writer for custom schema generation logic
+
+// Synchronous processing (for smaller specs)
+gen.visitSync(); // Alternative to async visit()
+```
+
+#### JsonGen Advanced Capabilities
+
+The `JsonGen` class supports incremental JSON processing and multiple output formats:
+
+```typescript
+// Incremental JSON processing
+const gen = JsonGen.new({
+  federationVersion: 'v2.11',
+  connectorSpecVersion: 'v0.2'
+});
+
+// Add JSON data incrementally (merges structures)
+gen.walkJson('{"user": {"id": 1, "name": "John"}}');
+gen.walkJson('{"user": {"email": "john@example.com", "age": 30}}');
+gen.walkJson('{"product": {"id": 1, "title": "Widget"}}');
+
+// The final schema will include merged user type and product type
+const mergedSchema = gen.generateSchema();
+
+// Different output modes for different use cases
+const typesOnly = gen.writeTypes();      // GraphQL types without connectors
+const selectionsOnly = gen.writeSelection(); // Selection sets for debugging
+const fullSchema = gen.generateSchema();     // Complete Apollo Connector schema
+```
+
+#### Modular Imports
+
+The library supports modular imports for smaller bundle sizes:
+
+```typescript
+// Import only what you need
+import { OasGen } from 'apollo-conn-gen/oas';
+import { JsonGen } from 'apollo-conn-gen/json';
+
+// Or import from main module
+import { OasGen, JsonGen } from 'apollo-conn-gen';
+
+// Advanced: Import specific utilities
+import { RulesLoader, OpNameMapper } from 'apollo-conn-gen/oas/mapper';
+import { StringWriter, ConnectorWriter } from 'apollo-conn-gen/json';
+```
+
+#### Transform Rules Advanced Features
+
+The transform rules system supports complex transformation chains:
+
+```typescript
+import { RulesLoader, OpNameMapper } from 'apollo-conn-gen/oas/mapper';
+
+// Complex rule with priority ordering
+const rules = {
+  "description": "Complex API transformation rules",
+  "rules": [
+    {
+      "pattern": "^apiV1(.*)$",
+      "replacement": "api_v1_$1",
+      "priority": 10,
+      "description": "Convert apiV1 prefix to snake_case"
+    },
+    {
+      "pattern": "^get(.*)$", 
+      "replacement": "fetch$1",
+      "priority": 5,
+      "description": "Convert get operations to fetch"
+    },
+    {
+      "pattern": "([a-z])([A-Z])",
+      "replacement": "$1_$2",
+      "priority": 1,
+      "enabled": true,
+      "description": "Convert camelCase to snake_case"
+    }
+  ]
+};
+
+// Load and apply transform rules
+const mapper = OpNameMapper.fromRules(rules);
+const gen = await OasGen.fromFile('./api.yaml', { mapper });
+
+// Results in: apiV1GetUser -> api_v1_GetUser -> api_v1_fetchUser -> api_v1_fetch_user
 ```
 
 ## Additional details
@@ -232,10 +432,11 @@ type Query {
 - `-s, --load-selections <file>`: Load a JSON file with field selections (other options are ignored).
 - `-v, --verbose`: Log all messages from generator.
 - `-m, --print-selections`: Print selections from generator.
-- `-r, --post-name <pattern>`: Apply a regex to transform operation names (e.g., `"apiV1(.*):api_v1_$1"` to convert `"apiV1SomeOperation"` to `"api_v1_SomeOperation"`).
+- `-r, --post-name <pattern>`: Apply a regex to transform operation names (e.g., `"apiV1(.*):api_v1_$1"` to convert `"apiV1SomeOperation"` to `"api_v1_SomeOperation"`) - deprecated, use `--transform-rules` instead.
 - `-t, --transform-rules <file>`: Load transform rules from a JSON file to apply multiple name transformations.
 - `--federation-version <version>`: Federation version to use (default: `v2.11`).
 - `--connector-spec-version <version>`: Connector spec version to use (default: `v0.2`).
+- `--skip-optional-args`: Skip optional arguments in queries (default: `false`).
 
 For a complete list of options, run:
 
@@ -304,9 +505,17 @@ node ./dist/cli/oas ./tests/petstore.yaml --list-paths
 get:/pet/{petId}
 get:/pet/findByStatus
 get:/pet/findByTags
+post:/pet
+put:/pet
+delete:/pet/{petId}
 get:/store/inventory
 get:/store/order/{orderId}
+post:/store/order
+delete:/store/order/{orderId}
 get:/user/{username}
+post:/user
+put:/user/{username}
+delete:/user/{username}
 get:/user/login
 get:/user/logout
 ```
@@ -512,7 +721,51 @@ type Query {
 
 This is particularly useful for specifications that are bound to change often.
 
-will select all fields in the `Pet` type:
+will select all fields in the `Pet` type.
+
+## Skipping Optional Arguments
+
+The `--skip-optional-args` option allows you to generate cleaner schemas by excluding optional query parameters from the generated GraphQL operations. This is useful when:
+- You have APIs with many optional query parameters that clutter the schema
+- You want to generate a minimal schema focusing on required parameters only
+- You need to reduce the complexity of the generated GraphQL operations
+
+### Example
+
+Without `--skip-optional-args` (default behavior):
+```bash
+node ./dist/cli/oas ./api-spec.yaml
+```
+
+Generated query might include all parameters:
+```graphql
+type Query {
+  searchProducts(
+    category: String!    # required
+    minPrice: Float      # optional
+    maxPrice: Float      # optional
+    sortBy: String       # optional
+    limit: Int           # optional
+    offset: Int          # optional
+  ): [Product]
+}
+```
+
+With `--skip-optional-args`:
+```bash
+node ./dist/cli/oas ./api-spec.yaml --skip-optional-args
+```
+
+Generated query includes only required parameters:
+```graphql
+type Query {
+  searchProducts(
+    category: String!    # required only
+  ): [Product]
+}
+```
+
+This option applies to all query parameters across all operations in your OpenAPI specification.
 
 ## OpenAPI `additionalProperties` Support
 
@@ -557,6 +810,102 @@ Each map is converted to an array of entry objects with:
 
 This allows GraphQL clients to work with map data while maintaining type safety and GraphQL schema compatibility.
 
+### Real-World Examples
+
+#### Example 1: Vehicle Configuration Maps
+
+**OpenAPI Schema:**
+```yaml
+VehicleComponentTree:
+  type: object
+  additionalProperties:
+    $ref: "#/components/schemas/VehicleComponent"
+  
+VehicleComponent:
+  type: object
+  properties:
+    id: { type: string }
+    name: { type: string }
+    images:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          $ref: "#/components/schemas/VehicleImage"
+```
+
+**Generated GraphQL:**
+```graphql
+type VehicleComponentTree {
+  vehicleComponents: [VehicleComponentsEntry]!
+}
+
+type VehicleComponentsEntry {
+  key: String
+  value: VehicleComponent
+}
+
+type VehicleComponent {
+  id: String
+  name: String
+  images: [ImagesEntry]!
+}
+
+type ImagesEntry {
+  key: String
+  value: [VehicleImage]
+}
+
+type VehicleImage {
+  url: String
+  format: String
+}
+```
+
+**GraphQL Query Usage:**
+```graphql
+query GetVehicleConfiguration {
+  vehicleConfig {
+    vehicleComponents {
+      key
+      value {
+        id
+        name
+        images {
+          key
+          value {
+            url
+            format
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+#### Example 2: Simple Key-Value Configuration
+
+**OpenAPI Schema:**
+```yaml
+Settings:
+  type: object
+  additionalProperties:
+    type: string
+```
+
+**Generated GraphQL:**
+```graphql
+type Settings {
+  settings: [SettingsEntry]!
+}
+
+type SettingsEntry {
+  key: String
+  value: String
+}
+```
+
 ## Development and Testing
 
 ### Testing a local Supergraph
@@ -588,6 +937,35 @@ To use the script:
 
 The script will validate your environment variables and start a local supergraph development server with your generated schema.
 
+### Testing Generated Schemas
+
+The library includes comprehensive test infrastructure that can help validate your generated schemas:
+
+```bash
+# Run all tests to validate generation works correctly
+npm test
+
+# Run specific OAS tests
+npm test -- --grep "oas_test"
+
+# Run specific JSON tests  
+npm test -- --grep "json.*test"
+
+# Test with transform rules
+npm test -- --grep "transform_rules"
+
+# Test additionalProperties support
+npm test -- --grep "additionalProperties"
+```
+
+The test suite includes over 60 test cases covering:
+- Basic OAS and JSON generation
+- Transform rules and name mapping
+- Complex OpenAPI patterns (`allOf`, `oneOf`, unions)
+- AdditionalProperties and map handling
+- Circular reference detection
+- Error handling and validation
+
 ## Generating all paths
 
 Whilst this option is not recommended for large specifications, you can generate all paths without prompting for a specific selection. To do so, you can use the `-n` (or `--skip-selection`) flag. This may result in a very large Apollo Connector schema, might take a long time to process and not be particularly useful, so use with caution.
@@ -617,11 +995,13 @@ Arguments:
   file|folder              A single JSON file or a folder with a collection of JSON files
 
 Options:
-  -V, --version            output the version number
-  -s --schema-types        Output the GraphQL schema types (default: false)
-  -e --selection-set       Output the Apollo Connector selection set (default: false)
-  -o --output-file <file>  Where to write the output (default: "stdout")
-  -h, --help               display help for command
+  -V, --version                            output the version number
+  -s --schema-types                        Output the GraphQL schema types (default: false)
+  -e --selection-set                       Output the Apollo Connector selection set (default: false)
+  -o --output-file <file>                  Where to write the output (default: "stdout")
+  --federation-version <version>           Federation version to use (default: v2.11)
+  --connector-spec-version <version>       Connector spec version to use (default: v0.2)
+  -h, --help                               display help for command
 ```
 
 The CLI options affect what is generated by the tool. There are three possibilities:

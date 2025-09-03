@@ -14,6 +14,7 @@ export type GenerateOptions = {
   federationVersion?: string;
   connectorSpecVersion?: string;
   mapper?: Mapper;
+  skipOptionalArgs?: boolean;
 };
 
 export class OasContext {
