@@ -76,7 +76,7 @@ export class OperationWriter {
       let queryParams = op.params.filter((p: Param) => {
         return p.parameter.in && p.parameter.in.toLowerCase() === 'query';
       });
-      
+
       // Skip optional params if skipOptionalArgs is true
       if (context.generateOptions?.skipOptionalArgs) {
         queryParams = queryParams.filter((p: Param) => p.required);
