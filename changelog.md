@@ -4,10 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.6.1]
+## [0.6.2]
+
+## Fixed
+
+- `skipOptionalArgs` was only working for selections, now fixed in operation params too
 
 ### Added
 - Added `--skip-optional-args` to OAS CLI and `skipOptionalArgs` to `OasGen` to skip optional arguments in generated queries (default: `false`)
+
+### Fixed
+- Fixed parameter filtering logic in `Get` class (and inherited classes) to correctly skip optional parameters when `skipOptionalArgs` is enabled
 
 ## [0.6.0]
 
