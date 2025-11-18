@@ -90,6 +90,11 @@ export class PropRef extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(fieldName);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
+    // Add optional chaining operator if field is nullable and option is enabled
+    if (context.generateOptions.optionalChaining && !this.required) {
+      writer.write('?');
+    }
+
     if (this.refType && this.needsBrackets(this.refType)) {
       writer.write(' {').write('\n');
       context.enter(this);

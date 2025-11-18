@@ -1,0 +1,81 @@
+openapi: 3.0.0
+info:
+  title: Optional Chaining Test API
+  version: 1.0.0
+  description: Test API for validating optional chaining feature
+servers:
+  - url: https://api.example.com
+paths:
+  /users:
+    get:
+      operationId: getUsers
+      summary: Get all users
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+  /users/{userId}:
+    get:
+      operationId: getUser
+      summary: Get a single user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - username
+      properties:
+        id:
+          type: string
+          description: User ID (required)
+        username:
+          type: string
+          description: Username (required)
+        email:
+          type: string
+          description: Email address (nullable)
+        firstName:
+          type: string
+          description: First name (nullable)
+        lastName:
+          type: string
+          description: Last name (nullable)
+        age:
+          type: integer
+          description: Age (nullable)
+        profile:
+          $ref: '#/components/schemas/Profile'
+          description: User profile (nullable)
+    Profile:
+      type: object
+      required:
+        - bio
+      properties:
+        bio:
+          type: string
+          description: Biography (required)
+        avatar:
+          type: string
+          description: Avatar URL (nullable)
+        website:
+          type: string
+          description: Website URL (nullable)

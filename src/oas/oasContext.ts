@@ -15,6 +15,7 @@ export type GenerateOptions = {
   connectorSpecVersion?: string;
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
+  optionalChaining?: boolean;
 };
 
 export class OasContext {

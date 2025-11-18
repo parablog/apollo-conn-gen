@@ -21,6 +21,7 @@ interface IGenOptions {
   connectorSpecVersion?: string;
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
+  optionalChaining?: boolean;
 }
 
 export class OasGen {
@@ -37,6 +38,7 @@ export class OasGen {
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
       mapper: undefined,
       skipOptionalArgs: false,
+      optionalChaining: false,
     },
   ): Promise<OasGen> {
     const normalizer: OASNormalize = new OASNormalize(data, {
@@ -74,6 +76,7 @@ export class OasGen {
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
       mapper: undefined,
       skipOptionalArgs: false,
+      optionalChaining: false,
     },
     // prompt: Prompt
   ): Promise<OasGen> {

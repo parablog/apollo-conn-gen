@@ -68,6 +68,11 @@ export class PropObj extends Prop {
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
+    // Add optional chaining operator if field is nullable and option is enabled
+    if (context.generateOptions.optionalChaining && !this.required) {
+      writer.write('?');
+    }
+
     if (this.needsBrackets(this.obj!)) {
       writer.write(' {').write('\n');
       context.enter(this);

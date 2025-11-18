@@ -21,6 +21,8 @@ export async function runOasTest(
   skipValidation: boolean = false,
   mapper?: Mapper,
   skipOptionalArgs: boolean = false,
+  optionalChaining: boolean = false,
+  connectorSpecVersion?: string,
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
@@ -28,6 +30,8 @@ export async function runOasTest(
     showParentInSelections: false,
     mapper,
     skipOptionalArgs,
+    optionalChaining,
+    connectorSpecVersion,
   });
   await gen.visit();
 

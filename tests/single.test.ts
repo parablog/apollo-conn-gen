@@ -132,10 +132,20 @@ test('test_053_oas_test_036_time-series', async () => {
 
 
 test('test-single', async () => {
-  // const paths = ["get:/api/v1/markets/{marketId}/dataversion/{dataversion}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**"];
+  // Test optional chaining feature
   const paths = [
-    // 'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
-    "get:/api/v1/markets>res:r>array:#/c/s/Market>obj:type:#/c/s/Market>prop:scalar:country",
+    "get:/users>**",
   ]
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 1, false, true, undefined, true);
+  await runOasTest(
+    'optional-chaining-test.yaml',
+    paths,
+    2, // pathsSize: 2 paths in the spec (/users and /users/{userId})
+    2, // typesSize: User and Profile types
+    false, // shouldFail
+    false, // skipValidation
+    undefined, // mapper
+    false, // skipOptionalArgs
+    true, // optionalChaining - this is what we're testing!
+    'v0.3', // connectorSpecVersion - optional chaining requires v0.3
+  );
 });

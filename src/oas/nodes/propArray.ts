@@ -74,6 +74,11 @@ export class PropArray extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
+    // Add optional chaining operator if field is nullable and option is enabled
+    if (context.generateOptions.optionalChaining && !this.required) {
+      writer.write('?');
+    }
+
     if (this.needsBrackets(this.items!)) {
       writer.write(' {');
       writer.write('\n');

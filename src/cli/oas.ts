@@ -45,6 +45,7 @@ async function main(sourceFile: string, opts: any): Promise<void> {
     postName: opts.postName,
     mapper: mapper,
     skipOptionalArgs: opts.skipOptionalArgs,
+    optionalChaining: opts.optionalChaining,
   });
 
   await gen.visit();
@@ -100,6 +101,7 @@ program
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
+  .option('--optional-chaining', 'Mark nullable fields with optional chaining (?) operator in selections', false)
   .parse(process.argv);
 
 const source = program.args[0];

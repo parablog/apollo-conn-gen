@@ -64,7 +64,14 @@ export class PropMap extends Prop {
     // because we are in a map, we need to write the key-value structure
     writer
       .write(' '.repeat(context.indent + context.stack.length))
-      .write(sanitised)
+      .write(sanitised);
+
+    // Add optional chaining operator if field is nullable and option is enabled
+    if (context.generateOptions.optionalChaining && !this.required) {
+      writer.write('?');
+    }
+
+    writer
       .write(': ')
       .write(sanitised);
 

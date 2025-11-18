@@ -55,6 +55,11 @@ export class PropScalar extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(this.name, this.parent?.kind === 'input');
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
+    // Add optional chaining operator if field is nullable and option is enabled
+    if (context.generateOptions.optionalChaining && !this.required) {
+      writer.write('?');
+    }
+
     // we can only write the default value if and only if the name is the same as the sanitised name,
     // otherwise we'll end up with an expression like "someField: some_field: $(value)" which is not legal
     if (sanitised === this.name && this.schema.default) {

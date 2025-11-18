@@ -42,6 +42,11 @@ export class PropEn extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(this.name);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
+    // Add optional chaining operator if field is nullable and option is enabled
+    if (context.generateOptions.optionalChaining && !this.required) {
+      writer.write('?');
+    }
+
     if (context.generateOptions.showParentInSelections) {
       writer.write(' # ').write(Naming.getRefName(this.parent!.name));
     }
