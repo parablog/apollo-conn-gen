@@ -211,7 +211,9 @@ const jsonData = '{"user": {"id": 1, "name": "John", "email": "john@example.com"
 const jsonGen = JsonGen.fromReader(jsonData, {
   federationVersion: 'v2.11',
   connectorSpecVersion: 'v0.2',
-  rootType: 'User' // optional: customizes root type (default: 'Root')
+  rootType: 'User',           // optional: customizes root type (default: 'Root'), use '[User]' for list
+  baseURL: 'https://api.example.com', // optional: @source baseURL (default: 'http://localhost:4010')
+  relativePath: '/users',     // optional: @connect HTTP path (default: '/test')
 });
 
 // Generate full Apollo Connector schema
@@ -280,7 +282,9 @@ The `JsonGen` class supports incremental JSON processing and multiple output for
 const gen = JsonGen.new({
   federationVersion: 'v2.11',
   connectorSpecVersion: 'v0.2',
-  rootType: 'User' // optional: root type becomes 'User', nested types become 'UserAddress', etc.
+  rootType: 'User',           // optional: root type becomes 'User', nested types become 'UserAddress', etc.
+  baseURL: 'https://api.example.com',
+  relativePath: '/users',
 });
 
 // Add JSON data incrementally (merges structures)
@@ -1003,6 +1007,9 @@ Options:
   -o --output-file <file>                  Where to write the output (default: "stdout")
   --federation-version <version>           Federation version to use (default: v2.11)
   --connector-spec-version <version>       Connector spec version to use (default: v0.2)
+  --root-type <name>                       Root type name, use [Name] for list (default: Root)
+  --base-url <url>                         Base URL for the @source directive (default: http://localhost:4010)
+  --relative-path <path>                   Relative path for the @connect directive (default: /test)
   -h, --help                               display help for command
 ```
 
