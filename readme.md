@@ -214,6 +214,7 @@ const jsonGen = JsonGen.fromReader(jsonData, {
   rootType: 'User',           // optional: customizes root type (default: 'Root'), use '[User]' for list
   baseURL: 'https://api.example.com', // optional: @source baseURL (default: 'http://localhost:4010')
   relativePath: '/users',     // optional: @connect HTTP path (default: '/test')
+  queryField: 'allUsers',    // optional: query field name (default: derived from rootType)
 });
 
 // Generate full Apollo Connector schema
@@ -1010,6 +1011,7 @@ Options:
   --root-type <name>                       Root type name, use [Name] for list (default: Root)
   --base-url <url>                         Base URL for the @source directive (default: http://localhost:4010)
   --relative-path <path>                   Relative path for the @connect directive (default: /test)
+  --query-field <name>                     Query field name (default: derived from root type)
   -h, --help                               display help for command
 ```
 

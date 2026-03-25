@@ -11,6 +11,7 @@ export interface JsonGenOptions {
   rootType?: string;
   baseURL?: string;
   relativePath?: string;
+  queryField?: string;
 }
 
 export class JsonGen {

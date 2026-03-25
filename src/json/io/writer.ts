@@ -28,6 +28,7 @@ export interface ConnectorWriterOptions {
   rootType?: string;
   baseURL?: string;
   relativePath?: string;
+  queryField?: string;
 }
 
 export class ConnectorWriter {
@@ -64,13 +65,14 @@ export class ConnectorWriter {
 
   private static writeQuery(walker: JsonGen, writer: IWriter, options?: ConnectorWriterOptions): void {
     const { typeName, fieldName, isList } = this.parseRootType(options?.rootType);
+    const queryField = options?.queryField ?? fieldName;
     const relativePath = options?.relativePath ?? '/test';
     const returnType = isList ? `[${typeName}]` : typeName;
 
     writer.write(
       '\n' +
         `type Query {
-  ${fieldName}: ${returnType}
+  ${queryField}: ${returnType}
     @connect(
       source: "api"
       http: { GET: "${relativePath}" }
