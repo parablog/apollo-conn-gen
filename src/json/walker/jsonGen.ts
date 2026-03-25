@@ -8,6 +8,7 @@ import { sanitiseField } from './naming.js';
 export interface JsonGenOptions {
   federationVersion?: string;
   connectorSpecVersion?: string;
+  rootType?: string;
 }
 
 export class JsonGen {
@@ -119,7 +120,7 @@ export class JsonGen {
   // Walk the JSON provided as a string
   public walkJson(json: string): void {
     const rootElement = JSON.parse(json);
-    this.walkElement(this.context, null, 'root', rootElement);
+    this.walkElement(this.context, null, this.options.rootType ?? 'root', rootElement);
     trace(this.context, '   [walkSource]', 'types found: ' + this.context.getTypes().length);
   }
 

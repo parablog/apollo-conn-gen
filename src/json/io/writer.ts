@@ -1,5 +1,6 @@
 import { DEFAULT_VERSIONS } from '../../versions.js';
 import { JsonGen } from '../walker/jsonGen.js';
+import { sanitiseField, upperFirst } from '../walker/naming.js';
 
 export interface IWriter {
   write(text: string): void;
@@ -24,13 +25,14 @@ export class StringWriter implements IWriter {
 export interface ConnectorWriterOptions {
   federationVersion?: string;
   connectorSpecVersion?: string;
+  rootType?: string;
 }
 
 export class ConnectorWriter {
   public static write(walker: JsonGen, writer: IWriter, options?: ConnectorWriterOptions): void {
     this.writeConnector(writer, options);
     writer.write(walker.writeTypes());
-    this.writeQuery(walker, writer);
+    this.writeQuery(walker, writer, options);
   }
 
   private static writeConnector(writer: IWriter, options?: ConnectorWriterOptions): void {
@@ -47,11 +49,14 @@ export class ConnectorWriter {
 `);
   }
 
-  private static writeQuery(walker: JsonGen, writer: IWriter): void {
+  private static writeQuery(walker: JsonGen, writer: IWriter, options?: ConnectorWriterOptions): void {
+    const fieldName = options?.rootType ? sanitiseField(options.rootType) : 'root';
+    const typeName = options?.rootType ? upperFirst(sanitiseField(options.rootType)) : 'Root';
+
     writer.write(
       '\n' +
         `type Query {
-  root: Root
+  ${fieldName}: ${typeName}
     @connect(
       source: "api"
       http: { GET: "/test" }

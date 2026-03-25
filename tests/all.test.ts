@@ -34,6 +34,30 @@ test('should construct Walker from JSON string and store types in context', () =
   assert.ok(types.length > 0);
 });
 
+test('JsonGen: default rootType produces Root type', () => {
+  const json = '{"name": "Test", "age": 25}';
+  const schema = JsonGen.fromReader(json).generateSchema();
+  assert.ok(schema.includes('type Root {'));
+  assert.ok(schema.includes('root: Root'));
+});
+
+test('JsonGen: custom rootType produces correct type and query field', () => {
+  const json = '{"name": "Test", "address": {"street": "Main St"}}';
+  const schema = JsonGen.fromReader(json, { rootType: 'User' }).generateSchema();
+  assert.ok(schema.includes('type User {'));
+  assert.ok(schema.includes('type UserAddress {'));
+  assert.ok(schema.includes('user: User'));
+  assert.ok(!schema.includes('type Root {'));
+  assert.ok(!schema.includes('root: Root'));
+});
+
+test('JsonGen: rootType is case-insensitive (User === user)', () => {
+  const json = '{"name": "Test", "address": {"street": "Main St"}}';
+  const lower = JsonGen.fromReader(json, { rootType: 'user' }).generateSchema();
+  const upper = JsonGen.fromReader(json, { rootType: 'User' }).generateSchema();
+  assert.strictEqual(lower, upper);
+});
+
 test('should construct Walker from JSON file and store types in context', async () => {
   await runJsonTest('test/merge/a.json');
 });

@@ -210,7 +210,8 @@ const genFromData = await OasGen.fromData(fileBuffer, { skipValidation: true });
 const jsonData = '{"user": {"id": 1, "name": "John", "email": "john@example.com"}}';
 const jsonGen = JsonGen.fromReader(jsonData, {
   federationVersion: 'v2.11',
-  connectorSpecVersion: 'v0.2'
+  connectorSpecVersion: 'v0.2',
+  rootType: 'User' // optional: customizes root type (default: 'Root')
 });
 
 // Generate full Apollo Connector schema
@@ -278,7 +279,8 @@ The `JsonGen` class supports incremental JSON processing and multiple output for
 // Incremental JSON processing
 const gen = JsonGen.new({
   federationVersion: 'v2.11',
-  connectorSpecVersion: 'v0.2'
+  connectorSpecVersion: 'v0.2',
+  rootType: 'User' // optional: root type becomes 'User', nested types become 'UserAddress', etc.
 });
 
 // Add JSON data incrementally (merges structures)
