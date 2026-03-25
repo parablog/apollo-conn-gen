@@ -26,6 +26,8 @@ export interface ConnectorWriterOptions {
   federationVersion?: string;
   connectorSpecVersion?: string;
   rootType?: string;
+  baseURL?: string;
+  relativePath?: string;
 }
 
 export class ConnectorWriter {
@@ -44,22 +46,34 @@ export class ConnectorWriter {
     url: "https://specs.apollo.dev/connect/${connectorSpecVersion}"
     import: ["@connect", "@source"]
   )
-  @source(name: "api", http: { baseURL: "http://localhost:4010" })
+  @source(name: "api", http: { baseURL: "${options?.baseURL || 'http://localhost:4010'}" })
   
 `);
   }
 
+  private static parseRootType(raw?: string): { typeName: string; fieldName: string; isList: boolean } {
+    if (!raw) return { typeName: 'Root', fieldName: 'root', isList: false };
+    const listMatch = raw.match(/^\[(.+)]$/);
+    const name = listMatch ? listMatch[1] : raw;
+    return {
+      typeName: upperFirst(sanitiseField(name)),
+      fieldName: sanitiseField(name),
+      isList: !!listMatch,
+    };
+  }
+
   private static writeQuery(walker: JsonGen, writer: IWriter, options?: ConnectorWriterOptions): void {
-    const fieldName = options?.rootType ? sanitiseField(options.rootType) : 'root';
-    const typeName = options?.rootType ? upperFirst(sanitiseField(options.rootType)) : 'Root';
+    const { typeName, fieldName, isList } = this.parseRootType(options?.rootType);
+    const relativePath = options?.relativePath ?? '/test';
+    const returnType = isList ? `[${typeName}]` : typeName;
 
     writer.write(
       '\n' +
         `type Query {
-  ${fieldName}: ${typeName}
+  ${fieldName}: ${returnType}
     @connect(
       source: "api"
-      http: { GET: "/test" }
+      http: { GET: "${relativePath}" }
       selection: """` +
         '\n',
     );

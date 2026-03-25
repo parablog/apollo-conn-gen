@@ -58,6 +58,28 @@ test('JsonGen: rootType is case-insensitive (User === user)', () => {
   assert.strictEqual(lower, upper);
 });
 
+test('JsonGen: custom baseURL, relativePath, and list rootType', () => {
+  const json = '{"id": 1, "name": "Test"}';
+  const schema = JsonGen.fromReader(json, {
+    rootType: '[User]',
+    baseURL: 'https://api.example.com',
+    relativePath: '/users',
+  }).generateSchema();
+  assert.ok(schema.includes('baseURL: "https://api.example.com"'));
+  assert.ok(schema.includes('user: [User]'));
+  assert.ok(schema.includes('GET: "/users"'));
+  assert.ok(schema.includes('type User {'));
+});
+
+test('JsonGen: defaults for baseURL and relativePath', () => {
+  const json = '{"id": 1}';
+  const schema = JsonGen.fromReader(json).generateSchema();
+  assert.ok(schema.includes('baseURL: "http://localhost:4010"'));
+  assert.ok(schema.includes('root: Root'));
+  assert.ok(schema.includes('GET: "/test"'));
+  assert.ok(!schema.includes('[Root]'));
+});
+
 test('should construct Walker from JSON file and store types in context', async () => {
   await runJsonTest('test/merge/a.json');
 });
