@@ -71,6 +71,16 @@ test('JsonGen: custom baseURL, relativePath, and list rootType', () => {
   assert.ok(schema.includes('type User {'));
 });
 
+test('JsonGen: queryField overrides the derived field name', () => {
+  const json = '{"id": 1, "name": "Test"}';
+  const schema = JsonGen.fromReader(json, {
+    rootType: '[User]',
+    queryField: 'allUsers',
+  }).generateSchema();
+  assert.ok(schema.includes('allUsers: [User]'));
+  assert.ok(!schema.includes('user: [User]'));
+});
+
 test('JsonGen: defaults for baseURL and relativePath', () => {
   const json = '{"id": 1}';
   const schema = JsonGen.fromReader(json).generateSchema();

@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added `relativePath` option and `--relative-path` CLI flag to customize the `@connect` HTTP path
 - List type support: pass `rootType: '[User]'` or `--root-type [User]` to generate `[User]` return type
 
+## [0.8.1]
+
+### Added
+- Added `queryField` option and `--query-field` CLI flag to override the query field name
+
 ## [0.7.0]
 
 ### Added
