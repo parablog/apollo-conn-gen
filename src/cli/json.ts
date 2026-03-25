@@ -16,6 +16,7 @@ async function main(fileOrFolder: string, opts: any): Promise<void> {
   const jsonOptions = {
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
+    rootType: opts.rootType,
   };
 
   // generator
@@ -60,6 +61,7 @@ program
   .option('-o --output-file <file>', 'Where to write the output', 'stdout')
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
+  .option('--root-type <name>', 'Root type name for the generated schema (default: Root)')
   .parse(process.argv);
 
 const source = program.args[0];
