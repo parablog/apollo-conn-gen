@@ -43,8 +43,8 @@
     "lint": "eslint",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build && npm test && publint",
-    "preversion": "npm run lint && npm test",
-    "version": "npm run format && git add -A src",
+    "preversion": "npm run lint",
+    "version": "npm run format && git add src",
     "postversion": "git push && git push --tags",
     "yalc:update": "yalc push --scripts --update --replace"
   },
