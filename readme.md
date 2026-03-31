@@ -1012,6 +1012,7 @@ Options:
   --base-url <url>                         Base URL for the @source directive (default: http://localhost:4010)
   --relative-path <path>                   Relative path for the @connect directive (default: /test)
   --query-field <name>                     Query field name (default: derived from root type)
+  -v --verbose                             Log all messages from generator (default: false)
   -h, --help                               display help for command
 ```
 

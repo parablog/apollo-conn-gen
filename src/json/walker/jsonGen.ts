@@ -12,6 +12,7 @@ export interface JsonGenOptions {
   baseURL?: string;
   relativePath?: string;
   queryField?: string;
+  verbose?: boolean;
 }
 
 export class JsonGen {
@@ -21,6 +22,7 @@ export class JsonGen {
   // Private constructor
   private constructor(options: JsonGenOptions = {}) {
     this.context = new JsonContext();
+    this.context.verbose = options.verbose ?? false;
     this.options = {
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
@@ -98,7 +100,6 @@ export class JsonGen {
         generatedSet.set(typeName, t);
       });
 
-      console.log('orderedSet =', Array.from(orderedSet));
     }
 
     return writer.flush();

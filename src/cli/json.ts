@@ -20,6 +20,7 @@ async function main(fileOrFolder: string, opts: any): Promise<void> {
     baseURL: opts.baseUrl,
     relativePath: opts.relativePath,
     queryField: opts.queryField,
+    verbose: opts.verbose,
   };
 
   // generator
@@ -68,6 +69,7 @@ program
   .option('--base-url <url>', 'Base URL for the @source directive (default: http://localhost:4010)')
   .option('--relative-path <path>', 'Relative path for the @connect directive (default: /test)')
   .option('--query-field <name>', 'Query field name (default: derived from root type)')
+  .option('-v --verbose', 'Log all messages from generator', false)
   .parse(process.argv);
 
 const source = program.args[0];

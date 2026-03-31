@@ -5,6 +5,7 @@ export class JsonContext {
   private stack: JsonType[];
   private types: Map<string, JsonType>;
   private indent: number = 0;
+  public verbose: boolean = false;
 
   constructor() {
     this.stack = [];
