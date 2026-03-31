@@ -4,18 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.1]
+
+### Added
+- Added `queryField` option and `--query-field` CLI flag to override the query field name
+- Added `verbose` option and `-v --verbose` CLI flag to enable debug logging (default: silent)
+
 ## [0.8.0]
 
 ### Added
 - Added `baseURL` option and `--base-url` CLI flag to customize the `@source` base URL
 - Added `relativePath` option and `--relative-path` CLI flag to customize the `@connect` HTTP path
 - List type support: pass `rootType: '[User]'` or `--root-type [User]` to generate `[User]` return type
-
-## [0.8.1]
-
-### Added
-- Added `queryField` option and `--query-field` CLI flag to override the query field name
-- Added `verbose` option and `-v --verbose` CLI flag to enable debug logging (default: silent)
 
 ## [0.7.0]
 
