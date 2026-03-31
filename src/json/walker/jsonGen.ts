@@ -99,7 +99,6 @@ export class JsonGen {
         t.write(this.context, writer);
         generatedSet.set(typeName, t);
       });
-
     }
 
     return writer.flush();
