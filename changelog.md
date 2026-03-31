@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 - Added `queryField` option and `--query-field` CLI flag to override the query field name
+- Added `verbose` option and `-v --verbose` CLI flag to enable debug logging (default: silent)
 
 ## [0.7.0]
 
