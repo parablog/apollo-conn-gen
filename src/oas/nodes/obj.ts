@@ -2,6 +2,7 @@ import { Arr, Body, Factory, Get, IType, PropArray, Type, Res, T } from './inter
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
+import type { EntityResolver } from './entity.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 
@@ -10,6 +11,9 @@ import _ from 'lodash';
 export class Obj extends Type {
   synthetic: boolean = false;
   nameConflict: boolean = false;
+  // R1: type-level entity resolvers discovered for this type (empty unless inferred).
+  // Set by `inferEntityResolvers`; drives @key + type-level @connect/$this in generate().
+  entityResolvers: EntityResolver[] = [];
 
   constructor(
     parent: IType | undefined,
@@ -76,8 +80,25 @@ export class Obj extends Type {
     writer
       .write(this.kind + ' ')
       .write(sanitised === refName ? refName : sanitised)
-      .write(this.nameSuffix())
-      .write(' {\n');
+      .write(this.nameSuffix());
+
+    // Entity resolution (R1): when this type was identified as an entity, emit one
+    // repeatable @key per distinct key (sorted, deterministic) plus a type-level
+    // @connect resolver per discovered GET-by-key endpoint. This is the modern
+    // Connectors form — the resolver lives on the type via $this, keeping federation
+    // plumbing off the public Query type.
+    const resolvers = this.entityResolvers;
+    if (resolvers.length > 0) {
+      for (const key of Array.from(new Set(resolvers.map((r) => r.keyFields))).sort()) {
+        writer.write(` @key(fields: "${key}")`);
+      }
+      for (const resolver of resolvers) {
+        this.writeEntityConnector(context, writer, resolver, selection);
+      }
+      writer.write('\n{\n');
+    } else {
+      writer.write(' {\n');
+    }
 
     const selected = this.selectedProps(selection);
 
@@ -101,6 +122,44 @@ export class Obj extends Type {
     }
 
     trace(context, '<- [obj::select]', `-> out: ${this.name}`);
+  }
+
+  /**
+   * Emit a type-level `@connect` entity resolver (R1). The resolver fetches this entity by
+   * its key via the discovered GET-by-key endpoint, using `$this.<key>` (the entity's own
+   * key fields) instead of the `$args.<name>` a Query-field connector would use. The
+   * selection re-uses this object's own field selection, exactly like the response mapping
+   * of the equivalent Query connector.
+   */
+  private writeEntityConnector(
+    context: OasContext,
+    writer: Writer,
+    resolver: EntityResolver,
+    selection: string[],
+  ): void {
+    const i4 = ' '.repeat(4);
+    const i6 = ' '.repeat(6);
+
+    // Rewrite each {param} to {$this.param} (vs {$args.param} for Query-field connectors).
+    const path = resolver.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$this.$1}');
+
+    writer
+      .write('\n')
+      .write(i4)
+      .write('@connect(\n')
+      .write(i6)
+      .write(`source: "${resolver.source}"\n`)
+      .write(i6)
+      .write(`http: { ${resolver.verb}: "${path}" }\n`)
+      .write(i6)
+      .write('selection: """\n');
+
+    // Base the selection at 6 spaces like a Query connector. `select` adds
+    // `context.stack.length` (this object is mid-generation on the stack), so subtract it.
+    context.indent = 6 - context.stack.length;
+    this.select(context, writer, selection);
+
+    writer.write(i6).write('"""\n').write(i4).write(')');
   }
 
   private visitProperties(context: OasContext): void {

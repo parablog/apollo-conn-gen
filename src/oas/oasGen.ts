@@ -21,6 +21,7 @@ interface IGenOptions {
   connectorSpecVersion?: string;
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
+  inferEntityResolvers?: boolean;
 }
 
 export class OasGen {

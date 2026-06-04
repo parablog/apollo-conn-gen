@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info:
+  title: Widget Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      summary: List all widgets
+      responses:
+        '200':
+          description: A list of widgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Widget'
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      summary: Get a widget by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the widget
+        name:
+          type: string
+          description: Display name of the widget
+        sku:
+          type: string
+          description: Stock keeping unit
