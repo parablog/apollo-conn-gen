@@ -21,6 +21,7 @@ export async function runOasTest(
   skipValidation: boolean = false,
   mapper?: Mapper,
   skipOptionalArgs: boolean = false,
+  inferEntityResolvers: boolean = false,
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
@@ -28,6 +29,7 @@ export async function runOasTest(
     showParentInSelections: false,
     mapper,
     skipOptionalArgs,
+    inferEntityResolvers,
   });
   await gen.visit();
 
@@ -68,6 +70,9 @@ export async function runOasTest(
     assert.ok(output === undefined, 'should have been undefined, but it is: ' + output);
     assert.ok(result);
     console.error(schema);
+    // Return the generated schema so callers can make substring assertions (e.g. on
+    // @key / entity: true emitted by the inferEntityResolvers path).
+    return schema;
   }
 }
 

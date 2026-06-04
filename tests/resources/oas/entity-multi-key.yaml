@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: Gadget Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /gadgets/{id}:
+    get:
+      operationId: getGadgetById
+      summary: Get a gadget by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single gadget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gadget'
+  /gadgets/by-sku/{sku}:
+    get:
+      operationId: getGadgetBySku
+      summary: Get a gadget by sku
+      parameters:
+        - name: sku
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single gadget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gadget'
+components:
+  schemas:
+    Gadget:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the gadget
+        sku:
+          type: string
+          description: Stock keeping unit
+        name:
+          type: string
+          description: Display name of the gadget
