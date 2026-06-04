@@ -161,7 +161,7 @@ function compose(schemaPath: string, samplePath?: string) {
 
   const supergraphFile = path.join(os.tmpdir(), 'oas-test', 'supergraph.yaml');
   let content: string = `
-federation_version: =2.11.0
+federation_version: =2.12.0
 subgraphs:
   test_spec:
     routing_url: http://localhost # this value is ignored
