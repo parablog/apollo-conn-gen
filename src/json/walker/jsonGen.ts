@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import _ from 'lodash';
-import { DEFAULT_VERSIONS } from '../../versions.js';
+import { DEFAULT_VERSIONS, validateVersionOptions } from '../../versions.js';
 import { ConnectorWriter, JsonArray, JsonContext, JsonObj, JsonScalar, JsonType, StringWriter } from '../index.js';
 import { trace, warn } from './log/trace.js';
 import { sanitiseField } from './naming.js';
@@ -28,6 +28,7 @@ export class JsonGen {
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
       ...options,
     };
+    validateVersionOptions(this.options);
   }
 
   public getContext(): JsonContext {

@@ -5,7 +5,7 @@ import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
-import { DEFAULT_VERSIONS } from '../versions.js';
+import { DEFAULT_VERSIONS, validateVersionOptions } from '../versions.js';
 import { GenerateOptions, OasContext } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
@@ -39,6 +39,8 @@ export class OasGen {
       skipOptionalArgs: false,
     },
   ): Promise<OasGen> {
+    validateVersionOptions(options);
+
     const normalizer: OASNormalize = new OASNormalize(data, {
       enablePaths: true,
     });
@@ -77,6 +79,8 @@ export class OasGen {
     },
     // prompt: Prompt
   ): Promise<OasGen> {
+    validateVersionOptions(options);
+
     if (!fs.existsSync(sourceFile)) {
       throw new Error('Source not found: ' + sourceFile);
     }
