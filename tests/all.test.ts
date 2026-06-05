@@ -1497,3 +1497,43 @@ test('test_R5_security_global_plus_op_override_emits_no_global_header_and_warns'
   );
 });
 
+// --- Corpus: real-world vendor OAS specs (smoke: generate a real selection + compose via rover) ---
+// These broaden the corpus beyond the curated fixtures with large, real vendor specs (varied
+// shapes/auth). Each asserts a representative selection generates and composes; selections were
+// picked as composable subtrees (full `>**` of complex paths often hit not-yet-supported
+// constructs — tracked in the roadmap). Sizes are the spec's total path count + the selection's
+// type count.
+
+test('test_corpus_googlebooks', async () => {
+  await runOasTest('googlebooks.yaml', ['get:/books/v1/dictionary/listOfflineMetadata>**'], 51, 2);
+});
+
+test('test_corpus_slack', async () => {
+  await runOasTest('slack.yaml', ['get:/admin.conversations.getConversationPrefs>**'], 174, 4);
+});
+
+test('test_corpus_digitalocean', async () => {
+  await runOasTest('digitalocean.yaml', ['get:/v2/account>**'], 290, 3);
+});
+
+test('test_corpus_box', async () => {
+  await runOasTest(
+    'box.yaml',
+    ['get:/metadata_templates/enterprise/securityClassification-6VMVochwUWo/schema>**'],
+    258,
+    5,
+  );
+});
+
+test('test_corpus_openai', async () => {
+  await runOasTest('openai.yaml', ['get:/fine-tunes>**'], 28, 4);
+});
+
+test('test_corpus_asana', async () => {
+  await runOasTest('asana.yaml', ['get:/portfolio_memberships>**'], 167, 4);
+});
+
+test('test_corpus_sendgrid', async () => {
+  await runOasTest('sendgrid.yaml', ['get:/marketing/contacts/exports>**'], 334, 5);
+});
+
