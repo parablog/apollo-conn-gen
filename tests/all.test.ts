@@ -449,6 +449,40 @@ test('test_020_oas_test_010_TMF633_IntentOrValue_to_Union_Full', async () => {
   await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 4);
 });
 
+// --- R2: real unions with discriminator -> __typename (connect v0.4) ----------
+
+test('test_R2_union_discriminator_emits_typename_match_and_composes', async () => {
+  // simple-oneOf-example: a oneOf [Book, Movie] with discriminator { propertyName: type,
+  // mapping: { book: Book, movie: Movie } }. With consolidateUnions OFF + connect v0.4, the
+  // connector must emit a real `union` and a `...->match` selection that sets a string-literal
+  // __typename per member. Composes only at fed 2.13.
+  const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 3, false, false, undefined, false, false, {
+    consolidateUnions: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+    composeFederationVersion: '2.13.0',
+  });
+  assert.ok(schema !== undefined);
+  // real union, not the consolidate downgrade
+  assert.ok(schema!.includes('union ItemResponse = Book | Movie'), 'expected a real union type');
+  assert.ok(!schema!.includes('NOT SUPPORTED YET'), 'must not emit the consolidate placeholder');
+  // discriminator-driven match with string-literal __typename per member
+  assert.ok(schema!.includes('... type->match('), 'expected a spread ->match on the discriminator');
+  assert.ok(schema!.includes('["book", $ {'), 'expected a branch keyed by the mapping value "book"');
+  assert.ok(schema!.includes('__typename: $("Book")'), 'expected string-literal __typename for Book');
+  assert.ok(schema!.includes('__typename: $("Movie")'), 'expected string-literal __typename for Movie');
+});
+
+test('test_R2_union_consolidate_downgrade_unchanged', async () => {
+  // Default path (consolidateUnions ON): the same fixture must still emit the consolidate
+  // downgrade (a replacement object + the NOT-SUPPORTED marker), composing at fed 2.12 —
+  // i.e. the new abstract-type path does not perturb the default behaviour.
+  const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('NOT SUPPORTED YET'), 'default path still emits the consolidate downgrade');
+  assert.ok(!schema!.includes('->match('), 'default path must not emit the v0.4 match form');
+});
+
 test('test_021_oas_test_011_TMF637_001_ComposedTest', async () => {
   const paths = ['get:/product/{id}>**'];
 

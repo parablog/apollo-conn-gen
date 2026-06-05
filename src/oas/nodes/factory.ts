@@ -120,7 +120,7 @@ export class Factory {
     // union
     else if (schema.oneOf || schema.anyOf) {
       const oneOfs = schema.oneOf || [];
-      result = new Union(parent, ref || _.get(schema, 'name'), oneOfs as SchemaObject[]);
+      result = new Union(parent, ref || _.get(schema, 'name'), oneOfs as SchemaObject[], false, _.get(schema, 'discriminator'));
     }
     // map (object with only additionalProperties)
     else if (this.isMapSchema(schema)) {
@@ -226,7 +226,13 @@ export class Factory {
       ) {
         if (schemaObj.oneOf) {
           const inner: PropComp = new PropComp(parent, propName, schemaObj);
-          inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
+          inner.comp = new Union(
+            inner,
+            ref || _.get(schemaObj, 'name'),
+            schemaObj.oneOf as SchemaObject[],
+            false,
+            _.get(schemaObj, 'discriminator'),
+          );
           prop = inner;
         } else if (schemaObj.allOf) {
           const propComp: PropComp = new PropComp(parent, propName, schemaObj);
