@@ -24,7 +24,13 @@ function lowerFirst(s: string): string {
 }
 
 export function genParamName(param: string): string {
-  return lowerFirst(capitaliseParts(param, '[\\-_\\.:]'));
+  // Split on any run of non-alphanumeric characters, camelCase the parts, then guarantee
+  // a valid GraphQL identifier: non-empty and not starting with a digit.
+  const camel = lowerFirst(capitaliseParts(param || '', '[^A-Za-z0-9]+'));
+  if (camel.length === 0) {
+    return '_';
+  }
+  return /^[0-9]/.test(camel) ? '_' + camel : camel;
 }
 
 // Private helper; not exported.
@@ -50,16 +56,11 @@ export function sanitiseFieldForSelect(name: string): string {
   const sanitised = genParamName(fieldName);
   if (sanitised === name && !isProtected(name)) {
     return sanitised;
-  } else {
-    const needsQuotes = /.*[:_\-.].*/.test(fieldName) || name.startsWith('@') || isProtected(name);
-    let builder = sanitised + ': ';
-    if (needsQuotes) {
-      builder += '"' + (name.startsWith('@') ? name : fieldName) + '"';
-    } else {
-      builder += name.startsWith('@') ? name : fieldName;
-    }
-    return builder;
   }
+  // Alias: safe GraphQL field <- original JSON key, always quoted (it is not a bare
+  // identifier — covers spaces, `$`, `%`, leading digits, etc.).
+  const original = name.startsWith('@') ? name : fieldName;
+  return `${sanitised}: "${original}"`;
 }
 
 export function upperFirst(s: string): string {

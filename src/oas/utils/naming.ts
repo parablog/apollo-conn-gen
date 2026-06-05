@@ -20,16 +20,6 @@ abstract class AbstractConverter implements Converter {
   protected abstract process(input: string): string;
 }
 
-class ReplaceBracketsConverter extends AbstractConverter {
-  constructor(next: Converter) {
-    super(next);
-  }
-
-  public process(input: string): string {
-    return input.replace(/\[|\]/g, '-');
-  }
-}
-
 class CapitalisePartsConverter extends AbstractConverter {
   constructor(next: Converter) {
     super(next);
@@ -37,12 +27,6 @@ class CapitalisePartsConverter extends AbstractConverter {
 
   public process(input: string): string {
     return Naming.capitaliseParts(input, /[-_.]/);
-  }
-}
-
-class FinalFirstLowerCaseConverter extends AbstractConverter {
-  public process(input: string): string {
-    return _.lowerFirst(input);
   }
 }
 
@@ -83,7 +67,14 @@ class FinalConverter extends AbstractConverter {
 
 export class Naming {
   public static genParamName(param: string): string {
-    return Naming.PARAM_CONVERTER.convert(param);
+    // Split on any run of non-alphanumeric characters, camelCase the parts, then
+    // guarantee a valid GraphQL identifier: non-empty and not starting with a digit.
+    // (Plain `[-_.]` splitting let spaces, `$`, `%`, … and leading digits through.)
+    const camel = _.lowerFirst(Naming.capitaliseParts(param || '', /[^A-Za-z0-9]+/));
+    if (camel.length === 0) {
+      return Naming.NUMBER_PREFIX;
+    }
+    return /^[0-9]/.test(camel) ? Naming.NUMBER_PREFIX + camel : camel;
   }
 
   public static genTypeName(name: string): string {
@@ -98,20 +89,23 @@ export class Naming {
   public static sanitiseFieldForSelect(name: string, isInput: boolean = false): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
     const sanitised = Naming.genParamName(fieldName);
+
+    // The JSON key is already a valid identifier identical to the field — no alias needed.
     if (sanitised === name) {
       return sanitised;
-    } else {
-      const needsQuotes = /[:_\-.]/.test(fieldName) || name.startsWith('@');
-      let builder = (isInput ? fieldName : sanitised) + ': ';
-      if (needsQuotes) {
-        builder += '"';
-      }
-      builder += name.startsWith('@') ? name : isInput ? sanitised : fieldName;
-      if (needsQuotes) {
-        builder += '"';
-      }
-      return builder;
     }
+
+    if (isInput) {
+      // Request-body direction (unchanged): GraphQL field maps into the JSON key.
+      const needsQuotes = /[:_\-.]/.test(fieldName) || name.startsWith('@');
+      const value = name.startsWith('@') ? name : sanitised;
+      return fieldName + ': ' + (needsQuotes ? `"${value}"` : value);
+    }
+
+    // Response direction: safe GraphQL field <- original JSON key, always quoted (the key
+    // is not a bare identifier — covers spaces, `$`, `%`, leading digits, etc.).
+    const original = name.startsWith('@') ? name : fieldName;
+    return `${sanitised}: "${original}"`;
   }
 
   public static genOperationName(path: string, operation: Operation): string {
@@ -169,10 +163,6 @@ export class Naming {
       .map((part) => (part ? _.upperFirst(part) : ''))
       .join('');
   }
-  private static readonly PARAM_CONVERTER: Converter = new ReplaceBracketsConverter(
-    new CapitalisePartsConverter(new FinalFirstLowerCaseConverter()),
-  );
-
   private static readonly TYPE_CONVERTER: Converter = new RemoveRefConverter(
     new CapitalisePartsConverter(new FinalFirstUpperCaseConverter()),
   );

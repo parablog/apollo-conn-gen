@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info:
+  title: R3 Field-Naming Edge Cases
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /things:
+    get:
+      operationId: listThings
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Thing:
+      type: object
+      properties:
+        created_at:
+          type: string
+        media-metadata:
+          type: string
+        "2fa_enabled":
+          type: boolean
+        "full name":
+          type: string
+        "cost$":
+          type: number
+        "__typename":
+          type: string
