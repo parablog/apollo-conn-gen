@@ -14,6 +14,10 @@ export class Obj extends Type {
   // R1: type-level entity resolvers discovered for this type (empty unless inferred).
   // Set by `inferEntityResolvers`; drives @key + type-level @connect/$this in generate().
   entityResolvers: EntityResolver[] = [];
+  // R2: when promoted to a GraphQL interface (a shared allOf base of a discriminated oneOf),
+  // emit `interface` instead of `type`. Id-neutral on purpose — `id` embeds `kind`, so we must
+  // NOT mutate `kind` (it would desync generatedSet/dedup/deletion keys). Set by promoteInterfaces.
+  emitAsInterface: boolean = false;
 
   constructor(
     parent: IType | undefined,
@@ -78,7 +82,7 @@ export class Obj extends Type {
     const refName = Naming.getRefName(this.name);
 
     writer
-      .write(this.kind + ' ')
+      .write(this.emitAsInterface ? 'interface ' : this.kind + ' ')
       .write(sanitised === refName ? refName : sanitised)
       .write(this.nameSuffix());
 

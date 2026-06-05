@@ -8,6 +8,10 @@ import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
 
 export class Composed extends Type {
+  // R2: GraphQL interface this member implements (a shared allOf base of a discriminated
+  // oneOf). When set, generate() appends `implements <Base>`. Set by promoteInterfaces.
+  public implementsInterface?: string;
+
   constructor(
     parent: IType | undefined,
     public name: string,
@@ -75,6 +79,10 @@ export class Composed extends Type {
         writer.write(this.kind + ' ');
         writer.write(_.upperFirst(Naming.getRefName(this.name)));
         writer.write(this.nameSuffix());
+        // R2: a promoted member implements the shared base interface.
+        if (this.implementsInterface) {
+          writer.write(` implements ${this.implementsInterface}`);
+        }
         writer.write(' {\n');
 
         for (const prop of selected) {

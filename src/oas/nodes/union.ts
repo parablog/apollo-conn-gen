@@ -12,6 +12,11 @@ export class Union extends Type {
   // `discriminatorMapping` maps each tag value to a schema ref (value -> "#/.../Type").
   public discriminator?: string;
   public discriminatorMapping?: Record<string, string>;
+  // R2: when this discriminated union's members all share one allOf base, it is promoted to a
+  // GraphQL interface. `interfaceBaseRef` is the base schema ref ("#/.../Product"); when set,
+  // generate() returns the interface name (not the union name) and emits no `union` line. Set by
+  // promoteInterfaces (a post-collect pass) — never in visit().
+  public interfaceBaseRef?: string;
 
   constructor(
     parent: IType,
@@ -85,7 +90,8 @@ export class Union extends Type {
         child.generate(context, writer, selection);
       }
     } else if (context.inContextOf('Res', this)) {
-      writer.write(Naming.genTypeName(this.name));
+      // R2: when promoted to an interface, the field returns the base interface, not the union name.
+      writer.write(Naming.genTypeName(this.interfaceBaseRef ?? this.name));
       return;
     }
     // generate traditional union
@@ -124,6 +130,10 @@ export class Union extends Type {
         }
 
         writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
+      } else if (this.interfaceBaseRef) {
+        // R2: promoted to an interface — the base (emitted as `interface`) and the members
+        // (each `... implements Base`) carry the type system; emit no `union X = A | B` line.
+        trace(context, '   [union::generate]', `[interface] suppressing union line for ${this.name}`);
       } else {
         // add the prop parent paths to a set so we can only include those parents that have been selected
         const propParentsPathSet = new Set(this.selectedProps(selection).map((p) => p.parent!.path()));

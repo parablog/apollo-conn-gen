@@ -483,6 +483,65 @@ test('test_R2_union_consolidate_downgrade_unchanged', async () => {
   assert.ok(!schema!.includes('->match('), 'default path must not emit the v0.4 match form');
 });
 
+// --- R2 (Scenario B): oneOf members sharing an allOf base -> GraphQL interface (connect v0.4) ---
+
+test('test_R2_interface_oneof_promotes_and_composes', async () => {
+  // oneOf [Book, Movie], both allOf [Product, {…}] + a discriminator. With consolidateUnions OFF +
+  // connect v0.4, the shared base Product is promoted to an interface, members implement it, the
+  // field returns Product, and the connector selection uses the abstract-type ->match. Composes at
+  // fed 2.13.
+  const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 3, false, false, undefined, false, false, {
+    consolidateUnions: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+    composeFederationVersion: '2.13.0',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('interface Product'), 'shared base promoted to an interface');
+  assert.ok(schema!.includes('type Book implements Product'), 'Book implements the interface');
+  assert.ok(schema!.includes('type Movie implements Product'), 'Movie implements the interface');
+  assert.ok(/item: Product\b/.test(schema!), 'field returns the interface, not the union');
+  assert.ok(!/\bunion \w+ =/.test(schema!), 'no union type is emitted');
+  assert.ok(schema!.includes('... type->match('), 'abstract-type ->match selection');
+  assert.ok(schema!.includes('__typename: $("Book")'), 'string-literal __typename per member');
+});
+
+test('test_R2_interface_skips_when_base_used_concretely', async () => {
+  // Rule 3: when the shared base is ALSO returned concretely by another selected op
+  // (GET /product -> $ref Product), promotion must be skipped (else that op would return an
+  // interface with no __typename). Asserts the skip DECISION + loud warning. (Not composed: the
+  // non-promoted real-union fallback is pre-existing-broken for allOf-composed members — see the
+  // ROADMAP follow-up; promotion is precisely what fixes the allOf case.)
+  let schema: string | undefined;
+  const warnings = await captureWarnings(async () => {
+    const gen = await OasGen.fromFile(`${oasBasePath}/r2-interface-shared-base.yaml`, {
+      skipValidation: false,
+      consolidateUnions: false,
+      showParentInSelections: false,
+      connectorSpecVersion: 'v0.4',
+      federationVersion: 'v2.13',
+    });
+    await gen.visit();
+    schema = gen.generateSchema(['get:/item>**', 'get:/product>**']);
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(!/interface Product/.test(schema!), 'base used concretely must NOT be promoted');
+  assert.ok(
+    warnings.some((w) => /not promoting .*Product.* concrete/.test(w)),
+    `expected a rule-3 skip warning, got: ${warnings.join(' | ')}`,
+  );
+});
+
+test('test_R2_interface_default_consolidate_unchanged', async () => {
+  // Default path (consolidateUnions ON) on the same fixture: consolidate downgrade, no interface,
+  // no ->match. Confirms interface promotion does not perturb the default. Composes at fed 2.12.
+  const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('NOT SUPPORTED YET'), 'default path emits the consolidate downgrade');
+  assert.ok(!schema!.includes('interface '), 'default path must not emit an interface');
+  assert.ok(!schema!.includes('->match('), 'default path must not emit the v0.4 match form');
+});
+
 test('test_021_oas_test_011_TMF637_001_ComposedTest', async () => {
   const paths = ['get:/product/{id}>**'];
 
