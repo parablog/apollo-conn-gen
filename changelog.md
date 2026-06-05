@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- Auth headers from OAS security: a spec's global `security` scheme is now mapped to a
+  templated `@source` header so the router supplies the secret at runtime
+  (`apiKey`/header → `{$config.apiKey}`; `http`/bearer, `oauth2`/`openIdConnect` →
+  `Authorization: Bearer {$config.token}`; `http`/basic → `Authorization: Basic {$config.token}`).
+  Default on, no flag. Deferred cases (per-operation `security`, `apiKey` in query/cookie,
+  and additional/alternative schemes) emit no header and are logged as warnings rather than
+  dropped silently.
+
 ## [0.8.4]
 
 ### Added
