@@ -1,0 +1,38 @@
+openapi: 3.0.3
+info:
+  title: Basic Auth Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# Global http/basic requirement, no per-operation overrides -> emitted on @source.
+security:
+  - basicAuth: []
+paths:
+  /things:
+    get:
+      operationId: listThings
+      summary: List all things
+      responses:
+        '200':
+          description: A list of things
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Thing:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the thing
+        name:
+          type: string
+          description: Display name of the thing
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
