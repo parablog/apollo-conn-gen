@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info:
+  title: Ref Into Paths Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widgets/{widget_id}:
+    get:
+      operationId: getWidget
+      parameters:
+        - name: widget_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+  /gadgets/{widget_id}:
+    get:
+      operationId: getGadget
+      # Shared parameter referenced via a JSON-pointer into #/paths (percent-encoded braces),
+      # exactly as DigitalOcean's published spec does.
+      parameters:
+        - $ref: '#/paths/~1widgets~1%7Bwidget_id%7D/get/parameters/0'
+      responses:
+        '200':
+          description: A gadget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string

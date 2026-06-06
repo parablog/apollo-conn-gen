@@ -675,3 +675,13 @@ test('test_062_oas_test_images_additionalProperties', async () => {
   ];
   await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5);
 });
+
+test('test_ref_into_paths_pointer_resolves_and_composes', async () => {
+  // A parameter shared via a JSON-pointer into #/paths (percent-encoded braces) — the DigitalOcean
+  // pattern — must resolve (not throw "Schema not found for ref") and compose. Top coverage gap:
+  // GEN-THROW Schema/response not found for ref #/…. runOasTest composes via rover.
+  const schema = await runOasTest('ref-into-paths.yaml', ['get:/gadgets/{widget_id}>**'], 2, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('gadgets(widgetId: String!)'), 'resolved shared path param became an arg');
+  assert.ok(schema!.includes('GET: "/gadgets/{$args.widgetId}"'), 'param templated against the resolved arg');
+});
