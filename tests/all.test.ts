@@ -1537,3 +1537,20 @@ test('test_corpus_sendgrid', async () => {
   await runOasTest('sendgrid.yaml', ['get:/marketing/contacts/exports>**'], 334, 5);
 });
 
+test('test_corpus_github', async () => {
+  await runOasTest('github.yaml', ['get:/orgs/{org}/codespaces>**'], 845, 14);
+});
+
+test('test_corpus_omni', async () => {
+  // Omni Analytics (docs.omni.co). skipValidation: the published spec needs the two missing
+  // error schemas stubbed (see TEST_CORPUS.md) and still trips strict validation.
+  await runOasTest('omni.yaml', ['get:/v1/models/{modelId}/topic/{topicName}>**'], 146, 9, false, true);
+});
+
+test('test_corpus_confluence', async () => {
+  // Confluence Cloud (developer.atlassian.com). Fixture patched: its published `servers[0].url`
+  // is the protocol-relative placeholder `//your-domain.atlassian.net`, which fails
+  // @source(baseURL) composition — set to an absolute https URL (see TEST_CORPUS.md).
+  await runOasTest('confluence.json', ['get:/wiki/rest/api/audit>**'], 130, 6, false, true);
+});
+
