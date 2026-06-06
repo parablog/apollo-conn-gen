@@ -401,18 +401,22 @@ mapping (done). The remaining gap is bodies that are not a direct passthrough.
 ## Coverage findings — robustness backlog (from `COVERAGE.md`)
 
 `tools/coverage-spec.mts` runs **every GET op** of the corpus through generate + rover-compose under
-two configs (see `COVERAGE.md` for the live per-spec table). Real coverage is **4–78% per spec**, not
-the ~100% the single-path `test_corpus_*` smoke tests imply (e.g. digitalocean 4%, box 6%, asana 15%,
-slack 24%, github 45%, omni 78%). The failures, triaged **generator-bug vs input-quality**:
+two configs (see `COVERAGE.md` for the live per-spec table). The failures, triaged **generator-bug vs
+input-quality**.
 
-**Generator gaps (fixable — the bulk of the volume; counts sum both passes):**
-- **Path-param templating → `INVALID_URL` (~517, #1).** snake_case / multi path params (`{app_id}`,
-  `{engine_id}`) are not emitted as `{$args.…}`. Maps to R8/R3. Single biggest win.
-- **`$ref` into `#/paths/…` not resolved → `Schema not found for ref` (~198).** DigitalOcean shares
-  parameters via JSON-pointers into `#/paths/<p>/get/parameters/N` (valid OAS the bundler leaves
-  intact); our resolver only follows `#/components/…`. Fixing it recovers ~135 DO ops (4% → ~85%).
-  (`src/oas/nodes/ref.ts`, `factory.ts`, `propRef.ts`.)
-- **`allOf` + sibling `type: object` → `Cannot handle schema` (~250).** Box `--Full`/`--Mini` and many
+**Progress (default pass, OK%):** after fixing gaps #1 and #2 the range moved from **4–78% to 16–80%**
+— github 45→**78%**, asana 15→**71%**, sendgrid 63→**77%**, openai 50→**80%**, digitalocean 4→**16%**,
+box 6→**18%**. The two fixes cleared their classes: `INVALID_URL` 517→4, `Schema not found for ref` ~216→0.
+
+**Generator gaps (counts sum both passes):**
+- ✅ **FIXED (`ad5cede`) — Path-param templating → `INVALID_URL` (was ~517, now 4).** snake_case / multi
+  path params (`{app_id}`, `{engine_id}`) were emitted raw instead of `{$args.<camelName>}`
+  (`operationWriter.ts`; regex excluded `_` and used the raw key). R8/R3.
+- ✅ **FIXED (`039b3e0`) — `$ref` into `#/paths/…` → `Schema not found for ref` / `Could not find a
+  response` (was ~216, now 0).** DigitalOcean shares params/responses/schemas via JSON-pointers into
+  `#/paths/<p>/<verb>/…`; `lookupParam`/`lookupRef`/`lookupResponse` only followed `#/components`. Added
+  a generic RFC-6901 + percent-decoding `resolvePointer` fallback (`oasContext.ts`).
+- ⬜ **`allOf` + sibling `type: object` → `Cannot handle schema` (now ~376, the #1 remaining).** Box `--Full`/`--Mini` and many
   Slack methods compose `allOf: [ $ref, { properties } ]` alongside `type: object`; `factory.ts:109`
   rejects the shape. Ties into the broader R2 `allOf`→interface work.
 - **Edge/null handling:** `Cannot read 'type' of null` (34), `Unknown or undefined schema` (14),
@@ -431,8 +435,10 @@ slack 24%, github 45%, omni 78%). The failures, triaged **generator-bug vs input
 - omni / confluence needed fixture patches (dangling `$ref`s, protocol-relative `servers[].url`) — see
   TEST_CORPUS.md. The generator could be hardened to tolerate these, but the source specs are at fault.
 
-**ROI order:** (1) path-param templating, (2) `#/paths` `$ref` resolution, (3) `allOf` + sibling-type,
-(4) abstract-path recursion guard. Regenerate `COVERAGE.md` after each to watch the numbers move.
+**ROI order:** ~~(1) path-param templating~~ ✅, ~~(2) `#/paths` `$ref` resolution~~ ✅, (3) `allOf` +
+sibling-type (`Cannot handle schema`, ~376 — now the largest class), (4) `INTERNAL_ERROR` (~153) and
+`SELECTED_FIELD_NOT_FOUND` (~91) on the compose side, (5) abstract-path recursion guard. Regenerate
+`COVERAGE.md` after each to watch the numbers move.
 
 ## Sequencing notes
 
