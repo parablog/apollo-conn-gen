@@ -685,3 +685,11 @@ test('test_ref_into_paths_pointer_resolves_and_composes', async () => {
   assert.ok(schema!.includes('gadgets(widgetId: String!)'), 'resolved shared path param became an arg');
   assert.ok(schema!.includes('GET: "/gadgets/{$args.widgetId}"'), 'param templated against the resolved arg');
 });
+
+test('test_implied_array_items_without_type_resolves_and_composes', async () => {
+  // A schema with `items` but no explicit `type: array` (Slack does this) must be treated as an
+  // array, not throw "Cannot handle schema". runOasTest composes via rover.
+  const schema = await runOasTest('implied-array.yaml', ['get:/things>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('things: [Thing]'), 'implied array resolved to a list type');
+});

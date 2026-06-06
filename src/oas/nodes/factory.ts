@@ -57,8 +57,9 @@ export class Factory {
     if (!schema) throw new Error('Unknown or undefined schema');
     const schemaObj: SchemaObject = schema as SchemaObject;
 
-    // array case
-    if (schemaObj.type === 'array' && schemaObj.items) {
+    // array case — incl. implied arrays: a schema with `items` but no explicit `type: array`
+    // (e.g. Slack `{ items: { anyOf: [...] } }`) is still an array.
+    if (_.get(schemaObj, 'items') && (schemaObj.type === 'array' || schemaObj.type == null)) {
       result = this.createArrayType(parent, schemaObj, context);
     }
     // array case
