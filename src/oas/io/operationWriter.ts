@@ -66,9 +66,13 @@ export class OperationWriter {
   }
 
   private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], indent: number): void {
-    // replace every {elem} in the path for {$args.elem}
+    // Replace every {elem} in the path with {$args.<safeName>}. The OAS param name may be
+    // snake_case / contain non-identifier chars (e.g. {engine_id}); the GraphQL arg is the
+    // sanitised name (Naming.genParamName, same as the arg declaration + queryParams), so the
+    // template must reference that — not the raw key, which composition rejects (INVALID_URL).
     const verb = op.verb;
-    writer.write(`{ ${verb}: `).write('"' + op.operation.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$args.$1}') + '"');
+    const templatedPath = op.operation.path.replace(/\{([^}]+)\}/g, (_m, name) => `{$args.${Naming.genParamName(name)}}`);
+    writer.write(`{ ${verb}: `).write('"' + templatedPath + '"');
 
     if (op.params.length > 0) {
       // we now include all query params, not just required ones. if they are not set,

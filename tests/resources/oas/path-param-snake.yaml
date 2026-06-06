@@ -1,0 +1,38 @@
+openapi: 3.0.3
+info:
+  title: Snake Path Param Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /things/{thing_id}/parts/{part_id}:
+    get:
+      operationId: getThingPart
+      summary: Get a part of a thing by snake_case path params
+      parameters:
+        - name: thing_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: part_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single part
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Part'
+components:
+  schemas:
+    Part:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string

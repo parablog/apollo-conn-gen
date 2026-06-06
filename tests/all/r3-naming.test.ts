@@ -70,3 +70,14 @@ test('test_R3_oas_edge_fixture_composes_with_safe_names', async () => {
   assert.ok(schema!.includes('fullName: "full name"'), 'space field aliased');
   assert.ok(schema!.includes('createdAt: "created_at"'), 'snake_case field aliased');
 });
+
+test('test_R8_path_param_snake_case_templated_with_args', async () => {
+  // snake_case path params ({thing_id}) must be templated against the sanitised GraphQL arg name
+  // ({$args.thingId}), not emitted raw — rover rejects a raw {thing_id} with INVALID_URL. runOasTest
+  // composes, so a regression here fails composition. (Top coverage gap: COMPOSE-FAIL [INVALID_URL].)
+  const schema = await runOasTest('path-param-snake.yaml', ['get:/things/{thing_id}/parts/{part_id}>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('GET: "/things/{$args.thingId}/parts/{$args.partId}"'), 'snake path params templated as $args');
+  // raw snake params may remain in the descriptive comment, but never in the connect GET URL
+  assert.ok(!/GET: "[^"]*\{thing_id\}/.test(schema!), 'raw snake path param must not survive in the GET URL');
+});
