@@ -404,9 +404,10 @@ mapping (done). The remaining gap is bodies that are not a direct passthrough.
 two configs (see `COVERAGE.md` for the live per-spec table). The failures, triaged **generator-bug vs
 input-quality**.
 
-**Progress (default pass, OK%):** after fixing gaps #1 and #2 the range moved from **4–78% to 16–80%**
-— github 45→**78%**, asana 15→**71%**, sendgrid 63→**77%**, openai 50→**80%**, digitalocean 4→**16%**,
-box 6→**18%**. The two fixes cleared their classes: `INVALID_URL` 517→4, `Schema not found for ref` ~216→0.
+**Progress (default pass, OK%):** after fixing gaps #1, #2 and #3-B the range moved from **4–78% to
+16–80%** — github 45→**78%**, asana 15→**71%**, sendgrid 63→**77%**, openai 50→**80%**, slack 24→**41%**,
+digitalocean 4→**16%**, box 6→**18%**. Classes cleared: `INVALID_URL` 517→4, `Schema not found for ref`
+~216→0, implied-array `Cannot handle schema` 376→322.
 
 **Generator gaps (counts sum both passes):**
 - ✅ **FIXED (`ad5cede`) — Path-param templating → `INVALID_URL` (was ~517, now 4).** snake_case / multi
@@ -416,7 +417,11 @@ box 6→**18%**. The two fixes cleared their classes: `INVALID_URL` 517→4, `Sc
   response` (was ~216, now 0).** DigitalOcean shares params/responses/schemas via JSON-pointers into
   `#/paths/<p>/<verb>/…`; `lookupParam`/`lookupRef`/`lookupResponse` only followed `#/components`. Added
   a generic RFC-6901 + percent-decoding `resolvePointer` fallback (`oasContext.ts`).
-- ⬜ **`allOf` + sibling `type: object` → `Cannot handle schema` (now ~376, the #1 remaining).** Box `--Full`/`--Mini` and many
+- 🟡 **`Cannot handle schema` (was ~376, now ~322 — the #1 remaining).** Two sub-causes: **(B) ✅ FIXED
+  (`f521bc1`)** — a schema with `items` but no `type: array` (Slack) is now treated as an implied array
+  (slack 24→41%); **(A) ⬜ remaining** — typeless `{ description }`-only schemas (Box `--Full`/`--Mini`,
+  box still 78 throws) must become a JSON scalar **as a property** but be **ignored as an `allOf`
+  member** (context-dependent — the careful slice). Box `--Full`/`--Mini` and many
   Slack methods compose `allOf: [ $ref, { properties } ]` alongside `type: object`; `factory.ts:109`
   rejects the shape. Ties into the broader R2 `allOf`→interface work.
 - **Edge/null handling:** `Cannot read 'type' of null` (34), `Unknown or undefined schema` (14),
@@ -435,9 +440,10 @@ box 6→**18%**. The two fixes cleared their classes: `INVALID_URL` 517→4, `Sc
 - omni / confluence needed fixture patches (dangling `$ref`s, protocol-relative `servers[].url`) — see
   TEST_CORPUS.md. The generator could be hardened to tolerate these, but the source specs are at fault.
 
-**ROI order:** ~~(1) path-param templating~~ ✅, ~~(2) `#/paths` `$ref` resolution~~ ✅, (3) `allOf` +
-sibling-type (`Cannot handle schema`, ~376 — now the largest class), (4) `INTERNAL_ERROR` (~153) and
-`SELECTED_FIELD_NOT_FOUND` (~91) on the compose side, (5) abstract-path recursion guard. Regenerate
+**ROI order:** ~~(1) path-param templating~~ ✅, ~~(2) `#/paths` `$ref` resolution~~ ✅, ~~(3-B)
+implied-array~~ ✅, (3-A) typeless `{description}` schema → JSON-scalar-as-property / ignore-as-allOf-member
+(`Cannot handle schema`, ~322 — still the largest class), (4) `INTERNAL_ERROR` (~163) and
+`SELECTED_FIELD_NOT_FOUND` (~97) on the compose side, (5) abstract-path recursion guard. Regenerate
 `COVERAGE.md` after each to watch the numbers move.
 
 ## Sequencing notes
