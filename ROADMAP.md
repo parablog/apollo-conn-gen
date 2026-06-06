@@ -398,6 +398,42 @@ mapping (done). The remaining gap is bodies that are not a direct passthrough.
 
 ---
 
+## Coverage findings — robustness backlog (from `COVERAGE.md`)
+
+`tools/coverage-spec.mts` runs **every GET op** of the corpus through generate + rover-compose under
+two configs (see `COVERAGE.md` for the live per-spec table). Real coverage is **4–78% per spec**, not
+the ~100% the single-path `test_corpus_*` smoke tests imply (e.g. digitalocean 4%, box 6%, asana 15%,
+slack 24%, github 45%, omni 78%). The failures, triaged **generator-bug vs input-quality**:
+
+**Generator gaps (fixable — the bulk of the volume; counts sum both passes):**
+- **Path-param templating → `INVALID_URL` (~517, #1).** snake_case / multi path params (`{app_id}`,
+  `{engine_id}`) are not emitted as `{$args.…}`. Maps to R8/R3. Single biggest win.
+- **`$ref` into `#/paths/…` not resolved → `Schema not found for ref` (~198).** DigitalOcean shares
+  parameters via JSON-pointers into `#/paths/<p>/get/parameters/N` (valid OAS the bundler leaves
+  intact); our resolver only follows `#/components/…`. Fixing it recovers ~135 DO ops (4% → ~85%).
+  (`src/oas/nodes/ref.ts`, `factory.ts`, `propRef.ts`.)
+- **`allOf` + sibling `type: object` → `Cannot handle schema` (~250).** Box `--Full`/`--Mini` and many
+  Slack methods compose `allOf: [ $ref, { properties } ]` alongside `type: object`; `factory.ts:109`
+  rejects the shape. Ties into the broader R2 `allOf`→interface work.
+- **Edge/null handling:** `Cannot read 'type' of null` (34), `Unknown or undefined schema` (14),
+  response `$ref` into `#/paths` (18), `Cannot handle property type` (4).
+- **Abstract-types recursion HANG (R2, P0 for v0.4).** `consolidateUnions:false` + v0.4 infinite-loops
+  (100% CPU) on recursive schemas (Confluence `Content`/`relation`); the default v0.3 path is fine.
+  Confirms the R2 note that the abstract path is not yet a net win — github's abstract pass had **20
+  more** compose-fails than default. Needs a recursion guard before the v0.4 path can be trusted.
+- **Compose-side, likely ours:** `SELECTED_FIELD_NOT_FOUND` (44), `INTERNAL_ERROR` (104, needs a
+  look), `GROUP_SELECTION_IS_NOT_OBJECT` (14), `INVALID_GRAPHQL` (14), `CIRCULAR_REFERENCE` (3).
+
+**Input quality (NOT our bug — don't chase):**
+- **`GEN-EMPTY` (~148), Slack-dominated.** Slack's published spec declares **146** methods with
+  *"a verbose schema is not available for this method"* — stub responses with nothing to generate.
+  Slack's 24% is mostly thin input, not a generator gap.
+- omni / confluence needed fixture patches (dangling `$ref`s, protocol-relative `servers[].url`) — see
+  TEST_CORPUS.md. The generator could be hardened to tolerate these, but the source specs are at fault.
+
+**ROI order:** (1) path-param templating, (2) `#/paths` `$ref` resolution, (3) `allOf` + sibling-type,
+(4) abstract-path recursion guard. Regenerate `COVERAGE.md` after each to watch the numbers move.
+
 ## Sequencing notes
 
 - **R0 (version gating) is first** — it unblocks the per-feature gate every v0.2+/v0.4
