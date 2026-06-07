@@ -702,3 +702,16 @@ test('test_allof_contentless_member_skipped_and_composes', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/type Thing \{[^}]*\bid: String\b[^}]*\bname: String\b/s.test(schema!), 'merged type keeps both members\' fields');
 });
+
+test('test_inline_allof_property_gets_valid_name_and_composes', async () => {
+  // A property whose value is an inline allOf (one real member + one contentless constraint member)
+  // must be emitted as a real type (Meta), not the internal placeholder `[inline:meta]` which the
+  // composer rejects (INTERNAL_ERROR). DigitalOcean's `meta` shape. runOasTest composes via rover.
+  const schema = await runOasTest('inline-allof-prop.yaml', ['get:/things>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('[inline:'), 'internal inline placeholder must not leak into output');
+  assert.ok(schema!.includes('type Meta {'), 'inline allOf property type named from the property key');
+  assert.ok(/\bmeta: Meta\b/.test(schema!), 'field references the derived type');
+  // total stays nullable: the `required` lived only in the skipped contentless member (pre-existing)
+  assert.ok(/total: Int\b(?!!)/.test(schema!), 'total emitted nullable (required was on the skipped member)');
+});

@@ -1,0 +1,31 @@
+openapi: 3.0.3
+info:
+  title: Inline AllOf Property Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /things:
+    get:
+      operationId: listThings
+      responses:
+        '200':
+          description: A list with pagination meta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  # property whose value is an inline allOf (one real member + one contentless
+                  # constraint member) — must be named `Meta`, not `[inline:meta]` (DigitalOcean shape)
+                  meta:
+                    allOf:
+                      - type: object
+                        description: Information about the response itself.
+                        properties:
+                          total:
+                            type: integer
+                      - required:
+                          - total

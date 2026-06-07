@@ -211,12 +211,19 @@ export class Composed extends Type {
       if (this.parent instanceof Res) {
         const op = this.parent!.parent as Get;
         name = op.getGqlOpName() + 'Response';
+      } else if (this.schema?.allOf?.length === 1) {
+        // because we are going to consolidate the children anyway, we can assume the name of the child.
+        // this avoids having a comp with name '[inline:...]' which does not generate properly
+        name = _.get(this.schema?.allOf[0], '$ref') as string;
+      } else if (this.parent instanceof Prop) {
+        // This inline composed is a property's value type (a PropComp) and WILL be emitted, so it
+        // needs a real GraphQL identifier rather than the internal '[inline:...]' placeholder (which
+        // the composer rejects, e.g. DigitalOcean's `meta` allOf). Derive it from the property key.
+        // allOf *members* of another Composed are parented by that Composed, consolidated (not
+        // emitted), and keep the '[inline:...]' id that selection paths reference.
+        name = Naming.genTypeName(Naming.getRefName(this.parent.name));
       } else {
-        if (this.schema?.allOf?.length === 1) {
-          // because we are going to consolidate the children anyway, we can assume the name of the child.
-          // this avoids having a comp with name '[inline:...]' which does not generate properly
-          name = _.get(this.schema?.allOf[0], '$ref') as string;
-        } else name = `[inline:${this.parent!.name}]`;
+        name = `[inline:${this.parent!.name}]`;
       }
     }
 
