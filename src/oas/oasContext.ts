@@ -18,6 +18,25 @@ export type GenerateOptions = {
   inferEntityResolvers?: boolean;
 };
 
+// Max nested $ref hops resolvePointer will follow before giving up (guards against ref cycles).
+const MAX_REF_DEPTH = 5;
+
+// Split a JSON pointer (`#/a/b~1c`) into decoded segments: RFC-6901 unescape (`~1`->`/`, `~0`->`~`),
+// then percent-decode, since pointers encode path keys (e.g. `#/paths/~1v2~1apps~1%7Bid%7D`).
+function decodePointer(ref: string): string[] {
+  return ref
+    .slice(2)
+    .split('/')
+    .map((segment) => {
+      const unescaped = segment.replace(/~1/g, '/').replace(/~0/g, '~');
+      try {
+        return decodeURIComponent(unescaped);
+      } catch {
+        return unescaped;
+      }
+    });
+}
+
 export class OasContext {
   public static readonly COMPONENTS_SCHEMAS: string = '#/components/schemas/';
   public static readonly COMPONENTS_RESPONSES: string = '#/components/responses/';
@@ -125,38 +144,28 @@ export class OasContext {
     }
 
     // Generic JSON-pointer (e.g. shared params $ref'd into #/paths/<path>/<verb>/parameters/N — as
-    // DigitalOcean does — which the bundler leaves intact since it isn't a #/components ref). Resolve
-    // against the parsed definition, following up to a few ref hops.
+    // DigitalOcean does — not a #/components ref, so the bundler leaves it intact). resolvePointer
+    // follows any nested $ref chain itself.
     if (ref && ref.startsWith('#/')) {
-      let resolved: unknown = this.resolvePointer(ref);
-      for (let i = 0; i < 5 && resolved && typeof resolved === 'object' && '$ref' in (resolved as object); i++) {
-        resolved = this.resolvePointer((resolved as ReferenceObject).$ref);
-      }
-      return (resolved as ParameterObject) ?? false;
+      return (this.resolvePointer(ref) as ParameterObject) ?? false;
     }
 
     return false;
   }
 
-  // Resolve an internal JSON pointer (`#/a/b/0`) against the parsed OAS document. Decodes the
-  // RFC-6901 escapes (`~1`->`/`, `~0`->`~`) so path keys like `/v2/account/keys` resolve.
-  public resolvePointer(ref: string | null): unknown {
-    if (!ref || !ref.startsWith('#/')) return undefined;
-    const decode = (p: string) => {
-      // RFC-6901 unescape, then percent-decode (path keys are encoded in the pointer, e.g.
-      // #/paths/~1v2~1apps~1%7Bapp_id%7D -> key "/v2/apps/{app_id}").
-      const unescaped = p.replace(/~1/g, '/').replace(/~0/g, '~');
-      try {
-        return decodeURIComponent(unescaped);
-      } catch {
-        return unescaped;
-      }
-    };
-    const parts = ref.slice(2).split('/').map(decode);
+  // Resolve an internal JSON pointer (`#/a/b/0`) against the parsed OAS document, following nested
+  // $ref chains (a pointer may land on another `{ $ref }`). `depth` bounds ref-chasing.
+  public resolvePointer(ref: string | null, depth = 0): unknown {
+    if (!ref || !ref.startsWith('#/') || depth > MAX_REF_DEPTH) return undefined;
+
     let cur: unknown = this.parser.getDefinition();
-    for (const part of parts) {
+    for (const segment of decodePointer(ref)) {
       if (cur == null || typeof cur !== 'object') return undefined;
-      cur = (cur as Record<string, unknown>)[part];
+      cur = (cur as Record<string, unknown>)[segment];
+    }
+
+    if (cur != null && typeof cur === 'object' && '$ref' in cur) {
+      return this.resolvePointer((cur as ReferenceObject).$ref, depth + 1);
     }
     return cur;
   }
