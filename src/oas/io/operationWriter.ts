@@ -4,6 +4,8 @@ import { OasGen } from '../oasGen.js';
 import { Body, IType, Op, Param, Type } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
 import { Writer } from './writer.js';
+import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
+import { warn } from '../log/trace.js';
 
 export class OperationWriter {
   constructor(private gen: OasGen) {}
@@ -61,8 +63,47 @@ export class OperationWriter {
     }
 
     writer.write(spacing).write('"""\n');
+
+    this.writeErrors(context, writer, op, indent);
+
     spacing = ' '.repeat(indent + 4);
     writer.write(spacing).write(')\n');
+  }
+
+  // R4 (opt-in): emit `errors: { extensions: """statusCode: $status""" }` to surface the HTTP status
+  // in the GraphQL error extensions, for operations that document HTTP error responses. errors is a
+  // connect v0.2+ feature; below that we skip with a logged downgrade rather than emit invalid output.
+  private writeErrors(context: OasContext, writer: Writer, op: Op, indent: number): void {
+    if (!context.generateOptions?.emitConnectorErrors || !this.hasDocumentedErrors(op)) {
+      return;
+    }
+
+    const version = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
+    if (!meetsMinimum(version, 'v0.2')) {
+      warn(
+        context,
+        '[errors]',
+        `@connect(errors:) requires connect v0.2, but target is ${version} — not emitted for ${op.verb} ${op.operation.path}`,
+      );
+      return;
+    }
+
+    const outer = ' '.repeat(indent + 6);
+    const inner = ' '.repeat(indent + 6);
+    writer
+      .write(outer)
+      .write('errors: { extensions: """\n')
+      .write(inner)
+      .write('statusCode: $status\n')
+      .write(outer)
+      .write('""" }\n');
+  }
+
+  // True when the operation documents an HTTP error response. Accepts both concrete numeric statuses
+  // (4xx/5xx) and the OAS range keys `4XX`/`5XX` (case-insensitive). The `default` key is excluded —
+  // it also covers 2xx/3xx, so it is not specifically an error indicator.
+  private hasDocumentedErrors(op: Op): boolean {
+    return op.operation.getResponseStatusCodes().some((code: string) => /^[45](\d\d|XX)$/i.test(code));
   }
 
   private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], indent: number): void {

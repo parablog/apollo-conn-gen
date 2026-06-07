@@ -144,7 +144,7 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 | R1. Entity resolution | ✅ Done | `entity`/`@key`/`$this` (`--infer-entity-resolvers`) |
 | R2. Unions & interfaces | 🟡 Partial | real `union` + discriminator→`__typename` + **`oneOf`+shared-`allOf`-base → `interface`/`implements`** (all `->match`, v0.4) + consolidate downgrade done; broader `allOf`→interface, real-union fix for allOf members, + auto version-gate pending |
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
-| R4. Error handling | ⬜ Not started | `errors`/`isSuccess` never emitted |
+| R4. Error handling | 🟡 Partial | baseline `@connect(errors: { extensions })` w/ `$status` (opt-in, v0.2+); `message`/`isSuccess`/source-level pending |
 | R5. Dynamic headers / auth | 🟡 Partial | slice 1 done (global `@source` `$config` header); per-op, `$env`, `from:`, `$request.headers` remain |
 | R6. Batch entity resolution | ⬜ Not started | depends on R1 |
 | R7. Richer JSONSelection | ⬜ Not started | methods/literals/spreads/coalescing |
@@ -309,18 +309,35 @@ leading digit, reserved words) or snake_case keys produce invalid/awkward schema
 
 ### Medium value
 
-### R4. Error handling — `errors: { message, extensions }` and `isSuccess` — ⬜ Not started
+### R4. Error handling — `errors: { message, extensions }` (+ `isSuccess`) — 🟡 Partial
 
-**Why:** Available since v0.2 but never emitted. OAS documents 4xx/5xx schemas that can
-drive these mappings. (Verified: no `errors`/`isSuccess`/`$status` tokens emitted today.)
+**Spec shape (verified against the connect spec + docs):** `errors` is a single input
+`ConnectorErrors { message: JSONSelection, extensions: JSONSelection }` on **both** `@connect` and
+`@source` — NOT an array keyed by status code. `extensions` must evaluate to an **object**, `message`
+to a **string**; `$status`/`$response.headers`/`$`/`@` are available in both. `isSuccess` also exists on
+`@connect`/`@source` (maps chosen status codes to success) — the spec tool's directive SDL omits it, so
+its compose-version is unverified.
 
-**Scope:**
-- Emit `errors: { message, extensions }` derived from documented error responses.
-- Optionally emit `isSuccess` when success is signalled in the body, not the status.
+**Done — baseline slice (opt-in `emitConnectorErrors`, connect v0.2+):** for operations that document
+HTTP error responses, the connector emits `errors: { extensions: """ statusCode: $status """ }` (surfaces
+the HTTP status in the GraphQL error extensions). Opt-in (default output byte-identical, like R1) and
+version-gated — below v0.2 it skips with a logged downgrade. The error-response predicate matches numeric
+`4xx/5xx` and the OAS range keys `4XX`/`5XX` (case-insensitive), excluding `default`. Verified to compose
+(rover, fed 2.12 / connect v0.3). Files: `src/oas/io/operationWriter.ts` (`writeConnector` +
+`hasDocumentedErrors`), options threaded in `oasGen.ts`/`oasContext.ts`/`runners.ts`. Tested
+(`tests/all/r4-errors.test.ts`).
 
-**Requires:** `$response.headers`, `$status`, `@` (see variable table).
+**Remaining:**
+- **B — heuristic `errors.message`:** detect a string message field in the documented error body
+  (`message` / `error` / `error.message` / `detail` / `title`) and emit `errors.message`. Heuristic; the
+  composer rejects a non-string result.
+- **C — `isSuccess`:** verify its compose-version first; inferring success-codes from OAS is unreliable.
+- **`@source`-level `errors`** applied across all connectors of a source.
 
-**Files:** `src/oas/io/schemaWriter.ts`, `src/oas/io/operationWriter.ts`. (gate: v0.2+)
+**Requires:** `$status` (done), `$response.headers`, `@` (see variable table).
+
+**Files:** `src/oas/io/operationWriter.ts` (done); `src/oas/io/schemaWriter.ts` (source-level, pending).
+(gate: v0.2+)
 
 ### R5. Dynamic headers / auth from OAS security schemes — 🟡 Partial
 
