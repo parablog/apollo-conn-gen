@@ -71,6 +71,16 @@ test('test_R3_oas_edge_fixture_composes_with_safe_names', async () => {
   assert.ok(schema!.includes('createdAt: "created_at"'), 'snake_case field aliased');
 });
 
+test('test_R3_type_name_leading_digit_is_sanitised', async () => {
+  // A type name derived from a digit-leading path/field (e.g. /1-clicks -> 1ClicksItem) is not a
+  // valid GraphQL identifier; the composer rejects it (INTERNAL_ERROR). genTypeName must prefix it
+  // (_1ClicksItem) at both the definition and references. runOasTest composes via rover.
+  const schema = await runOasTest('type-name-digit.yaml', ['get:/1-clicks>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type _1ClicksItem'), 'leading-digit type name prefixed at definition');
+  assert.ok(schema!.includes('_1Clicks: [_1ClicksItem]'), 'reference uses the same sanitised name');
+});
+
 test('test_R8_path_param_snake_case_templated_with_args', async () => {
   // snake_case path params ({thing_id}) must be templated against the sanitised GraphQL arg name
   // ({$args.thingId}), not emitted raw — rover rejects a raw {thing_id} with INVALID_URL. runOasTest

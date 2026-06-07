@@ -78,7 +78,14 @@ export class Naming {
   }
 
   public static genTypeName(name: string): string {
-    return Naming.TYPE_CONVERTER.convert(name);
+    // Guarantee a valid GraphQL type identifier: non-empty and not starting with a digit
+    // (e.g. an item type derived from `/v2/1-clicks` would otherwise be `1ClicksItem`, which the
+    // composer rejects). Mirrors genParamName; idempotent for already-valid names.
+    const converted = Naming.TYPE_CONVERTER.convert(name);
+    if (converted.length === 0) {
+      return Naming.NUMBER_PREFIX;
+    }
+    return /^[0-9]/.test(converted) ? Naming.NUMBER_PREFIX + converted : converted;
   }
 
   public static sanitiseField(name: string): string {
