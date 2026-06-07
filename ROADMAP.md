@@ -402,7 +402,9 @@ mapping (done). The remaining gap is bodies that are not a direct passthrough.
 
 `tools/coverage-spec.mts` runs **every GET op** of the corpus through generate + rover-compose under
 two configs (see `COVERAGE.md` for the live per-spec table). The failures, triaged **generator-bug vs
-input-quality**.
+input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs are kept **local-only**
+— gitignored — because the published specs embed example secrets that block pushes; this section is the
+committed summary of what they showed.)
 
 **Progress (default pass, OK%):** after fixing gaps #1, #2 and #3-B the range moved from **4–78% to
 16–80%** — github 45→**78%**, asana 15→**71%**, sendgrid 63→**77%**, openai 50→**80%**, slack 24→**41%**,
