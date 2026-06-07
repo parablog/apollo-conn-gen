@@ -693,3 +693,12 @@ test('test_implied_array_items_without_type_resolves_and_composes', async () => 
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('things: [Thing]'), 'implied array resolved to a list type');
 });
+
+test('test_allof_contentless_member_skipped_and_composes', async () => {
+  // An allOf with a metadata-only member ({ description } and no $ref/type/properties) must skip
+  // that member, not throw "Cannot handle schema" (Box --Full/--Mini pattern). The merged type
+  // keeps the real members' fields and composes. Top coverage gap: GEN-THROW Cannot handle schema.
+  const schema = await runOasTest('allof-empty-member.yaml', ['get:/things>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/type Thing \{[^}]*\bid: String\b[^}]*\bname: String\b/s.test(schema!), 'merged type keeps both members\' fields');
+});

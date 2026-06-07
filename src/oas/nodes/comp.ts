@@ -168,6 +168,14 @@ export class Composed extends Type {
     for (let i = 0; i < allOfs.length; i++) {
       const allOfItemSchema = allOfs[i];
 
+      // Skip metadata-only allOf members (e.g. `{ description: "..." }`): they contribute no fields
+      // and would otherwise hit Factory's "Cannot handle schema". (Typeless *properties* are handled
+      // separately by Factory.fromProp's JSON fallback; this is only the allOf-member path.)
+      if (Factory.isEmptySchema(allOfItemSchema as SchemaObject)) {
+        trace(context, '   [composed::all-of]', `skipping empty allOf member #${i}`);
+        continue;
+      }
+
       const type = Factory.fromSchema(context, this, allOfItemSchema as SchemaObject);
       this.add(type);
 

@@ -85,6 +85,18 @@ export class Factory {
     return result;
   }
 
+  // Keywords that give a schema a renderable GraphQL shape. A schema with none of these is empty
+  // (metadata only, e.g. `{ description: "..." }`) and has no representation — fromSchema would
+  // reject it.
+  private static readonly SHAPE_KEYWORDS = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf', 'additionalProperties'];
+
+  /** True when a schema carries no renderable content — only metadata. Such an allOf member
+   *  contributes no fields and should be skipped rather than passed to {@link fromSchema}. */
+  public static isEmptySchema(schema: SchemaObject | ReferenceObject): boolean {
+    const s = schema as Record<string, unknown>;
+    return Factory.SHAPE_KEYWORDS.every((k) => s[k] == null) && _.isEmpty(s.properties);
+  }
+
   private static createScalarType(schema: SchemaObject | null, parent: IType) {
     const typeStr = schema?.type;
     if (typeStr != null) {
