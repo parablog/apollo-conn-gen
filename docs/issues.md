@@ -131,22 +131,32 @@ type WidgetsItem { … }   widget: WidgetsItem                                  
 **Refs:** `src/oas/utils/naming.ts` (`RemoveRefConverter` / `nameFromPathsPointer`), fixture
 `ref-schema-into-paths.yaml`. **Remaining DO residual is a separate bug — see #11.**
 
-## 9 · Inline-type name collisions collapse distinct shapes — ⬜ Open
-**Symptom:** selection references a field missing on a type → `SELECTED_FIELD_NOT_FOUND` (~109;
-googlebooks, github).
-**Cause:** two structurally-different inline objects derive the same property-based name and are deduped
-by name, losing fields. (The historical "duplicate Addressable/Extensible" problem.)
-**Proposed fix (sketch):** real collision handling — structural distinction or deterministic suffixing
-for inline types that share a name but differ in shape.
-**Example** — Google Books volume `saleInfo` vs `offers`:
+## 9 · Inline-type name collisions collapse distinct shapes — ✅ Fixed (`6977eaa`)
+**Symptom:** selection references a field missing on a type → `SELECTED_FIELD_NOT_FOUND` (googlebooks,
+github).
+**Cause:** two structurally-different inline objects derive the same property-based name (the property
+key) and dedup by name, losing fields. (The historical "duplicate Addressable/Extensible" problem.)
+**Fix:** `Obj.visit` qualifies a colliding inline object with its container (nearest non-prop ancestor) —
+`listPrice` under `saleInfo` -> `SaleInfoListPrice` — so distinct shapes survive as distinct types. Three
+exclusions keep this from over-splitting:
+- `$ref`-named types (`T.isRef`) — they are genuinely shared and dedup by id.
+- `[inline:…]` consolidated `allOf`/`oneOf` members (`comp.ts:220`, `obj.ts` `updateName`) — they fold
+  into their parent `Composed` and never emit standalone, so they must keep a shared id; otherwise a
+  duplicate `$ref` instance's member escapes `Composed.consolidate()` and emits as an orphan type with
+  no connector (`CONNECTORS_UNRESOLVED_FIELD`).
+- the renamed node's `id` is name-derived (`obj.ts:35`, a getter), so the rename flows to both the
+  definition and the reference (same instance) before collection — references stay in sync for free.
+**Example** — Google Books volume `saleInfo` vs `offers` (now split, both compose):
 ```graphql
 # saleInfo.listPrice -> { amount }      offers[].listPrice -> { amountInMicros }
-# both named ListPrice; the {amount} one wins:
-type ListPrice { amount: Float }
-# selection for offers.listPrice still asks for amountInMicros -> SELECTED_FIELD_NOT_FOUND
-# goal: two distinct types (e.g. ListPrice + ListPrice2 / structural suffix)
+type ListPrice { amountInMicros: Float; currencyCode: String }          # first occurrence keeps the key
+type SaleInfoListPrice { amount: Float; currencyCode: String }          # collider qualified by container
+type OffersItem { listPrice: ListPrice }
+type SaleInfo   { listPrice: SaleInfoListPrice }
 ```
-**Refs:** `src/oas/nodes/obj.ts` (`updateName`/`resolveNameConflict`), naming.
+**Refs:** `src/oas/nodes/obj.ts` (`visit`/`resolveNameConflict`), `src/oas/utils/naming.ts`
+(`genTypeName` now strips all non-identifier chars). Fixture `tests/resources/oas/inline-name-collision.yaml`,
+test `test_inline_name_collision_splits_by_container`.
 
 ## 10 · Abstract-types (v0.4) path infinite-loops on recursive schemas — ⬜ Open
 **Symptom:** `consolidateUnions:false` + connect v0.4 busy-loops (100% CPU) on Confluence's recursive
