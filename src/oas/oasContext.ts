@@ -96,7 +96,7 @@ export class OasContext {
       return responses[Naming.getRefName(ref)!] ?? null;
     }
 
-    // Generic JSON-pointer response ref (e.g. #/paths/<path>/<verb>/responses/<code>).
+    // generic JSON-pointer response ref (e.g. #/paths/…/responses/<code>). see docs/issues.md #3
     if (ref && ref.startsWith('#/')) {
       return (this.resolvePointer(ref) as ResponseObject) ?? null;
     }
@@ -115,9 +115,8 @@ export class OasContext {
       return schemas ? schemas[Naming.getRefName(ref)!] : null;
     }
 
-    // Generic JSON-pointer schema ref (e.g. a schema $ref'd via #/paths/<path>/... rather than
-    // #/components/schemas). Not a named component, so it does NOT participate in refCount /
-    // consolidation — resolve it directly against the document.
+    // generic JSON-pointer schema ref (e.g. #/paths/…); not a named component, so it skips
+    // refCount/consolidation. see docs/issues.md #3
     if (ref && ref.startsWith('#/')) {
       return (this.resolvePointer(ref) as SchemaObject) ?? null;
     }
@@ -144,9 +143,7 @@ export class OasContext {
       return (parameters[name] as ParameterObject) ?? false;
     }
 
-    // Generic JSON-pointer (e.g. shared params $ref'd into #/paths/<path>/<verb>/parameters/N — as
-    // DigitalOcean does — not a #/components ref, so the bundler leaves it intact). resolvePointer
-    // follows any nested $ref chain itself.
+    // generic JSON-pointer param ref (e.g. shared params via #/paths/…/parameters/N). see docs/issues.md #3
     if (ref && ref.startsWith('#/')) {
       return (this.resolvePointer(ref) as ParameterObject) ?? false;
     }

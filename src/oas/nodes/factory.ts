@@ -57,8 +57,7 @@ export class Factory {
     if (!schema) throw new Error('Unknown or undefined schema');
     const schemaObj: SchemaObject = schema as SchemaObject;
 
-    // array case — incl. implied arrays: a schema with `items` but no explicit `type: array`
-    // (e.g. Slack `{ items: { anyOf: [...] } }`) is still an array.
+    // implied array: `items` present even without an explicit `type: array`. see docs/issues.md #4
     if (_.get(schemaObj, 'items') && (schemaObj.type === 'array' || schemaObj.type == null)) {
       result = this.createArrayType(parent, schemaObj, context);
     }
@@ -85,13 +84,10 @@ export class Factory {
     return result;
   }
 
-  // Keywords that give a schema a renderable GraphQL shape. A schema with none of these is empty
-  // (metadata only, e.g. `{ description: "..." }`) and has no representation — fromSchema would
-  // reject it.
+  // Keywords that give a schema a renderable GraphQL shape; a schema with none is metadata-only. #5
   private static readonly SHAPE_KEYWORDS = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf', 'additionalProperties'];
 
-  /** True when a schema carries no renderable content — only metadata. Such an allOf member
-   *  contributes no fields and should be skipped rather than passed to {@link fromSchema}. */
+  /** True when a schema carries no renderable content (metadata only). see docs/issues.md #5 */
   public static isEmptySchema(schema: SchemaObject | ReferenceObject): boolean {
     const s = schema as Record<string, unknown>;
     return Factory.SHAPE_KEYWORDS.every((k) => s[k] == null) && _.isEmpty(s.properties);

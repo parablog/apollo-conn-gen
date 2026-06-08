@@ -78,9 +78,8 @@ export class Naming {
   }
 
   public static genTypeName(name: string): string {
-    // Guarantee a valid GraphQL type identifier: non-empty and not starting with a digit
-    // (e.g. an item type derived from `/v2/1-clicks` would otherwise be `1ClicksItem`, which the
-    // composer rejects). Mirrors genParamName; idempotent for already-valid names.
+    // guarantee a valid type identifier: non-empty, no leading digit (mirrors genParamName,
+    // idempotent for valid names). see docs/issues.md #6
     const converted = Naming.TYPE_CONVERTER.convert(name);
     if (converted.length === 0) {
       return Naming.NUMBER_PREFIX;
