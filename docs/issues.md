@@ -161,16 +161,16 @@ get:/wiki/rest/api/content/{id}/descendant   (abstract pass)
 ```
 **Refs:** abstract path in `union.ts` / `interfacePromotion.ts`; harness `tools/coverage-spec.mts`.
 
-## 11 · Path param resolved via `#/paths` ref emits an empty arg type — ⬜ Open
-**Symptom:** `INTERNAL_ERROR` — an arg is emitted with no type: `sshKeyIdentifier: !` (DigitalOcean
+## 11 · `anyOf`/`oneOf` param emits an empty arg type — ✅ Fixed (`985bc97`)
+**Symptom:** `INTERNAL_ERROR` — an arg emitted with no type: `sshKeyIdentifier: !` (DigitalOcean
 `/v2/account/keys/{ssh_key_identifier}`). Exposed once #8 cleared the type-name leak on the same ops.
-**Cause:** a path param shared via a `#/paths` JSON-pointer (`$ref`) resolves (issue #3) but its
-`schema` isn't carried through to the GraphQL arg type, so the arg type renders empty.
-**Proposed fix:** when a `$ref` param resolves, derive the arg type from the resolved param's `schema`
-(default to `String`/`ID` if absent) — never emit a bare `!`.
+**Cause:** the param's schema is `anyOf: [int, string]` (here via `#/paths` refs, issue #3). A GraphQL
+argument must be a single scalar; `fromSchema(anyOf)` builds a `Union`, which isn't a valid arg type, so
+the arg type renders empty.
+**Fix:** `Param.visit` coerces an `anyOf`/`oneOf` param schema to `String` (path/query args are scalars).
 **Example**:
 ```graphql
-sshKeyIdentifier: !          # ✗ now  → INTERNAL_ERROR (no type before `!`)
-sshKeyIdentifier: String!    # ✓ goal
+sshKeyIdentifier: !          # ✗ before  → INTERNAL_ERROR (no type before `!`)
+sshKeyIdentifier: String!    # ✓ after
 ```
-**Refs:** `src/oas/nodes/param.ts` / `factory.ts` (`fromParam`), arg emission in `operationWriter.ts`.
+**Refs:** `src/oas/nodes/param.ts` (`visit`), fixture `param-anyof.yaml`.
