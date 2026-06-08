@@ -715,3 +715,14 @@ test('test_inline_allof_property_gets_valid_name_and_composes', async () => {
   // total stays nullable: the `required` lived only in the skipped contentless member (pre-existing)
   assert.ok(/total: Int\b(?!!)/.test(schema!), 'total emitted nullable (required was on the skipped member)');
 });
+
+test('test_schema_ref_into_paths_gets_clean_type_name', async () => {
+  // A schema $ref'd via a #/paths JSON-pointer (DigitalOcean pattern) must be emitted with a clean
+  // type name derived from the pointer tail, not the raw pointer (which the composer rejects).
+  // see docs/issues.md #8. runOasTest composes via rover.
+  const schema = await runOasTest('ref-schema-into-paths.yaml', ['get:/gadgets>**'], 2, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('#/paths'), 'raw #/paths pointer must not leak as a type name');
+  assert.ok(schema!.includes('type WidgetsItem'), 'pointer tail -> clean type name');
+  assert.ok(/\bwidget: WidgetsItem\b/.test(schema!), 'reference uses the same derived name');
+});

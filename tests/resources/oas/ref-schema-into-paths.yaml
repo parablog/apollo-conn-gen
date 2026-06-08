@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Schema Ref Into Paths Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        '200':
+          description: Widgets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  widgets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+  /gadgets:
+    get:
+      operationId: getGadget
+      responses:
+        '200':
+          description: A gadget wrapping a widget item shared via a #/paths pointer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  widget:
+                    $ref: '#/paths/~1widgets/get/responses/200/content/application~1json/schema/properties/widgets/items'

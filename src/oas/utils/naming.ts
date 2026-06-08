@@ -37,6 +37,11 @@ class RemoveRefConverter extends AbstractConverter {
 
   public process(input: string): string {
     let result = input || '';
+    // A schema $ref'd via a JSON-pointer into #/paths (DigitalOcean shares schemas this way) carries
+    // the whole pointer as its name; derive a clean tail name instead. see docs/issues.md #8
+    if (result.includes('#/paths/')) {
+      return nameFromPathsPointer(result);
+    }
     if (result.includes('#/components/schemas/')) {
       result = result.replace(/#\/components\/schemas\//g, '');
     }
@@ -48,6 +53,39 @@ class RemoveRefConverter extends AbstractConverter {
     }
     return result;
   }
+}
+
+// Structural JSON-pointer segments that don't make good type-name material.
+const POINTER_NOISE = new Set([
+  '#', 'paths', 'get', 'post', 'put', 'patch', 'delete', 'responses', 'requestBody',
+  'content', 'schema', 'allOf', 'oneOf', 'anyOf', 'items', 'properties', 'parameters',
+]);
+
+/**
+ * Derive a readable type name from a JSON pointer into `#/paths/...` (how DigitalOcean shares inline
+ * schemas). See docs/issues.md #8.
+ *
+ * Input  (a raw pointer, RFC-6901 encoded):
+ *   `#/paths/~1v2~1account~1keys/get/responses/200/content/application~1json/schema/.../properties/sshKeys/items`
+ * Output (a bare name; the caller's `genTypeName` then capitalises it):
+ *   `sshKeysItem`   ->  `SshKeysItem`
+ *
+ * Rules: decode `~1`/`~0`, then take the segment right after the last `properties` (`sshKeys`); if the
+ * pointer targets array `items`, append `Item`. If there's no `properties`, use the last meaningful
+ * segment (skipping structural keywords, array indices, and decoded path keys that contain `/`); if
+ * nothing qualifies, fall back to `inline`.
+ */
+function nameFromPathsPointer(ref: string): string {
+  const segments = ref.split('/').map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'));
+  const propIdx = segments.lastIndexOf('properties');
+
+  let base = propIdx >= 0 ? segments[propIdx + 1] : undefined;
+  if (!base) {
+    base = [...segments].reverse().find((s) => !POINTER_NOISE.has(s) && !/^\d+$/.test(s) && !s.includes('/'));
+  }
+  if (!base) base = 'inline';
+
+  return segments[segments.length - 1] === 'items' ? base + 'Item' : base;
 }
 
 class FinalFirstUpperCaseConverter extends AbstractConverter {
