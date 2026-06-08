@@ -9,7 +9,6 @@ import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
 
 export class Obj extends Type {
-  synthetic: boolean = false;
   nameConflict: boolean = false;
   // R1: type-level entity resolvers discovered for this type (empty unless inferred).
   // Set by `inferEntityResolvers`; drives @key + type-level @connect/$this in generate().
@@ -48,8 +47,11 @@ export class Obj extends Type {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
-    // do we have a name conflict?
-    if (context.types.has(this.name) && !T.isRef(this.name) && this.synthetic) {
+    // A non-$ref inline object whose name is already taken is a different shape that would collapse
+    // onto the existing type (dropping fields) — qualify it. Skip `[inline:…]` consolidated allOf/oneOf
+    // members (comp.ts:220, updateName below): they fold into their parent Composed and never emit
+    // standalone, so they must keep a shared id for duplicate $ref instances to dedup. see docs/issues.md #9
+    if (context.types.has(this.name) && !T.isRef(this.name) && !this.name.startsWith('[inline:')) {
       this.resolveNameConflict(context);
     }
 
@@ -229,7 +231,6 @@ export class Obj extends Type {
       // is our parent an array?
       if (parent instanceof Arr || parent instanceof PropArray) {
         // if so, synthesize a name based on the parent name
-        this.synthetic = true;
         name = Naming.genTypeName(Naming.getRefName(parentName) + 'Item');
       }
       // if the parent is a response, we can use the operation name and append "Response"
@@ -255,8 +256,16 @@ export class Obj extends Type {
     this.name = name;
   }
 
+  // Qualify a colliding inline name with its container (nearest non-prop ancestor), e.g. `listPrice`
+  // under `offersItem` -> `OffersItemListPrice`, bumping `2`, `3`… until free. Both parts go through
+  // genTypeName so the result is always a valid identifier (the container name may itself be an
+  // `[inline:…]` placeholder) and is idempotent under emission. see docs/issues.md #9
   private resolveNameConflict(context: OasContext) {
-    const container = T.findNonPropParent(this.parent!);
-    this.name = container.name + '_' + this.name;
+    const base = Naming.genTypeName(T.findNonPropParent(this.parent!).name) + Naming.genTypeName(this.name);
+    let candidate = base;
+    for (let n = 2; context.types.has(candidate); n++) {
+      candidate = `${base}${n}`;
+    }
+    this.name = candidate;
   }
 }

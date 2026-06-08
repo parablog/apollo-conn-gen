@@ -116,13 +116,14 @@ export class Naming {
   }
 
   public static genTypeName(name: string): string {
-    // guarantee a valid type identifier: non-empty, no leading digit (mirrors genParamName,
-    // idempotent for valid names). see docs/issues.md #6
-    const converted = Naming.TYPE_CONVERTER.convert(name);
-    if (converted.length === 0) {
+    // guarantee a valid type identifier: drop any leftover non-identifier chars (e.g. the
+    // `[`/`]`/`:` of an `[inline:Foo]` placeholder used as a name prefix), then non-empty +
+    // no leading digit. Idempotent for valid names. see docs/issues.md #6, #9
+    const cleaned = Naming.TYPE_CONVERTER.convert(name).replace(/[^_0-9A-Za-z]/g, '');
+    if (cleaned.length === 0) {
       return Naming.NUMBER_PREFIX;
     }
-    return /^[0-9]/.test(converted) ? Naming.NUMBER_PREFIX + converted : converted;
+    return /^[0-9]/.test(cleaned) ? Naming.NUMBER_PREFIX + cleaned : cleaned;
   }
 
   public static sanitiseField(name: string): string {

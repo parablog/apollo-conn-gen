@@ -34,7 +34,6 @@ import _ from 'lodash';
 import { warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { GqlUtils } from '../utils/gql.js';
-import { APOLLO_SYNTHETIC_OBJ } from '../schemas/index.js';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
 export class Factory {
@@ -146,11 +145,6 @@ export class Factory {
       }
 
       result = new Obj(parent, ref || _.get(schema, 'name') || null, schema);
-
-      // if we want to syntethise an object:
-      if (schema.format == APOLLO_SYNTHETIC_OBJ) {
-        (result as Obj).synthetic = true;
-      }
     }
 
     return result;

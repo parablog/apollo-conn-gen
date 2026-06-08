@@ -727,6 +727,19 @@ test('test_schema_ref_into_paths_gets_clean_type_name', async () => {
   assert.ok(/\bwidget: WidgetsItem\b/.test(schema!), 'reference uses the same derived name');
 });
 
+test('test_inline_name_collision_splits_by_container', async () => {
+  // Two differently-shaped inline objects sharing a property key (`saleInfo.listPrice` -> {amount},
+  // `offers[].listPrice` -> {amountInMicros}) must not collapse into one type (which drops fields and
+  // breaks the selection: SELECTED_FIELD_NOT_FOUND). The colliding newcomer is qualified by its
+  // container -> `SaleInfoListPrice`, keeping both shapes. see docs/issues.md #9. composes via rover.
+  const schema = await runOasTest('inline-name-collision.yaml', ['get:/volume>**'], 1, 5);
+  assert.ok(schema !== undefined);
+  assert.ok(/type ListPrice \{[^}]*amountInMicros/s.test(schema!), 'first shape kept as ListPrice');
+  assert.ok(/type SaleInfoListPrice \{[^}]*\bamount\b/s.test(schema!), 'colliding shape split by container');
+  assert.ok(/\blistPrice: ListPrice\b/.test(schema!), 'offers item references ListPrice');
+  assert.ok(/\blistPrice: SaleInfoListPrice\b/.test(schema!), 'saleInfo references the split type');
+});
+
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
   // emitting `id: !`); coerce it to String. see docs/issues.md #11. runOasTest composes via rover.
