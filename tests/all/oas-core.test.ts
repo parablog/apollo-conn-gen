@@ -726,3 +726,12 @@ test('test_schema_ref_into_paths_gets_clean_type_name', async () => {
   assert.ok(schema!.includes('type WidgetsItem'), 'pointer tail -> clean type name');
   assert.ok(/\bwidget: WidgetsItem\b/.test(schema!), 'reference uses the same derived name');
 });
+
+test('test_anyof_param_coerced_to_string_arg', async () => {
+  // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
+  // emitting `id: !`); coerce it to String. see docs/issues.md #11. runOasTest composes via rover.
+  const schema = await runOasTest('param-anyof.yaml', ['get:/things/{id}>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bid: String!/.test(schema!), 'anyOf param coerced to a String arg');
+  assert.ok(!/\bid: !/.test(schema!), 'no empty arg type');
+});
