@@ -115,20 +115,21 @@ type Meta { total: Int }            meta: Meta!            # ✓ after
 
 ---
 
-## 8 · Resolved `#/paths` schema refs leak the raw pointer as the type name — ⬜ Open
+## 8 · Resolved `#/paths` schema refs leak the raw pointer as the type name — ✅ Fixed (`7431952`)
 **Symptom:** `INTERNAL_ERROR` / `INVALID_GRAPHQL` / `CONNECTORS_UNRESOLVED_FIELD`. ~82/145 DigitalOcean
-ops; gates DigitalOcean at ~35%.
+ops; gated DigitalOcean at ~35%.
 **Cause:** #3 made `lookupRef` *resolve* `#/paths/…` schema refs, but the resolved type is named by the
-raw pointer; the ref-name extractor (`RemoveRefConverter`) only strips `#/components/…`.
-**Proposed fix:** derive a clean name from the `#/paths` pointer tail. Low risk; same family as #3.
-Expected: DigitalOcean ~35% → ~80%.
-**Example** — `sshKey: { $ref: '#/paths/~1v2~1account~1keys/get/.../properties/sshKeys/items' }`:
+raw pointer; the ref-name extractor (`RemoveRefConverter`) only stripped `#/components/…`.
+**Fix:** `RemoveRefConverter` derives a clean name from the `#/paths` pointer tail (`nameFromPathsPointer`
+— property after the last `properties`, `+Item` for array `items`). Same family as #3; node ids stay the
+full pointer, only emission changes. **DigitalOcean 35% → 74%** (measured).
+**Example** — `widget: { $ref: '#/paths/~1widgets/get/.../properties/widgets/items' }`:
 ```graphql
-type #/paths/~1v2~1account~1keys/get/responses/200/.../properties/sshKeys/items { … }  # ✗ now
-type SshKeysItem { … }                                                                  # ✓ goal
+type #/paths/~1widgets/get/responses/200/.../properties/widgets/items { … }  # ✗ before  → INTERNAL_ERROR
+type WidgetsItem { … }   widget: WidgetsItem                                  # ✓ after
 ```
-**Refs:** `src/oas/utils/naming.ts` (`RemoveRefConverter`/`getRefName`), `factory.ts` naming of resolved
-refs.
+**Refs:** `src/oas/utils/naming.ts` (`RemoveRefConverter` / `nameFromPathsPointer`), fixture
+`ref-schema-into-paths.yaml`. **Remaining DO residual is a separate bug — see #11.**
 
 ## 9 · Inline-type name collisions collapse distinct shapes — ⬜ Open
 **Symptom:** selection references a field missing on a type → `SELECTED_FIELD_NOT_FOUND` (~109;
@@ -159,3 +160,17 @@ get:/wiki/rest/api/content/{id}/descendant   (abstract pass)
 # Content -> children -> Content -> …  : no cycle guard -> hang
 ```
 **Refs:** abstract path in `union.ts` / `interfacePromotion.ts`; harness `tools/coverage-spec.mts`.
+
+## 11 · Path param resolved via `#/paths` ref emits an empty arg type — ⬜ Open
+**Symptom:** `INTERNAL_ERROR` — an arg is emitted with no type: `sshKeyIdentifier: !` (DigitalOcean
+`/v2/account/keys/{ssh_key_identifier}`). Exposed once #8 cleared the type-name leak on the same ops.
+**Cause:** a path param shared via a `#/paths` JSON-pointer (`$ref`) resolves (issue #3) but its
+`schema` isn't carried through to the GraphQL arg type, so the arg type renders empty.
+**Proposed fix:** when a `$ref` param resolves, derive the arg type from the resolved param's `schema`
+(default to `String`/`ID` if absent) — never emit a bare `!`.
+**Example**:
+```graphql
+sshKeyIdentifier: !          # ✗ now  → INTERNAL_ERROR (no type before `!`)
+sshKeyIdentifier: String!    # ✓ goal
+```
+**Refs:** `src/oas/nodes/param.ts` / `factory.ts` (`fromParam`), arg emission in `operationWriter.ts`.
