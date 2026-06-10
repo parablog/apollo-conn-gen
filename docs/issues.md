@@ -395,11 +395,23 @@ alternatives: alternatives->entries {        # selection
   - connect v0.4 / fed 2.13 (Rover 0.40.0) → ✗ fails
 - Reproduced on two independent ops; the gap histogram buckets all 26 failures here.
 
-**Conclusion:** v0.4's (preview) validation does not credit fields selected beneath an `->entries`
-method sub-selection to the field's declared entry type.
+**Root cause** (found in the router source, `apollo-federation/src/connectors/validation/connect/selection.rs`):
+- v0.1–v0.3 use the **frozen legacy AST-visitor** validator; v0.4+ switched to **shape-based**
+  validation (`selection.rs:120`).
+- The new `walk_selection_with_shape` credits fields only for `ShapeCase::Object` (and `One`);
+  **`ShapeCase::Array` falls into `_ => Ok(Vec::new())`** (`selection.rs:728`) — no fields credited.
+- `->entries` is the method whose *static* shape is an explicit **list** (`entries_shape` returns
+  `Shape::list/array` in every branch) → its sub-selection arrives as an Array shape → unhandled.
+- Why others survive: `->first` returns the *item* shape (Object/Unknown → handled, credited —
+  verified composing); plain list fields (`results { id }`) are statically Unknown (array-ness is
+  runtime-only) → sub-selection yields an Object record → handled.
+- Confirmed with a 30-line minimal repro (one map field, `->entries { key value }`): v0.3 ✓, v0.4 ✗.
 
-**Next step:** report upstream. If we need to unblock sooner: under `connectorSpecVersion >= v0.4`,
-degrade map values to `JSON` (skip the synthetic entry type) — same best-effort convention as #10.
+**Next step:** report upstream — the fix is an `Array { prefix, tail }` arm in
+`walk_selection_with_shape` recursing the item shape against the same `type_ref` (the caller already
+unwrapped the GraphQL list via `inner_named_type()`). Likely also affects `->map` with sub-selections
+(same static-array shape family). If we need to unblock sooner: under `connectorSpecVersion >= v0.4`,
+degrade map values to `JSON` — same best-effort convention as #10.
 
 **AST:** untouched — tree and emission are correct; the divergence is in composition validation.
 **Refs:** `src/oas/nodes/map.ts` (`generate`/`select`). Found by adding CCS to the coverage sweep
