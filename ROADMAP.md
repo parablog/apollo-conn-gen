@@ -429,15 +429,15 @@ committed summary of what they showed.)
 |---|--:|--:|--:|
 | googlebooks | 30 | 100% | 100% |
 | mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
-| digitalocean | 145 | 91.7% | 91.7% |
-| sendgrid | 154 | 89.0% | 89.0% |
-| asana | 79 | 83.5% | 83.5% |
-| omni | 54 | 81.5% | 79.6% |
-| openai | 10 | 80.0% | 80.0% |
-| github | 444 | 78.4% | 78.4% |
+| sendgrid | 154 | 92.9% | 92.9% |
+| digitalocean | 145 | 92.4% | 92.4% |
+| openai | 10 | 90.0% | 90.0% (0 compose-fails) |
+| asana | 79 | 86.1% | 86.1% |
+| omni | 54 | 83.3% | 81.5% |
+| github | 444 | 82.0% | 80.4% |
 | box | 114 | 66.7% | 66.7% |
-| confluence | 65 | 60.0% | 60.0% (was: unmeasurable hang, fixed by #10) |
-| slack | 80 | 41.3% | 41.3% (mostly input quality, see below) |
+| confluence | 65 | 63.1% | 63.1% (was: unmeasurable hang, fixed by #10) |
+| slack | 80 | 45.0% | 45.0% (mostly input quality, see below) |
 
 With the **#14 patch** applied to composition (verified via local `apollo-federation-cli` + rover
 shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, box +14, confluence
@@ -447,9 +447,9 @@ shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, 
 
 | Rank | Item | Ops (both passes) | Status |
 |--:|---|--:|---|
-| 1 | **#17** — param defaults dangle ` = ` for boolean/array/object/null (`param.ts:74-85`) | up to 66 (INTERNAL_ERROR buckets) | root-caused, trivial fix |
+| 1 | ~~**#17** — param defaults dangle ` = `~~ | — | ✅ fixed `aae14ca` |
 | 2 | **R-collector** (open research; #18 reserved) — collector/reference-graph misalignment: DO emits orphan #9-renamed types (`/v2/apps`, UNRESOLVED), box references unemitted array-item Composed (`retention_policies`/`collaborations`, cannot-find-type) | ~100+ across UNRESOLVED/INVALID buckets | mechanism unpinned — two conflicting hypotheses (over-collection `typesCollector.ts:70-82` vs Composed-consolidation deletion); bisect before fixing |
-| 3 | **#19** — typeless `{}` / boolean-`additionalProperties` schemas throw (`factory.ts:129`) | 18 confirmed (slack 4 + github 14, /pass) | root-caused; fix = shapeless→JSON scalar (NOT empty Obj) |
+| 3 | ~~**#19** — typeless `{}` schemas throw~~ | — | ✅ fixed `aae14ca` (sendgrid's 3 throws were this shape too; omni's 3 persist → R-genthrow-tail confirmed distinct) |
 | 4 | **R-anyof-empty** (open research; #20 reserved) — `anyOf: [$ref, empty-closed-object]` → zero types (10 github ops) | 10 | fix mechanism undecided: prove-placeholder (a) vs represent-as-JSON-branch (b, leaning) — dropping a *disjunct* is not the #5 allOf case |
 | 5 | **R-genthrow-tail** (open research) — sendgrid(3) + omni(3) GEN-THROW ops | 6 | throwing shapes unexamined; fold into #19 if same, else own note |
 | 6 | **#13** — path-dependent cycle cuts diverge same-named instances | ~16 | open; collect-time prop-merge proposal ready in the entry |

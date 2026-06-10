@@ -679,6 +679,8 @@ through, leaving the dangling ` = `.
 **Fix:** `writeDefaultValue` decides *before* writing ` = `: emits number/boolean/string
 literals; skips the whole default otherwise (an omitted default is always valid GraphQL).
 Fixture `param-default-bool.yaml`, test `test_param_default_boolean_emits_literal`.
+**Measured** (with #19, same commit): +32 ops/pass — github 78.4→82.0, sendgrid 89.0→92.9,
+slack 41.3→45.0, asana +2, confluence +2, openai now 0 compose-fails, DO 92.4.
 
 **AST:** untouched — emission-only (`writeDefaultValue`); `Param` nodes unchanged.
 **Refs:** `src/oas/nodes/param.ts` (`writeDefaultValue`). Found by the post-#15 triage sweep.
@@ -723,6 +725,8 @@ map values, composition members.)
 `additionalProperties` allowed; a real map `additionalProperties: <schema>` is NOT shapeless)
 routed to `Scalar(JSON)` in `fromSchema`. Fixture `shapeless-object.yaml`, test
 `test_shapeless_object_schema_becomes_json_scalar`.
+**Measured:** all slack(4)/github(14)/sendgrid(3) throws cleared — sendgrid's were this shape too
+(fold into scope); omni's 3 persist → ROADMAP `R-genthrow-tail` confirmed as a different shape.
 **Care:** do NOT route to `createContainerType` — an empty `Obj` is skipped by `Obj.generate`
 (empty props), which would dangle the reference and re-create #15-style `INVALID_GRAPHQL`.
 
