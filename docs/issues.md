@@ -685,13 +685,61 @@ slack 41.3→45.0, asana +2, confluence +2, openai now 0 compose-fails, DO 92.4.
 **AST:** untouched — emission-only (`writeDefaultValue`); `Param` nodes unchanged.
 **Refs:** `src/oas/nodes/param.ts` (`writeDefaultValue`). Found by the post-#15 triage sweep.
 
-## 18 · (reserved) Collector/reference-graph misalignment — see ROADMAP `R-collector`
-Two mirror symptoms under joint investigation: DO `/v2/apps` emits orphan `#9`-renamed types nothing
-references (`CONNECTORS_UNRESOLVED_FIELD`), and box `retention_policies`/`collaborations` reference
-array-item `Composed` types (`UserMini`, `FolderMini`) that are never emitted (`cannot find type`).
-Mechanism not yet pinned (two conflicting hypotheses — collector over-collection vs the
-Composed-consolidation deletion); the id is reserved and this entry will be written when the
-mechanism meets the issue bar. Tracked as **R-collector** in `ROADMAP.md`.
+## 18 · Identical inline schemas rename instead of dedup → orphan types — ✅ Fixed (`0cff45d`)
+**Symptom:** `CONNECTORS_UNRESOLVED_FIELD` — emitted types that no selection references: box
+`/collaborations` `InlineSharedLinkPermissions`/`…2`, DO `/v2/apps` `ServicesGit15` (counter 15!).
+(The second mirror symptom once logged here — box `retention_policies` `cannot find type` — was #15
+residue and already composes.)
+
+**OAS** (box — `File`/`Folder`/`WebLink` each carry a byte-identical *inline* `shared_link`):
+```yaml
+File:
+  properties:
+    shared_link:
+      type: object
+      properties:
+        url:         { type: string }
+        permissions: { type: object, properties: { can_download: { type: boolean } } }
+Folder:
+  properties:
+    shared_link:     # byte-identical inline copy — NOT a $ref
+      ...
+```
+**Example**:
+```graphql
+type Permissions { canDownload: Boolean }                   # referenced by the selection
+type InlineSharedLinkPermissions { canDownload: Boolean }   # ✗ orphan — nothing references it
+type InlineSharedLinkPermissions2 { canDownload: Boolean }  # ✗ orphan
+# ✓ after: one `type Permissions`; both parents reference it
+```
+
+**Cause:**
+- #9's collision check is name-occupancy only — a byte-identical inline duplicate renames exactly
+  like a genuinely different shape.
+- The rename mints a fresh name-derived id; the duplicate's *container* (also same-named → same id)
+  dedups away in the collector.
+- The renamed child was already added to `pendingTypes` (per expanded path) → emitted unreferenced.
+- The two prior hypotheses were halves of one mechanism: per-path collection adds the children;
+  container dedup/consolidation drops only the containers.
+
+**Fix** (named predicates in `Obj`; `context.store` now keeps the node, not just the name):
+- `isSameInlineDefinition` — a same-id occupant built from a deeply-equal raw schema is NOT a
+  collision: keep the shared name, the collector dedups (`collidesWithStoredType`).
+- `canConvergeOn` — when the occupant's id differs (pointer-named #8 / component #12 — keeping the
+  name there would emit two definitions of it), sibling twins converge on the first renamed name
+  instead of minting `2`, `3`, … (`resolveNameConflict`).
+
+**Measured** (default pass): box 66.7 → **74.6%** (+9 ops), DO 92.4 → **93.8%** (`/v2/apps` family
+cleared). Box's remaining 14 compose-fails are different sub-causes (`/files/{file_id}`
+INTERNAL_ERROR, `/metadata_templates` UNRESOLVED) — residue tracked under `R-collector` in ROADMAP.
+**Care:** dedup requires BOTH the same name-derived id and deep schema equality — schema equality
+alone produced `type StepsItem` *defined twice* on DO (caught mid-fix). #13 (path-dependent cycle
+cuts diverging same-named instances) is unchanged by this.
+**AST:** identity-only — identical twins keep the shared name/id (no rename); different shapes
+rename as before, but convergently. Tree shape unchanged.
+**Refs:** `src/oas/nodes/obj.ts` (`collidesWithStoredType` / `isSameInlineDefinition` /
+`canConvergeOn`), `src/oas/oasContext.ts` (`store`). Fixture `inline-identical-dedup.yaml`, test
+`test_inline_identical_shapes_dedup_not_renamed`.
 
 ## 19 · Typeless `{}` / `additionalProperties:false` schemas throw — ✅ Fixed (`aae14ca`)
 **Symptom:** `GEN-THROW: Cannot handle schema` — generation aborts for the whole op. 18 confirmed ops
