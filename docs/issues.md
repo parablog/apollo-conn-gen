@@ -356,3 +356,32 @@ emitted (first wins):   type Space { # history … }     selection (path B): …
 `PropCircRef` entries with the un-cut props from later same-id instances).
 **Refs:** `src/oas/generator/typesCollector.ts` (`collect`, id-keyed `pendingTypes`),
 `src/oas/nodes/propCircRef.ts`. Until fixed the harness keeps `confluence.json::abstract` skipped.
+
+## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⬜ Open (upstream)
+**Symptom:** 26/43 Mercedes-Benz CCS ops fail the abstract pass with
+`CONNECTORS_UNRESOLVED_FIELD: No connector resolves field AlternativesEntry.key / .value` — the map-entry
+fields — even though the selection plainly selects them. CCS default pass is 100%.
+**Cause (isolated by A/B compose, not a generator bug):** the generated schema selects map entries as
+`alternatives: alternatives->entries { key value {…} }` against `alternatives: [AlternativesEntry]` where
+`type AlternativesEntry { key: String value: Amount }` (the `Map` node's emission). The **byte-identical**
+schema — only the two `@link` version strings swapped — composes clean under connect v0.3 / fed 2.12 and
+fails under connect v0.4 / fed 2.13 (Rover 0.40.0). So v0.4's (preview) connector validation does not
+credit fields selected beneath an `->entries` method sub-selection to the field's declared entry type.
+Reproduced identically on two separate ops; the gap histogram buckets all 26 failures here.
+**Proposed fix:** report upstream (rover / connect v0.4 composition). Generator-side workaround if needed
+before that lands: under `connectorSpecVersion >= v0.4`, degrade map values to `JSON` (skip the synthetic
+entry type) so the op composes, behind the same best-effort convention as #10.
+**Example** — identical schema, two compose runs:
+```graphql
+alternatives: [AlternativesEntry]            # SDL
+alternatives: alternatives->entries {        # selection
+  key
+  value { unit value }
+}
+# connect v0.3 / fed 2.12: ✓ composes
+# connect v0.4 / fed 2.13: ✗ CONNECTORS_UNRESOLVED_FIELD: AlternativesEntry.key, AlternativesEntry.value
+```
+**AST:** untouched — the generator's tree and emission are correct; the divergence is in composition
+validation between connect spec versions.
+**Refs:** `src/oas/nodes/map.ts` (`generate`/`select`). Found by adding CCS to the coverage sweep
+(default 100%, abstract 39.5%); fixing this one family would take CCS abstract to ~100%.
