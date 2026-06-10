@@ -649,7 +649,7 @@ tags {                tags? {
 **Refs:** `src/oas/nodes/prop*.ts` (`select`), `obj.ts` (`visitProperties` sets `required`). Gate: the
 abstract pass needs composition ≥ 2.15 (or the patched toolchain) before this is corpus-safe on v0.4.
 
-## 17 · Param defaults dangle ` = ` for non-number/string values — ⬜ Open
+## 17 · Param defaults dangle ` = ` for non-number/string values — ✅ Fixed (`aae14ca`)
 **Symptom:** rover syntax error — `expected a valid Value`:
 `v2RegistryDockerCredentials(…, readWrite: Boolean = ): …` — the default's right-hand side is empty.
 66 INTERNAL_ERROR-bucketed ops in the sweep (DigitalOcean-dominated); exact share to re-derive at fix
@@ -676,8 +676,9 @@ readWrite: Boolean = false # ✓ after
 the value for `typeof number` and `typeof string`. Boolean — and array/object/null — defaults fall
 through, leaving the dangling ` = `.
 
-**Fix sketch:** decide *before* writing ` = `: emit only for supported types (number, string,
-boolean); skip the whole ` = <value>` otherwise (an omitted default is always valid GraphQL).
+**Fix:** `writeDefaultValue` decides *before* writing ` = `: emits number/boolean/string
+literals; skips the whole default otherwise (an omitted default is always valid GraphQL).
+Fixture `param-default-bool.yaml`, test `test_param_default_boolean_emits_literal`.
 
 **AST:** untouched — emission-only (`writeDefaultValue`); `Param` nodes unchanged.
 **Refs:** `src/oas/nodes/param.ts` (`writeDefaultValue`). Found by the post-#15 triage sweep.
@@ -690,7 +691,7 @@ Mechanism not yet pinned (two conflicting hypotheses — collector over-collecti
 Composed-consolidation deletion); the id is reserved and this entry will be written when the
 mechanism meets the issue bar. Tracked as **R-collector** in `ROADMAP.md`.
 
-## 19 · Typeless `{}` / `additionalProperties:false` schemas throw — ⬜ Open
+## 19 · Typeless `{}` / `additionalProperties:false` schemas throw — ✅ Fixed (`aae14ca`)
 **Symptom:** `GEN-THROW: Cannot handle schema` — generation aborts for the whole op. 18 confirmed ops
 (slack 4, github 14) per pass; sendgrid(3)+omni(3) unexamined (ROADMAP `R-genthrow-tail`).
 
@@ -718,8 +719,10 @@ container nor the scalar branch → `createScalarType` throws. (`fromProp` alrea
 to a `JSON` `PropScalar` — the throw only happens for schemas reached via `fromSchema`: array items,
 map values, composition members.)
 
-**Fix sketch:** a named predicate (shapeless object: no `$ref`/`type`/`enum`/`items`/composition/
-`properties`; boolean `additionalProperties` allowed) routed to `Scalar(JSON)` in `fromSchema`.
+**Fix:** named predicate `Factory.isShapelessObject` (no shape keyword; boolean
+`additionalProperties` allowed; a real map `additionalProperties: <schema>` is NOT shapeless)
+routed to `Scalar(JSON)` in `fromSchema`. Fixture `shapeless-object.yaml`, test
+`test_shapeless_object_schema_becomes_json_scalar`.
 **Care:** do NOT route to `createContainerType` — an empty `Obj` is skipped by `Obj.generate`
 (empty props), which would dangle the reference and re-create #15-style `INVALID_GRAPHQL`.
 
