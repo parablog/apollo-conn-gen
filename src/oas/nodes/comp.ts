@@ -76,8 +76,13 @@ export class Composed extends Type {
       const selected = this.selectedProps(selection);
 
       if (selected.length > 0) {
+        // Definition and reference must agree: references emit genTypeName(name), so the definition
+        // does too (upperFirst(getRefName) kept separators: `Billing_historyResponse` vs the
+        // reference's `BillingHistoryResponse`). Mirrors obj.ts. see docs/issues.md #15, #6
+        const sanitised = Naming.genTypeName(this.name);
+        const refName = Naming.getRefName(this.name);
         writer.write(this.kind + ' ');
-        writer.write(_.upperFirst(Naming.getRefName(this.name)));
+        writer.write(sanitised === refName ? refName : sanitised);
         writer.write(this.nameSuffix());
         // R2: a promoted member implements the shared base interface.
         if (this.implementsInterface) {

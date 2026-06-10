@@ -4,7 +4,6 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import _ from 'lodash';
 
 export class Union extends Type {
   public schemas: SchemaObject[];
@@ -96,7 +95,11 @@ export class Union extends Type {
     }
     // generate traditional union
     else {
-      const name = _.upperFirst(Naming.getRefName(this.name));
+      // Definition/reference agreement, like comp.ts: references emit genTypeName(name), so the
+      // union line (and its consolidate-downgrade type) must too. see docs/issues.md #15, #6
+      const sanitised = Naming.genTypeName(this.name);
+      const refName = Naming.getRefName(this.name);
+      const name = sanitised === refName ? refName : sanitised;
 
       if (context.generateOptions.consolidateUnions) {
         if (!this.consolidated) {

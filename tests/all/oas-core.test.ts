@@ -740,6 +740,18 @@ test('test_inline_name_collision_splits_by_container', async () => {
   assert.ok(/\blistPrice: SaleInfoListPrice\b/.test(schema!), 'saleInfo references the split type');
 });
 
+test('test_response_allof_snake_path_def_ref_names_converge', async () => {
+  // A response-root allOf on a snake_case path synthesizes a name carrying the `_`
+  // (`v2…Billing_historyResponse`); the definition (Composed.generate) used upperFirst(getRefName)
+  // while the reference used genTypeName, so they diverged -> INVALID_GRAPHQL ("cannot find type").
+  // Both now route through genTypeName. see docs/issues.md #15. runOasTest composes via rover.
+  const schema = await runOasTest('response-allof-snake-path.yaml', ['get:/billing_history>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type BillingHistoryResponse {'), 'definition camelized via genTypeName');
+  assert.ok(/billing_history: BillingHistoryResponse\b/.test(schema!), 'reference matches the definition');
+  assert.ok(!schema!.includes('Billing_history'), 'no underscore-divergent type name remains');
+});
+
 test('test_inline_renamed_when_colliding_with_component_emitted_name', async () => {
   // An inline object named by its property key ('user') must not emit under the same GraphQL name as
   // a stored component ('#/c/s/User' -> `User`): occupancy is checked on the EMITTED name too, and the

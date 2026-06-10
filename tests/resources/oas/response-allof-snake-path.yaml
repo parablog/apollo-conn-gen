@@ -1,0 +1,38 @@
+openapi: 3.0.0
+info:
+  title: Response-root allOf on a snake_case path
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # snake_case tail: the synthesized response name carries the `_`, so the emitted
+  # definition (upperFirst) and the reference (genTypeName) used to diverge (issue #15)
+  /billing_history:
+    get:
+      operationId: listBillingHistory
+      responses:
+        '200':
+          description: DigitalOcean-style response whose root is an allOf.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      billing_history:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            amount:
+                              type: string
+                            description:
+                              type: string
+                  - $ref: '#/components/schemas/meta'
+components:
+  schemas:
+    meta:
+      type: object
+      properties:
+        total:
+          type: integer
