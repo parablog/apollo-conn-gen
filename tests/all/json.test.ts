@@ -127,9 +127,7 @@ test('articles/search.json', async () => {
 });
 
 test('articles/clockwatch', async () => {
-  // known-bad: blocks.main.attributes is {} in the fixtures; the empty type is skipped at
-  // emission but `attributes: MainAttributes` still references it. Error bucket is
-  // composition-version dependent (fed 2.11 reported SELECTED_FIELD_NOT_FOUND instead).
+  // known-bad: empty {} value emits a dangling type reference — see docs/issues.md #21
   const output = await runJsonTest('articles/clockwatch', { shouldFail: true });
   assert.ok(output !== undefined);
   assert.ok(output!.includes('MainAttributes'));

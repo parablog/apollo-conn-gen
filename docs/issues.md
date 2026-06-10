@@ -733,3 +733,39 @@ routed to `Scalar(JSON)` in `fromSchema`. Fixture `shapeless-object.yaml`, test
 **AST:** shape change — `Scalar(JSON)` node where construction previously threw (no node at all).
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema`/`createScalarType`, throw at :129),
 `isEmptySchema` (#5) as the predicate's relative.
+
+## 20 · (reserved) `anyOf: [$ref, empty-closed-object]` → zero types — see ROADMAP `R-anyof-empty`
+10 github GET ops generate nothing. Fix mechanism undecided (prove-placeholder vs
+represent-as-JSON-branch); the id is reserved and this entry will be written when the mechanism is
+pinned. Tracked as **R-anyof-empty** in `ROADMAP.md`.
+
+## 21 · JSON walker: empty `{}` value emits a dangling type reference — ⬜ Open
+**Symptom:** compose fails `INVALID_GRAPHQL: cannot find type MainAttributes in this document`
+(`articles/clockwatch`, fed 2.12). Under fed 2.11 the same schema bucketed as
+`SELECTED_FIELD_NOT_FOUND` instead — bucket labels are composition-version dependent (cf. the
+corpus note in `ROADMAP.md`).
+**JSON** (clockwatch — same key, one occurrence empty, one shaped):
+```json
+"blocks": {
+  "main": { "attributes": {} },
+  "body": [ { "attributes": { "keyEvent": true, "title": "…", "pinned": false } } ]
+}
+```
+**Example**:
+```graphql
+type BlocksMain { attributes: MainAttributes }   # ✗ reference emitted
+type BodyAttributes { pinned: Boolean }          # body's type exists
+# type MainAttributes is never emitted — no fields, writer skips it → dangling reference
+```
+**Cause:**
+- The walker builds a type node for the empty `{}` value.
+- The writer skips field-less types at generation.
+- The parent field still renders its reference → `cannot find type`.
+- Same failure family as #19's **Care** note (empty type dangles the reference), JSON-walker path.
+**Proposed fix:** route an empty-object *value* to the `JSON` scalar (the unknown-shape
+convention, cf. #19) instead of minting a field-less type. Walker-side counterpart of
+`Factory.isShapelessObject`.
+**AST:** shape change (proposed) — scalar node instead of an empty object type.
+**Refs:** `src/json/walker/`, test `articles/clockwatch` (`tests/all/json.test.ts`, repinned
+`c13cfe5`). Verified: walker output byte-identical 0.8.3 → HEAD except `@link` versions — the
+bucket shift came from the R0 default bump (`72f625e`), not a walker change.
