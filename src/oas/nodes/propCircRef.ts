@@ -1,6 +1,7 @@
 import { OasContext } from '../oasContext.js';
 import { IType, Prop } from './internal.js';
 import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
 
 export class PropCircRef extends Prop {
   private ref: Prop;
@@ -31,15 +32,32 @@ export class PropCircRef extends Prop {
     return `[prop] ${this.name}: Circular reference to: ${this.ref.forPrompt(context)} `;
   }
 
-  generateValue(context: OasContext, writer: Writer) {
-    writer.write('# ');
-    this.ref.generateValue(context, writer);
-    writer.write(`# Circular reference detected! Please re-visit the schema and remove the reference.\n`);
+  // Render the whole field commented in the SDL (override generate, not just generateValue: the base
+  // Prop.generate writes the uncommented `  field: ` prefix + `!`). A commented field is inert, so the
+  // type carries no unresolved field (no CONNECTORS_UNRESOLVED_FIELD) while documenting the cut. #10
+  public generate(context: OasContext, writer: Writer, _selection: string[]): void {
+    // the wrapped value may carry a raw ref (`[#/components/schemas/User]`): reduce refs to their name.
+    // A cut object was never visited (no props), so getValue falls back to 'JSON' — name it instead.
+    let value = this.ref.getValue(context).replace(/#\/[^\]\s]*\//g, '');
+    const inner = (this.ref as { obj?: IType }).obj;
+    if (value === 'JSON' && inner?.name) {
+      value = Naming.genTypeName(Naming.getRefName(inner.name) ?? inner.name);
+    }
+    writer
+      .write('  # ')
+      .write(Naming.sanitiseField(this.name))
+      .write(': ')
+      .write(value)
+      .write(' - circular reference omitted\n');
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
-    // do nothing
-    writer.write('# ');
-    this.ref.select(context, writer, selection);
+  public select(context: OasContext, writer: Writer, _selection: string[]) {
+    // Cut the cycle: emit a comment and DO NOT recurse into the wrapped ref. Delegating to
+    // `this.ref.select(...)` re-expands the very cycle this node exists to break, re-introducing the
+    // recursion into the connector selection (rover then rejects it as CIRCULAR_REFERENCE). Mirrors
+    // CircularRef.select. see docs/issues.md #10
+    writer
+      .write(' '.repeat(context.indent + context.stack.length))
+      .write(`# ${this.name}: circular reference omitted (re-visit schema and remove the reference)\n`);
   }
 }

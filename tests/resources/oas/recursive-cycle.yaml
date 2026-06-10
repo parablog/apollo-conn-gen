@@ -1,0 +1,44 @@
+openapi: 3.0.0
+info:
+  title: Recursive schema cycles
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /nodes:
+    get:
+      operationId: getNodes
+      responses:
+        '200':
+          description: A node tree whose schema is recursive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        id:
+          type: string
+        # direct self-cycle: prop name differs from any ancestor prop, so only the
+        # schema-identity cut catches it
+        parent:
+          $ref: '#/components/schemas/Node'
+        # array-items cycle: items $ref back to Node (bubbles up to the whole field)
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'
+        # shared, non-recursive component referenced twice from sibling fields:
+        # must stay fully expanded under BOTH (no over-cutting)
+        meta:
+          $ref: '#/components/schemas/Shared'
+        extra:
+          $ref: '#/components/schemas/Shared'
+    Shared:
+      type: object
+      properties:
+        label:
+          type: string

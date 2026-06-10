@@ -740,6 +740,28 @@ test('test_inline_name_collision_splits_by_container', async () => {
   assert.ok(/\blistPrice: SaleInfoListPrice\b/.test(schema!), 'saleInfo references the split type');
 });
 
+test('test_recursive_schema_cut_composes_abstract_pass', async () => {
+  // A recursive schema (Node.parent -> Node, Node.children -> [Node]) must terminate on the
+  // non-consolidating v0.4 path and compose: the re-entering field is cut at the first repeat of a
+  // schema already on the expansion path and emitted as a comment in BOTH the SDL and the selection.
+  // A shared non-recursive component (Shared, referenced twice from sibling fields) must NOT be cut.
+  // see docs/issues.md #10. runOasTest composes via rover.
+  const schema = await runOasTest('recursive-cycle.yaml', ['get:/nodes>**'], 1, 2, false, true, undefined, false, false, {
+    consolidateUnions: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+    composeFederationVersion: '2.13.0',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('# children: [Node] - circular reference omitted'), 'array-items cycle cut in SDL');
+  assert.ok(schema!.includes('# parent: Node - circular reference omitted'), 'direct self-cycle cut in SDL');
+  assert.ok(/# children: circular reference omitted/.test(schema!), 'array cut commented in selection');
+  assert.ok(/# parent: circular reference omitted/.test(schema!), 'self-cycle cut commented in selection');
+  // shared non-recursive type expands fully under BOTH referencing fields (no over-cutting)
+  assert.ok(/\bmeta: Shared\b/.test(schema!) && /\bextra: Shared\b/.test(schema!), 'both Shared refs kept');
+  assert.ok((schema!.match(/label/g) || []).length >= 3, 'Shared.label selected under both fields');
+});
+
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
   // emitting `id: !`); coerce it to String. see docs/issues.md #11. runOasTest composes via rover.
