@@ -547,12 +547,11 @@ test fails without the patch, passes with it). Re-running the corpus through the
 corpus-wide** (box +14, github +15, confluence +7, DO +4, omni +2, asana +1) — abstract overall
 73.5% → 79.1%. Awaiting internal PR.
 
-## 15 · Response-root `allOf` type referenced but never emitted — ⬜ Open
-**Symptom:** the new dominant compose failure after #14 — **143 ops** across the corpus (DO, box,
-github, sendgrid, …):
-`INVALID_GRAPHQL: cannot find type V2CustomersMyBillingHistoryResponse in this document`.
-The Query field references the synthesized response type; its definition never appears (the name occurs
-exactly once in the output — the reference).
+## 15 · Composed/Union definition and reference emit divergent names — ✅ Fixed (`44b628d`)
+**Symptom:** the dominant compose failure after #14 — **143 ops** in the abstract sweep (DO, box,
+sendgrid, …): `INVALID_GRAPHQL: cannot find type V2CustomersMyBillingHistoryResponse in this document`.
+(The entry originally hypothesized "never emitted" — wrong: it IS emitted, under a divergent name —
+`type V2CustomersMyBilling_historyResponse` — which a first grep missed.)
 
 **OAS** (DigitalOcean — the *response root* is an `allOf`):
 ```yaml
@@ -571,20 +570,28 @@ responses:
 
 **Example**:
 ```graphql
-v2CustomersMyBilling_history: V2CustomersMyBillingHistoryResponse   # reference emitted…
-# …but no `type V2CustomersMyBillingHistoryResponse { … }` anywhere → INVALID_GRAPHQL
+type V2CustomersMyBilling_historyResponse { … }                      # ✗ definition: upperFirst(getRefName)
+v2CustomersMyBilling_history: V2CustomersMyBillingHistoryResponse   # ✗ reference: genTypeName → no match
+type V2CustomersMyBillingHistoryResponse { … }                       # ✓ after: both via genTypeName
 ```
 
-**Suspected cause (hypothesis — needs the comp.ts emission walk):** a response-root `Composed`
-(`allOf`) gets its reference name from `getGqlOpName() + 'Response'`, but its definition is dropped on
-emission — likely `Composed.generate` skipping when `selectedProps` is empty post-consolidation, or a
-definition/reference naming divergence. Probably **not** v0.4-specific (DO's default pass shows the
-same `INVALID_GRAPHQL` count family). Side smell in the same op: the field name keeps a raw underscore
-(`v2CustomersMyBilling_history`) — `getGqlOpName` doesn't camelize every segment.
+**Cause:**
+- The response-root `Composed` is named `getGqlOpName() + 'Response'` — carries the path's `_`.
+- Definition: `Composed.generate` (`comp.ts:80`) wrote `_.upperFirst(getRefName(name))` — keeps `_history`.
+- Reference: the Res/return-type path writes `genTypeName(name)` — camelizes to `History`. Divergent.
+- `Union.generate` (`union.ts:99`) had the identical pattern.
+- Same family as #6: definition and reference must both route through `genTypeName`. Pass-independent
+  (emission), so it affected default AND abstract.
 
-**AST (suspected):** emission-only or a missing collect — to be confirmed.
-**Refs:** `src/oas/nodes/comp.ts` (`generate`/`consolidate`), `res.ts`, `operationWriter`. Biggest
-single family in the post-#14 gap histogram (143 of 151 remaining compose-fails).
+**Fix:** both sites now use obj.ts's #6 pattern (`sanitised === refName ? refName : sanitised`).
+Measured (stock rover, both passes): **sendgrid 77.9 → 89.0%**, **box 57.0 → 66.7%**,
+**digitalocean 86.2 → 91.7%** — `INVALID_GRAPHQL` collapsed 143 → ~39 (residue is a different
+sub-cause, e.g. box `retention_policies` — to triage). Side smell left open: `getGqlOpName` doesn't
+camelize every path segment (`v2CustomersMyBilling_history` — legal GraphQL, cosmetic).
+
+**AST:** untouched — emission-only; node names/ids keep the raw separator-bearing name.
+**Refs:** `src/oas/nodes/comp.ts` (`generate`), `union.ts` (`generate`). Fixture
+`response-allof-snake-path.yaml`, test `test_response_allof_snake_path_def_ref_names_converge`.
 
 ## 16 · Selections don't mark OAS-optional fields with `?` — ⏸ Parked (until composition ≥ 2.15 ships)
 **Parked (2026-06-10):** emitting `?` today would break composition for anyone on the released

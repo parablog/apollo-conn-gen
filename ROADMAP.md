@@ -429,14 +429,14 @@ committed summary of what they showed.)
 |---|--:|--:|--:|
 | googlebooks | 30 | 100% | 100% |
 | mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
-| digitalocean | 145 | 86.2% | 86.2% |
+| digitalocean | 145 | 91.7% | 91.7% |
+| sendgrid | 154 | 89.0% | 89.0% |
 | asana | 79 | 83.5% | 83.5% |
 | omni | 54 | 81.5% | 79.6% |
 | openai | 10 | 80.0% | 80.0% |
 | github | 444 | 78.4% | 78.4% |
-| sendgrid | 154 | 77.9% | 77.9% |
+| box | 114 | 66.7% | 66.7% |
 | confluence | 65 | 60.0% | 60.0% (was: unmeasurable hang, fixed by #10) |
-| box | 114 | 57.0% | 57.0% |
 | slack | 80 | 41.3% | 41.3% (mostly input quality, see below) |
 
 With the **#14 patch** applied to composition (verified via local `apollo-federation-cli` + rover
@@ -445,18 +445,22 @@ shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, 
 
 **Issue queue (priority = measured impact; details live in `docs/issues.md`):**
 
-| Rank | Item | Ops | Status |
+| Rank | Item | Ops (both passes) | Status |
 |--:|---|--:|---|
-| 1 | **#15** — def/ref type-name divergence (`INVALID_GRAPHQL: cannot find type <X>Response`; `comp.ts:80`/`union.ts:99` emit `upperFirst(getRefName)` while references use `genTypeName`) | 143 | in progress |
-| 2 | GEN-EMPTY — generation produces nothing | 79 | mostly input quality (Slack stubs); triage the non-Slack residue |
-| 3 | GEN-THROW `Cannot handle schema` — typeless `{description}`-only schemas (Box `--Full`/`--Mini`) | 22 | open (the old 3-A slice; ties into R2 `allOf` work) |
-| 4 | **#13** — path-dependent cycle cuts diverge same-named instances | 8 | open; collect-time prop-merge proposal ready in the entry |
-| 5 | GEN-THROW `Cannot handle property type` | 3 | open |
+| 1 | COMPOSE `CONNECTORS_UNRESOLVED_FIELD` residue (non-#14: e.g. DO `/v2/apps`) | 121* | triage next (*includes the 26×2-ish #14 ops on stock toolchains) |
+| 2 | GEN-EMPTY — generation produces nothing | 158 | mostly input quality (Slack stubs ×2 passes); triage the non-Slack residue |
+| 3 | COMPOSE `INTERNAL_ERROR` (DO `/v2/registry/docker-credentials`) | 66 | open |
+| 4 | GEN-THROW `Cannot handle schema` — typeless `{description}`-only schemas (Box) | 44 | open (the old 3-A slice; ties into R2 `allOf` work) |
+| 5 | COMPOSE `INVALID_GRAPHQL` residue (box `retention_policies`) | 39 | open — what's left after #15 |
+| 6 | COMPOSE `GROUP_SELECTION_IS_NOT_OBJECT` (box) | 31 | open |
+| 7 | **#13** — path-dependent cycle cuts diverge same-named instances | ~16 | open; collect-time prop-merge proposal ready in the entry |
 
 **Fixed since the last refresh** (entries + fixtures in `docs/issues.md`): #8 `#/paths` pointer names
 (DO 35→74%), #9 inline-shape collisions (`SELECTED_FIELD_NOT_FOUND`), #10 abstract-pass "hang"
 (quadratic `selectedProps` + uncut recursion → cycle cuts commented in both artifacts), #11 `anyOf`
-params, #12 inline-vs-component emitted-name collision (cleared Confluence `CIRCULAR_REFERENCE`).
+params, #12 inline-vs-component emitted-name collision (cleared Confluence `CIRCULAR_REFERENCE`),
+**#15** def/ref type-name divergence (`44b628d` — sendgrid 77.9→89.0, box 57→66.7, DO 86.2→91.7,
+`INVALID_GRAPHQL` 143→39).
 
 **Upstream / parked:**
 - **#14** (upstream): composition's v0.4 shape validator drops `Array` shapes → `->entries`
