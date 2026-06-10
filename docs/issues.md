@@ -303,25 +303,56 @@ sshKeyIdentifier: String!    # ✓ after
 `Param → Union(int | string)` becomes `Param → Scalar(String)`.
 **Refs:** `src/oas/nodes/param.ts` (`visit`), fixture `param-anyof.yaml`.
 
-## 12 · Inline object collides with a component's *emitted* name — ⬜ Open
+## 12 · Inline object collides with a component's *emitted* name — ✅ Fixed (`cf19247`)
 **Symptom:** rover rejects the Confluence abstract pass with `CIRCULAR_REFERENCE: type User appears more
 than once in …users.personalSpace.permissions.subjects.user` — even after the real recursion is cut (#10).
 **Cause:** `SpacePermission.subjects.user` is an *inline* pagination wrapper (`{results: [$ref User],
 size, start, limit}`). It keeps its property key as its name (`user`) and emits as `type User` — the same
-GraphQL name as the component `#/components/schemas/User`. The #9 collision guard compares *raw* stored
+GraphQL name as the component `#/components/schemas/User`. The #9 collision guard compared *raw* stored
 names (`context.types.has('user')` vs the stored `'#/components/schemas/User'`), so the cross-namespace
-collision is invisible; two different shapes emit under one name, and rover sees `User` nested inside
+collision was invisible; two different shapes emit under one name, and rover sees `User` nested inside
 `User` and calls it circular.
-**Proposed fix:** extend the #9 occupancy check to compare **emitted** names (`Naming.genTypeName`) so the
-inline `user` wrapper is qualified (e.g. `SubjectsUser`), exactly like same-namespace collisions are today.
+**Fix:** `context.store` also reserves the **emitted** GraphQL name (`Naming.genTypeName`), and the
+collision guard (extracted to `Obj.collidesWithStoredType`) checks raw *and* emitted occupancy. Only
+**inline** objects are renamed — that's safe because an inline object is referenced solely through its
+owning prop (same node instance; ids are name-derived getters), so the reference follows the rename.
+`$ref`-named types — the ones other types point at — are excluded by `T.isRef` and never renamed.
+**Limitation (pre-existing, same as #9):** occupancy is point-in-time — if the inline visits *before* the
+component is stored, the collision is not seen. In practice components are reached at shallower depths
+first (Confluence works); a counter-example would need the converse order.
 **Example**:
 ```graphql
-users: [User]                 # component #/c/s/User
-…  subjects { user: User }    # ✗ inline wrapper also emits `type User` → rover: CIRCULAR_REFERENCE
-…  subjects { user: SubjectsUser }   # ✓ goal: qualified like a #9 collision
+users: [User]                          # component #/c/s/User
+…  subjects { user: User }             # ✗ before: inline wrapper also emits `type User` → CIRCULAR_REFERENCE
+…  subjects { user: SubjectsUser }     # ✓ after: qualified by its container, like a #9 collision
 ```
-**AST (proposed):** identity-only, like #9 — rename the inline wrapper (`obj:type:user` →
-`obj:type:SubjectsUser`); no shape change.
-**Refs:** `src/oas/nodes/obj.ts` (`visit` #9 guard / `resolveNameConflict`), `oasContext.ts`
-(`context.types` raw-name occupancy). Surfaced by the #10 Confluence re-measure; until fixed the harness
-keeps `confluence.json::abstract` skipped.
+**AST:** identity-only, like #9 — the inline wrapper is renamed (`obj:type:user` →
+`obj:type:SubjectsUser`); no shape change, reference follows (same instance).
+**Refs:** `src/oas/nodes/obj.ts` (`collidesWithStoredType`/`resolveNameConflict`), `oasContext.ts`
+(`store` reserves emitted names). Fixture `inline-vs-component-name.yaml`, test
+`test_inline_renamed_when_colliding_with_component_emitted_name`. Clears the Confluence
+`CIRCULAR_REFERENCE`; the next blocker on that spec is #13.
+
+## 13 · Path-dependent cycle cuts make same-named instances diverge — ⬜ Open
+**Symptom:** with #10 + #12 in place, the Confluence abstract pass fails compose with
+`SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`.
+**Cause:** #10's cycle cut is **per expansion path**: a `Space` instance reached *under* a `Content`
+ancestor has `history`/`homepage` cut (`PropCircRef` → commented), while a `Space` instance on a path
+with no such ancestor keeps them. All instances share one emitted name, the writer emits **one**
+`type Space` (the collector keeps the first instance per id), and the op's selection is the union of all
+paths — so a selection built from an un-cut instance can reference a field the emitted (cut) instance
+commented out.
+**Proposed fix (sketch):** when the collector meets an already-collected id, **merge props**: per prop
+name, prefer the non-`PropCircRef` version. The emitted type then carries the union of surviving fields —
+every selected field exists (no `SELECTED_FIELD_NOT_FOUND`), every union field is selected on at least the
+path it came from (no `CONNECTORS_UNRESOLVED_FIELD`), and props cut on *every* path stay commented.
+**Example** — two `Space` instances in one op:
+```
+path A (under Content): Space { # history — cut }      path B: Space { history: SpaceHistory }
+emitted (first wins):   type Space { # history … }     selection (path B): … space { history { … } }
+                        → SELECTED_FIELD_NOT_FOUND     goal: emitted Space = union → history survives
+```
+**AST (proposed):** no new nodes — a collect-time prop merge on the kept instance (replace its
+`PropCircRef` entries with the un-cut props from later same-id instances).
+**Refs:** `src/oas/generator/typesCollector.ts` (`collect`, id-keyed `pendingTypes`),
+`src/oas/nodes/propCircRef.ts`. Until fixed the harness keeps `confluence.json::abstract` skipped.
