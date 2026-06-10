@@ -15,3 +15,25 @@ dist
 build
 .idea
 coverage
+
+CLAUDE.md
+KNOWN_ISSUES.md
+
+# Local-only real-world vendor corpus. The published specs carry example secrets
+# (tokens, AWS keys, PEM private keys) that block pushes, so they are kept on disk
+# only — not committed. The coverage harness + corpus tests run against them locally.
+/COVERAGE.md
+/TEST_CORPUS.md
+/tools/coverage-spec.mts
+/tools/vet-spec.mts
+/tests/all/corpus.test.ts
+/tests/resources/oas/googlebooks.yaml
+/tests/resources/oas/slack.yaml
+/tests/resources/oas/digitalocean.yaml
+/tests/resources/oas/box.yaml
+/tests/resources/oas/openai.yaml
+/tests/resources/oas/asana.yaml
+/tests/resources/oas/sendgrid.yaml
+/tests/resources/oas/github.yaml
+/tests/resources/oas/omni.yaml
+/tests/resources/oas/confluence.json

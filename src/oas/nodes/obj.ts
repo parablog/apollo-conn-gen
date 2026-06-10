@@ -9,11 +9,14 @@ import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
 
 export class Obj extends Type {
-  synthetic: boolean = false;
   nameConflict: boolean = false;
   // R1: type-level entity resolvers discovered for this type (empty unless inferred).
   // Set by `inferEntityResolvers`; drives @key + type-level @connect/$this in generate().
   entityResolvers: EntityResolver[] = [];
+  // R2: when promoted to a GraphQL interface (a shared allOf base of a discriminated oneOf),
+  // emit `interface` instead of `type`. Id-neutral on purpose — `id` embeds `kind`, so we must
+  // NOT mutate `kind` (it would desync generatedSet/dedup/deletion keys). Set by promoteInterfaces.
+  emitAsInterface: boolean = false;
 
   constructor(
     parent: IType | undefined,
@@ -44,8 +47,7 @@ export class Obj extends Type {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
-    // do we have a name conflict?
-    if (context.types.has(this.name) && !T.isRef(this.name) && this.synthetic) {
+    if (this.collidesWithStoredType(context)) {
       this.resolveNameConflict(context);
     }
 
@@ -78,7 +80,7 @@ export class Obj extends Type {
     const refName = Naming.getRefName(this.name);
 
     writer
-      .write(this.kind + ' ')
+      .write(this.emitAsInterface ? 'interface ' : this.kind + ' ')
       .write(sanitised === refName ? refName : sanitised)
       .write(this.nameSuffix());
 
@@ -225,7 +227,6 @@ export class Obj extends Type {
       // is our parent an array?
       if (parent instanceof Arr || parent instanceof PropArray) {
         // if so, synthesize a name based on the parent name
-        this.synthetic = true;
         name = Naming.genTypeName(Naming.getRefName(parentName) + 'Item');
       }
       // if the parent is a response, we can use the operation name and append "Response"
@@ -251,8 +252,29 @@ export class Obj extends Type {
     this.name = name;
   }
 
+  // An inline object borrows its property key as a name, but each is its own definition (only $refs
+  // are shared) — if that name is already taken, this is a different shape that would collapse onto
+  // the existing type (dropping fields). Taken means the raw name OR the emitted GraphQL name is
+  // reserved ('user' collides with a stored '#/c/s/User': both emit `User` — issue #12). $ref-named
+  // types dedup by id and are never renamed; `[inline:…]` consolidated allOf/oneOf members fold into
+  // their parent Composed and must keep a shared id. see docs/issues.md #9, #12
+  private collidesWithStoredType(context: OasContext): boolean {
+    if (!this.name || T.isRef(this.name) || this.name.startsWith('[inline:')) {
+      return false;
+    }
+    return context.types.has(this.name) || context.types.has(Naming.genTypeName(this.name));
+  }
+
+  // Qualify a colliding inline name with its container (nearest non-prop ancestor), e.g. `listPrice`
+  // under `offersItem` -> `OffersItemListPrice`, bumping `2`, `3`… until free. Both parts go through
+  // genTypeName so the result is always a valid identifier (the container name may itself be an
+  // `[inline:…]` placeholder) and is idempotent under emission. see docs/issues.md #9
   private resolveNameConflict(context: OasContext) {
-    const container = T.findNonPropParent(this.parent!);
-    this.name = container.name + '_' + this.name;
+    const base = Naming.genTypeName(T.findNonPropParent(this.parent!).name) + Naming.genTypeName(this.name);
+    let candidate = base;
+    for (let n = 2; context.types.has(candidate); n++) {
+      candidate = `${base}${n}`;
+    }
+    this.name = candidate;
   }
 }

@@ -8,6 +8,10 @@ import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
 
 export class Composed extends Type {
+  // R2: GraphQL interface this member implements (a shared allOf base of a discriminated
+  // oneOf). When set, generate() appends `implements <Base>`. Set by promoteInterfaces.
+  public implementsInterface?: string;
+
   constructor(
     parent: IType | undefined,
     public name: string,
@@ -72,9 +76,18 @@ export class Composed extends Type {
       const selected = this.selectedProps(selection);
 
       if (selected.length > 0) {
+        // Definition and reference must agree: references emit genTypeName(name), so the definition
+        // does too (upperFirst(getRefName) kept separators: `Billing_historyResponse` vs the
+        // reference's `BillingHistoryResponse`). Mirrors obj.ts. see docs/issues.md #15, #6
+        const sanitised = Naming.genTypeName(this.name);
+        const refName = Naming.getRefName(this.name);
         writer.write(this.kind + ' ');
-        writer.write(_.upperFirst(Naming.getRefName(this.name)));
+        writer.write(sanitised === refName ? refName : sanitised);
         writer.write(this.nameSuffix());
+        // R2: a promoted member implements the shared base interface.
+        if (this.implementsInterface) {
+          writer.write(` implements ${this.implementsInterface}`);
+        }
         writer.write(' {\n');
 
         for (const prop of selected) {
@@ -160,6 +173,12 @@ export class Composed extends Type {
     for (let i = 0; i < allOfs.length; i++) {
       const allOfItemSchema = allOfs[i];
 
+      // skip metadata-only allOf members (they contribute no fields). see docs/issues.md #5
+      if (Factory.isEmptySchema(allOfItemSchema as SchemaObject)) {
+        trace(context, '   [composed::all-of]', `skipping empty allOf member #${i}`);
+        continue;
+      }
+
       const type = Factory.fromSchema(context, this, allOfItemSchema as SchemaObject);
       this.add(type);
 
@@ -195,12 +214,15 @@ export class Composed extends Type {
       if (this.parent instanceof Res) {
         const op = this.parent!.parent as Get;
         name = op.getGqlOpName() + 'Response';
+      } else if (this.schema?.allOf?.length === 1) {
+        // single member: adopt its ref name (avoids an unusable '[inline:…]' name). see docs/issues.md #7
+        name = _.get(this.schema?.allOf[0], '$ref') as string;
+      } else if (this.parent instanceof Prop) {
+        // emitted inline allOf-property type needs a real name, not '[inline:…]'. see docs/issues.md #7
+        name = Naming.genTypeName(Naming.getRefName(this.parent.name));
       } else {
-        if (this.schema?.allOf?.length === 1) {
-          // because we are going to consolidate the children anyway, we can assume the name of the child.
-          // this avoids having a comp with name '[inline:...]' which does not generate properly
-          name = _.get(this.schema?.allOf[0], '$ref') as string;
-        } else name = `[inline:${this.parent!.name}]`;
+        // consolidated allOf member: keep the '[inline:…]' id that selection paths reference. issue #7
+        name = `[inline:${this.parent!.name}]`;
       }
     }
 

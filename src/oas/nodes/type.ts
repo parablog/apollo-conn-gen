@@ -4,6 +4,25 @@ import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Factory } from './factory.js';
 
+// Build (once per selection array, cached by identity) the set of all `>`-boundary prefixes of every
+// selection entry. `someEntry.startsWith(path)` for a `>`-joined `path` is then exactly
+// `prefixes.has(path)`, turning per-prop membership from O(selection) into O(1). The same expanded
+// selection array is threaded through generation, so the WeakMap is built once and reused. see #10
+const selectionPrefixCache = new WeakMap<string[], Set<string>>();
+export function selectionPrefixes(selection: string[]): Set<string> {
+  let prefixes = selectionPrefixCache.get(selection);
+  if (prefixes) return prefixes;
+  prefixes = new Set<string>();
+  for (const entry of selection) {
+    prefixes.add(entry);
+    for (let i = entry.indexOf('>'); i !== -1; i = entry.indexOf('>', i + 1)) {
+      prefixes.add(entry.slice(0, i));
+    }
+  }
+  selectionPrefixCache.set(selection, prefixes);
+  return prefixes;
+}
+
 export abstract class Type implements IType {
   public parent?: IType;
   public name: string;
@@ -121,7 +140,13 @@ export abstract class Type implements IType {
   }
 
   public selectedProps(selection: string[]) {
-    return Array.from(this.props.values()).filter((prop) => selection.find((s) => s.startsWith(prop.path())));
+    // A prop is selected when some selection entry starts with its path. Done naively
+    // (`selection.find(s => s.startsWith(prop.path()))`) this is O(props x selection) with a
+    // path() rebuild per entry, which blows up on large recursive type sets (2700+ types x 20k
+    // selection entries -> billions of ops; see docs/issues.md #10). Index the selection once into
+    // its set of `>`-boundary prefixes, then membership is O(1) per prop.
+    const prefixes = selectionPrefixes(selection);
+    return Array.from(this.props.values()).filter((prop) => prefixes.has(prop.path()));
   }
 
   nameSuffix(): string {

@@ -1,0 +1,65 @@
+openapi: "3.0.1"
+info:
+  title: Catalog API (shared base used concretely -> no promotion)
+  version: "1.0.0"
+paths:
+  /item:
+    get:
+      summary: Retrieve a catalog item.
+      responses:
+        '200':
+          description: A catalog item, which can be either a Book or a Movie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+  # This op returns the base `Product` directly, so Product is used as a CONCRETE type.
+  # Promotion rule 3 must skip interface promotion here (it would otherwise make this op
+  # return an interface with no __typename/->match selection). The /item field stays a union.
+  /product:
+    get:
+      summary: Retrieve a bare product (base type, used concretely).
+      responses:
+        '200':
+          description: A product.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+components:
+  schemas:
+    ItemResponse:
+      oneOf:
+        - $ref: '#/components/schemas/Book'
+        - $ref: '#/components/schemas/Movie'
+      discriminator:
+        propertyName: type
+        mapping:
+          book: '#/components/schemas/Book'
+          movie: '#/components/schemas/Movie'
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        type:
+          type: string
+      required: [id, title, type]
+    Book:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            author:
+              type: string
+          required: [author]
+    Movie:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            director:
+              type: string
+          required: [director]

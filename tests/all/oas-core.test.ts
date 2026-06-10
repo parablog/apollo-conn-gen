@@ -1,194 +1,9 @@
 import _ from 'lodash';
 import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { JsonGen, OasGen } from '../src/index.js';
-import { JsonContext, JsonType } from '../src/json/index.js';
-import { oasBasePath, runJsonTest, runOasTest } from '../src/tests/runners.js';
-import { RulesLoader, OpNameMapper } from '../src/oas/mapper/index.js';
-import { Naming } from '../src/oas/utils/naming.js';
-import {
-  genParamName as jsonGenParamName,
-  sanitiseFieldForSelect as jsonSanitiseForSelect,
-} from '../src/json/walker/naming.js';
-import {
-  DEFAULT_VERSIONS,
-  parseVersion,
-  compareVersions,
-  meetsMinimum,
-  assertSupportedConnectVersion,
-  requireConnectVersion,
-} from '../src/versions.js';
-
-console.log = () => {};
-console.warn = () => {};
-console.error = () => {};
-
-test('should construct Walker from JSON string and store types in context', () => {
-  const json = `{
-      "name": "Test User",
-      "age": 25,
-      "address": {
-        "street": "Main St",
-        "city": "Anytown"
-      }
-    }`;
-
-  const walker = JsonGen.fromReader(json);
-  const context: JsonContext = walker.getContext();
-  const types: JsonType[] = context.getTypes();
-
-  // ConnectorWriter.write(walker, writer);
-  // writer.clear();
-  const schema = walker.generateSchema();
-
-  assert.ok(types.length > 0);
-});
-
-test('JsonGen: default rootType produces Root type', () => {
-  const json = '{"name": "Test", "age": 25}';
-  const schema = JsonGen.fromReader(json).generateSchema();
-  assert.ok(schema.includes('type Root {'));
-  assert.ok(schema.includes('root: Root'));
-});
-
-test('JsonGen: custom rootType produces correct type and query field', () => {
-  const json = '{"name": "Test", "address": {"street": "Main St"}}';
-  const schema = JsonGen.fromReader(json, { rootType: 'User' }).generateSchema();
-  assert.ok(schema.includes('type User {'));
-  assert.ok(schema.includes('type UserAddress {'));
-  assert.ok(schema.includes('user: User'));
-  assert.ok(!schema.includes('type Root {'));
-  assert.ok(!schema.includes('root: Root'));
-});
-
-test('JsonGen: rootType is case-insensitive (User === user)', () => {
-  const json = '{"name": "Test", "address": {"street": "Main St"}}';
-  const lower = JsonGen.fromReader(json, { rootType: 'user' }).generateSchema();
-  const upper = JsonGen.fromReader(json, { rootType: 'User' }).generateSchema();
-  assert.strictEqual(lower, upper);
-});
-
-test('JsonGen: custom baseURL, relativePath, and list rootType', () => {
-  const json = '{"id": 1, "name": "Test"}';
-  const schema = JsonGen.fromReader(json, {
-    rootType: '[User]',
-    baseURL: 'https://api.example.com',
-    relativePath: '/users',
-  }).generateSchema();
-  assert.ok(schema.includes('baseURL: "https://api.example.com"'));
-  assert.ok(schema.includes('user: [User]'));
-  assert.ok(schema.includes('GET: "/users"'));
-  assert.ok(schema.includes('type User {'));
-});
-
-test('JsonGen: queryField overrides the derived field name', () => {
-  const json = '{"id": 1, "name": "Test"}';
-  const schema = JsonGen.fromReader(json, {
-    rootType: '[User]',
-    queryField: 'allUsers',
-  }).generateSchema();
-  assert.ok(schema.includes('allUsers: [User]'));
-  assert.ok(!schema.includes('user: [User]'));
-});
-
-test('JsonGen: defaults for baseURL and relativePath', () => {
-  const json = '{"id": 1}';
-  const schema = JsonGen.fromReader(json).generateSchema();
-  assert.ok(schema.includes('baseURL: "http://localhost:4010"'));
-  assert.ok(schema.includes('root: Root'));
-  assert.ok(schema.includes('GET: "/test"'));
-  assert.ok(!schema.includes('[Root]'));
-});
-
-test('should construct Walker from JSON file and store types in context', async () => {
-  await runJsonTest('test/merge/a.json');
-});
-
-test('should read and output a single file', async () => {
-  await runJsonTest('preferences/user/50.json');
-});
-
-test('should read all the json files and combine the output into one', async () => {
-  await runJsonTest('live-scores/all');
-});
-
-test('stats/fixtures/championship', async () => {
-  await runJsonTest('stats/fixtures/championship');
-});
-
-test('stats/leagues', async () => {
-  await runJsonTest('stats/leagues');
-});
-
-test('stats/line-ups', async () => {
-  await runJsonTest('stats/line-ups');
-});
-
-test('stats/results/scottish-premiership', async () => {
-  await runJsonTest('stats/results/scottish-premiership');
-});
-
-test('stats/tables/championship', async () => {
-  await runJsonTest('stats/tables/championship');
-});
-
-test('stats/tables/not-found.json', async () => {
-  await runJsonTest('stats/tables/not-found.json');
-});
-
-test('fronts', async () => {
-  await runJsonTest('fronts');
-});
-
-test('articles/search.json', async () => {
-  await runJsonTest('articles/search.json');
-});
-
-test('articles/clockwatch', async () => {
-  const output = await runJsonTest('articles/clockwatch', { shouldFail: true });
-  assert.ok(output !== undefined);
-  assert.ok(output!.includes('SELECTED_FIELD_NOT_FOUND'));
-});
-
-test('test/merge', async () => {
-  await runJsonTest('test/merge');
-});
-
-test('articles/blog', async () => {
-  await runJsonTest('articles/blog', {
-    shouldFail: true,
-    outputContains: 'SELECTED_FIELD_NOT_FOUND',
-  });
-});
-
-test('articles/article', async () => {
-  await runJsonTest('articles/article', {
-    shouldFail: true,
-    outputContains: 'SELECTED_FIELD_NOT_FOUND',
-  });
-});
-
-test('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend', async () => {
-  await runJsonTest('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend.json', {
-    shouldFail: true,
-    outputContains: 'SELECTED_FIELD_NOT_FOUND',
-  });
-});
-
-test('live-scores/all/2023-12-23_15_00.json', async () => {
-  await runJsonTest('live-scores/all/2023-12-23_15_00.json');
-});
-
-test('test/all/2023-12-23_15_00.json', async () => {
-  await runJsonTest('test/names_with_colon.json');
-});
-
-test('test/null_fields.json', async () => {
-  await runJsonTest('test/null_fields.json');
-});
+import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
+import './_setup.js';
 
 /// OAS TESTS
 test('test_001_oas_test minimal petstore', async () => {
@@ -448,7 +263,6 @@ test('test_020_oas_test_010_TMF633_IntentOrValue_to_Union_Full', async () => {
 
   await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 4);
 });
-
 test('test_021_oas_test_011_TMF637_001_ComposedTest', async () => {
   const paths = ['get:/product/{id}>**'];
 
@@ -838,212 +652,6 @@ test('test_054_oas_test-better-naming', async () => {
 
   await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 5);
 });
-
-test('test_055_test-parser-reset', async () => {
-  const file = 'launch_Library_2-docs-v2.3.0.json';
-  const oasBasePath = '/Users/fernando/Development/Apollo/connectors/projects/gen/tests/resources/oas';
-
-  const content = fs.readFileSync(`${oasBasePath}/${file}`)
-
-  // @ts-expect-error - Buffer to ArrayBuffer conversion
-  const gen = await OasGen.fromData(content as ArrayBuffer, {
-    skipValidation: false,
-    consolidateUnions: true,
-    showParentInSelections: false,
-  });
-
-  await gen.visit();
-
-  // 1st pass
-  const paths = [
-    "get:/2.3.0/agencies/>res:r>obj:type:#/c/s/PaginatedPolymorphicAgencyEndpointList>prop:array:#results>union:#/c/s/PolymorphicAgencyEndpoint>obj:type:#/c/s/AgencyMini>prop:scalar:id"
-  ]
-
-  const types = gen.getTypes(paths);
-  const schema = gen.generateSchema(paths);
-
-  // 2nd pass
-  const types2 = gen.getTypes(paths);
-  const schema2 = gen.generateSchema(paths);
-
-  assert.ok(_.isEqual(schema, schema2), "Schema should be equal");
-  assert.ok(_.isEqual(Array.from(types.keys()), Array.from(types2.keys())), "Types keys should be equal")
-});
-
-
-// Transform rules tests
-test('test_056_should load valid transform rules from file', async () => {
-  const tempFile = path.join(os.tmpdir(), 'test-rules.json');
-  const rulesContent = {
-    description: 'Test rules',
-    rules: [
-      {
-        pattern: 'apiV1(.*)',
-        replacement: 'api_v1_$1'
-      }
-    ]
-  };
-
-  fs.writeFileSync(tempFile, JSON.stringify(rulesContent));
-
-  try {
-    const rules = RulesLoader.fromFile(tempFile);
-    
-    assert.strictEqual(rules.description, 'Test rules');
-    assert.strictEqual(rules.rules.length, 1);
-    assert.strictEqual(rules.rules[0].pattern, 'apiV1(.*)');
-    assert.strictEqual(rules.rules[0].replacement, 'api_v1_$1');
-    assert.strictEqual(rules.rules[0].description, undefined);
-    assert.strictEqual(rules.rules[0].enabled, undefined);
-  } finally {
-    fs.unlinkSync(tempFile);
-  }
-});
-
-test('should map operation names with multiple rules', async () => {
-  const rules = {
-    rules: [
-      {
-        pattern: 'apiV1(.*)',
-        replacement: 'api_v1_$1'
-      },
-      {
-        pattern: 'get(.*)',
-        replacement: 'fetch$1'
-      }
-    ]
-  };
-
-  const mapper = OpNameMapper.fromRules(rules);
-  const result = mapper.operationName('apiV1getUser');
-  
-  // Should apply both rules: apiV1getUser -> api_v1_getUser -> api_v1_fetchUser
-  assert.strictEqual(result, 'api_v1_fetchUser');
-});
-
-test('should handle legacy pattern conversion', async () => {
-  const rule = OpNameMapper.fromPattern('apiV1(.*):api_v1_$1');
-  const result = rule.operationName('apiV1getUser');
-  
-  assert.strictEqual(result, 'api_v1_getUser');
-});
-
-test('should apply rules in priority order', async () => {
-  const rules = {
-    rules: [
-      {
-        pattern: 'apiV1(.*)',
-        replacement: 'api_v1_$1',
-        priority: 1
-      },
-      {
-        pattern: 'get(.*)',
-        replacement: 'fetch$1',
-        priority: 10 // Higher priority, should be applied first
-      },
-      {
-        pattern: 'fetchUser',
-        replacement: 'getUser',
-        priority: 5
-      }
-    ]
-  };
-
-  const mapper = OpNameMapper.fromRules(rules);
-  const result = mapper.operationName('apiV1getUser');
-  
-  // Priority order: 10, 5, 1
-  // 1. get(.*) -> fetch$1: apiV1getUser -> apiV1fetchUser
-  // 2. fetchUser -> getUser: apiV1fetchUser -> apiV1getUser  
-  // 3. apiV1(.*) -> api_v1_$1: apiV1getUser -> api_v1_getUser
-  assert.strictEqual(result, 'api_v1_getUser');
-});
-
-test('test_057_oas_test_petstore_with_transform_rules', async () => {
-  // Load the petstore transform rules
-  const rules = RulesLoader.fromFile('./tests/resources/petstore-transform-rules.json');
-  const mapper = OpNameMapper.fromRules(rules);
-  
-  // Test that the mapper correctly transforms operation names
-  assert.strictEqual(mapper.operationName('createPet'), 'create_Pet');
-  assert.strictEqual(mapper.operationName('updateUserByUsername'), 'updateUser');
-  assert.strictEqual(mapper.operationName('createUser'), 'create_User');
-  
-  // Test with petstore operations that should be transformed
-  const paths = [
-    'get:/pet/{petId}>**',
-    'get:/pet/findByStatus>**',
-    'get:/pet/findByTags>**',
-    'get:/store/inventory>**',
-    'get:/store/order/{orderId}>**',
-    'get:/user/{username}>**',
-    'get:/user/login>**',
-    'get:/user/logout>**',
-  ];
-
-  await runOasTest('petstore.yaml', paths, 19, 6, false, false, mapper);
-});
-
-test('test_058_oas_test_mb_cc_with_transform_rules', async () => {
-  // Load the mb-cc transform rules
-  const rules = RulesLoader.fromFile('./tests/resources/mb-cc-transform-rules.json');
-  const mapper = OpNameMapper.fromRules(rules);
-  
-  // Test that the mapper correctly transforms operation names with exact matching
-  assert.strictEqual(mapper.operationName('apiV1Markets'), 'markets');
-  assert.strictEqual(mapper.operationName('marketsByMarketIdModels'), 'marketModels');
-  assert.strictEqual(mapper.operationName('marketsByMarketIdByModelIdModelsByMarketIdByModelId'), 'vehicleModel');
-  assert.strictEqual(mapper.operationName('modelByMarketIdAndModelIdConfigurationsInitial'), 'initialVehicleConfiguration');
-  assert.strictEqual(mapper.operationName('marketsByMarketIdByModelIdByConfigurationIdModelsByMarketIdByModelIdByConfigurationIdConfigurationsByMarketIdByModelIdByConfigurationId'), 'vehicleConfiguration');
-  
-  // Test that the mapper doesn't transform unrelated names
-  assert.strictEqual(mapper.operationName('getUser'), 'getUser');
-  assert.strictEqual(mapper.operationName('createPet'), 'createPet');
-  
-  // Test that the mapper doesn't transform partial matches (this was the problem before anchors)
-  assert.strictEqual(mapper.operationName('apiV1MarketsExtended'), 'apiV1MarketsExtended');
-  assert.strictEqual(mapper.operationName('ExtendedApiV1Markets'), 'ExtendedApiV1Markets');
-  assert.strictEqual(mapper.operationName('marketsByMarketIdModelsExtended'), 'marketsByMarketIdModelsExtended');
-  assert.strictEqual(mapper.operationName('ExtendedMarketsByMarketIdModels'), 'ExtendedMarketsByMarketIdModels');
-});
-
-test('test_059_oas_test_mb_cc_problematic_rules_without_anchors', async () => {
-  // Create rules without anchors to demonstrate the problem
-  const problematicRules = {
-    description: "Problematic rules without anchors",
-    rules: [
-      { "pattern": "apiV1Markets", "replacement": "markets" },
-      { "pattern": "marketsByMarketIdModels", "replacement": "marketModels" }
-    ]
-  };
-  
-  const mapper = OpNameMapper.fromRules(problematicRules);
-  
-  // This shows the problem: rules without anchors affect multiple names
-  assert.strictEqual(mapper.operationName('apiV1Markets'), 'markets');
-  assert.strictEqual(mapper.operationName('apiV1MarketsExtended'), 'marketsExtended'); // ❌ Problem: partial match
-  assert.strictEqual(mapper.operationName('ExtendedApiV1Markets'), 'ExtendedApiV1Markets'); // This doesn't match because pattern is at start
-  
-  assert.strictEqual(mapper.operationName('marketsByMarketIdModels'), 'marketModels');
-  assert.strictEqual(mapper.operationName('marketsByMarketIdModelsExtended'), 'marketModelsExtended'); // ❌ Problem: partial match
-  
-  // Let's show a better example of the problem with a pattern that could match anywhere
-  const problematicRules2 = {
-    description: "Problematic rules that could match anywhere",
-    rules: [
-      { "pattern": "Markets", "replacement": "MarketsFixed" },
-      { "pattern": "Models", "replacement": "ModelsFixed" }
-    ]
-  };
-  
-  const mapper2 = OpNameMapper.fromRules(problematicRules2);
-  
-  // This shows the real problem: patterns match anywhere in the string
-  assert.strictEqual(mapper2.operationName('apiV1Markets'), 'apiV1MarketsFixed');
-  assert.strictEqual(mapper2.operationName('ExtendedApiV1Markets'), 'ExtendedApiV1MarketsFixed'); // ❌ Problem: matches anywhere
-  assert.strictEqual(mapper2.operationName('marketsByMarketIdModels'), 'marketsByMarketIdModelsFixed'); // ❌ Problem: matches "Models" anywhere
-});
-
 test('test_060_oas_test_additionalProperties_support', async () => {
   // Test additionalProperties support with VehicleComponentTree
   const paths = [
@@ -1068,339 +676,144 @@ test('test_062_oas_test_images_additionalProperties', async () => {
   await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5);
 });
 
-// --- R1: entity-resolver inference (inferEntityResolvers, type-level @connect) ---
-
-test('test_R1_entity_flag_on_positive_emits_key_and_type_resolver', async () => {
-  // GET /widgets/{id} -> Widget { id } qualifies: path param `id` matches a selected
-  // scalar field. Expect @key(fields: "id") plus a type-level @connect using $this.id;
-  // the Query field stays a plain connector (no legacy entity: true).
-  const paths = [
-    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:id',
-    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:name',
-  ];
-
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, true);
+test('test_ref_into_paths_pointer_resolves_and_composes', async () => {
+  // A parameter shared via a JSON-pointer into #/paths (percent-encoded braces) — the DigitalOcean
+  // pattern — must resolve (not throw "Schema not found for ref") and compose. Top coverage gap:
+  // GEN-THROW Schema/response not found for ref #/…. runOasTest composes via rover.
+  const schema = await runOasTest('ref-into-paths.yaml', ['get:/gadgets/{widget_id}>**'], 2, 1);
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('type Widget @key(fields: "id")'), 'expected @key on Widget');
-  assert.ok(schema!.includes('http: { GET: "/widgets/{$this.id}" }'), 'expected type-level $this resolver');
-  assert.ok(!schema!.includes('entity: true'), 'must not emit the legacy Query-field entity: true');
+  assert.ok(schema!.includes('gadgets(widgetId: String!)'), 'resolved shared path param became an arg');
+  assert.ok(schema!.includes('GET: "/gadgets/{$args.widgetId}"'), 'param templated against the resolved arg');
 });
 
-test('test_R1_entity_flag_off_is_byte_identical', async () => {
-  // Same selection, flag OFF: no @key, no $this resolver (literal conversion).
-  const paths = [
-    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:id',
-    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:name',
-  ];
-
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, false);
+test('test_implied_array_items_without_type_resolves_and_composes', async () => {
+  // A schema with `items` but no explicit `type: array` (Slack does this) must be treated as an
+  // array, not throw "Cannot handle schema". runOasTest composes via rover.
+  const schema = await runOasTest('implied-array.yaml', ['get:/things>**'], 1, 1);
   assert.ok(schema !== undefined);
-  assert.ok(!schema!.includes('@key('), 'flag off must not emit @key');
-  assert.ok(!schema!.includes('$this'), 'flag off must not emit a $this resolver');
+  assert.ok(schema!.includes('things: [Thing]'), 'implied array resolved to a list type');
 });
 
-test('test_R1_entity_flag_on_negative_key_not_selected', async () => {
-  // Flag ON but the key field `id` is NOT selected -> $this would dangle, so the op does
-  // not qualify: no @key, no type-level resolver. Still composes.
-  const paths = [
-    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:name',
-    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:sku',
-  ];
-
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, true);
+test('test_allof_contentless_member_skipped_and_composes', async () => {
+  // An allOf with a metadata-only member ({ description } and no $ref/type/properties) must skip
+  // that member, not throw "Cannot handle schema" (Box --Full/--Mini pattern). The merged type
+  // keeps the real members' fields and composes. Top coverage gap: GEN-THROW Cannot handle schema.
+  const schema = await runOasTest('allof-empty-member.yaml', ['get:/things>**'], 1, 1);
   assert.ok(schema !== undefined);
-  assert.ok(!schema!.includes('@key('), 'no @key when key field is unselected');
-  assert.ok(!schema!.includes('$this'), 'no $this resolver when key field is unselected');
+  assert.ok(/type Thing \{[^}]*\bid: String\b[^}]*\bname: String\b/s.test(schema!), 'merged type keeps both members\' fields');
 });
 
-test('test_R1_entity_op_scoping_only_qualifying_op_resolves', async () => {
-  // A qualifying GET-by-id and a non-qualifying list GET both return Widget. Only the
-  // by-id op contributes a type-level resolver; the list (array) op does not.
-  const paths = [
-    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:id',
-    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:name',
-    'get:/widgets>res:r>array:#/c/s/Widget>obj:type:#/c/s/Widget>prop:scalar:id',
-    'get:/widgets>res:r>array:#/c/s/Widget>obj:type:#/c/s/Widget>prop:scalar:name',
-  ];
-
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, true);
+test('test_inline_allof_property_gets_valid_name_and_composes', async () => {
+  // A property whose value is an inline allOf (one real member + one contentless constraint member)
+  // must be emitted as a real type (Meta), not the internal placeholder `[inline:meta]` which the
+  // composer rejects (INTERNAL_ERROR). DigitalOcean's `meta` shape. runOasTest composes via rover.
+  const schema = await runOasTest('inline-allof-prop.yaml', ['get:/things>**'], 1, 2);
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('type Widget @key(fields: "id")'), 'expected single @key on Widget');
-  const resolverCount = schema!.split('{$this.').length - 1;
-  assert.strictEqual(resolverCount, 1, `exactly one $this resolver expected, got ${resolverCount}`);
-  assert.ok(!schema!.includes('entity: true'), 'must not emit entity: true');
+  assert.ok(!schema!.includes('[inline:'), 'internal inline placeholder must not leak into output');
+  assert.ok(schema!.includes('type Meta {'), 'inline allOf property type named from the property key');
+  assert.ok(/\bmeta: Meta\b/.test(schema!), 'field references the derived type');
+  // total stays nullable: the `required` lived only in the skipped contentless member (pre-existing)
+  assert.ok(/total: Int\b(?!!)/.test(schema!), 'total emitted nullable (required was on the skipped member)');
 });
 
-test('test_R1_entity_multi_key_two_resolvers_sorted', async () => {
-  // Two qualifying ops resolve to the same type with different path-param keys. Expect
-  // both @key directives (sorted) and one type-level $this resolver per key.
-  const paths = [
-    'get:/gadgets/{id}>res:r>obj:type:#/c/s/Gadget>prop:scalar:id',
-    'get:/gadgets/{id}>res:r>obj:type:#/c/s/Gadget>prop:scalar:sku',
-    'get:/gadgets/by-sku/{sku}>res:r>obj:type:#/c/s/Gadget>prop:scalar:id',
-    'get:/gadgets/by-sku/{sku}>res:r>obj:type:#/c/s/Gadget>prop:scalar:sku',
-  ];
-
-  const schema = await runOasTest('entity-multi-key.yaml', paths, 2, 1, false, false, undefined, false, true);
+test('test_schema_ref_into_paths_gets_clean_type_name', async () => {
+  // A schema $ref'd via a #/paths JSON-pointer (DigitalOcean pattern) must be emitted with a clean
+  // type name derived from the pointer tail, not the raw pointer (which the composer rejects).
+  // see docs/issues.md #8. runOasTest composes via rover.
+  const schema = await runOasTest('ref-schema-into-paths.yaml', ['get:/gadgets>**'], 2, 2);
   assert.ok(schema !== undefined);
-  assert.ok(
-    schema!.includes('type Gadget @key(fields: "id") @key(fields: "sku")'),
-    'expected both @key directives in sorted order',
-  );
-  assert.ok(schema!.includes('http: { GET: "/gadgets/{$this.id}" }'), 'expected id resolver');
-  assert.ok(schema!.includes('http: { GET: "/gadgets/by-sku/{$this.sku}" }'), 'expected sku resolver');
-  const resolverCount = schema!.split('{$this.').length - 1;
-  assert.strictEqual(resolverCount, 2, `expected two $this resolvers, got ${resolverCount}`);
+  assert.ok(!schema!.includes('#/paths'), 'raw #/paths pointer must not leak as a type name');
+  assert.ok(schema!.includes('type WidgetsItem'), 'pointer tail -> clean type name');
+  assert.ok(/\bwidget: WidgetsItem\b/.test(schema!), 'reference uses the same derived name');
 });
 
-// --- R3: field-name sanitisation edge cases --------------------------------
-
-const GQL_IDENTIFIER = /^[_A-Za-z][_0-9A-Za-z]*$/;
-
-test('test_R3_oas_genParamName_edge_cases', () => {
-  const cases: [string, string][] = [
-    ['created_at', 'createdAt'], // snake -> camel
-    ['media-metadata', 'mediaMetadata'], // kebab
-    ['foo.bar', 'fooBar'], // dotted
-    ['fooBar', 'fooBar'], // already camel (idempotent)
-    ['name', 'name'], // plain
-    ['2fa_enabled', '_2faEnabled'], // leading digit -> prefixed
-    ['123', '_123'], // all digits
-    ['50%off', '_50Off'], // leading digit + illegal char
-    ['full name', 'fullName'], // space
-    ['cost$', 'cost'], // trailing illegal char
-    ['__typename', 'typename'], // reserved-ish prefix collapsed
-    ['', '_'], // empty
-    ['---', '_'], // separators only
-  ];
-  for (const [input, expected] of cases) {
-    assert.strictEqual(Naming.genParamName(input), expected, `genParamName(${JSON.stringify(input)})`);
-    assert.ok(GQL_IDENTIFIER.test(Naming.genParamName(input)), `not a valid identifier: ${JSON.stringify(input)}`);
-  }
-});
-
-test('test_R3_oas_sanitiseFieldForSelect_aliases', () => {
-  // Already-valid keys pass through bare (no alias).
-  assert.strictEqual(Naming.sanitiseFieldForSelect('id'), 'id');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('userName'), 'userName');
-  // Everything else aliases the safe field back to the original (quoted) JSON key.
-  assert.strictEqual(Naming.sanitiseFieldForSelect('created_at'), 'createdAt: "created_at"');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('media-metadata'), 'mediaMetadata: "media-metadata"');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('2fa_enabled'), '_2faEnabled: "2fa_enabled"');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('full name'), 'fullName: "full name"');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('cost$'), 'cost: "cost$"');
-});
-
-test('test_R3_json_walker_naming_edge_cases', () => {
-  assert.strictEqual(jsonGenParamName('created_at'), 'createdAt');
-  assert.strictEqual(jsonGenParamName('2fa_enabled'), '_2faEnabled');
-  assert.strictEqual(jsonGenParamName('full name'), 'fullName');
-  assert.strictEqual(jsonGenParamName('cost$'), 'cost');
-  for (const k of ['2fa', 'full name', 'cost$', '$', '---', '']) {
-    assert.ok(GQL_IDENTIFIER.test(jsonGenParamName(k)), `not a valid identifier: ${JSON.stringify(k)}`);
-  }
-  assert.strictEqual(jsonSanitiseForSelect('id'), 'id');
-  assert.strictEqual(jsonSanitiseForSelect('full name'), 'fullName: "full name"');
-  assert.strictEqual(jsonSanitiseForSelect('cost$'), 'cost: "cost$"');
-});
-
-test('test_R3_oas_edge_fixture_composes_with_safe_names', async () => {
-  // End-to-end: a schema full of awkward JSON keys must produce valid, composable GraphQL
-  // with each safe field aliased back to its original key. runOasTest composes via rover,
-  // so an invalid identifier here would fail composition.
-  const schema = await runOasTest('r3-edge-cases.yaml', ['get:/things>**'], 1, 1);
+test('test_inline_name_collision_splits_by_container', async () => {
+  // Two differently-shaped inline objects sharing a property key (`saleInfo.listPrice` -> {amount},
+  // `offers[].listPrice` -> {amountInMicros}) must not collapse into one type (which drops fields and
+  // breaks the selection: SELECTED_FIELD_NOT_FOUND). The colliding newcomer is qualified by its
+  // container -> `SaleInfoListPrice`, keeping both shapes. see docs/issues.md #9. composes via rover.
+  const schema = await runOasTest('inline-name-collision.yaml', ['get:/volume>**'], 1, 5);
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('_2faEnabled: "2fa_enabled"'), 'leading-digit field aliased');
-  assert.ok(schema!.includes('cost: "cost$"'), 'dollar-sign field aliased');
-  assert.ok(schema!.includes('fullName: "full name"'), 'space field aliased');
-  assert.ok(schema!.includes('createdAt: "created_at"'), 'snake_case field aliased');
+  assert.ok(/type ListPrice \{[^}]*amountInMicros/s.test(schema!), 'first shape kept as ListPrice');
+  assert.ok(/type SaleInfoListPrice \{[^}]*\bamount\b/s.test(schema!), 'colliding shape split by container');
+  assert.ok(/\blistPrice: ListPrice\b/.test(schema!), 'offers item references ListPrice');
+  assert.ok(/\blistPrice: SaleInfoListPrice\b/.test(schema!), 'saleInfo references the split type');
 });
 
-// --- R0: spec version gating (rover-free unit tests) -----------------------
-
-test('test_063_versions_defaults_locked', () => {
-  // Lock the paired bump so a future edit cannot desync connect/federation.
-  assert.deepStrictEqual(DEFAULT_VERSIONS, { federationVersion: 'v2.12', connectorSpecVersion: 'v0.3' });
-});
-
-test('test_064_versions_parse', () => {
-  assert.deepStrictEqual(parseVersion('v0.4'), { major: 0, minor: 4 });
-  assert.deepStrictEqual(parseVersion('v2.12'), { major: 2, minor: 12 });
-  for (const bad of ['2.11', 'v2', 'vx.y', 'v0.4-preview']) {
-    assert.throws(() => parseVersion(bad), /Invalid version/);
-  }
-});
-
-test('test_065_versions_compare_and_minimum', () => {
-  assert.strictEqual(compareVersions('v0.3', 'v0.3'), 0);
-  assert.strictEqual(compareVersions('v0.2', 'v0.4'), -1);
-  assert.strictEqual(compareVersions('v0.4', 'v0.2'), 1);
-  assert.strictEqual(meetsMinimum('v0.4', 'v0.2'), true);
-  assert.strictEqual(meetsMinimum('v0.2', 'v0.4'), false);
-  assert.strictEqual(meetsMinimum('v0.3', 'v0.3'), true);
-  // cross-major ordering on (major, minor)
-  assert.strictEqual(meetsMinimum('v2.11', 'v0.4'), true);
-});
-
-test('test_066_versions_assert_supported', () => {
-  assert.doesNotThrow(() => assertSupportedConnectVersion('v0.3'));
-  assert.doesNotThrow(() => assertSupportedConnectVersion('v0.4'));
-  assert.throws(() => assertSupportedConnectVersion('v9.9'), /Unsupported connector spec version/);
-  // a -preview suffix is not a valid identifier; message steers to v0.4
-  assert.throws(() => assertSupportedConnectVersion('v0.4-preview'), /v0\.4/);
-});
-
-test('test_067_versions_require_gate', () => {
-  assert.doesNotThrow(() => requireConnectVersion('unions', 'v0.4', 'v0.4'));
-  assert.doesNotThrow(() => requireConnectVersion('errors', 'v0.3', 'v0.2'));
-  assert.throws(() => requireConnectVersion('unions', 'v0.3', 'v0.4'), /requires connect v0\.4/);
-});
-
-test('test_068_entrypoints_reject_bad_version', async () => {
-  // JsonGen constructor validates synchronously.
-  assert.throws(
-    () => JsonGen.new({ connectorSpecVersion: 'v0.4-preview' }),
-    /Unsupported connector spec version/,
-  );
-  // OasGen.fromData validates before touching the data.
-  await assert.rejects(
-    OasGen.fromData(new ArrayBuffer(0), {
-      skipValidation: true,
-      consolidateUnions: true,
-      showParentInSelections: false,
-      connectorSpecVersion: 'v9.9',
-    }),
-    /Unsupported connector spec version/,
-  );
-});
-
-// --- R5 (slice 1): @source auth header from OAS global security ---------------
-//
-// The suite globally no-ops console.warn (top of file). Deferred-is-loud cases below
-// temporarily install a capturing stub and restore the original in a `finally` so the
-// warnings are actually observable.
-async function captureWarnings(fn: () => Promise<void>): Promise<string[]> {
-  const orig = console.warn;
-  const warnings: string[] = [];
-  console.warn = (...a: unknown[]) => {
-    warnings.push(a.join(' '));
-  };
-  try {
-    await fn();
-  } finally {
-    console.warn = orig;
-  }
-  return warnings;
-}
-
-test('test_R5_security_bearer_emits_authorization_header', async () => {
-  // Global bearerAuth (http/bearer), no per-op overrides -> Authorization: Bearer.
-  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 9);
+test('test_param_default_boolean_emits_literal', async () => {
+  // A boolean (or other non-number/string) param default used to leave a dangling ` = ` →
+  // compose syntax error ("expected a valid Value"). Defaults now emit only for renderable types.
+  // see docs/issues.md #17. runOasTest composes via rover.
+  const schema = await runOasTest('param-default-bool.yaml', ['get:/credentials>**'], 1, 1);
   assert.ok(schema !== undefined);
-  assert.ok(
-    schema!.includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),
-    'expected a Bearer Authorization header on @source',
-  );
+  assert.ok(/readWrite: Boolean = false\b/.test(schema!), 'boolean default rendered as literal');
+  assert.ok(/expirySeconds: Int = 0\b/.test(schema!), 'number default unchanged');
+  assert.ok(!/=\s*[,)]/.test(schema!), 'no dangling = remains');
 });
 
-test('test_R5_security_basic_emits_authorization_header', async () => {
-  // Global http/basic, no per-op overrides -> Authorization: Basic. (No corpus spec uses
-  // global basic auth, so this slice ships a minimal fixture.)
-  const schema = await runOasTest('r5-basic-auth.yaml', ['get:/things>**'], 1, 1);
+test('test_shapeless_object_schema_becomes_json_scalar', async () => {
+  // `{}` / `{ additionalProperties: false }` schemas (Slack shares pattern) used to throw
+  // "Cannot handle schema" when reached via fromSchema (array items, members). They are objects
+  // with no declared fields -> JSON scalar (NOT an empty Obj, which generate() would skip and
+  // dangle the reference). see docs/issues.md #19. runOasTest composes via rover.
+  const schema = await runOasTest('shapeless-object.yaml', ['get:/messages>**'], 1, 2);
   assert.ok(schema !== undefined);
-  assert.ok(
-    schema!.includes('{ name: "Authorization", value: "Basic {$config.token}" }'),
-    'expected a Basic Authorization header on @source',
-  );
+  assert.ok(/privateChannels: \[JSON\]/.test(schema!), 'additionalProperties:false items -> [JSON]');
+  assert.ok(/publicChannels: \[JSON\]/.test(schema!), 'empty {} items -> [JSON]');
 });
 
-test('test_R5_security_apikey_header_emits_named_header', async () => {
-  // Global ApiKeyAuthentication (apiKey in header, name x-api-key), no per-op overrides.
-  const paths = [
-    'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
-  ];
-  const schema = await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 17);
+test('test_response_allof_snake_path_def_ref_names_converge', async () => {
+  // A response-root allOf on a snake_case path synthesizes a name carrying the `_`
+  // (`v2…Billing_historyResponse`); the definition (Composed.generate) used upperFirst(getRefName)
+  // while the reference used genTypeName, so they diverged -> INVALID_GRAPHQL ("cannot find type").
+  // Both now route through genTypeName. see docs/issues.md #15. runOasTest composes via rover.
+  const schema = await runOasTest('response-allof-snake-path.yaml', ['get:/billing_history>**'], 1, 2);
   assert.ok(schema !== undefined);
-  assert.ok(
-    schema!.includes('{ name: "x-api-key", value: "{$config.apiKey}" }'),
-    'expected the named apiKey header on @source',
-  );
+  assert.ok(schema!.includes('type BillingHistoryResponse {'), 'definition camelized via genTypeName');
+  assert.ok(/billing_history: BillingHistoryResponse\b/.test(schema!), 'reference matches the definition');
+  assert.ok(!schema!.includes('Billing_history'), 'no underscore-divergent type name remains');
 });
 
-test('test_R5_security_oauth2_first_scheme_emits_and_warns_dropped_alternative', async () => {
-  // Global requirement lists `main_auth` (oauth2) then `bearerAuth` (http/bearer). The
-  // first header-producing scheme (oauth2 -> Bearer) is emitted; the alternative is warned.
-  const paths = [
-    'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:scalar:activationDate',
-  ];
-  let schema: string | undefined;
-  const warnings = await captureWarnings(async () => {
-    schema = await runOasTest('js-mva-homepage-product-selector_v3.yaml', paths, 3, 1);
+test('test_inline_renamed_when_colliding_with_component_emitted_name', async () => {
+  // An inline object named by its property key ('user') must not emit under the same GraphQL name as
+  // a stored component ('#/c/s/User' -> `User`): occupancy is checked on the EMITTED name too, and the
+  // inline (never the $ref-named component) is qualified by its container. see docs/issues.md #12.
+  // runOasTest composes via rover.
+  const schema = await runOasTest('inline-vs-component-name.yaml', ['get:/accounts>**'], 1, 4);
+  assert.ok(schema !== undefined);
+  assert.ok(/type User \{[^}]*\bid\b/s.test(schema!), 'component keeps the User name');
+  assert.ok(schema!.includes('type SettingsUser'), 'inline wrapper qualified by its container');
+  assert.ok(/\buser: SettingsUser\b/.test(schema!), 'reference follows the rename');
+  assert.ok((schema!.match(/^type User /gm) || []).length === 1, 'exactly one type User emitted');
+});
+
+test('test_recursive_schema_cut_composes_abstract_pass', async () => {
+  // A recursive schema (Node.parent -> Node, Node.children -> [Node]) must terminate on the
+  // non-consolidating v0.4 path and compose: the re-entering field is cut at the first repeat of a
+  // schema already on the expansion path and emitted as a comment in BOTH the SDL and the selection.
+  // A shared non-recursive component (Shared, referenced twice from sibling fields) must NOT be cut.
+  // see docs/issues.md #10. runOasTest composes via rover.
+  const schema = await runOasTest('recursive-cycle.yaml', ['get:/nodes>**'], 1, 2, false, true, undefined, false, false, {
+    consolidateUnions: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+    composeFederationVersion: '2.13.0',
   });
   assert.ok(schema !== undefined);
-  assert.ok(
-    schema!.includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),
-    'expected oauth2 mapped to a Bearer Authorization header',
-  );
-  assert.ok(
-    warnings.some((w) => /bearerAuth/.test(w) && /not emitted/.test(w)),
-    `expected a dropped-alternative warning naming bearerAuth, got: ${warnings.join(' | ')}`,
-  );
+  assert.ok(schema!.includes('# children: [Node] - circular reference omitted'), 'array-items cycle cut in SDL');
+  assert.ok(schema!.includes('# parent: Node - circular reference omitted'), 'direct self-cycle cut in SDL');
+  assert.ok(/# children: circular reference omitted/.test(schema!), 'array cut commented in selection');
+  assert.ok(/# parent: circular reference omitted/.test(schema!), 'self-cycle cut commented in selection');
+  // shared non-recursive type expands fully under BOTH referencing fields (no over-cutting)
+  assert.ok(/\bmeta: Shared\b/.test(schema!) && /\bextra: Shared\b/.test(schema!), 'both Shared refs kept');
+  assert.ok((schema!.match(/label/g) || []).length >= 3, 'Shared.label selected under both fields');
 });
 
-test('test_R5_security_none_is_byte_identical', async () => {
-  // A spec with no security at all -> headerless @source, exactly as before.
-  const paths = [
-    'get:/individual/{id}>res:r>comp:type:#/c/s/Individual>comp:type:#/c/s/Party>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
-    'get:/individual/{id}>res:r>comp:type:#/c/s/Individual>obj:type:[inline:#/c/s/Individual]>prop:array:#individualIdentification>comp:type:#/c/s/IndividualIdentification>obj:type:[inline:#/c/s/IndividualIdentification]>prop:scalar:identificationId',
-  ];
-  const schema = await runOasTest('TMF632-Party_Management-v5.0.0.oas.yaml', paths, 20, 2);
+test('test_anyof_param_coerced_to_string_arg', async () => {
+  // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
+  // emitting `id: !`); coerce it to String. see docs/issues.md #11. runOasTest composes via rover.
+  const schema = await runOasTest('param-anyof.yaml', ['get:/things/{id}>**'], 1, 1);
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('@source(name: "api", http: { baseURL: "'), 'expected an @source block');
-  assert.ok(!schema!.includes('headers:'), 'no security -> no headers on @source');
+  assert.ok(/\bid: String!/.test(schema!), 'anyOf param coerced to a String arg');
+  assert.ok(!/\bid: !/.test(schema!), 'no empty arg type');
 });
-
-test('test_R5_security_apikey_in_query_is_deferred_with_warning', async () => {
-  // Global apiKey in query (Swagger 2.0 most-popular-product) -> no header, loud warning.
-  let schema: string | undefined;
-  const warnings = await captureWarnings(async () => {
-    schema = await runOasTest('most-popular-product.yaml', ['get:/emailed/{period}.json>**'], 4, 4);
-  });
-  assert.ok(schema !== undefined);
-  assert.ok(!schema!.includes('headers:'), 'apiKey-in-query must not emit an @source header');
-  assert.ok(
-    warnings.some((w) => /query/.test(w)),
-    `expected an apiKey-in-query deferral warning, got: ${warnings.join(' | ')}`,
-  );
-});
-
-test('test_R5_security_per_op_only_emits_no_global_header_and_warns', async () => {
-  // petstore declares per-op security on every operation, no global -> no @source header,
-  // a per-operation warning each (concern-2 guard).
-  let schema: string | undefined;
-  const warnings = await captureWarnings(async () => {
-    schema = await runOasTest('petstore.yaml', ['get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id'], 19, 1);
-  });
-  assert.ok(schema !== undefined);
-  assert.ok(!schema!.includes('headers:'), 'per-op security must not emit a global @source header');
-  assert.ok(
-    warnings.some((w) => /declares its own `security`/.test(w)),
-    `expected per-operation override warnings, got: ${warnings.join(' | ')}`,
-  );
-});
-
-test('test_R5_security_global_plus_op_override_emits_no_global_header_and_warns', async () => {
-  // time-series-1.0.28 has a global requirement AND an op-level override -> guard fires:
-  // no @source header, a per-operation warning.
-  let schema: string | undefined;
-  const warnings = await captureWarnings(async () => {
-    schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 12);
-  });
-  assert.ok(schema !== undefined);
-  assert.ok(!schema!.includes('headers:'), 'op override must suppress the global @source header');
-  assert.ok(
-    warnings.some((w) => /declares its own `security`/.test(w)),
-    `expected a per-operation override warning, got: ${warnings.join(' | ')}`,
-  );
-});
-

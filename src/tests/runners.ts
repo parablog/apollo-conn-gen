@@ -22,14 +22,27 @@ export async function runOasTest(
   mapper?: Mapper,
   skipOptionalArgs: boolean = false,
   inferEntityResolvers: boolean = false,
+  // R2: optional version/union overrides. Defaults reproduce the historic behaviour
+  // (consolidate unions, compose at fed 2.12) so existing callers are unaffected. Real
+  // unions/interfaces (`consolidateUnions: false`) need connect v0.4 + fed 2.13.
+  opts: {
+    consolidateUnions?: boolean;
+    connectorSpecVersion?: string;
+    federationVersion?: string;
+    composeFederationVersion?: string;
+    emitConnectorErrors?: boolean;
+  } = {},
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
-    consolidateUnions: true,
+    consolidateUnions: opts.consolidateUnions ?? true,
     showParentInSelections: false,
     mapper,
     skipOptionalArgs,
     inferEntityResolvers,
+    emitConnectorErrors: opts.emitConnectorErrors,
+    connectorSpecVersion: opts.connectorSpecVersion,
+    federationVersion: opts.federationVersion,
   });
   await gen.visit();
 
@@ -61,7 +74,7 @@ export async function runOasTest(
     fs.writeFileSync(sampleFile, 'type Query { hello: String }', { encoding: 'utf-8', flag: 'w' });
   }
 
-  const [result, output] = compose(schemaFile, sampleFile);
+  const [result, output] = compose(schemaFile, sampleFile, opts.composeFederationVersion);
   if (shouldFail) {
     assert.ok(!result);
     assert.ok(output !== undefined);
@@ -156,7 +169,7 @@ function isRoverAvailable(command: string): [boolean, string?] {
   return [result.status === 0, result.stdout.toString().trim()];
 }
 
-function compose(schemaPath: string, samplePath?: string) {
+function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.12.0') {
   console.info('schemaPath', schemaPath);
 
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');
@@ -166,7 +179,7 @@ function compose(schemaPath: string, samplePath?: string) {
 
   const supergraphFile = path.join(os.tmpdir(), 'oas-test', 'supergraph.yaml');
   let content: string = `
-federation_version: =2.12.0
+federation_version: =${federationVersion}
 subgraphs:
   test_spec:
     routing_url: http://localhost # this value is ignored

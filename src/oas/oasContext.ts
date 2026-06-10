@@ -16,7 +16,27 @@ export type GenerateOptions = {
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
   inferEntityResolvers?: boolean;
+  emitConnectorErrors?: boolean;
 };
+
+// Max nested $ref hops resolvePointer will follow before giving up (guards against ref cycles).
+const MAX_REF_DEPTH = 5;
+
+// Split a JSON pointer (`#/a/b~1c`) into decoded segments: RFC-6901 unescape (`~1`->`/`, `~0`->`~`),
+// then percent-decode, since pointers encode path keys (e.g. `#/paths/~1v2~1apps~1%7Bid%7D`).
+function decodePointer(ref: string): string[] {
+  return ref
+    .slice(2)
+    .split('/')
+    .map((segment) => {
+      const unescaped = segment.replace(/~1/g, '/').replace(/~0/g, '~');
+      try {
+        return decodeURIComponent(unescaped);
+      } catch {
+        return unescaped;
+      }
+    });
+}
 
 export class OasContext {
   public static readonly COMPONENTS_SCHEMAS: string = '#/components/schemas/';
@@ -65,6 +85,13 @@ export class OasContext {
   public store(name: string, type: IType): void {
     trace(this, '[context::store]', 'store ' + type.id);
     this.types.set(name, undefined);
+
+    // Also reserve the *emitted* GraphQL name: an inline object named by its property key must not
+    // collide with a component's emitted name ('user' vs '#/c/s/User' both emit `User`). see issues.md #12
+    const emitted = Naming.genTypeName(name);
+    if (emitted !== name) {
+      this.types.set(emitted, undefined);
+    }
   }
 
   public lookupResponse(ref: string): ResponseObject | ReferenceObject | null {
@@ -74,6 +101,11 @@ export class OasContext {
 
       // get the response schema
       return responses[Naming.getRefName(ref)!] ?? null;
+    }
+
+    // generic JSON-pointer response ref (e.g. #/paths/…/responses/<code>). see docs/issues.md #3
+    if (ref && ref.startsWith('#/')) {
+      return (this.resolvePointer(ref) as ResponseObject) ?? null;
     }
 
     return null;
@@ -88,6 +120,12 @@ export class OasContext {
       const schemas = definition.components?.schemas ?? {};
 
       return schemas ? schemas[Naming.getRefName(ref)!] : null;
+    }
+
+    // generic JSON-pointer schema ref (e.g. #/paths/…); not a named component, so it skips
+    // refCount/consolidation. see docs/issues.md #3
+    if (ref && ref.startsWith('#/')) {
+      return (this.resolvePointer(ref) as SchemaObject) ?? null;
     }
 
     return null;
@@ -112,7 +150,29 @@ export class OasContext {
       return (parameters[name] as ParameterObject) ?? false;
     }
 
+    // generic JSON-pointer param ref (e.g. shared params via #/paths/…/parameters/N). see docs/issues.md #3
+    if (ref && ref.startsWith('#/')) {
+      return (this.resolvePointer(ref) as ParameterObject) ?? false;
+    }
+
     return false;
+  }
+
+  // Resolve an internal JSON pointer (`#/a/b/0`) against the parsed OAS document, following nested
+  // $ref chains (a pointer may land on another `{ $ref }`). `depth` bounds ref-chasing.
+  public resolvePointer(ref: string | null, depth = 0): unknown {
+    if (!ref || !ref.startsWith('#/') || depth > MAX_REF_DEPTH) return undefined;
+
+    let cur: unknown = this.parser.getDefinition();
+    for (const segment of decodePointer(ref)) {
+      if (cur == null || typeof cur !== 'object') return undefined;
+      cur = (cur as Record<string, unknown>)[segment];
+    }
+
+    if (cur != null && typeof cur === 'object' && '$ref' in cur) {
+      return this.resolvePointer((cur as ReferenceObject).$ref, depth + 1);
+    }
+    return cur;
   }
 
   public inContextOf(type: string, node: IType): boolean {

@@ -1,0 +1,26 @@
+openapi: 3.0.3
+info:
+  title: Digit Type Name Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /1-clicks:
+    get:
+      operationId: listOneClicks
+      responses:
+        '200':
+          description: A list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  # array field whose item type name would derive to a leading-digit identifier
+                  '1_clicks':
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        slug:
+                          type: string

@@ -21,6 +21,7 @@ import {
   PropScalar,
   Put,
   ReferenceObject,
+  RefCircRef,
   Res,
   Scalar,
   T,
@@ -34,7 +35,7 @@ import _ from 'lodash';
 import { warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { GqlUtils } from '../utils/gql.js';
-import { APOLLO_SYNTHETIC_OBJ } from '../schemas/index.js';
+import { Naming } from '../utils/naming.js';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
 export class Factory {
@@ -57,8 +58,18 @@ export class Factory {
     if (!schema) throw new Error('Unknown or undefined schema');
     const schemaObj: SchemaObject = schema as SchemaObject;
 
-    // array case
-    if (schemaObj.type === 'array' && schemaObj.items) {
+    // Cycle cut (see docs/issues.md #10): a recursive schema can only close through a component `$ref`,
+    // and `lookupRef` returns the same `SchemaObject` instance for a given ref. So if this resolved ref's
+    // schema is already on the expansion path (an ancestor was built from it), re-entering would recurse
+    // forever / emit a circular connector selection. Stop with a `RefCircRef` sentinel (commented in both
+    // SDL and selection, traversal-terminating) instead of building + lazily expanding the recursion.
+    const cyclic = ref ? this.cyclicAncestor(parent, schemaObj) : undefined;
+    if (cyclic) {
+      return this.fromRefCircRef(parent, cyclic, ref!);
+    }
+
+    // implied array: `items` present even without an explicit `type: array`. see docs/issues.md #4
+    if (_.get(schemaObj, 'items') && (schemaObj.type === 'array' || schemaObj.type == null)) {
       result = this.createArrayType(parent, schemaObj, context);
     }
     // array case
@@ -71,6 +82,12 @@ export class Factory {
     ) {
       result = this.createContainerType(parent, schemaObj, ref);
     }
+    // a shapeless object (nothing but a boolean `additionalProperties`, or `{}`) declares no fields:
+    // fall back to the JSON scalar — NOT an empty Obj, which generate() would skip, dangling the
+    // reference. see docs/issues.md #19
+    else if (this.isShapelessObject(schemaObj)) {
+      result = new Scalar(parent, 'JSON', schemaObj);
+    }
     // scalar
     else {
       result = this.createScalarType(schemaObj, parent);
@@ -82,6 +99,26 @@ export class Factory {
     }
 
     return result;
+  }
+
+  // Keywords that give a schema a renderable GraphQL shape; a schema with none is metadata-only. #5
+  private static readonly SHAPE_KEYWORDS = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf', 'additionalProperties'];
+
+  /** True when a schema carries no renderable content (metadata only). see docs/issues.md #5 */
+  public static isEmptySchema(schema: SchemaObject | ReferenceObject): boolean {
+    const s = schema as Record<string, unknown>;
+    return Factory.SHAPE_KEYWORDS.every((k) => s[k] == null) && _.isEmpty(s.properties);
+  }
+
+  /**
+   * True for an object with no declared fields: no shape keyword except (at most) a boolean
+   * `additionalProperties` (`{}`, `{ additionalProperties: false }`, …). A real map
+   * (`additionalProperties: <schema>`) is NOT shapeless. see docs/issues.md #19
+   */
+  private static isShapelessObject(schema: SchemaObject): boolean {
+    const s = schema as Record<string, unknown>;
+    const noShape = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf'].every((k) => s[k] == null);
+    return noShape && _.isEmpty(s.properties) && typeof s.additionalProperties !== 'object';
   }
 
   private static createScalarType(schema: SchemaObject | null, parent: IType) {
@@ -120,7 +157,7 @@ export class Factory {
     // union
     else if (schema.oneOf || schema.anyOf) {
       const oneOfs = schema.oneOf || [];
-      result = new Union(parent, ref || _.get(schema, 'name'), oneOfs as SchemaObject[]);
+      result = new Union(parent, ref || _.get(schema, 'name'), oneOfs as SchemaObject[], false, _.get(schema, 'discriminator'));
     }
     // map (object with only additionalProperties)
     else if (this.isMapSchema(schema)) {
@@ -137,11 +174,6 @@ export class Factory {
       }
 
       result = new Obj(parent, ref || _.get(schema, 'name') || null, schema);
-
-      // if we want to syntethise an object:
-      if (schema.format == APOLLO_SYNTHETIC_OBJ) {
-        (result as Obj).synthetic = true;
-      }
     }
 
     return result;
@@ -216,6 +248,13 @@ export class Factory {
 
         array.setItems(itemsType);
         prop = array;
+
+        // Array items resolve eagerly here, so if the item ref re-entered a schema on the path
+        // (fromSchema returned the circular sentinel), bubble the cut up to the whole list field:
+        // render `# children: [Node] — circular reference omitted`. see docs/issues.md #10
+        if (itemsType instanceof CircularRef) {
+          return new PropCircRef(parent, array);
+        }
       }
       // 2nd checks for obj property
       else if (
@@ -226,7 +265,13 @@ export class Factory {
       ) {
         if (schemaObj.oneOf) {
           const inner: PropComp = new PropComp(parent, propName, schemaObj);
-          inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
+          inner.comp = new Union(
+            inner,
+            ref || _.get(schemaObj, 'name'),
+            schemaObj.oneOf as SchemaObject[],
+            false,
+            _.get(schemaObj, 'discriminator'),
+          );
           prop = inner;
         } else if (schemaObj.allOf) {
           const propComp: PropComp = new PropComp(parent, propName, schemaObj);
@@ -286,12 +331,34 @@ export class Factory {
       prop = new PropScalar(parent, propName, 'JSON', schemaObj);
     }
 
-    if (parent.ancestors().find((a) => a.id === prop.id)) {
-      console.warn('[factory] Recursion detected! Ancestors already contain this type: \n' + prop.id);
+    // Cut a recursive direct-`$ref` property: the legacy id/name check, plus a schema-identity check
+    // (the resolved component schema already on the path) that catches cycles the name check misses
+    // because the recursion mints distinct per-depth names. see docs/issues.md #10
+    const cyclic = ref ? this.cyclicAncestor(parent, schema as SchemaObject) : undefined;
+    if (cyclic || parent.ancestors().find((a) => a.id === prop.id)) {
       prop = new PropCircRef(parent, prop);
     }
 
     return prop;
+  }
+
+  /**
+   * The nearest ancestor built from the same resolved component `$ref` (compared by `SchemaObject`
+   * identity — `lookupRef` returns the same instance per ref), or undefined. Scoped to the current
+   * expansion path (`ancestors()`), so a shared non-recursive component used by sibling fields is NOT
+   * cut — only a schema that is its own ancestor. `schema` is undefined for inline (non-`$ref`) nodes,
+   * which can never match an ancestor. see docs/issues.md #10
+   */
+  private static cyclicAncestor(parent: IType, schema?: SchemaObject): IType | undefined {
+    if (!schema) return undefined;
+    return parent.ancestors().find((a) => a.schema === schema);
+  }
+
+  /** Build the `fromSchema` circular sentinel (commented in both SDL + selection). see docs/issues.md #10 */
+  public static fromRefCircRef(parent: IType, ancestor: IType, ref: string): IType {
+    const node = new RefCircRef(parent, Naming.getRefName(ref) ?? ancestor.name);
+    node.ref = ancestor;
+    return node;
   }
 
   public static fromResponse(_context: OasContext, parent: IType, mediaSchema: SchemaObject): IType {

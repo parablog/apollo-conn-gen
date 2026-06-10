@@ -1,0 +1,33 @@
+openapi: 3.0.3
+info:
+  title: AllOf Empty Member Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /things:
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: A thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        id:
+          type: string
+    Thing:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        # contentless member — only metadata, no $ref/type/properties (Box does this)
+        - description: 'The information about the current version of the thing.'
+        - type: object
+          properties:
+            name:
+              type: string

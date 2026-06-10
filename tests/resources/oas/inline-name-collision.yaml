@@ -1,0 +1,44 @@
+openapi: 3.0.0
+info:
+  title: Inline name collision
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /volume:
+    get:
+      operationId: getVolume
+      responses:
+        '200':
+          description: A volume with two differently-shaped inline `listPrice` objects.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  # saleInfo.listPrice -> { amount, currencyCode }
+                  saleInfo:
+                    type: object
+                    properties:
+                      listPrice:
+                        type: object
+                        properties:
+                          amount:
+                            type: number
+                            format: double
+                          currencyCode:
+                            type: string
+                  # offers[].listPrice -> { amountInMicros, currencyCode } (same key, different shape)
+                  offers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        listPrice:
+                          type: object
+                          properties:
+                            amountInMicros:
+                              type: number
+                              format: double
+                            currencyCode:
+                              type: string

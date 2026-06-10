@@ -1,0 +1,54 @@
+openapi: "3.0.1"
+info:
+  title: Catalog API (interface via oneOf + shared allOf base)
+  version: "1.0.0"
+paths:
+  /item:
+    get:
+      summary: Retrieve a catalog item.
+      responses:
+        '200':
+          description: A catalog item, which can be either a Book or a Movie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+components:
+  schemas:
+    # Polymorphic response: members are discovered via oneOf and share the Product base via allOf,
+    # so the base is promoted to a GraphQL interface (Scenario B).
+    ItemResponse:
+      oneOf:
+        - $ref: '#/components/schemas/Book'
+        - $ref: '#/components/schemas/Movie'
+      discriminator:
+        propertyName: type
+        mapping:
+          book: '#/components/schemas/Book'
+          movie: '#/components/schemas/Movie'
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        type:
+          type: string
+      required: [id, title, type]
+    Book:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            author:
+              type: string
+          required: [author]
+    Movie:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            director:
+              type: string
+          required: [director]

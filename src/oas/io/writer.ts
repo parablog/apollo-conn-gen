@@ -1,6 +1,7 @@
 import { OasGen } from '../oasGen.js';
 import { IType, T } from '../nodes/internal.js';
 import { inferEntityResolvers } from '../nodes/entity.js';
+import { promoteInterfaces } from '../nodes/interfacePromotion.js';
 import { OperationWriter } from './operationWriter.js';
 import { SchemaWriter } from './schemaWriter.js';
 import { TypesCollector } from '../generator/typesCollector.js';
@@ -49,6 +50,10 @@ export class Writer {
     // loop below generates, so each entity type can emit @key + its type-level
     // @connect/$this resolver. Resets first, so it's a no-op when the flag is off.
     inferEntityResolvers(context, this.gen, types, selection);
+
+    // R2: promote discriminated oneOf-with-shared-allOf-base to a GraphQL interface (id-neutral;
+    // no-op unless consolidateUnions is off and a qualifying union exists). Same `types` map.
+    promoteInterfaces(context, this.gen, types, selection);
 
     this.schemaWriter.writeDirectives(writer);
     this.schemaWriter.writeJSONScalar(writer);

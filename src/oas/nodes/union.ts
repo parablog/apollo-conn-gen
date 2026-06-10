@@ -4,20 +4,30 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import _ from 'lodash';
 
 export class Union extends Type {
   public schemas: SchemaObject[];
+  // OAS discriminator: `propertyName` is the source JSON field carrying the type tag,
+  // `discriminatorMapping` maps each tag value to a schema ref (value -> "#/.../Type").
   public discriminator?: string;
+  public discriminatorMapping?: Record<string, string>;
+  // R2: when this discriminated union's members all share one allOf base, it is promoted to a
+  // GraphQL interface. `interfaceBaseRef` is the base schema ref ("#/.../Product"); when set,
+  // generate() returns the interface name (not the union name) and emits no `union` line. Set by
+  // promoteInterfaces (a post-collect pass) — never in visit().
+  public interfaceBaseRef?: string;
 
   constructor(
     parent: IType,
     name: string,
     schemas: SchemaObject[],
     public consolidated: boolean = false,
+    disc?: { propertyName?: string; mapping?: Record<string, string> },
   ) {
     super(parent, name);
     this.schemas = schemas;
+    this.discriminator = disc?.propertyName;
+    this.discriminatorMapping = disc?.mapping;
     this.updateName();
   }
 
@@ -79,12 +89,17 @@ export class Union extends Type {
         child.generate(context, writer, selection);
       }
     } else if (context.inContextOf('Res', this)) {
-      writer.write(Naming.genTypeName(this.name));
+      // R2: when promoted to an interface, the field returns the base interface, not the union name.
+      writer.write(Naming.genTypeName(this.interfaceBaseRef ?? this.name));
       return;
     }
     // generate traditional union
     else {
-      const name = _.upperFirst(Naming.getRefName(this.name));
+      // Definition/reference agreement, like comp.ts: references emit genTypeName(name), so the
+      // union line (and its consolidate-downgrade type) must too. see docs/issues.md #15, #6
+      const sanitised = Naming.genTypeName(this.name);
+      const refName = Naming.getRefName(this.name);
+      const name = sanitised === refName ? refName : sanitised;
 
       if (context.generateOptions.consolidateUnions) {
         if (!this.consolidated) {
@@ -118,6 +133,10 @@ export class Union extends Type {
         }
 
         writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
+      } else if (this.interfaceBaseRef) {
+        // R2: promoted to an interface — the base (emitted as `interface`) and the members
+        // (each `... implements Base`) carry the type system; emit no `union X = A | B` line.
+        trace(context, '   [union::generate]', `[interface] suppressing union line for ${this.name}`);
       } else {
         // add the prop parent paths to a set so we can only include those parents that have been selected
         const propParentsPathSet = new Set(this.selectedProps(selection).map((p) => p.parent!.path()));
@@ -144,6 +163,17 @@ export class Union extends Type {
 
     if (!this.consolidated) {
       this.consolidate(selection);
+    }
+
+    // R2: when we emit a *real* `union X = A | B` (not the consolidate downgrade) and the
+    // spec gives us a discriminator, produce the composable abstract-type selection
+    // (connect v0.4): a spread `->match` whose branches set a string-literal __typename per
+    // concrete member. Without a discriminator, or when consolidating, fall back to the flat
+    // merged selection (the consolidate-downgrade shape).
+    if (!context.generateOptions.consolidateUnions && this.discriminator) {
+      this.selectAbstract(context, writer, selection);
+      trace(context, '<- [union::select]', `-> out: ${this.name}`);
+      return;
     }
 
     const selected = this.selectedProps(selection);
@@ -192,6 +222,66 @@ export class Union extends Type {
      */
 
     trace(context, '<- [union::select]', `-> out: ${this.name}`);
+  }
+
+  /**
+   * R2: emit the connect-v0.4 abstract-type selection for a real union. Shape (verified to
+   * compose under fed v2.13 / connect v0.4):
+   *
+   *   ... <discriminator>->match(
+   *     ["<value>", $ { __typename: $("Book") <Book fields> }],
+   *     ["<value>", $ { __typename: $("Movie") <Movie fields> }]
+   *   )
+   *
+   * `__typename` is a string literal (required by the composer); per-member fields come from
+   * each member's own `select`, scoped by the current selection.
+   */
+  private selectAbstract(context: OasContext, writer: Writer, selection: string[]): void {
+    const base = context.indent;
+    const pad = (n: number) => ' '.repeat(Math.max(n, 0));
+
+    // The match operates on the *source* JSON field; quote it if not a bare identifier
+    // (e.g. OAS discriminators like `@type`).
+    const field = /^[_A-Za-z][_0-9A-Za-z]*$/.test(this.discriminator!)
+      ? this.discriminator!
+      : `"${this.discriminator!}"`;
+
+    // Only members with at least one selected prop participate.
+    const members = this.children.filter((child) =>
+      Array.from(child.props.values()).some((p) => selection.find((s) => s.startsWith(p.path()))),
+    );
+
+    writer.write(pad(base)).write(`... ${field}->match(\n`);
+
+    members.forEach((child, idx) => {
+      const typeName = Naming.getRefName(child.name)!;
+      const value = this.discriminatorValue(child) ?? typeName.toLowerCase();
+
+      writer.write(pad(base + 2)).write(`["${value}", $ {\n`);
+      writer.write(pad(base + 4)).write(`__typename: $("${typeName}")\n`);
+
+      // Member fields via the child's own select (scoped by selection). `select` writes at
+      // `context.indent + stack.length`, so offset indent to land fields at base + 4.
+      const savedIndent = context.indent;
+      context.indent = base + 4 - context.stack.length;
+      child.select(context, writer, selection);
+      context.indent = savedIndent;
+
+      writer.write(pad(base + 2)).write(idx < members.length - 1 ? '}],' : '}]').write('\n');
+    });
+
+    writer.write(pad(base)).write(')\n');
+  }
+
+  /** Reverse-lookup an OAS discriminator value (e.g. "book") for a concrete member type. */
+  private discriminatorValue(child: IType): string | null {
+    const mapping = this.discriminatorMapping;
+    if (!mapping) return null;
+    const childRef = Naming.getRefName(child.name);
+    for (const [value, ref] of Object.entries(mapping)) {
+      if (Naming.getRefName(ref) === childRef) return value;
+    }
+    return null;
   }
 
   public consolidate(selection: string[]): Set<IType> {

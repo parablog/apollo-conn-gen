@@ -27,7 +27,11 @@ export class Param extends Type {
     context.enter(this);
     trace(context, '-> [param:visit]', 'in: ' + this.name);
 
-    const type = Factory.fromSchema(context, this, this.schema);
+    // A GraphQL argument must be a single scalar; a param schema that is anyOf/oneOf (e.g.
+    // DigitalOcean's `id | fingerprint` path param) has no single arg type — coerce to String.
+    // see docs/issues.md #11
+    const argSchema = this.schema && (this.schema.anyOf || this.schema.oneOf) ? ({ type: 'string' } as SchemaObject) : this.schema;
+    const type = Factory.fromSchema(context, this, argSchema);
     this.add(type);
 
     this.resultType = type;
@@ -67,16 +71,17 @@ export class Param extends Type {
     // do nothing
   }
 
+  // Emit ` = <value>` only for types we can render as a GraphQL literal; otherwise skip the whole
+  // default (a dangling ` = ` is a compose syntax error, an omitted default is always valid). #17
   private writeDefaultValue(writer: Writer): void {
-    writer.write(' = ');
     const value = this.defaultValue;
 
     if (typeof value === 'number') {
-      writer.write(value.toString());
+      writer.write(' = ').write(value.toString());
+    } else if (typeof value === 'boolean') {
+      writer.write(' = ').write(value ? 'true' : 'false');
     } else if (typeof value === 'string') {
-      writer.write('"');
-      writer.write(String(value));
-      writer.write('"');
+      writer.write(' = "').write(String(value)).write('"');
     }
   }
 }
