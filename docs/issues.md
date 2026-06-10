@@ -478,6 +478,20 @@ prefer the non-`PropCircRef` version. Then:
 - props cut on *every* path stay commented.
 
 **AST (proposed):** no new nodes — a collect-time prop merge on the kept instance.
+
+**Attempt notes (2026-06-10, implemented then reverted as too invasive — keep for the next try):**
+- Mutating `kept.props` is WRONG: the merged prop leaks into the *cut position's* selection, which
+  then genuinely re-enters the cycle → rover `CIRCULAR_REFERENCE`. The merge must be **SDL-only**;
+  each path's selection keeps its own cut comment.
+- The merge must also be **selection-guarded**: only take a prop whose own `path()` is in the final
+  selection — an unselected replacement emits an SDL field no selection resolves
+  (`CONNECTORS_UNRESOLVED_FIELD`, caught by `test_040` AdobeCommerce). Defer to after the collect
+  loop: `expanded` is still mutating during it.
+- Verified on confluence abstract: clears all 8 `SELECTED_FIELD_NOT_FOUND` ops (`history`/`Space`),
+  **but** they then hit the R2 discriminator-less-union wall (`GROUP_SELECTION_IS_NOT_OBJECT` on
+  `ContentMetadata.labels: LabelsUnion`) — net pass-rate unchanged until that R2 gap is also fixed.
+  Re-estimate the payoff jointly with R2 before re-attempting.
+
 **Refs:** `src/oas/generator/typesCollector.ts` (`collect`, id-keyed `pendingTypes`),
 `src/oas/nodes/propCircRef.ts`. Until fixed the harness keeps `confluence.json::abstract` skipped.
 
