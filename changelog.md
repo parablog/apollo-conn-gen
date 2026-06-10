@@ -4,16 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.9.1]
 
 ### Added
-- Auth headers from OAS security: a spec's global `security` scheme is now mapped to a
-  templated `@source` header so the router supplies the secret at runtime
-  (`apiKey`/header → `{$config.apiKey}`; `http`/bearer, `oauth2`/`openIdConnect` →
-  `Authorization: Bearer {$config.token}`; `http`/basic → `Authorization: Basic {$config.token}`).
-  Default on, no flag. Deferred cases (per-operation `security`, `apiKey` in query/cookie,
-  and additional/alternative schemes) emit no header and are logged as warnings rather than
-  dropped silently.
+- Entity resolution (R1): opt-in `--infer-entity-resolvers` emits type-level `@connect`
+  with `@key`/`$this` lookups.
+- Abstract types (R2, connect v0.4): real unions with discriminator → `__typename` via
+  `->match`; discriminated `oneOf` with a shared `allOf` base promotes to a GraphQL
+  `interface`. Default output (consolidate downgrade) unchanged.
+- Error handling (R4): opt-in `emitConnectorErrors` emits
+  `@connect(errors: { extensions })` surfacing `$status` (connect v0.2+).
+- Auth headers (R5): a spec's global `security` scheme maps to a templated `@source`
+  header (`{$config.apiKey}` / `Authorization: Bearer {$config.token}`). Deferred cases
+  warn instead of dropping silently.
+- Coverage harness: real-world vendor corpus sweep (generate + rover-compose per GET op).
+
+### Fixed
+Details per id in `docs/issues.md`:
+- #1 non-identifier field names sanitised + aliased back to the JSON key
+- #2 snake_case path params templated as `{$args.…}`
+- #3/#8 `$ref` pointers into `#/paths` resolved, with clean type names
+- #4 schemas with `items` but no `type: array` treated as arrays
+- #5 contentless `allOf` members skipped
+- #6 leading-digit type names prefixed
+- #7 inline `allOf`-property composed types named from the property key
+- #9/#12 inline type-name collisions (same-shape and vs-component) split/renamed
+- #10 recursive schema cycles cut and commented instead of looping
+- #11 `anyOf`/`oneOf` params coerced to `String`
+- #15 Composed/Union definition vs reference names converge via `genTypeName`
+- #17 boolean param defaults rendered (no dangling `= `)
+- #19 shapeless `{}` schemas become `JSON` scalars instead of throwing
 
 ## [0.8.4]
 
