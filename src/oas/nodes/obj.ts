@@ -47,11 +47,7 @@ export class Obj extends Type {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
-    // A non-$ref inline object whose name is already taken is a different shape that would collapse
-    // onto the existing type (dropping fields) — qualify it. Skip `[inline:…]` consolidated allOf/oneOf
-    // members (comp.ts:220, updateName below): they fold into their parent Composed and never emit
-    // standalone, so they must keep a shared id for duplicate $ref instances to dedup. see docs/issues.md #9
-    if (context.types.has(this.name) && !T.isRef(this.name) && !this.name.startsWith('[inline:')) {
+    if (this.collidesWithStoredType(context)) {
       this.resolveNameConflict(context);
     }
 
@@ -254,6 +250,19 @@ export class Obj extends Type {
     }
 
     this.name = name;
+  }
+
+  // An inline object borrows its property key as a name, but each is its own definition (only $refs
+  // are shared) — if that name is already taken, this is a different shape that would collapse onto
+  // the existing type (dropping fields). Taken means the raw name OR the emitted GraphQL name is
+  // reserved ('user' collides with a stored '#/c/s/User': both emit `User` — issue #12). $ref-named
+  // types dedup by id and are never renamed; `[inline:…]` consolidated allOf/oneOf members fold into
+  // their parent Composed and must keep a shared id. see docs/issues.md #9, #12
+  private collidesWithStoredType(context: OasContext): boolean {
+    if (!this.name || T.isRef(this.name) || this.name.startsWith('[inline:')) {
+      return false;
+    }
+    return context.types.has(this.name) || context.types.has(Naming.genTypeName(this.name));
   }
 
   // Qualify a colliding inline name with its container (nearest non-prop ancestor), e.g. `listPrice`

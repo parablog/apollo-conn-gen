@@ -740,6 +740,19 @@ test('test_inline_name_collision_splits_by_container', async () => {
   assert.ok(/\blistPrice: SaleInfoListPrice\b/.test(schema!), 'saleInfo references the split type');
 });
 
+test('test_inline_renamed_when_colliding_with_component_emitted_name', async () => {
+  // An inline object named by its property key ('user') must not emit under the same GraphQL name as
+  // a stored component ('#/c/s/User' -> `User`): occupancy is checked on the EMITTED name too, and the
+  // inline (never the $ref-named component) is qualified by its container. see docs/issues.md #12.
+  // runOasTest composes via rover.
+  const schema = await runOasTest('inline-vs-component-name.yaml', ['get:/accounts>**'], 1, 4);
+  assert.ok(schema !== undefined);
+  assert.ok(/type User \{[^}]*\bid\b/s.test(schema!), 'component keeps the User name');
+  assert.ok(schema!.includes('type SettingsUser'), 'inline wrapper qualified by its container');
+  assert.ok(/\buser: SettingsUser\b/.test(schema!), 'reference follows the rename');
+  assert.ok((schema!.match(/^type User /gm) || []).length === 1, 'exactly one type User emitted');
+});
+
 test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   // A recursive schema (Node.parent -> Node, Node.children -> [Node]) must terminate on the
   // non-consolidating v0.4 path and compose: the re-entering field is cut at the first repeat of a

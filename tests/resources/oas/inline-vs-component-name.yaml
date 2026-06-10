@@ -1,0 +1,40 @@
+openapi: 3.0.0
+info:
+  title: Inline object collides with a component's emitted name
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /accounts:
+    get:
+      operationId: getAccounts
+      responses:
+        '200':
+          description: A component User plus an inline wrapper that would also emit as `User`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  # visited first (props sort alphabetically): stores #/c/s/User and reserves `User`
+                  account:
+                    $ref: '#/components/schemas/User'
+                  settings:
+                    type: object
+                    properties:
+                      # inline wrapper named by its property key: emits as `User` without the
+                      # emitted-name occupancy check (docs/issues.md #12)
+                      user:
+                        type: object
+                        properties:
+                          lastLogin:
+                            type: string
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
