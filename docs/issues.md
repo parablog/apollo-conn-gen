@@ -2,8 +2,9 @@
 
 Curated, numbered log of non-obvious generator bugs / OAS edge cases. Code comments stay short and
 cite an entry here (`// see docs/issues.md #N`) instead of carrying the full rationale inline. Every
-entry has a concrete **before → after** example, an **AST:** note stating how (or whether) the node
-tree changed, and fixed ones have an executable companion fixture under `tests/resources/oas/`.
+entry has an **OAS:** snippet showing the input schema that triggers it, a concrete **before → after**
+example, an **AST:** note stating how (or whether) the node tree changed, and fixed ones have an
+executable companion fixture under `tests/resources/oas/`.
 
 This is the **committed, canonical** list. (`KNOWN_ISSUES.md` at the repo root is gitignored local
 scratch — not this.) `ROADMAP.md` tracks priority/gaps and may link to these ids.
@@ -42,7 +43,14 @@ composition.
 **Cause:** field/arg/select names weren't guaranteed to be valid GraphQL identifiers.
 **Fix:** `Naming.genParamName` / `sanitiseFieldForSelect` sanitise + alias the safe field back to the
 original JSON key.
-**Example** — OAS `{ "2fa_enabled": true, "full name": "x" }`:
+**OAS:**
+```yaml
+properties:
+  2fa_enabled: { type: boolean }
+  full name:   { type: string }
+  cost$:       { type: number }
+```
+**Example**:
 ```graphql
 # before: invalid identifiers
 type Thing { 2fa_enabled: Boolean, full name: String }     # ✗ won't parse
@@ -59,7 +67,17 @@ happen at write time, so `path()`/ids/selection addressing are unaffected.
 **Cause:** templating regex `/\{([a-zA-Z0-9]+)\}/` excluded `_` and used the raw key, but the arg is the
 sanitised camelCase name.
 **Fix:** match the full `{…}` and map through `Naming.genParamName`.
-**Example** — OAS path `/engines/{engine_id}`:
+**OAS:**
+```yaml
+paths:
+  /engines/{engine_id}:
+    get:
+      parameters:
+        - name: engine_id
+          in: path
+          required: true
+```
+**Example**:
 ```graphql
 enginesByEngineId(engineId: String!): Engine
   @connect(http: { GET: "/engines/{engine_id}" })       # ✗ before  → INVALID_URL
@@ -90,7 +108,14 @@ builds ordinary nodes whose **names/ids carry the raw pointer** — cleaned up a
 **Symptom:** Slack `{ items: { anyOf: [...] } }` (implied array) → "Cannot handle schema".
 **Cause:** `Factory.fromSchema` only took the array path when `type === 'array'`.
 **Fix:** treat `items` present (+ no/`array` type) as an implied array.
-**Example** — OAS property `latest: { items: { anyOf: [...] } }` (no `type`):
+**OAS** (Slack — note: no `type: array`):
+```yaml
+latest:
+  items:
+    anyOf:
+      - $ref: '#/components/schemas/ObjsMessage'
+```
+**Example**:
 ```
 before: createScalarType -> throw "Cannot handle schema"
 after:  latest: [ObjsMessage]      # treated as a list
@@ -123,7 +148,13 @@ allOf:
 **Cause:** `genTypeName` didn't guard leading digits like `genParamName` does.
 **Fix:** prefix `_` for digit-leading/empty names (idempotent for valid names); definition + references
 both route through `genTypeName`, so they stay consistent.
-**Example** — OAS path `/v2/1-clicks`:
+**OAS** (DigitalOcean):
+```yaml
+paths:
+  /v2/1-clicks:        # path segment starts with a digit -> item type name does too
+    get: { ... }
+```
+**Example**:
 ```graphql
 type 1ClicksItem { slug: String }    # ✗ before  → INTERNAL_ERROR
 type _1ClicksItem { slug: String }   # ✓ after
@@ -142,7 +173,16 @@ composed.
 emitted**), derive a real name from the property key. **Gated on `Prop`** because `allOf` *members* of
 another `Composed` are consolidated (not emitted) and keep the `[inline:…]` id that selection paths
 reference (`test_010`/`test_018`) — renaming those would break the paths.
-**Example** — OAS `meta: { allOf: [ { properties: { total } }, { required: [total] } ] }`:
+**OAS** (DigitalOcean — `allOf` as a *property* value):
+```yaml
+meta:
+  allOf:
+    - type: object
+      properties:
+        total: { type: integer }
+    - required: [total]
+```
+**Example**:
 ```graphql
 type [inline:meta] { total: Int }   meta: [inline:meta]!   # ✗ before  → INTERNAL_ERROR
 type Meta { total: Int }            meta: Meta!            # ✓ after
@@ -162,7 +202,12 @@ raw pointer; the ref-name extractor (`RemoveRefConverter`) only stripped `#/comp
 **Fix:** `RemoveRefConverter` derives a clean name from the `#/paths` pointer tail (`nameFromPathsPointer`
 — property after the last `properties`, `+Item` for array `items`). Same family as #3.
 **DigitalOcean 35% → 74%** (measured).
-**Example** — `widget: { $ref: '#/paths/~1widgets/get/.../properties/widgets/items' }`:
+**OAS** (DigitalOcean — schema `$ref` pointing into another op's response):
+```yaml
+widget:
+  $ref: '#/paths/~1widgets/get/responses/200/content/application~1json/schema/properties/widgets/items'
+```
+**Example**:
 ```graphql
 type #/paths/~1widgets/get/responses/200/.../properties/widgets/items { … }  # ✗ before  → INTERNAL_ERROR
 type WidgetsItem { … }   widget: WidgetsItem                                  # ✓ after
@@ -187,7 +232,21 @@ exclusions keep this from over-splitting:
   no connector (`CONNECTORS_UNRESOLVED_FIELD`).
 - the renamed node's `id` is name-derived (`obj.ts:35`, a getter), so the rename flows to both the
   definition and the reference (same instance) before collection — references stay in sync for free.
-**Example** — Google Books volume `saleInfo` vs `offers` (now split, both compose):
+**OAS** (Google Books — same property key, two different inline shapes):
+```yaml
+saleInfo:
+  properties:
+    listPrice:
+      properties:
+        amount:       { type: number }
+offers:
+  items:
+    properties:
+      listPrice:
+        properties:
+          amountInMicros: { type: number }
+```
+**Example** (now split, both compose):
 ```graphql
 # saleInfo.listPrice -> { amount }      offers[].listPrice -> { amountInMicros }
 type ListPrice { amountInMicros: Float; currencyCode: String }          # first occurrence keeps the key
@@ -251,6 +310,19 @@ All three are traversal-terminating (`visit`/`add`/`expand` are no-ops / yield n
 rather than silently dropped. Detection happens **only at construction time** (`fromProp` + `fromSchema`,
 one shared predicate) — there is no traversal-time detector.
 
+**OAS** (fixture; Confluence's `Content`/`User`/`Space` is the real-world case):
+```yaml
+Node:
+  type: object
+  properties:
+    parent:   { $ref: '#/components/schemas/Node' }    # direct self-cycle
+    children:
+      type: array
+      items: { $ref: '#/components/schemas/Node' }     # cycle through array items
+    meta:     { $ref: '#/components/schemas/Shared' }  # shared, NOT recursive -> must not be cut
+    extra:    { $ref: '#/components/schemas/Shared' }
+```
+
 **AST before → after** — `Node.children: { type: array, items: { $ref: Node } }` (and a direct
 `parent: { $ref: Node }`):
 ```
@@ -303,6 +375,17 @@ seconds and cuts correctly, but still fails compose on a *name* collision — tr
 argument must be a single scalar; `fromSchema(anyOf)` builds a `Union`, which isn't a valid arg type, so
 the arg type renders empty.
 **Fix:** `Param.visit` coerces an `anyOf`/`oneOf` param schema to `String` (path/query args are scalars).
+**OAS** (DigitalOcean — a path param that accepts an id *or* a name):
+```yaml
+parameters:
+  - name: ssh_key_identifier
+    in: path
+    required: true
+    schema:
+      anyOf:
+        - type: integer
+        - type: string
+```
 **Example**:
 ```graphql
 sshKeyIdentifier: !          # ✗ before  → INTERNAL_ERROR (no type before `!`)
@@ -316,6 +399,21 @@ sshKeyIdentifier: String!    # ✓ after
 **Symptom:** Confluence abstract pass: `CIRCULAR_REFERENCE: type User appears more than once in
 …subjects.user` — even after the real recursion is cut (#10).
 
+**OAS** (Confluence — an *inline* pagination wrapper whose property key is `user`):
+```yaml
+SpacePermission:
+  properties:
+    subjects:
+      type: object
+      properties:
+        user:                       # inline wrapper, NOT the component User
+          type: object
+          properties:
+            results:
+              type: array
+              items: { $ref: '#/components/schemas/User' }
+            size:  { type: integer }
+```
 **Example**:
 ```graphql
 users: [User]                          # component #/c/s/User
@@ -349,6 +447,16 @@ component is stored won't see the collision. Components are reached at shallower
 **Symptom:** with #10 + #12 in place, Confluence abstract fails compose with
 `SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`.
 
+**OAS** (Confluence — `Space` carries refs that re-enter `Content`/`User` only on *some* paths):
+```yaml
+Space:
+  properties:
+    homepage: { $ref: '#/components/schemas/Content' }   # cut when Space sits under Content
+    history:
+      type: object
+      properties:
+        createdBy: { $ref: '#/components/schemas/User' } # cut when Space sits under User
+```
 **Example** — two `Space` instances in one op:
 ```
 path A (under Content): Space { # history — cut }      path B: Space { history: SpaceHistory }
