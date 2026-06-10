@@ -423,21 +423,23 @@ input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs ar
 — gitignored — because the published specs embed example secrets that block pushes; this section is the
 committed summary of what they showed.)
 
-**Corpus status (measured 2026-06-10, stock rover 0.40 / composition 2.13):**
+**Corpus status (measured 2026-06-10 post-#18, stock rover 0.40 / composition 2.13):**
 
 | Spec | GET ops | default (v0.3) | abstract (v0.4) |
 |---|--:|--:|--:|
 | googlebooks | 30 | 100% | 100% |
 | mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
+| digitalocean | 145 | 93.8% | 93.8% |
 | sendgrid | 154 | 92.9% | 92.9% |
-| digitalocean | 145 | **93.8%** | **93.8%** |
 | openai | 10 | 90.0% | 90.0% (0 compose-fails) |
+| github | 444 | 86.5% | 84.9% |
 | asana | 79 | 86.1% | 86.1% |
 | omni | 54 | 83.3% | 81.5% |
-| github | 444 | 82.0% | 80.4% |
-| box | 114 | **74.6%** | **74.6%** |
-| confluence | 65 | 63.1% | 63.1% (was: unmeasurable hang, fixed by #10) |
-| slack | 80 | 45.0% | 45.0% (mostly input quality, see below) |
+| box | 114 | 74.6% | 74.6% |
+| confluence | 65 | 69.2% | 69.2% |
+| slack | 80 | 46.3% | 46.3% (mostly input quality, see below) |
+
+#18 measured corpus-wide: **+36 ops/pass** (github +20, box +9, confluence +4, DO +2, slack +1).
 
 With the **#14 patch** applied to composition (verified via local `apollo-federation-cli` + rover
 shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, box +14, confluence
@@ -448,7 +450,9 @@ shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, 
 | Rank | Item | Ops (both passes) | Status |
 |--:|---|--:|---|
 | 1 | ~~**#17** — param defaults dangle ` = `~~ | — | ✅ fixed `aae14ca` |
-| 2 | **R-collector** — ~~identical inline schemas rename instead of dedup → orphan types (#18)~~ ✅ fixed `0cff45d` (box 66.7→74.6%, DO 92.4→93.8%, both passes); **residue open**: box's 14 remaining compose-fails are different sub-causes (`/files/{file_id}` INTERNAL_ERROR ×9, `/metadata_templates` UNRESOLVED ×5) | residue ~14 (box) | other specs (github, sendgrid, …) not yet re-swept post-#18 — full corpus refresh pending; re-derive buckets then |
+| 2 | ~~**R-collector** — identical inline schemas rename instead of dedup → orphan types (#18)~~ | — | ✅ fixed `0cff45d`, +36 ops/pass corpus-wide; residue split into the two rows below |
+| 2a | **#22** — `Composed` skips the #9/#12 collision check → duplicate type definitions (box `/files/{file_id}` family) | 9/pass (box) | mechanism pinned, fix proposed in the entry; high blast radius (allOf naming) — own slice |
+| 2b | **R-options-pairing** (open research) — same-named array items split (`Options` vs `OptionsItem`) but field/selection pair with the wrong half (box `/metadata_templates` family); #13-adjacent | 5/pass (box) | mechanism unpinned — likely the #13 collect-time prop-merge resolves it; verify when slicing #13 |
 | 3 | ~~**#19** — typeless `{}` schemas throw~~ | — | ✅ fixed `aae14ca` (sendgrid's 3 throws were this shape too; omni's 3 persist → R-genthrow-tail confirmed distinct) |
 | 4 | **R-anyof-empty** (open research; #20 reserved) — `anyOf: [$ref, empty-closed-object]` → zero types (10 github ops) | 10 | fix mechanism undecided: prove-placeholder (a) vs represent-as-JSON-branch (b, leaning) — dropping a *disjunct* is not the #5 allOf case |
 | 5 | **R-genthrow-tail** (open research) — sendgrid(3) + omni(3) GEN-THROW ops | 6 | throwing shapes unexamined; fold into #19 if same, else own note |

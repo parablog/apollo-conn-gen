@@ -729,9 +729,10 @@ type InlineSharedLinkPermissions2 { canDownload: Boolean }  # ✗ orphan
   name there would emit two definitions of it), sibling twins converge on the first renamed name
   instead of minting `2`, `3`, … (`resolveNameConflict`).
 
-**Measured** (default pass): box 66.7 → **74.6%** (+9 ops), DO 92.4 → **93.8%** (`/v2/apps` family
-cleared). Box's remaining 14 compose-fails are different sub-causes (`/files/{file_id}`
-INTERNAL_ERROR, `/metadata_templates` UNRESOLVED) — residue tracked under `R-collector` in ROADMAP.
+**Measured** (full corpus, both passes): **+36 ops/pass** — github 82.0→86.5 (+20), box 66.7→74.6
+(+9), confluence 63.1→69.2 (+4), DO 92.4→93.8 (+2, `/v2/apps` family cleared), slack +1. Box's
+remaining 14 compose-fails are different sub-causes — #22 (`/files/{file_id}` INTERNAL_ERROR ×9)
+and `R-options-pairing` (`/metadata_templates` UNRESOLVED ×5) in ROADMAP.
 **Care:** dedup requires BOTH the same name-derived id and deep schema equality — schema equality
 alone produced `type StepsItem` *defined twice* on DO (caught mid-fix). #13 (path-dependent cycle
 cuts diverging same-named instances) is unchanged by this.
@@ -817,3 +818,41 @@ convention, cf. #19) instead of minting a field-less type. Walker-side counterpa
 **Refs:** `src/json/walker/`, test `articles/clockwatch` (`tests/all/json.test.ts`, repinned
 `c13cfe5`). Verified: walker output byte-identical 0.8.3 → HEAD except `@link` versions — the
 bucket shift came from the R0 default bump (`72f625e`), not a walker change.
+
+## 22 · `Composed` skips the #9/#12 collision check → duplicate type definitions — ⬜ Open
+**Symptom:** `INTERNAL_ERROR: the type Permissions is defined multiple times in the schema` —
+box `/files/{file_id}` and 8 sibling ops (9 per pass). Predates #18 (same counts before/after).
+
+**OAS** (box — two *different* inline `permissions` shapes; the second is a nested `allOf`):
+```yaml
+SharedLink:
+  properties:
+    permissions:          # inline OBJECT -> Obj, stores the name (issue #9 path)
+      type: object
+      properties: { can_download: {type: boolean}, can_edit: {type: boolean} }
+File--Full:
+  properties:
+    permissions:          # inline ALLOF -> Composed: never collision-checks
+      allOf:
+        - allOf: [ {properties: {can_delete: …}}, {properties: {can_annotate: …}} ]
+```
+**Example**:
+```graphql
+type Permissions { canDownload: Boolean canEdit: Boolean }   # the Obj
+type Permissions { canAnnotate: Boolean canComment: Boolean… } # ✗ the Composed — same name, redefined
+```
+
+**Cause:**
+- `collidesWithStoredType`/`resolveNameConflict` live on `Obj` only (`obj.ts`, issues #9/#12/#18).
+- A `PropComp`-named `Composed` (#7: named from its property key) emits its name blindly
+  (`comp.ts` `updateName`/`generate`) — no occupancy check against `context.types`.
+- Same gap presumably applies to `Map` (`map.ts` has only the legacy `nameConflict` flag) and `Union`.
+
+**Proposed fix:** run the same occupancy check + container-qualified rename (and #18 convergence)
+when a `Composed` takes its name from a `Prop` — the #7 gate. Blast radius: every allOf/TMF fixture
+(`[inline:…]` member ids must stay untouched, see #7/#9 exclusions) — own slice, measure box's 9
+INTERNAL_ERROR ops before/after.
+
+**AST:** identity change (proposed) — rename at build, like #9; no shape change.
+**Refs:** `src/oas/nodes/comp.ts` (`updateName`), `src/oas/nodes/obj.ts` (the predicates to reuse).
+Found while triaging the #18 residue.
