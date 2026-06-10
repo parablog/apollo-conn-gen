@@ -585,3 +585,55 @@ same `INVALID_GRAPHQL` count family). Side smell in the same op: the field name 
 **AST (suspected):** emission-only or a missing collect — to be confirmed.
 **Refs:** `src/oas/nodes/comp.ts` (`generate`/`consolidate`), `res.ts`, `operationWriter`. Biggest
 single family in the post-#14 gap histogram (143 of 151 remaining compose-fails).
+
+## 16 · Selections don't mark OAS-optional fields with `?` — ⬜ Open (proposal)
+**Symptom:** the router's connectors debugger warns about "missing properties" at runtime when the API
+omits a field the selection references plainly. Marking optional fields with the mapping language's
+optional-chaining `?` silences the warnings (verified by hand on petstore `/pet/findByStatus`).
+
+**OAS** (petstore — `category`/`name`/`tags` are not in `required`):
+```yaml
+Pet:
+  required: [id, photoUrls]
+  properties:
+    id:        { type: integer }
+    name:      { type: string }      # optional -> may be ABSENT in the response
+    category:  { $ref: '#/components/schemas/Category' }
+    tags:      { type: array, items: { $ref: '#/components/schemas/Tag' } }
+```
+
+**Example** — selection before → after:
+```
+category {            category? {
+  id                    id
+  name                  name?
+}                     }
+name            →     name?
+tags {                tags? {
+  id                    id
+  name                  name?
+}                     }
+```
+
+**Proposal:**
+- Emit `?` **iff the prop is not required** — driven by the existing `Prop.required` (set in
+  `Obj.visitProperties` from the OAS `required` array; the same source of truth as the SDL `!`).
+- Required props stay plain so the debugger still flags genuine contract violations.
+- Exclude entity-resolver key fields (R1) — keys must be present.
+- Mapping-language semantics match exactly: not-in-`required` = key may be absent; `?` = tolerate
+  absence (`a?`, `a? { b }`, `a?->method`).
+
+**Compose support (measured, stock rover + patched workspace):**
+- v0.3 / fed 2.12: ✓ composes.
+- v0.4 / composition **2.13 & 2.14**: ✗ — `category? { id name }` leaves `Category.id`/`Category.name`
+  uncredited (`CONNECTORS_UNRESOLVED_FIELD`) — same shape-validator family as #14, different shape case
+  (`?` produces `One([Object, None])`). Fixed in composition **2.15** (its `One`-arm walks branches;
+  independent of our #14 patch).
+- Nuance: seen-fields are unioned **across all connectors**, so a `?`-group composes on 2.13 *if* another
+  op selects the same type's fields plainly — which is why a manual petstore test can pass.
+
+**AST:** untouched — emission-only (`select()` in the `Prop` subclasses appends `?` from
+`prop.required`). Care points: aliased keys (`safe: "raw key"?`), arrays (`tags? {`), method chains
+(`alternatives?->entries`).
+**Refs:** `src/oas/nodes/prop*.ts` (`select`), `obj.ts` (`visitProperties` sets `required`). Gate: the
+abstract pass needs composition ≥ 2.15 (or the patched toolchain) before this is corpus-safe on v0.4.
