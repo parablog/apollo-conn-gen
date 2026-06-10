@@ -8,6 +8,9 @@ tree changed, and fixed ones have an executable companion fixture under `tests/r
 This is the **committed, canonical** list. (`KNOWN_ISSUES.md` at the repo root is gitignored local
 scratch — not this.) `ROADMAP.md` tracks priority/gaps and may link to these ids.
 
+Style: keep entries scannable — short labeled bullets, **one fact per line**, example near the top;
+no paragraph-blobs. The example carries the weight; prose only adds what the example can't show.
+
 Status: ✅ Fixed · ⬜ Open.
 
 ## Node model (AST) at a glance
@@ -207,24 +210,30 @@ test `test_inline_name_collision_splits_by_container`.
 **Symptom:** `consolidateUnions:false` + connect v0.4 appeared to busy-loop (100% CPU, never returns) on
 Confluence's recursive `Content`/`User`/`Space` schemas; the harness skipped the whole Confluence abstract
 pass. Default v0.3 path was fine.
-**Cause:** two independent defects, neither an actual infinite loop:
-1. **Quadratic selection matching.** `selectedProps` re-ran `prop.path()` (rebuild `ancestors()` + join +
-   regex) once per selection entry, per prop: Confluence's descendant op legitimately expands to ~2,700
-   types and a ~20,000-entry selection (path multiplicity: `User` is reached via `createdBy`,
-   `contributors`, `version.by`, … each minting fresh inline copies), so generation cost was
-   O(types × props × 20k) — finite but hours.
-2. **Recursion never cut.** True schema cycles (`User → personalSpace → Space → … → results: [User]`) were
-   only caught when the *property name* coincidentally repeated (`results` under `results`): the existing
-   checks compare node ids, which are name-derived, and the recursion mints distinct synthesized names per
-   depth — so cycles entered the connector selection and rover rejected it (`CIRCULAR_REFERENCE`).
+**Cause** — two independent defects, neither an actual infinite loop:
+
+1. **Quadratic selection matching.**
+   - Confluence's descendant op legitimately expands to ~2,700 types and a ~20,000-entry selection
+     (path multiplicity: `User` reached via `createdBy`, `contributors`, `version.by`, …).
+   - `selectedProps` re-ran `prop.path()` (rebuild `ancestors()` + join + regex) once per selection
+     entry, per prop → O(types × props × 20k). Finite, but hours.
+2. **Recursion never cut.**
+   - True cycles (`User → personalSpace → Space → … → results: [User]`) were only caught when the
+     *property name* coincidentally repeated (`results` under `results`).
+   - The existing checks compare node ids (name-derived), and the recursion mints distinct synthesized
+     names per depth → never matched.
+   - The cycle reached the connector selection → rover `CIRCULAR_REFERENCE`.
+
 **Fix:**
-1. `selectedProps` indexes the selection once into a `Set` of its `>`-boundary prefixes (`selectionPrefixes`,
-   cached per selection array) — membership is O(1) per prop. Generation drops from hours to seconds.
-2. Cycle detection by **schema identity**: a recursive schema can only close through a component `$ref`,
-   and `lookupRef` returns the *same `SchemaObject` instance* per ref — so `Factory.cyclicAncestor` walks
-   `parent.ancestors()` comparing `a.schema === resolvedSchema`. Scoped to the current expansion path
-   (never a global seen-set), so a shared non-recursive component used by sibling fields is *not* cut.
-   The cut node renders **commented in both artifacts** (SDL + selection) — see the node structure below.
+
+1. `selectedProps` indexes the selection once into a `Set` of its `>`-boundary prefixes
+   (`selectionPrefixes`, cached per selection array) — O(1) per prop. Hours → seconds.
+2. Cycle detection by **schema identity** (`Factory.cyclicAncestor`):
+   - a recursive schema can only close through a component `$ref`, and `lookupRef` returns the *same
+     `SchemaObject` instance* per ref → compare `a.schema === resolvedSchema` along `ancestors()`;
+   - scoped to the current expansion path (never a global seen-set), so a shared non-recursive
+     component used by sibling fields is *not* cut;
+   - the cut renders **commented in both artifacts** (SDL + selection) — node structure below.
 
 ### Circular-reference nodes (AST structure)
 A detected cycle becomes a *node* in the type tree (see the hierarchy in "Node model" above), not a
@@ -304,76 +313,74 @@ sshKeyIdentifier: String!    # ✓ after
 **Refs:** `src/oas/nodes/param.ts` (`visit`), fixture `param-anyof.yaml`.
 
 ## 12 · Inline object collides with a component's *emitted* name — ✅ Fixed (`cf19247`)
-**Symptom:** rover rejects the Confluence abstract pass with `CIRCULAR_REFERENCE: type User appears more
-than once in …users.personalSpace.permissions.subjects.user` — even after the real recursion is cut (#10).
-**Cause:** `SpacePermission.subjects.user` is an *inline* pagination wrapper (`{results: [$ref User],
-size, start, limit}`). It keeps its property key as its name (`user`) and emits as `type User` — the same
-GraphQL name as the component `#/components/schemas/User`. The #9 collision guard compared *raw* stored
-names (`context.types.has('user')` vs the stored `'#/components/schemas/User'`), so the cross-namespace
-collision was invisible; two different shapes emit under one name, and rover sees `User` nested inside
-`User` and calls it circular.
-**Fix:** `context.store` also reserves the **emitted** GraphQL name (`Naming.genTypeName`), and the
-collision guard (extracted to `Obj.collidesWithStoredType`) checks raw *and* emitted occupancy. Only
-**inline** objects are renamed — that's safe because an inline object is referenced solely through its
-owning prop (same node instance; ids are name-derived getters), so the reference follows the rename.
-`$ref`-named types — the ones other types point at — are excluded by `T.isRef` and never renamed.
-**Limitation (pre-existing, same as #9):** occupancy is point-in-time — if the inline visits *before* the
-component is stored, the collision is not seen. In practice components are reached at shallower depths
-first (Confluence works); a counter-example would need the converse order.
+**Symptom:** Confluence abstract pass: `CIRCULAR_REFERENCE: type User appears more than once in
+…subjects.user` — even after the real recursion is cut (#10).
+
 **Example**:
 ```graphql
 users: [User]                          # component #/c/s/User
 …  subjects { user: User }             # ✗ before: inline wrapper also emits `type User` → CIRCULAR_REFERENCE
 …  subjects { user: SubjectsUser }     # ✓ after: qualified by its container, like a #9 collision
 ```
-**AST:** identity-only, like #9 — the inline wrapper is renamed (`obj:type:user` →
-`obj:type:SubjectsUser`); no shape change, reference follows (same instance).
+
+**Cause:**
+- `subjects.user` is an *inline* pagination wrapper (`{results: [$ref User], size, start, limit}`).
+- It keeps its property key as its name (`user`) → emits as `type User`, same name as the component
+  `#/components/schemas/User`.
+- The #9 guard compared **raw** stored names (`'user'` vs `'#/components/schemas/User'`) — the
+  cross-namespace collision was invisible.
+- Two shapes emit under one name; rover sees `User` nested inside `User` → calls it circular.
+
+**Fix:**
+- `context.store` also reserves the **emitted** name (`Naming.genTypeName`).
+- The guard — extracted to `Obj.collidesWithStoredType` — checks raw *and* emitted occupancy.
+- Only **inline** objects rename. Safe: an inline object is referenced solely through its owning prop
+  (same instance, name-derived id) so the reference follows. `$ref`-named types (`T.isRef`) never rename.
+
+**Limitation** (pre-existing, same as #9): occupancy is point-in-time — an inline visiting *before* the
+component is stored won't see the collision. Components are reached at shallower depths first in practice.
+
+**AST:** identity-only, like #9 — `obj:type:user` → `obj:type:SubjectsUser`; no shape change.
 **Refs:** `src/oas/nodes/obj.ts` (`collidesWithStoredType`/`resolveNameConflict`), `oasContext.ts`
-(`store` reserves emitted names). Fixture `inline-vs-component-name.yaml`, test
-`test_inline_renamed_when_colliding_with_component_emitted_name`. Clears the Confluence
-`CIRCULAR_REFERENCE`; the next blocker on that spec is #13.
+(`store`). Fixture `inline-vs-component-name.yaml`, test
+`test_inline_renamed_when_colliding_with_component_emitted_name`. Next Confluence blocker: #13.
 
 ## 13 · Path-dependent cycle cuts make same-named instances diverge — ⬜ Open
-**Symptom:** with #10 + #12 in place, the Confluence abstract pass fails compose with
+**Symptom:** with #10 + #12 in place, Confluence abstract fails compose with
 `SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`.
-**Cause:** #10's cycle cut is **per expansion path**: a `Space` instance reached *under* a `Content`
-ancestor has `history`/`homepage` cut (`PropCircRef` → commented), while a `Space` instance on a path
-with no such ancestor keeps them. All instances share one emitted name, the writer emits **one**
-`type Space` (the collector keeps the first instance per id), and the op's selection is the union of all
-paths — so a selection built from an un-cut instance can reference a field the emitted (cut) instance
-commented out.
-**Proposed fix (sketch):** when the collector meets an already-collected id, **merge props**: per prop
-name, prefer the non-`PropCircRef` version. The emitted type then carries the union of surviving fields —
-every selected field exists (no `SELECTED_FIELD_NOT_FOUND`), every union field is selected on at least the
-path it came from (no `CONNECTORS_UNRESOLVED_FIELD`), and props cut on *every* path stay commented.
+
 **Example** — two `Space` instances in one op:
 ```
 path A (under Content): Space { # history — cut }      path B: Space { history: SpaceHistory }
 emitted (first wins):   type Space { # history … }     selection (path B): … space { history { … } }
                         → SELECTED_FIELD_NOT_FOUND     goal: emitted Space = union → history survives
 ```
-**AST (proposed):** no new nodes — a collect-time prop merge on the kept instance (replace its
-`PropCircRef` entries with the un-cut props from later same-id instances).
+
+**Cause:**
+- #10's cycle cut is **per expansion path**: `Space` under a `Content` ancestor has `history`/`homepage`
+  cut; a `Space` instance on a path without that ancestor keeps them.
+- The writer emits **one** `type Space` (collector keeps the first instance per id).
+- The op's selection is the union of all paths → a selection from an un-cut instance can reference a
+  field the emitted (cut) instance commented out.
+
+**Proposed fix:** when the collector meets an already-collected id, **merge props** — per prop name,
+prefer the non-`PropCircRef` version. Then:
+- emitted type = union of surviving fields → every selected field exists (no `SELECTED_FIELD_NOT_FOUND`);
+- every union field is selected on at least the path it came from (no `CONNECTORS_UNRESOLVED_FIELD`);
+- props cut on *every* path stay commented.
+
+**AST (proposed):** no new nodes — a collect-time prop merge on the kept instance.
 **Refs:** `src/oas/generator/typesCollector.ts` (`collect`, id-keyed `pendingTypes`),
 `src/oas/nodes/propCircRef.ts`. Until fixed the harness keeps `confluence.json::abstract` skipped.
 
 ## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⬜ Open (upstream)
-**Symptom:** 26/43 Mercedes-Benz CCS ops fail the abstract pass with
-`CONNECTORS_UNRESOLVED_FIELD: No connector resolves field AlternativesEntry.key / .value` — the map-entry
-fields — even though the selection plainly selects them. CCS default pass is 100%.
-**Cause (isolated by A/B compose, not a generator bug):** the generated schema selects map entries as
-`alternatives: alternatives->entries { key value {…} }` against `alternatives: [AlternativesEntry]` where
-`type AlternativesEntry { key: String value: Amount }` (the `Map` node's emission). The **byte-identical**
-schema — only the two `@link` version strings swapped — composes clean under connect v0.3 / fed 2.12 and
-fails under connect v0.4 / fed 2.13 (Rover 0.40.0). So v0.4's (preview) connector validation does not
-credit fields selected beneath an `->entries` method sub-selection to the field's declared entry type.
-Reproduced identically on two separate ops; the gap histogram buckets all 26 failures here.
-**Proposed fix:** report upstream (rover / connect v0.4 composition). Generator-side workaround if needed
-before that lands: under `connectorSpecVersion >= v0.4`, degrade map values to `JSON` (skip the synthetic
-entry type) so the op composes, behind the same best-effort convention as #10.
+**Symptom:** 26/43 Mercedes CCS ops fail the abstract pass with
+`CONNECTORS_UNRESOLVED_FIELD: AlternativesEntry.key / .value` — yet the selection selects both.
+CCS default pass: 100%.
+
 **Example** — identical schema, two compose runs:
 ```graphql
-alternatives: [AlternativesEntry]            # SDL
+alternatives: [AlternativesEntry]            # SDL (the Map node's emission)
 alternatives: alternatives->entries {        # selection
   key
   value { unit value }
@@ -381,7 +388,19 @@ alternatives: alternatives->entries {        # selection
 # connect v0.3 / fed 2.12: ✓ composes
 # connect v0.4 / fed 2.13: ✗ CONNECTORS_UNRESOLVED_FIELD: AlternativesEntry.key, AlternativesEntry.value
 ```
-**AST:** untouched — the generator's tree and emission are correct; the divergence is in composition
-validation between connect spec versions.
+
+**Evidence** (A/B compose — not a generator bug):
+- The **byte-identical** schema, with only the two `@link` version strings swapped:
+  - connect v0.3 / fed 2.12 → ✓ composes
+  - connect v0.4 / fed 2.13 (Rover 0.40.0) → ✗ fails
+- Reproduced on two independent ops; the gap histogram buckets all 26 failures here.
+
+**Conclusion:** v0.4's (preview) validation does not credit fields selected beneath an `->entries`
+method sub-selection to the field's declared entry type.
+
+**Next step:** report upstream. If we need to unblock sooner: under `connectorSpecVersion >= v0.4`,
+degrade map values to `JSON` (skip the synthetic entry type) — same best-effort convention as #10.
+
+**AST:** untouched — tree and emission are correct; the divergence is in composition validation.
 **Refs:** `src/oas/nodes/map.ts` (`generate`/`select`). Found by adding CCS to the coverage sweep
-(default 100%, abstract 39.5%); fixing this one family would take CCS abstract to ~100%.
+(default 100%, abstract 39.5%); fixing this one family takes CCS abstract to ~100%.
