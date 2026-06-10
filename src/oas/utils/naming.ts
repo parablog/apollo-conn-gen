@@ -57,8 +57,23 @@ class RemoveRefConverter extends AbstractConverter {
 
 // Structural JSON-pointer segments that don't make good type-name material.
 const POINTER_NOISE = new Set([
-  '#', 'paths', 'get', 'post', 'put', 'patch', 'delete', 'responses', 'requestBody',
-  'content', 'schema', 'allOf', 'oneOf', 'anyOf', 'items', 'properties', 'parameters',
+  '#',
+  'paths',
+  'get',
+  'post',
+  'put',
+  'patch',
+  'delete',
+  'responses',
+  'requestBody',
+  'content',
+  'schema',
+  'allOf',
+  'oneOf',
+  'anyOf',
+  'items',
+  'properties',
+  'parameters',
 ]);
 
 /**

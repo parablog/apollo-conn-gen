@@ -267,7 +267,10 @@ export class Union extends Type {
       child.select(context, writer, selection);
       context.indent = savedIndent;
 
-      writer.write(pad(base + 2)).write(idx < members.length - 1 ? '}],' : '}]').write('\n');
+      writer
+        .write(pad(base + 2))
+        .write(idx < members.length - 1 ? '}],' : '}]')
+        .write('\n');
     });
 
     writer.write(pad(base)).write(')\n');

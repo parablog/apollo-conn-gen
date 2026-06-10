@@ -28,10 +28,7 @@ export class SchemaWriter {
     if (authHeader) {
       writer.write(`  @source(name: "api", http: { baseURL: "${host}", headers: [${authHeader}] })\n\n`);
     } else {
-      writer
-        .write('  @source(name: "api", http: { baseURL: "')
-        .write(host)
-        .write('" })\n\n');
+      writer.write('  @source(name: "api", http: { baseURL: "').write(host).write('" })\n\n');
     }
   }
 
