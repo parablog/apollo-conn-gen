@@ -443,17 +443,22 @@ With the **#14 patch** applied to composition (verified via local `apollo-federa
 shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, box +14, confluence
 +7, DO +4, omni +2, asana +1): overall abstract **73.5% → 79.1%**.
 
-**Issue queue (priority = measured impact; details live in `docs/issues.md`):**
+**Issue queue (post-triage 2026-06-10; priority = measured impact; details in `docs/issues.md`):**
 
 | Rank | Item | Ops (both passes) | Status |
 |--:|---|--:|---|
-| 1 | COMPOSE `CONNECTORS_UNRESOLVED_FIELD` residue (non-#14: e.g. DO `/v2/apps`) | 121* | triage next (*includes the 26×2-ish #14 ops on stock toolchains) |
-| 2 | GEN-EMPTY — generation produces nothing | 158 | mostly input quality (Slack stubs ×2 passes); triage the non-Slack residue |
-| 3 | COMPOSE `INTERNAL_ERROR` (DO `/v2/registry/docker-credentials`) | 66 | open |
-| 4 | GEN-THROW `Cannot handle schema` — typeless `{description}`-only schemas (Box) | 44 | open (the old 3-A slice; ties into R2 `allOf` work) |
-| 5 | COMPOSE `INVALID_GRAPHQL` residue (box `retention_policies`) | 39 | open — what's left after #15 |
-| 6 | COMPOSE `GROUP_SELECTION_IS_NOT_OBJECT` (box) | 31 | open |
-| 7 | **#13** — path-dependent cycle cuts diverge same-named instances | ~16 | open; collect-time prop-merge proposal ready in the entry |
+| 1 | **#17** — param defaults dangle ` = ` for boolean/array/object/null (`param.ts:74-85`) | up to 66 (INTERNAL_ERROR buckets) | root-caused, trivial fix |
+| 2 | **R-collector** (open research; #18 reserved) — collector/reference-graph misalignment: DO emits orphan #9-renamed types (`/v2/apps`, UNRESOLVED), box references unemitted array-item Composed (`retention_policies`/`collaborations`, cannot-find-type) | ~100+ across UNRESOLVED/INVALID buckets | mechanism unpinned — two conflicting hypotheses (over-collection `typesCollector.ts:70-82` vs Composed-consolidation deletion); bisect before fixing |
+| 3 | **#19** — typeless `{}` / boolean-`additionalProperties` schemas throw (`factory.ts:129`) | 18 confirmed (slack 4 + github 14, /pass) | root-caused; fix = shapeless→JSON scalar (NOT empty Obj) |
+| 4 | **R-anyof-empty** (open research; #20 reserved) — `anyOf: [$ref, empty-closed-object]` → zero types (10 github ops) | 10 | fix mechanism undecided: prove-placeholder (a) vs represent-as-JSON-branch (b, leaning) — dropping a *disjunct* is not the #5 allOf case |
+| 5 | **R-genthrow-tail** (open research) — sendgrid(3) + omni(3) GEN-THROW ops | 6 | throwing shapes unexamined; fold into #19 if same, else own note |
+| 6 | **#13** — path-dependent cycle cuts diverge same-named instances | ~16 | open; collect-time prop-merge proposal ready in the entry |
+
+GEN-EMPTY resolution: of the non-Slack residue (25 ops/pass), 15 are legit input quality (non-JSON
+file endpoints on DO/confluence/github; scalar-rooted responses — the latter a possible future
+enhancement, not a bug) and 10 are R-anyof-empty. Slack's 43/pass remain input-quality stubs.
+Bucket labels (INVALID_GRAPHQL/INTERNAL_ERROR/GROUP_SELECTION) shift across composition versions —
+re-derive counts per fix; don't trust the histogram labels.
 
 **Fixed since the last refresh** (entries + fixtures in `docs/issues.md`): #8 `#/paths` pointer names
 (DO 35→74%), #9 inline-shape collisions (`SELECTED_FIELD_NOT_FOUND`), #10 abstract-pass "hang"

@@ -648,3 +648,81 @@ tags {                tags? {
 (`alternatives?->entries`).
 **Refs:** `src/oas/nodes/prop*.ts` (`select`), `obj.ts` (`visitProperties` sets `required`). Gate: the
 abstract pass needs composition ≥ 2.15 (or the patched toolchain) before this is corpus-safe on v0.4.
+
+## 17 · Param defaults dangle ` = ` for non-number/string values — ⬜ Open
+**Symptom:** rover syntax error — `expected a valid Value`:
+`v2RegistryDockerCredentials(…, readWrite: Boolean = ): …` — the default's right-hand side is empty.
+66 INTERNAL_ERROR-bucketed ops in the sweep (DigitalOcean-dominated); exact share to re-derive at fix
+time.
+
+**OAS** (DigitalOcean `/v2/registry/docker-credentials` — a boolean query param with a default):
+```yaml
+parameters:
+  - name: read_write
+    in: query
+    required: false
+    schema:
+      type: boolean
+      default: false
+```
+
+**Example**:
+```graphql
+readWrite: Boolean =       # ✗ before: dangling `= ` → syntax error at compose
+readWrite: Boolean = false # ✓ after
+```
+
+**Cause:** `Param.writeDefaultValue` (`param.ts:74-85`) writes ` = ` unconditionally, then only fills
+the value for `typeof number` and `typeof string`. Boolean — and array/object/null — defaults fall
+through, leaving the dangling ` = `.
+
+**Fix sketch:** decide *before* writing ` = `: emit only for supported types (number, string,
+boolean); skip the whole ` = <value>` otherwise (an omitted default is always valid GraphQL).
+
+**AST:** untouched — emission-only (`writeDefaultValue`); `Param` nodes unchanged.
+**Refs:** `src/oas/nodes/param.ts` (`writeDefaultValue`). Found by the post-#15 triage sweep.
+
+## 18 · (reserved) Collector/reference-graph misalignment — see ROADMAP `R-collector`
+Two mirror symptoms under joint investigation: DO `/v2/apps` emits orphan `#9`-renamed types nothing
+references (`CONNECTORS_UNRESOLVED_FIELD`), and box `retention_policies`/`collaborations` reference
+array-item `Composed` types (`UserMini`, `FolderMini`) that are never emitted (`cannot find type`).
+Mechanism not yet pinned (two conflicting hypotheses — collector over-collection vs the
+Composed-consolidation deletion); the id is reserved and this entry will be written when the
+mechanism meets the issue bar. Tracked as **R-collector** in `ROADMAP.md`.
+
+## 19 · Typeless `{}` / `additionalProperties:false` schemas throw — ⬜ Open
+**Symptom:** `GEN-THROW: Cannot handle schema` — generation aborts for the whole op. 18 confirmed ops
+(slack 4, github 14) per pass; sendgrid(3)+omni(3) unexamined (ROADMAP `R-genthrow-tail`).
+
+**OAS** (Slack `objs_message…shares` — properties with no type and no shape):
+```yaml
+shares:
+  type: object
+  additionalProperties: false
+  properties:
+    private:
+      additionalProperties: false   # <- no type, no properties: an explicitly EMPTY object
+    public:
+      additionalProperties: false
+```
+
+**Example**:
+```
+before: Factory.fromSchema falls through to createScalarType -> throw "Cannot handle schema" (factory.ts:129)
+after:  private: JSON     # shapeless object -> JSON scalar (the existing unknown-shape convention)
+```
+
+**Cause:** `fromSchema`'s container check requires `type: object` / composition / `properties`; a
+schema whose only content is a boolean `additionalProperties` (or nothing at all) matches neither the
+container nor the scalar branch → `createScalarType` throws. (`fromProp` already defaults this shape
+to a `JSON` `PropScalar` — the throw only happens for schemas reached via `fromSchema`: array items,
+map values, composition members.)
+
+**Fix sketch:** a named predicate (shapeless object: no `$ref`/`type`/`enum`/`items`/composition/
+`properties`; boolean `additionalProperties` allowed) routed to `Scalar(JSON)` in `fromSchema`.
+**Care:** do NOT route to `createContainerType` — an empty `Obj` is skipped by `Obj.generate`
+(empty props), which would dangle the reference and re-create #15-style `INVALID_GRAPHQL`.
+
+**AST:** shape change — `Scalar(JSON)` node where construction previously threw (no node at all).
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema`/`createScalarType`, throw at :129),
+`isEmptySchema` (#5) as the predicate's relative.
