@@ -460,6 +460,15 @@ enhancement, not a bug) and 10 are R-anyof-empty. Slack's 43/pass remain input-q
 Bucket labels (INVALID_GRAPHQL/INTERNAL_ERROR/GROUP_SELECTION) shift across composition versions —
 re-derive counts per fix; don't trust the histogram labels.
 
+**Enhancements (not bugs — ideas only, mechanism untriaged):**
+- **E-slack-ok** — Slack's stub responses DO declare `ok: Boolean` (+ `required: [ok]`) yet the
+  generator emits nothing for them; emitting the trivial `{ ok: Boolean }` connector would be honest
+  output (success/failure calls work) and would lift Slack 45% → ~90% (~+36-43 ops/pass — estimate,
+  unmeasured). Needs a quick why-genEmpty triage first (the stub has properties, yet yields 0 types).
+- **E-scalar-roots** — scalar/Map-rooted responses (github `/emojis` string-map,
+  `/gitignore/templates` `[string]`) yield nothing today; emitting scalar/Map roots is the companion
+  enhancement (4 ops).
+
 **Fixed since the last refresh** (entries + fixtures in `docs/issues.md`): #8 `#/paths` pointer names
 (DO 35→74%), #9 inline-shape collisions (`SELECTED_FIELD_NOT_FOUND`), #10 abstract-pass "hang"
 (quadratic `selectedProps` + uncut recursion → cycle cuts commented in both artifacts), #11 `anyOf`
