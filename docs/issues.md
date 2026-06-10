@@ -378,6 +378,21 @@ prefer the non-`PropCircRef` version. Then:
 `CONNECTORS_UNRESOLVED_FIELD: AlternativesEntry.key / .value` — yet the selection selects both.
 CCS default pass: 100%.
 
+**OAS origin** — where the map comes from: an OAS *dictionary* (`additionalProperties` = arbitrary
+keys, here currency code → amount):
+```yaml
+Amount:
+  properties:
+    alternatives:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/Amount'
+```
+GraphQL has no map type, so the generator's `Map` node (`map.ts`) emits a synthetic entry type and maps
+the JSON object through `->entries`:
+- SDL: `alternatives: [AlternativesEntry]` + `type AlternativesEntry { key: String value: Amount }`
+- selection: `alternatives: alternatives->entries { key value {…} }`
+
 **Example** — identical schema, two compose runs:
 ```graphql
 alternatives: [AlternativesEntry]            # SDL (the Map node's emission)
