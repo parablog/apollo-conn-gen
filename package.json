@@ -46,7 +46,8 @@
     "preversion": "npm run lint",
     "version": "npm run format && git add src",
     "postversion": "git push && git push --tags",
-    "yalc:update": "yalc push --scripts --update --replace"
+    "yalc:update": "yalc push --scripts --update --replace",
+    "yalc:push": "npm run build && yalc push"
   },
   "dependencies": {
     "@inquirer/checkbox": "^4.1.1",
