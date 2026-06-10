@@ -423,47 +423,55 @@ input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs ar
 — gitignored — because the published specs embed example secrets that block pushes; this section is the
 committed summary of what they showed.)
 
-**Progress (default pass, OK%):** after fixing gaps #1, #2 and #3-B the range moved from **4–78% to
-16–80%** — github 45→**78%**, asana 15→**71%**, sendgrid 63→**77%**, openai 50→**80%**, slack 24→**41%**,
-digitalocean 4→**16%**, box 6→**18%**. Classes cleared: `INVALID_URL` 517→4, `Schema not found for ref`
-~216→0, implied-array `Cannot handle schema` 376→322.
+**Corpus status (measured 2026-06-10, stock rover 0.40 / composition 2.13):**
 
-**Generator gaps (counts sum both passes):**
-- ✅ **FIXED (`ad5cede`) — Path-param templating → `INVALID_URL` (was ~517, now 4).** snake_case / multi
-  path params (`{app_id}`, `{engine_id}`) were emitted raw instead of `{$args.<camelName>}`
-  (`operationWriter.ts`; regex excluded `_` and used the raw key). R8/R3.
-- ✅ **FIXED (`039b3e0`) — `$ref` into `#/paths/…` → `Schema not found for ref` / `Could not find a
-  response` (was ~216, now 0).** DigitalOcean shares params/responses/schemas via JSON-pointers into
-  `#/paths/<p>/<verb>/…`; `lookupParam`/`lookupRef`/`lookupResponse` only followed `#/components`. Added
-  a generic RFC-6901 + percent-decoding `resolvePointer` fallback (`oasContext.ts`).
-- 🟡 **`Cannot handle schema` (was ~376, now ~322 — the #1 remaining).** Two sub-causes: **(B) ✅ FIXED
-  (`f521bc1`)** — a schema with `items` but no `type: array` (Slack) is now treated as an implied array
-  (slack 24→41%); **(A) ⬜ remaining** — typeless `{ description }`-only schemas (Box `--Full`/`--Mini`,
-  box still 78 throws) must become a JSON scalar **as a property** but be **ignored as an `allOf`
-  member** (context-dependent — the careful slice). Box `--Full`/`--Mini` and many
-  Slack methods compose `allOf: [ $ref, { properties } ]` alongside `type: object`; `factory.ts:109`
-  rejects the shape. Ties into the broader R2 `allOf`→interface work.
-- **Edge/null handling:** `Cannot read 'type' of null` (34), `Unknown or undefined schema` (14),
-  response `$ref` into `#/paths` (18), `Cannot handle property type` (4).
-- **Abstract-types recursion HANG (R2, P0 for v0.4).** `consolidateUnions:false` + v0.4 infinite-loops
-  (100% CPU) on recursive schemas (Confluence `Content`/`relation`); the default v0.3 path is fine.
-  Confirms the R2 note that the abstract path is not yet a net win — github's abstract pass had **20
-  more** compose-fails than default. Needs a recursion guard before the v0.4 path can be trusted.
-- **Compose-side, likely ours:** `SELECTED_FIELD_NOT_FOUND` (44), `INTERNAL_ERROR` (104, needs a
-  look), `GROUP_SELECTION_IS_NOT_OBJECT` (14), `INVALID_GRAPHQL` (14), `CIRCULAR_REFERENCE` (3).
+| Spec | GET ops | default (v0.3) | abstract (v0.4) |
+|---|--:|--:|--:|
+| googlebooks | 30 | 100% | 100% |
+| mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
+| digitalocean | 145 | 86.2% | 86.2% |
+| asana | 79 | 83.5% | 83.5% |
+| omni | 54 | 81.5% | 79.6% |
+| openai | 10 | 80.0% | 80.0% |
+| github | 444 | 78.4% | 78.4% |
+| sendgrid | 154 | 77.9% | 77.9% |
+| confluence | 65 | 60.0% | 60.0% (was: unmeasurable hang, fixed by #10) |
+| box | 114 | 57.0% | 57.0% |
+| slack | 80 | 41.3% | 41.3% (mostly input quality, see below) |
 
-**Input quality (NOT our bug — don't chase):**
-- **`GEN-EMPTY` (~148), Slack-dominated.** Slack's published spec declares **146** methods with
-  *"a verbose schema is not available for this method"* — stub responses with nothing to generate.
-  Slack's 24% is mostly thin input, not a generator gap.
-- omni / confluence needed fixture patches (dangling `$ref`s, protocol-relative `servers[].url`) — see
-  TEST_CORPUS.md. The generator could be hardened to tolerate these, but the source specs are at fault.
+With the **#14 patch** applied to composition (verified via local `apollo-federation-cli` + rover
+shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, box +14, confluence
++7, DO +4, omni +2, asana +1): overall abstract **73.5% → 79.1%**.
 
-**ROI order:** ~~(1) path-param templating~~ ✅, ~~(2) `#/paths` `$ref` resolution~~ ✅, ~~(3-B)
-implied-array~~ ✅, (3-A) typeless `{description}` schema → JSON-scalar-as-property / ignore-as-allOf-member
-(`Cannot handle schema`, ~322 — still the largest class), (4) `INTERNAL_ERROR` (~163) and
-`SELECTED_FIELD_NOT_FOUND` (~97) on the compose side, (5) abstract-path recursion guard. Regenerate
-`COVERAGE.md` after each to watch the numbers move.
+**Issue queue (priority = measured impact; details live in `docs/issues.md`):**
+
+| Rank | Item | Ops | Status |
+|--:|---|--:|---|
+| 1 | **#15** — def/ref type-name divergence (`INVALID_GRAPHQL: cannot find type <X>Response`; `comp.ts:80`/`union.ts:99` emit `upperFirst(getRefName)` while references use `genTypeName`) | 143 | in progress |
+| 2 | GEN-EMPTY — generation produces nothing | 79 | mostly input quality (Slack stubs); triage the non-Slack residue |
+| 3 | GEN-THROW `Cannot handle schema` — typeless `{description}`-only schemas (Box `--Full`/`--Mini`) | 22 | open (the old 3-A slice; ties into R2 `allOf` work) |
+| 4 | **#13** — path-dependent cycle cuts diverge same-named instances | 8 | open; collect-time prop-merge proposal ready in the entry |
+| 5 | GEN-THROW `Cannot handle property type` | 3 | open |
+
+**Fixed since the last refresh** (entries + fixtures in `docs/issues.md`): #8 `#/paths` pointer names
+(DO 35→74%), #9 inline-shape collisions (`SELECTED_FIELD_NOT_FOUND`), #10 abstract-pass "hang"
+(quadratic `selectedProps` + uncut recursion → cycle cuts commented in both artifacts), #11 `anyOf`
+params, #12 inline-vs-component emitted-name collision (cleared Confluence `CIRCULAR_REFERENCE`).
+
+**Upstream / parked:**
+- **#14** (upstream): composition's v0.4 shape validator drops `Array` shapes → `->entries`
+  sub-selections spuriously unresolved. Fix drafted + verified on router branch
+  `fix/connect-v04-array-shape-seen-fields` (`212e35b60`); awaiting internal PR. Affects every
+  OAS `additionalProperties` dictionary.
+- **#16** (⏸ parked): mark OAS-optional fields with `?` in selections. Semantically correct and the
+  plumbing exists (`Prop.required`), but `?`-groups don't compose on released toolchains
+  (2.13/2.14) — gate: composition ≥ 2.15 ships in rover. Do not emit earlier or upgrades from
+  2.11 onwards regress.
+
+**Input quality (NOT our bug — don't chase):** Slack's published spec declares ~146 methods with
+*"a verbose schema is not available for this method"* — stub responses with nothing to generate;
+omni/confluence needed fixture patches (dangling `$ref`s, protocol-relative `servers[].url`), see
+TEST_CORPUS.md. Regenerate `COVERAGE.md` after each fix to watch the numbers move.
 
 ## Sequencing notes
 

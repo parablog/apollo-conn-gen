@@ -12,7 +12,7 @@ scratch — not this.) `ROADMAP.md` tracks priority/gaps and may link to these i
 Style: keep entries scannable — short labeled bullets, **one fact per line**, example near the top;
 no paragraph-blobs. The example carries the weight; prose only adds what the example can't show.
 
-Status: ✅ Fixed · ⬜ Open.
+Status: ✅ Fixed · ⬜ Open · ⏸ Parked (blocked on an external gate, noted in the entry).
 
 ## Node model (AST) at a glance
 
@@ -586,7 +586,11 @@ same `INVALID_GRAPHQL` count family). Side smell in the same op: the field name 
 **Refs:** `src/oas/nodes/comp.ts` (`generate`/`consolidate`), `res.ts`, `operationWriter`. Biggest
 single family in the post-#14 gap histogram (143 of 151 remaining compose-fails).
 
-## 16 · Selections don't mark OAS-optional fields with `?` — ⬜ Open (proposal)
+## 16 · Selections don't mark OAS-optional fields with `?` — ⏸ Parked (until composition ≥ 2.15 ships)
+**Parked (2026-06-10):** emitting `?` today would break composition for anyone on the released
+toolchain — supergraph plugins 2.13/2.14 don't credit `?`-groups (2.15 fixes it but is unreleased,
+confirmed 404). Users upgrading from fed 2.11 onwards would hit a hard regression. Revisit when a
+composition release with the `One`-shape fix reaches rover.
 **Symptom:** the router's connectors debugger warns about "missing properties" at runtime when the API
 omits a field the selection references plainly. Marking optional fields with the mapping language's
 optional-chaining `?` silences the warnings (verified by hand on petstore `/pet/findByStatus`).
