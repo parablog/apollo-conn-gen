@@ -102,7 +102,16 @@ export class Factory {
   }
 
   // Keywords that give a schema a renderable GraphQL shape; a schema with none is metadata-only. #5
-  private static readonly SHAPE_KEYWORDS = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf', 'additionalProperties'];
+  private static readonly SHAPE_KEYWORDS = [
+    '$ref',
+    'type',
+    'enum',
+    'items',
+    'allOf',
+    'oneOf',
+    'anyOf',
+    'additionalProperties',
+  ];
 
   /** True when a schema carries no renderable content (metadata only). see docs/issues.md #5 */
   public static isEmptySchema(schema: SchemaObject | ReferenceObject): boolean {
@@ -157,7 +166,13 @@ export class Factory {
     // union
     else if (schema.oneOf || schema.anyOf) {
       const oneOfs = schema.oneOf || [];
-      result = new Union(parent, ref || _.get(schema, 'name'), oneOfs as SchemaObject[], false, _.get(schema, 'discriminator'));
+      result = new Union(
+        parent,
+        ref || _.get(schema, 'name'),
+        oneOfs as SchemaObject[],
+        false,
+        _.get(schema, 'discriminator'),
+      );
     }
     // map (object with only additionalProperties)
     else if (this.isMapSchema(schema)) {

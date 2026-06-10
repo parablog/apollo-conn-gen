@@ -109,7 +109,10 @@ export class OperationWriter {
   private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], indent: number): void {
     // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
     const verb = op.verb;
-    const templatedPath = op.operation.path.replace(/\{([^}]+)\}/g, (_m, name) => `{$args.${Naming.genParamName(name)}}`);
+    const templatedPath = op.operation.path.replace(
+      /\{([^}]+)\}/g,
+      (_m, name) => `{$args.${Naming.genParamName(name)}}`,
+    );
     writer.write(`{ ${verb}: `).write('"' + templatedPath + '"');
 
     if (op.params.length > 0) {

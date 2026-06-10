@@ -740,6 +740,34 @@ test('test_inline_name_collision_splits_by_container', async () => {
   assert.ok(/\blistPrice: SaleInfoListPrice\b/.test(schema!), 'saleInfo references the split type');
 });
 
+test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
+  // Reported combo: Infer Entity Resolvers + Emit Connector Errors + v0.4/consolidate:false on
+  // petstore get:/user/{username}. Locks that the entity type block is emitted CONTIGUOUSLY
+  // (@key + type-level @connect + selection + fields before any other type) and composes — a
+  // scrambled/interleaved variant of this output was traced to app-side post-processing, not gen.
+  const schema = await runOasTest(
+    'petstore.yaml', ['get:/user/{username}>**'], 19, 1, false, true, undefined, false,
+    true, // inferEntityResolvers
+    {
+      consolidateUnions: false,
+      connectorSpecVersion: 'v0.4',
+      federationVersion: 'v2.13',
+      composeFederationVersion: '2.13.0',
+      emitConnectorErrors: true,
+    },
+  );
+  assert.ok(schema !== undefined);
+  const userIdx = schema!.indexOf('type User');
+  const queryIdx = schema!.indexOf('type Query');
+  const entitySelIdx = schema!.indexOf('selection', userIdx);
+  const userFieldsIdx = schema!.indexOf('username: String', userIdx);
+  assert.ok(userIdx >= 0 && queryIdx > userIdx, 'User emitted before Query');
+  assert.ok(entitySelIdx > userIdx && entitySelIdx < queryIdx, 'entity selection inside the User block');
+  assert.ok(userFieldsIdx > userIdx && userFieldsIdx < queryIdx, 'User fields contiguous with the type');
+  assert.ok(/@key\(fields: "username"\)/.test(schema!), 'entity key emitted');
+  assert.ok(/errors: \{ extensions/.test(schema!), 'connector errors emitted on the Query connector');
+});
+
 test('test_param_default_boolean_emits_literal', async () => {
   // A boolean (or other non-number/string) param default used to leave a dangling ` = ` →
   // compose syntax error ("expected a valid Value"). Defaults now emit only for renderable types.
