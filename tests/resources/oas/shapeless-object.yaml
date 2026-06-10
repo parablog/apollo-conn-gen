@@ -1,0 +1,33 @@
+openapi: 3.0.0
+info:
+  title: Shapeless object schemas (Slack shares pattern)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /messages:
+    get:
+      operationId: getMessages
+      responses:
+        '200':
+          description: Properties with no type and no declared fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text:
+                    type: string
+                  shares:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      # reached via fromSchema (array items): no type, no properties -> shapeless
+                      privateChannels:
+                        type: array
+                        items:
+                          additionalProperties: false
+                      # fully empty schema as array items
+                      publicChannels:
+                        type: array
+                        items: {}

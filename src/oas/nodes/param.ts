@@ -71,16 +71,17 @@ export class Param extends Type {
     // do nothing
   }
 
+  // Emit ` = <value>` only for types we can render as a GraphQL literal; otherwise skip the whole
+  // default (a dangling ` = ` is a compose syntax error, an omitted default is always valid). #17
   private writeDefaultValue(writer: Writer): void {
-    writer.write(' = ');
     const value = this.defaultValue;
 
     if (typeof value === 'number') {
-      writer.write(value.toString());
+      writer.write(' = ').write(value.toString());
+    } else if (typeof value === 'boolean') {
+      writer.write(' = ').write(value ? 'true' : 'false');
     } else if (typeof value === 'string') {
-      writer.write('"');
-      writer.write(String(value));
-      writer.write('"');
+      writer.write(' = "').write(String(value)).write('"');
     }
   }
 }

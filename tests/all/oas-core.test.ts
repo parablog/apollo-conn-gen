@@ -740,6 +740,28 @@ test('test_inline_name_collision_splits_by_container', async () => {
   assert.ok(/\blistPrice: SaleInfoListPrice\b/.test(schema!), 'saleInfo references the split type');
 });
 
+test('test_param_default_boolean_emits_literal', async () => {
+  // A boolean (or other non-number/string) param default used to leave a dangling ` = ` →
+  // compose syntax error ("expected a valid Value"). Defaults now emit only for renderable types.
+  // see docs/issues.md #17. runOasTest composes via rover.
+  const schema = await runOasTest('param-default-bool.yaml', ['get:/credentials>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/readWrite: Boolean = false\b/.test(schema!), 'boolean default rendered as literal');
+  assert.ok(/expirySeconds: Int = 0\b/.test(schema!), 'number default unchanged');
+  assert.ok(!/=\s*[,)]/.test(schema!), 'no dangling = remains');
+});
+
+test('test_shapeless_object_schema_becomes_json_scalar', async () => {
+  // `{}` / `{ additionalProperties: false }` schemas (Slack shares pattern) used to throw
+  // "Cannot handle schema" when reached via fromSchema (array items, members). They are objects
+  // with no declared fields -> JSON scalar (NOT an empty Obj, which generate() would skip and
+  // dangle the reference). see docs/issues.md #19. runOasTest composes via rover.
+  const schema = await runOasTest('shapeless-object.yaml', ['get:/messages>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/privateChannels: \[JSON\]/.test(schema!), 'additionalProperties:false items -> [JSON]');
+  assert.ok(/publicChannels: \[JSON\]/.test(schema!), 'empty {} items -> [JSON]');
+});
+
 test('test_response_allof_snake_path_def_ref_names_converge', async () => {
   // A response-root allOf on a snake_case path synthesizes a name carrying the `_`
   // (`v2…Billing_historyResponse`); the definition (Composed.generate) used upperFirst(getRefName)

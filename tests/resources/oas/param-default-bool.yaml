@@ -1,0 +1,33 @@
+openapi: 3.0.0
+info:
+  title: Boolean and unsupported param defaults
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /credentials:
+    get:
+      operationId: getCredentials
+      parameters:
+        - name: read_write
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: expiry_seconds
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string

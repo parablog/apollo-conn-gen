@@ -82,6 +82,12 @@ export class Factory {
     ) {
       result = this.createContainerType(parent, schemaObj, ref);
     }
+    // a shapeless object (nothing but a boolean `additionalProperties`, or `{}`) declares no fields:
+    // fall back to the JSON scalar — NOT an empty Obj, which generate() would skip, dangling the
+    // reference. see docs/issues.md #19
+    else if (this.isShapelessObject(schemaObj)) {
+      result = new Scalar(parent, 'JSON', schemaObj);
+    }
     // scalar
     else {
       result = this.createScalarType(schemaObj, parent);
@@ -102,6 +108,17 @@ export class Factory {
   public static isEmptySchema(schema: SchemaObject | ReferenceObject): boolean {
     const s = schema as Record<string, unknown>;
     return Factory.SHAPE_KEYWORDS.every((k) => s[k] == null) && _.isEmpty(s.properties);
+  }
+
+  /**
+   * True for an object with no declared fields: no shape keyword except (at most) a boolean
+   * `additionalProperties` (`{}`, `{ additionalProperties: false }`, …). A real map
+   * (`additionalProperties: <schema>`) is NOT shapeless. see docs/issues.md #19
+   */
+  private static isShapelessObject(schema: SchemaObject): boolean {
+    const s = schema as Record<string, unknown>;
+    const noShape = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf'].every((k) => s[k] == null);
+    return noShape && _.isEmpty(s.properties) && typeof s.additionalProperties !== 'object';
   }
 
   private static createScalarType(schema: SchemaObject | null, parent: IType) {
