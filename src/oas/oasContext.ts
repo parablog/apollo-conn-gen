@@ -84,13 +84,13 @@ export class OasContext {
 
   public store(name: string, type: IType): void {
     trace(this, '[context::store]', 'store ' + type.id);
-    this.types.set(name, undefined);
+    this.types.set(name, type);
 
     // Also reserve the *emitted* GraphQL name: an inline object named by its property key must not
     // collide with a component's emitted name ('user' vs '#/c/s/User' both emit `User`). see issues.md #12
     const emitted = Naming.genTypeName(name);
     if (emitted !== name) {
-      this.types.set(emitted, undefined);
+      this.types.set(emitted, type);
     }
   }
 

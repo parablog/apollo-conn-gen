@@ -430,12 +430,12 @@ committed summary of what they showed.)
 | googlebooks | 30 | 100% | 100% |
 | mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
 | sendgrid | 154 | 92.9% | 92.9% |
-| digitalocean | 145 | 92.4% | 92.4% |
+| digitalocean | 145 | **93.8%** | **93.8%** |
 | openai | 10 | 90.0% | 90.0% (0 compose-fails) |
 | asana | 79 | 86.1% | 86.1% |
 | omni | 54 | 83.3% | 81.5% |
 | github | 444 | 82.0% | 80.4% |
-| box | 114 | 66.7% | 66.7% |
+| box | 114 | **74.6%** | **74.6%** |
 | confluence | 65 | 63.1% | 63.1% (was: unmeasurable hang, fixed by #10) |
 | slack | 80 | 45.0% | 45.0% (mostly input quality, see below) |
 
@@ -448,7 +448,7 @@ shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, 
 | Rank | Item | Ops (both passes) | Status |
 |--:|---|--:|---|
 | 1 | ~~**#17** — param defaults dangle ` = `~~ | — | ✅ fixed `aae14ca` |
-| 2 | **R-collector** (open research; #18 reserved) — collector/reference-graph misalignment: DO emits orphan #9-renamed types (`/v2/apps`, UNRESOLVED), box references unemitted array-item Composed (`retention_policies`/`collaborations`, cannot-find-type) | ~100+ across UNRESOLVED/INVALID buckets | mechanism unpinned — two conflicting hypotheses (over-collection `typesCollector.ts:70-82` vs Composed-consolidation deletion); bisect before fixing |
+| 2 | **R-collector** — ~~identical inline schemas rename instead of dedup → orphan types (#18)~~ ✅ fixed `0cff45d` (box 66.7→74.6%, DO 92.4→93.8%, both passes); **residue open**: box's 14 remaining compose-fails are different sub-causes (`/files/{file_id}` INTERNAL_ERROR ×9, `/metadata_templates` UNRESOLVED ×5) | residue ~14 (box) | other specs (github, sendgrid, …) not yet re-swept post-#18 — full corpus refresh pending; re-derive buckets then |
 | 3 | ~~**#19** — typeless `{}` schemas throw~~ | — | ✅ fixed `aae14ca` (sendgrid's 3 throws were this shape too; omni's 3 persist → R-genthrow-tail confirmed distinct) |
 | 4 | **R-anyof-empty** (open research; #20 reserved) — `anyOf: [$ref, empty-closed-object]` → zero types (10 github ops) | 10 | fix mechanism undecided: prove-placeholder (a) vs represent-as-JSON-branch (b, leaning) — dropping a *disjunct* is not the #5 allOf case |
 | 5 | **R-genthrow-tail** (open research) — sendgrid(3) + omni(3) GEN-THROW ops | 6 | throwing shapes unexamined; fold into #19 if same, else own note |
@@ -474,7 +474,8 @@ re-derive counts per fix; don't trust the histogram labels.
 (quadratic `selectedProps` + uncut recursion → cycle cuts commented in both artifacts), #11 `anyOf`
 params, #12 inline-vs-component emitted-name collision (cleared Confluence `CIRCULAR_REFERENCE`),
 **#15** def/ref type-name divergence (`44b628d` — sendgrid 77.9→89.0, box 57→66.7, DO 86.2→91.7,
-`INVALID_GRAPHQL` 143→39).
+`INVALID_GRAPHQL` 143→39), **#18** identical-inline-schema dedup + convergent renames (`0cff45d` —
+box 66.7→74.6, DO 92.4→93.8, both passes).
 
 **Upstream / parked:**
 - **#14** (upstream): composition's v0.4 shape validator drops `Array` shapes → `->entries`

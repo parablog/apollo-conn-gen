@@ -740,6 +740,20 @@ test('test_inline_name_collision_splits_by_container', async () => {
   assert.ok(/\blistPrice: SaleInfoListPrice\b/.test(schema!), 'saleInfo references the split type');
 });
 
+test('test_inline_identical_shapes_dedup_not_renamed', async () => {
+  // Byte-identical inline shapes sharing a key (`file.shared_link` / `folder.shared_link`, the
+  // box.yaml pattern) must DEDUP onto one type, not rename: renaming mints a fresh name-derived id
+  // whose container dedups away, emitting an orphan type nothing references
+  // (CONNECTORS_UNRESOLVED_FIELD). A different shape under the same key still splits per #9.
+  // see docs/issues.md #18. composes via rover.
+  const schema = await runOasTest('inline-identical-dedup.yaml', ['get:/items>**'], 1, 7);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bsharedLink: SharedLink\b/.test(schema!), 'both parents reference the one SharedLink');
+  assert.ok(!/SharedLink2|Permissions2|InlineSharedLink/.test(schema!), 'no renamed duplicate/orphan types');
+  assert.ok(/type OfferPermissions \{[^}]*\brole\b/s.test(schema!), 'different shape still splits (#9)');
+  assert.ok(/\bpermissions: OfferPermissions\b/.test(schema!), 'offer references the split type');
+});
+
 test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
   // Reported combo: Infer Entity Resolvers + Emit Connector Errors + v0.4/consolidate:false on
   // petstore get:/user/{username}. Locks that the entity type block is emitted CONTIGUOUSLY

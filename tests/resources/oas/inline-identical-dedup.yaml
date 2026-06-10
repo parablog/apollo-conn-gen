@@ -1,0 +1,59 @@
+openapi: 3.0.0
+info:
+  title: Identical inline shapes dedup
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /items:
+    get:
+      operationId: getItems
+      responses:
+        '200':
+          description: >-
+            `file` and `folder` carry byte-identical inline `shared_link`/`permissions`
+            shapes (the box.yaml pattern); `offer.permissions` shares the key with a
+            DIFFERENT shape and must still split per issue #9.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file:
+                    type: object
+                    properties:
+                      shared_link:
+                        type: object
+                        properties:
+                          url:
+                            type: string
+                          permissions:
+                            type: object
+                            properties:
+                              can_download:
+                                type: boolean
+                              can_edit:
+                                type: boolean
+                  folder:
+                    type: object
+                    properties:
+                      shared_link:
+                        type: object
+                        properties:
+                          url:
+                            type: string
+                          permissions:
+                            type: object
+                            properties:
+                              can_download:
+                                type: boolean
+                              can_edit:
+                                type: boolean
+                  offer:
+                    type: object
+                    properties:
+                      permissions:
+                        type: object
+                        properties:
+                          role:
+                            type: string

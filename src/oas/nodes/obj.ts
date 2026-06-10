@@ -252,17 +252,53 @@ export class Obj extends Type {
     this.name = name;
   }
 
-  // An inline object borrows its property key as a name, but each is its own definition (only $refs
-  // are shared) — if that name is already taken, this is a different shape that would collapse onto
-  // the existing type (dropping fields). Taken means the raw name OR the emitted GraphQL name is
-  // reserved ('user' collides with a stored '#/c/s/User': both emit `User` — issue #12). $ref-named
-  // types dedup by id and are never renamed; `[inline:…]` consolidated allOf/oneOf members fold into
-  // their parent Composed and must keep a shared id. see docs/issues.md #9, #12
+  // The occupant is the type already stored under our name: a different shape collides (rename,
+  // see #9/#12); a same-schema occupant dedups instead — renaming it would orphan it (see #18).
   private collidesWithStoredType(context: OasContext): boolean {
-    if (!this.name || T.isRef(this.name) || this.name.startsWith('[inline:')) {
+    if (this.isExemptFromRename()) {
       return false;
     }
-    return context.types.has(this.name) || context.types.has(Naming.genTypeName(this.name));
+    const occupant = this.storedOccupant(context);
+    if (!occupant) {
+      return false;
+    }
+    return !this.isSameInlineDefinition(occupant);
+  }
+
+  // $ref-named types dedup by id; `[inline:…]` members keep their shared id. see docs/issues.md #9
+  private isExemptFromRename(): boolean {
+    return !this.name || T.isRef(this.name) || this.name.startsWith('[inline:');
+  }
+
+  // the type already stored under our name, raw or emitted ('user' vs '#/c/s/User'). see #12
+  private storedOccupant(context: OasContext): IType | undefined {
+    return context.types.get(this.name) ?? context.types.get(Naming.genTypeName(this.name));
+  }
+
+  // the same definition duplicated inline: same name-derived id AND a deeply-equal raw schema —
+  // an id mismatch (pointer-named #8, component #12) would emit two definitions of one name. see #18
+  private isSameInlineDefinition(occupant: IType): boolean {
+    if (occupant.id !== this.id) {
+      return false;
+    }
+    return this.sameSchemaAs(occupant);
+  }
+
+  // deeply-equal raw schemas: the same inline definition duplicated, not a competing shape. see #18
+  private sameSchemaAs(occupant: IType): boolean {
+    if (!this.schema || !occupant.schema) {
+      return false;
+    }
+    return _.isEqual(this.schema, occupant.schema);
+  }
+
+  // a schema-identical twin already renamed to `candidate` — adopt its name (and so its
+  // name-derived id) instead of minting `2`, `3`, …, which would orphan on fold. see #18
+  private canConvergeOn(occupant: IType | undefined, candidate: string): boolean {
+    if (!(occupant instanceof Obj) || occupant.name !== candidate) {
+      return false;
+    }
+    return this.sameSchemaAs(occupant);
   }
 
   // Qualify a colliding inline name with its container (nearest non-prop ancestor), e.g. `listPrice`
@@ -273,6 +309,9 @@ export class Obj extends Type {
     const base = Naming.genTypeName(T.findNonPropParent(this.parent!).name) + Naming.genTypeName(this.name);
     let candidate = base;
     for (let n = 2; context.types.has(candidate); n++) {
+      if (this.canConvergeOn(context.types.get(candidate), candidate)) {
+        break;
+      }
       candidate = `${base}${n}`;
     }
     this.name = candidate;
