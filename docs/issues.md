@@ -539,3 +539,49 @@ degrade map values to `JSON` — same best-effort convention as #10.
 **AST:** untouched — tree and emission are correct; the divergence is in composition validation.
 **Refs:** `src/oas/nodes/map.ts` (`generate`/`select`). Found by adding CCS to the coverage sweep
 (default 100%, abstract 39.5%); fixing this one family takes CCS abstract to ~100%.
+
+**Status update:** fix drafted and verified locally — `212e35b60` on router branch
+`fix/connect-v04-array-shape-seen-fields` (one `ShapeCase::Array` arm + fixture + snapshot + changeset;
+test fails without the patch, passes with it). Re-running the corpus through the patched composition
+(`apollo-federation-cli` + rover shim): **CCS abstract 39.5% → 100%**, and the patch recovers **~69 ops
+corpus-wide** (box +14, github +15, confluence +7, DO +4, omni +2, asana +1) — abstract overall
+73.5% → 79.1%. Awaiting internal PR.
+
+## 15 · Response-root `allOf` type referenced but never emitted — ⬜ Open
+**Symptom:** the new dominant compose failure after #14 — **143 ops** across the corpus (DO, box,
+github, sendgrid, …):
+`INVALID_GRAPHQL: cannot find type V2CustomersMyBillingHistoryResponse in this document`.
+The Query field references the synthesized response type; its definition never appears (the name occurs
+exactly once in the output — the reference).
+
+**OAS** (DigitalOcean — the *response root* is an `allOf`):
+```yaml
+responses:
+  '200':
+    content:
+      application/json:
+        schema:
+          allOf:
+            - properties:
+                billing_history:
+                  items: { properties: { amount: …, date: …, description: … } }
+            - $ref: '#/components/schemas/pagination'
+            - $ref: '#/components/schemas/meta'
+```
+
+**Example**:
+```graphql
+v2CustomersMyBilling_history: V2CustomersMyBillingHistoryResponse   # reference emitted…
+# …but no `type V2CustomersMyBillingHistoryResponse { … }` anywhere → INVALID_GRAPHQL
+```
+
+**Suspected cause (hypothesis — needs the comp.ts emission walk):** a response-root `Composed`
+(`allOf`) gets its reference name from `getGqlOpName() + 'Response'`, but its definition is dropped on
+emission — likely `Composed.generate` skipping when `selectedProps` is empty post-consolidation, or a
+definition/reference naming divergence. Probably **not** v0.4-specific (DO's default pass shows the
+same `INVALID_GRAPHQL` count family). Side smell in the same op: the field name keeps a raw underscore
+(`v2CustomersMyBilling_history`) — `getGqlOpName` doesn't camelize every segment.
+
+**AST (suspected):** emission-only or a missing collect — to be confirmed.
+**Refs:** `src/oas/nodes/comp.ts` (`generate`/`consolidate`), `res.ts`, `operationWriter`. Biggest
+single family in the post-#14 gap histogram (143 of 151 remaining compose-fails).
