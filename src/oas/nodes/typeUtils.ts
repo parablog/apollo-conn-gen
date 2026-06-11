@@ -1,7 +1,22 @@
-import { Arr, CircularRef, En, IType, Obj, Prop, PropArray, PropEn, PropScalar, Scalar } from './internal.js';
+import {
+  Arr,
+  CircularRef,
+  Composed,
+  En,
+  IType,
+  Obj,
+  Prop,
+  PropArray,
+  PropComp,
+  PropEn,
+  PropObj,
+  PropScalar,
+  Scalar,
+} from './internal.js';
 import _ from 'lodash';
 import { Naming } from '../utils/naming.js';
 import type { OasContext } from '../oasContext.js';
+import type { Writer } from '../io/writer.js';
 
 export class T {
   public static isLeaf(type: IType): boolean {
@@ -95,6 +110,143 @@ export class T {
 
   public static isScalarArray(type: IType) {
     return type instanceof Arr && type.itemsType instanceof Scalar;
+  }
+
+  // R10: the bare GraphQL name a `...Type` spread must reference — the exact name the type's
+  // own definition emits (genTypeName + nameSuffix; any drift breaks composition). Returns
+  // undefined when the child carries no @mapping to spread: inputs, promoted interfaces,
+  // free-form JSON (no props), unions (->match stays co-located) and maps (->entries).
+  public static mappingSpreadName(input: IType | undefined, selection: string[]): string | undefined {
+    // unwrap array nesting: the spread targets the item type's @mapping
+    let type = input;
+    while (type instanceof Arr) {
+      type = type.itemsType;
+    }
+    if (!type || type.kind === 'input') {
+      return undefined;
+    }
+    if (type instanceof Composed && type.schema.allOf != null && !type.consolidated) {
+      type.consolidate(selection);
+    }
+    const target =
+      type instanceof Obj && !type.emitAsInterface
+        ? type
+        : type instanceof Composed && type.schema.allOf != null
+          ? type
+          : undefined;
+    if (!target || _.isEmpty(target.props)) {
+      return undefined;
+    }
+    return Naming.genTypeName(target.name) + target.nameSuffix();
+  }
+
+  // R10: the child type a prop's selection would spread to, or undefined for scalar/enum/etc.
+  private static spreadChildOf(prop: Prop): IType | undefined {
+    if (prop instanceof PropObj) return prop.obj;
+    if (prop instanceof PropArray) return prop.items;
+    if (prop instanceof PropComp) return prop.comp;
+    return undefined;
+  }
+
+  // R10 cycle pre-pass: a per-type emission stack cannot catch multi-type cycles (each @mapping
+  // body is rendered from its own emitted instance), so before any body is emitted, build the
+  // spread graph over the *emitted* instances and mark every DFS back edge "Parent|Child" for
+  // inline fallback. Only back edges are marked — the minimum set that breaks each cycle.
+  public static computeInlinedMappingEdges(
+    types: Map<string, IType>,
+    selection: string[],
+    context: OasContext,
+  ): void {
+    const adjacency = new Map<string, Set<string>>();
+
+    types.forEach((type) => {
+      const name = T.mappingSpreadName(type, selection);
+      if (!name || adjacency.has(name)) {
+        return;
+      }
+      const edges = new Set<string>();
+      for (const prop of (type as Obj | Composed).selectedProps(selection)) {
+        const childName = T.mappingSpreadName(T.spreadChildOf(prop), selection);
+        if (childName) {
+          edges.add(childName);
+        }
+      }
+      adjacency.set(name, edges);
+    });
+
+    const backEdges = new Set<string>();
+    const colour = new Map<string, 'grey' | 'black'>();
+
+    const visit = (node: string): void => {
+      colour.set(node, 'grey');
+      for (const child of adjacency.get(node) ?? []) {
+        if (colour.get(child) === 'grey') {
+          backEdges.add(`${node}|${child}`);
+        } else if (colour.get(child) !== 'black' && adjacency.has(child)) {
+          visit(child);
+        }
+      }
+      colour.set(node, 'black');
+    };
+
+    for (const node of adjacency.keys()) {
+      if (!colour.has(node)) {
+        visit(node);
+      }
+    }
+
+    context.inlinedMappingEdges = backEdges;
+  }
+
+  // R10: true when this prop's spread closes a cycle (a pre-computed back edge) — the caller
+  // must render the child subtree fully inline instead of spreading.
+  public static isInlinedBackEdge(prop: Prop, spreadName: string, context: OasContext, selection: string[]): boolean {
+    const owner = T.mappingSpreadName(T.findNonPropParent(prop.parent!), selection);
+    return !!owner && context.inlinedMappingEdges.has(`${owner}|${spreadName}`);
+  }
+
+  // R10: emit the type's @mapping directive (connect v0.5). The body is the type's own selection
+  // rendered in reusable mode (nested fields collapse to `field { ...Child }` spreads). When the
+  // body is exactly the SDL field names, the auto-map form (bare `@mapping`) maps 1:1 by name;
+  // anything aliased, defaulted or nested needs the explicit `@mapping(selection: """…""")`.
+  public static writeMappingDirective(
+    type: Obj | Composed,
+    context: OasContext,
+    writer: Writer,
+    selection: string[],
+  ): void {
+    if (!context.generateOptions.reusableMappings || type.kind === 'input') {
+      return;
+    }
+    if (type instanceof Obj && type.emitAsInterface) {
+      return;
+    }
+
+    const body = writer.capture(() => {
+      const saved = context.indent;
+      // `select` indents by `context.indent + stack.length`; this type is mid-generation (on
+      // the stack), so offset to land the body lines at column 2 (the reference format).
+      context.indent = 2 - context.stack.length;
+      type.select(context, writer, selection);
+      context.indent = saved;
+    });
+
+    const lines = body
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (lines.length === 0) {
+      return;
+    }
+
+    const fields = type.selectedProps(selection).map((prop) => Naming.sanitiseField(prop.name));
+    const autoMap = lines.length === fields.length && lines.every((line, i) => line === fields[i]);
+
+    if (autoMap) {
+      writer.write(' @mapping');
+    } else {
+      writer.write(' @mapping(selection: """\n').write(body).write('""")');
+    }
   }
 
   // The occupant is the type already stored under our name: a different shape collides (rename,

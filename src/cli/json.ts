@@ -13,6 +13,10 @@ async function main(fileOrFolder: string, opts: any): Promise<void> {
     return;
   }
 
+  if (opts.reusableMappings) {
+    throw new Error('reusable @mapping (--reusable-mappings) is not supported for JSON generation yet');
+  }
+
   const jsonOptions = {
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
@@ -65,6 +69,7 @@ program
   .option('-o --output-file <file>', 'Where to write the output', 'stdout')
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
+  .option('--reusable-mappings', 'Not supported for JSON generation (OAS only)', false)
   .option('--root-type <name>', 'Root type name, use [Name] for list (default: Root)')
   .option('--base-url <url>', 'Base URL for the @source directive (default: http://localhost:4010)')
   .option('--relative-path <path>', 'Relative path for the @connect directive (default: /test)')

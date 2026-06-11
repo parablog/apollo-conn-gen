@@ -22,7 +22,7 @@ export const DEFAULT_VERSIONS = {
 export type Versions = typeof DEFAULT_VERSIONS;
 
 // Authoritative list of connect spec identifiers we will emit in an `@link` URL.
-export const SUPPORTED_CONNECT_VERSIONS = ['v0.1', 'v0.2', 'v0.3', 'v0.4'] as const;
+export const SUPPORTED_CONNECT_VERSIONS = ['v0.1', 'v0.2', 'v0.3', 'v0.4', 'v0.5'] as const;
 export type ConnectVersion = (typeof SUPPORTED_CONNECT_VERSIONS)[number];
 
 const VERSION_RE = /^v(\d+)\.(\d+)$/;
@@ -71,12 +71,17 @@ export function requireConnectVersion(feature: string, target: string, min: stri
   }
 }
 
-/** Non-blocking heads-up that v0.4 is experimental and needs router opt-in. */
+/** Non-blocking heads-up that v0.4/v0.5 are experimental and need router opt-in. */
 export function warnIfExperimentalConnectVersion(v: string): void {
   if (v === 'v0.4') {
     console.warn(
       'Warning: connect v0.4 is experimental. The router must enable ' +
         '`connectors: preview_connect_v0_4: true` and use federation >= v2.13.',
+    );
+  } else if (v === 'v0.5') {
+    console.warn(
+      'Warning: connect v0.5 is experimental (preview). Composition and the router ' +
+        'must support the @mapping preview; released builds reject connect v0.5.',
     );
   }
 }

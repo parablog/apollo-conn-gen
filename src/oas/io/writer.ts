@@ -27,6 +27,18 @@ export class Writer {
     return this.buffer.join('');
   }
 
+  /** Run `fn` against a fresh buffer and return what it wrote, restoring the original buffer. */
+  public capture(fn: () => void): string {
+    const saved = this.buffer;
+    this.buffer = [];
+    try {
+      fn();
+      return this.buffer.join('');
+    } finally {
+      this.buffer = saved;
+    }
+  }
+
   public generate(paths: string[]): string[] {
     const collector = new TypesCollector(this.gen);
     collector.collect(paths);
@@ -54,6 +66,12 @@ export class Writer {
     // R2: promote discriminated oneOf-with-shared-allOf-base to a GraphQL interface (id-neutral;
     // no-op unless consolidateUnions is off and a qualifying union exists). Same `types` map.
     promoteInterfaces(context, this.gen, types, selection);
+
+    // R10: before any @mapping body is emitted, mark the spread-graph back edges that must
+    // render inline — recursive schemas would otherwise produce a cyclic @mapping graph.
+    if (context.generateOptions.reusableMappings) {
+      T.computeInlinedMappingEdges(types, selection, context);
+    }
 
     this.schemaWriter.writeDirectives(writer);
     this.schemaWriter.writeJSONScalar(writer);

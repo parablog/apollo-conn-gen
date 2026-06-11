@@ -5,7 +5,7 @@ import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
-import { DEFAULT_VERSIONS, validateVersionOptions } from '../versions.js';
+import { DEFAULT_VERSIONS, requireConnectVersion, validateVersionOptions } from '../versions.js';
 import { GenerateOptions, OasContext } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
@@ -23,6 +23,19 @@ interface IGenOptions {
   skipOptionalArgs?: boolean;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  reusableMappings?: boolean;
+}
+
+// --reusable-mappings emits @mapping, a connect v0.5 construct — reject lower targets
+// explicitly rather than auto-bumping or emitting a directive the target cannot parse.
+function validateReusableMappings(options: IGenOptions): void {
+  if (options.reusableMappings) {
+    requireConnectVersion(
+      'reusable @mapping (--reusable-mappings)',
+      options.connectorSpecVersion ?? DEFAULT_VERSIONS.connectorSpecVersion,
+      'v0.5',
+    );
+  }
 }
 
 export class OasGen {
@@ -42,6 +55,7 @@ export class OasGen {
     },
   ): Promise<OasGen> {
     validateVersionOptions(options);
+    validateReusableMappings(options);
 
     const normalizer: OASNormalize = new OASNormalize(data, {
       enablePaths: true,
@@ -82,6 +96,7 @@ export class OasGen {
     // prompt: Prompt
   ): Promise<OasGen> {
     validateVersionOptions(options);
+    validateReusableMappings(options);
 
     if (!fs.existsSync(sourceFile)) {
       throw new Error('Source not found: ' + sourceFile);

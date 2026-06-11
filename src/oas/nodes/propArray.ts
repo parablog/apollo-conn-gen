@@ -74,6 +74,32 @@ export class PropArray extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
+    // R10: array-of-object items collapse to the item type's @mapping spread (prefix preserved);
+    // back edges render fully inline. see typeUtils.computeInlinedMappingEdges
+    if (context.generateOptions.reusableMappings && context.inlineFallbackDepth === 0) {
+      const spread = T.mappingSpreadName(this.items, selection);
+      if (spread) {
+        if (T.isInlinedBackEdge(this, spread, context, selection)) {
+          context.inlineFallbackDepth++;
+          try {
+            this.selectBody(context, writer, selection);
+          } finally {
+            context.inlineFallbackDepth--;
+          }
+        } else {
+          writer.write(` { ...${spread} }`).write('\n');
+        }
+        trace(context, '<- [prop:array:select]', 'out (mapped) ' + this.name);
+        return;
+      }
+    }
+
+    this.selectBody(context, writer, selection);
+
+    trace(context, '<- [prop:array:select]', 'out');
+  }
+
+  private selectBody(context: OasContext, writer: Writer, selection: string[]): void {
     if (this.needsBrackets(this.items!)) {
       writer.write(' {');
       writer.write('\n');
@@ -93,8 +119,6 @@ export class PropArray extends Prop {
     }
 
     writer.write('\n');
-
-    trace(context, '<- [prop:array:select]', 'out');
   }
 
   public needsBrackets(child?: IType): boolean {

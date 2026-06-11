@@ -94,6 +94,7 @@ export class Composed extends Type {
         if (this.implementsInterface) {
           writer.write(` implements ${this.implementsInterface}`);
         }
+        T.writeMappingDirective(this, context, writer, selection);
         writer.write(' {\n');
 
         for (const prop of selected) {

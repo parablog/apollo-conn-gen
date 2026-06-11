@@ -94,11 +94,14 @@ export class Obj extends Type {
       for (const key of Array.from(new Set(resolvers.map((r) => r.keyFields))).sort()) {
         writer.write(` @key(fields: "${key}")`);
       }
+      // directive order: @key -> @mapping -> @connect (matches the connect v0.5 reference shape)
+      T.writeMappingDirective(this, context, writer, selection);
       for (const resolver of resolvers) {
         this.writeEntityConnector(context, writer, resolver, selection);
       }
       writer.write('\n{\n');
     } else {
+      T.writeMappingDirective(this, context, writer, selection);
       writer.write(' {\n');
     }
 
@@ -156,10 +159,17 @@ export class Obj extends Type {
       .write(i6)
       .write('selection: """\n');
 
-    // Base the selection at 6 spaces like a Query connector. `select` adds
-    // `context.stack.length` (this object is mid-generation on the stack), so subtract it.
-    context.indent = 6 - context.stack.length;
-    this.select(context, writer, selection);
+    // R10: in reusable-mappings mode the entity selection is just this type's own spread —
+    // the field body lives in its @mapping.
+    const spread = context.generateOptions.reusableMappings ? T.mappingSpreadName(this, selection) : undefined;
+    if (spread) {
+      writer.write(i6).write(`...${spread}\n`);
+    } else {
+      // Base the selection at 6 spaces like a Query connector. `select` adds
+      // `context.stack.length` (this object is mid-generation on the stack), so subtract it.
+      context.indent = 6 - context.stack.length;
+      this.select(context, writer, selection);
+    }
 
     writer.write(i6).write('"""\n').write(i4).write(')');
   }

@@ -1,4 +1,4 @@
-import { IType, Obj, Union, Prop } from './internal.js';
+import { IType, Obj, Union, Prop, T } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
@@ -59,6 +59,34 @@ export class PropComp extends Prop {
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
+    // R10: composed (allOf) children collapse to their @mapping spread; unions stay inline;
+    // back edges render fully inline. see typeUtils.computeInlinedMappingEdges
+    if (context.generateOptions.reusableMappings && context.inlineFallbackDepth === 0) {
+      const spread = T.mappingSpreadName(comp, selection);
+      if (spread) {
+        if (T.isInlinedBackEdge(this, spread, context, selection)) {
+          context.inlineFallbackDepth++;
+          try {
+            this.selectBody(context, writer, selection);
+          } finally {
+            context.inlineFallbackDepth--;
+          }
+        } else {
+          writer.write(` { ...${spread} }`).write('\n');
+        }
+        trace(context, '<- [prop-comp:select]', 'out (mapped) ' + this.name);
+        return;
+      }
+    }
+
+    this.selectBody(context, writer, selection);
+
+    trace(context, '<- [prop-comp:select]', 'out ' + this.name + ', obj: ' + comp?.name);
+  }
+
+  private selectBody(context: OasContext, writer: Writer, selection: string[]): void {
+    const comp = this.comp!;
+
     if (this.needsBrackets(comp)) {
       writer.write(' {').write('\n');
       context.enter(this);
@@ -78,8 +106,6 @@ export class PropComp extends Prop {
     }
 
     writer.write('\n');
-
-    trace(context, '<- [prop-comp:select]', 'out ' + this.name + ', obj: ' + comp?.name);
   }
 
   private needsBrackets(child: IType): boolean {

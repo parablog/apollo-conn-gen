@@ -17,12 +17,17 @@ export class SchemaWriter {
     const federationVersion = this.gen.options.federationVersion || DEFAULT_VERSIONS.federationVersion;
     const connectorSpecVersion = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
     const authHeader = this.securityHeader(api);
+    // R10: @mapping joins the connect import only in reusable-mappings mode; the federation
+    // import stays ["@key"] (no @shareable — deliberate, revisit only if composition demands it).
+    const connectImports = this.gen.options.reusableMappings
+      ? '["@connect", "@source", "@mapping"]'
+      : '["@connect", "@source"]';
     writer
       .write('extend schema\n')
       .write(`  @link(url: "https://specs.apollo.dev/federation/${federationVersion}", import: ["@key"])\n`)
       .write('  @link(\n')
       .write(`    url: "https://specs.apollo.dev/connect/${connectorSpecVersion}"\n`)
-      .write('    import: ["@connect", "@source"]\n')
+      .write(`    import: ${connectImports}\n`)
       .write('  )\n');
 
     if (authHeader) {

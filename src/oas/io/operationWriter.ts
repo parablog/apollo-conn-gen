@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { Body, IType, Op, Param, Type } from '../nodes/internal.js';
+import { Body, IType, Op, Param, Res, T, Type } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
 import { Writer } from './writer.js';
 import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
@@ -184,6 +184,20 @@ export class OperationWriter {
 
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
     context.indent = 6;
+
+    // R10: in reusable-mappings mode the @connect selection is the result type's spread —
+    // its field body lives in the type's own @mapping. Wrapper structure (a `data { … }`
+    // response object, array nesting) is preserved: the wrapper type spreads here and carries
+    // the inner structure in its mapping. Scalar/JSON/union/map roots fall back to inline.
+    if (context.generateOptions.reusableMappings) {
+      const root = type instanceof Res ? type.response : type;
+      const spread = T.mappingSpreadName(root, selection);
+      if (spread) {
+        writer.write(' '.repeat(6)).write(`...${spread}\n`);
+        return;
+      }
+    }
+
     type.select(context, writer, selection);
   }
 

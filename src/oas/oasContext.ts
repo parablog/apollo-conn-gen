@@ -17,6 +17,7 @@ export type GenerateOptions = {
   skipOptionalArgs?: boolean;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  reusableMappings?: boolean;
 };
 
 // Max nested $ref hops resolvePointer will follow before giving up (guards against ref cycles).
@@ -45,6 +46,12 @@ export class OasContext {
 
   public generatedSet: Set<string> = new Set();
   public indent: number;
+
+  // R10: mapping back edges ("Parent|Child" spread names) pre-computed before emission; a spread
+  // on one of these edges renders its subtree fully inline instead (no spreads at any depth, via
+  // inlineFallbackDepth) so the emitted @mapping graph stays acyclic for the router expander.
+  public inlinedMappingEdges: Set<string> = new Set();
+  public inlineFallbackDepth: number = 0;
 
   public stack: IType[] = new Array<IType>();
   public types: Map<string, IType | undefined> = new Map();

@@ -1,0 +1,96 @@
+openapi: 3.0.0
+info:
+  title: R10 recursive mapping fixtures
+  version: 1.0.0
+servers:
+  - url: https://example.com
+paths:
+  /a:
+    get:
+      operationId: getA
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/A"
+  /b:
+    get:
+      operationId: getB
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/B"
+  /x:
+    get:
+      operationId: getX
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/X"
+  /y:
+    get:
+      operationId: getY
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Y"
+  /z:
+    get:
+      operationId: getZ
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Z"
+components:
+  schemas:
+    # 2-type cycle: A -> B -> A
+    A:
+      type: object
+      properties:
+        name:
+          type: string
+        b:
+          $ref: "#/components/schemas/B"
+    B:
+      type: object
+      properties:
+        title:
+          type: string
+        a:
+          $ref: "#/components/schemas/A"
+    # 3-type cycle: X -> Y -> Z -> X
+    X:
+      type: object
+      properties:
+        xv:
+          type: string
+        y:
+          $ref: "#/components/schemas/Y"
+    Y:
+      type: object
+      properties:
+        yv:
+          type: string
+        z:
+          $ref: "#/components/schemas/Z"
+    Z:
+      type: object
+      properties:
+        zv:
+          type: string
+        x:
+          $ref: "#/components/schemas/X"

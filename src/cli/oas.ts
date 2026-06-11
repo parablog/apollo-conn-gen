@@ -46,6 +46,7 @@ async function main(sourceFile: string, opts: any): Promise<void> {
     mapper: mapper,
     skipOptionalArgs: opts.skipOptionalArgs,
     inferEntityResolvers: opts.inferEntityResolvers,
+    reusableMappings: opts.reusableMappings,
   });
 
   await gen.visit();
@@ -102,6 +103,7 @@ program
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
+  .option('--reusable-mappings', 'Emit reusable @mapping directives (requires connect v0.5)', false)
   .parse(process.argv);
 
 const source = program.args[0];
