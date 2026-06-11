@@ -9,7 +9,6 @@ import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
 
 export class Obj extends Type {
-  nameConflict: boolean = false;
   // R1: type-level entity resolvers discovered for this type (empty unless inferred).
   // Set by `inferEntityResolvers`; drives @key + type-level @connect/$this in generate().
   entityResolvers: EntityResolver[] = [];
@@ -47,16 +46,17 @@ export class Obj extends Type {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
-    if (this.collidesWithStoredType(context)) {
-      this.resolveNameConflict(context);
+    // a different shape already owns this name — rename, or the two would merge into one type. see #9
+    if (T.collidesWithStoredType(this, context)) {
+      T.resolveNameConflict(this, context);
     }
 
     this.visitProperties(context);
     this.visited = true;
 
-    if (this.name) {
-      if (!T.isRef(this.name) && context.types.has(this.name)) this.nameConflict = true;
-      else context.store(this.name, this);
+    // register as the occupant that later same-named types check against. see #9/#12
+    if (this.name && !this.nameOwnedByAnother(context)) {
+      context.store(this.name, this);
     }
 
     trace(context, '<- [obj:visit]', 'out ' + this.name);
@@ -252,68 +252,8 @@ export class Obj extends Type {
     this.name = name;
   }
 
-  // The occupant is the type already stored under our name: a different shape collides (rename,
-  // see #9/#12); a same-schema occupant dedups instead — renaming it would orphan it (see #18).
-  private collidesWithStoredType(context: OasContext): boolean {
-    if (this.isExemptFromRename()) {
-      return false;
-    }
-    const occupant = this.storedOccupant(context);
-    if (!occupant) {
-      return false;
-    }
-    return !this.isSameInlineDefinition(occupant);
-  }
-
-  // $ref-named types dedup by id; `[inline:…]` members keep their shared id. see docs/issues.md #9
-  private isExemptFromRename(): boolean {
-    return !this.name || T.isRef(this.name) || this.name.startsWith('[inline:');
-  }
-
-  // the type already stored under our name, raw or emitted ('user' vs '#/c/s/User'). see #12
-  private storedOccupant(context: OasContext): IType | undefined {
-    return context.types.get(this.name) ?? context.types.get(Naming.genTypeName(this.name));
-  }
-
-  // the same definition duplicated inline: same name-derived id AND a deeply-equal raw schema —
-  // an id mismatch (pointer-named #8, component #12) would emit two definitions of one name. see #18
-  private isSameInlineDefinition(occupant: IType): boolean {
-    if (occupant.id !== this.id) {
-      return false;
-    }
-    return this.sameSchemaAs(occupant);
-  }
-
-  // deeply-equal raw schemas: the same inline definition duplicated, not a competing shape. see #18
-  private sameSchemaAs(occupant: IType): boolean {
-    if (!this.schema || !occupant.schema) {
-      return false;
-    }
-    return _.isEqual(this.schema, occupant.schema);
-  }
-
-  // a schema-identical twin already renamed to `candidate` — adopt its name (and so its
-  // name-derived id) instead of minting `2`, `3`, …, which would orphan on fold. see #18
-  private canConvergeOn(occupant: IType | undefined, candidate: string): boolean {
-    if (!(occupant instanceof Obj) || occupant.name !== candidate) {
-      return false;
-    }
-    return this.sameSchemaAs(occupant);
-  }
-
-  // Qualify a colliding inline name with its container (nearest non-prop ancestor), e.g. `listPrice`
-  // under `offersItem` -> `OffersItemListPrice`, bumping `2`, `3`… until free. Both parts go through
-  // genTypeName so the result is always a valid identifier (the container name may itself be an
-  // `[inline:…]` placeholder) and is idempotent under emission. see docs/issues.md #9
-  private resolveNameConflict(context: OasContext) {
-    const base = Naming.genTypeName(T.findNonPropParent(this.parent!).name) + Naming.genTypeName(this.name);
-    let candidate = base;
-    for (let n = 2; context.types.has(candidate); n++) {
-      if (this.canConvergeOn(context.types.get(candidate), candidate)) {
-        break;
-      }
-      candidate = `${base}${n}`;
-    }
-    this.name = candidate;
+  // another non-ref type still owns this name (we were exempt from renaming) — don't replace it. see #9
+  private nameOwnedByAnother(context: OasContext): boolean {
+    return !T.isRef(this.name) && context.types.has(this.name);
   }
 }

@@ -1,0 +1,49 @@
+openapi: 3.0.0
+info:
+  title: Composed collides with a stored inline object name
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /items:
+    get:
+      operationId: getItems
+      responses:
+        '200':
+          description: >-
+            `link.permissions` is an inline OBJECT (stores the name first — props visit
+            alphabetically); `media.permissions` is an inline nested ALLOF with a different
+            shape (the box.yaml `/files/{file_id}` pattern). Composed used to emit the
+            shared name blindly: `type Permissions` defined twice. see issues #22, #7, #9.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link:
+                    type: object
+                    properties:
+                      permissions:
+                        type: object
+                        properties:
+                          can_download:
+                            type: boolean
+                          can_edit:
+                            type: boolean
+                  media:
+                    type: object
+                    properties:
+                      permissions:
+                        allOf:
+                          - allOf:
+                              - type: object
+                                properties:
+                                  can_delete:
+                                    type: boolean
+                              - type: object
+                                properties:
+                                  can_annotate:
+                                    type: boolean
+                          - description: >-
+                              contentless member, skipped per issue #5 — keeps the outer
+                              allOf off the single-member $ref-adoption branch, as in box

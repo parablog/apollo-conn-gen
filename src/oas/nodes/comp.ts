@@ -43,6 +43,12 @@ export class Composed extends Type {
       trace(context, '[comp]', '   in composed schema: ' + this.name);
     }
 
+    // a PropComp-named inline allOf (#7) that clashes with a stored type of a different class
+    // must rename — otherwise the same type name is defined twice. see docs/issues.md #22
+    if (this.parent instanceof Prop && T.collidesAcrossNodeClasses(this, context)) {
+      T.resolveNameConflict(this, context);
+    }
+
     const composedSchema = this.schema;
 
     // this will be a type declaration

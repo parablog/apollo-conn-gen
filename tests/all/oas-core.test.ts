@@ -754,6 +754,19 @@ test('test_inline_identical_shapes_dedup_not_renamed', async () => {
   assert.ok(/\bpermissions: OfferPermissions\b/.test(schema!), 'offer references the split type');
 });
 
+test('test_composed_collision_with_stored_object_splits_by_container', async () => {
+  // An inline allOf named from its property key (#7) sharing that key with an already-stored
+  // inline OBJECT (`link.permissions` Obj vs `media.permissions` allOf — box `/files/{file_id}`)
+  // used to emit `type Permissions` twice: Composed skipped the #9/#12 occupancy check
+  // (INTERNAL_ERROR). The Composed now splits by container. see docs/issues.md #22. composes via rover.
+  const schema = await runOasTest('composed-name-collision.yaml', ['get:/items>**'], 1, 5);
+  assert.ok(schema !== undefined);
+  assert.ok(/type Permissions \{[^}]*canDownload/s.test(schema!), 'the stored Obj keeps the key name');
+  assert.ok(/type MediaPermissions \{[^}]*canAnnotate[^}]*canDelete/s.test(schema!), 'colliding Composed qualified by container');
+  assert.ok(/\bpermissions: MediaPermissions\b/.test(schema!), 'media references the split type');
+  assert.ok(!/type Permissions \{[^}]*canDelete/s.test(schema!), 'no redefinition of Permissions');
+});
+
 test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
   // Reported combo: Infer Entity Resolvers + Emit Connector Errors + v0.4/consolidate:false on
   // petstore get:/user/{username}. Locks that the entity type block is emitted CONTIGUOUSLY

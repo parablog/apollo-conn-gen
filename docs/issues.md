@@ -833,7 +833,7 @@ convention, cf. #19) instead of minting a field-less type. Walker-side counterpa
 `c13cfe5`). Verified: walker output byte-identical 0.8.3 → HEAD except `@link` versions — the
 bucket shift came from the R0 default bump (`72f625e`), not a walker change.
 
-## 22 · `Composed` skips the #9/#12 collision check → duplicate type definitions — ⬜ Open
+## 22 · `Composed` skips the #9/#12 collision check → duplicate type definitions — ✅ Fixed (working tree)
 **Symptom:** `INTERNAL_ERROR: the type Permissions is defined multiple times in the schema` —
 box `/files/{file_id}` and 8 sibling ops (9 per pass). Predates #18 (same counts before/after).
 
@@ -862,11 +862,36 @@ type Permissions { canAnnotate: Boolean canComment: Boolean… } # ✗ the Compo
   (`comp.ts` `updateName`/`generate`) — no occupancy check against `context.types`.
 - Same gap presumably applies to `Map` (`map.ts` has only the legacy `nameConflict` flag) and `Union`.
 
-**Proposed fix:** run the same occupancy check + container-qualified rename (and #18 convergence)
-when a `Composed` takes its name from a `Prop` — the #7 gate. Blast radius: every allOf/TMF fixture
-(`[inline:…]` member ids must stay untouched, see #7/#9 exclusions) — own slice, measure box's 9
-INTERNAL_ERROR ops before/after.
+**Fix:** the #9/#12/#18 collision checks moved from `Obj` (private methods) to `T` statics in
+`typeUtils.ts`, so `Composed.visit` can run them too (under the #7 gate, `parent instanceof Prop`).
+The `Composed` check is narrower — `collidesAcrossNodeClasses` — it only renames when the stored
+type is of a DIFFERENT node class:
+- different class (the box case: Obj `permissions` vs Composed `Permissions`): ids start with the
+  class (`obj:` / `comp:`), so the collector can never dedup the two — the name is always defined
+  twice → must rename.
+- same class: keep the old behaviour (both keep the name; the collector keeps one by id). Renaming
+  these was tried first and broke box 85→76 ok: File/Folder/WebLink carry `created_by`/`parent`/…
+  inline allOfs that are identical except for their `description`, so the deep-equality check saw
+  them as different shapes and renamed each one. Which copy got renamed depended on visit order,
+  the collector then kept a copy whose fields point at the other names, and the renamed types were
+  emitted with nothing referencing them (the same failure #18 describes).
+- `canConvergeOn` no longer requires the stored type to be an `Obj`, only the same class as the
+  node (same behaviour for `Obj`; lets two renamed `Composed` twins share one name).
 
-**AST:** identity change (proposed) — rename at build, like #9; no shape change.
-**Refs:** `src/oas/nodes/comp.ts` (`updateName`), `src/oas/nodes/obj.ts` (the predicates to reuse).
+**Measured (box, default):** the duplicate definitions are gone (all 6 ops a static scan finds);
+ok stays 85 — the 9 INTERNAL_ERROR ops have a second, separate bug that the duplicate was hiding,
+and they now fail on that one: `PathCollection.entries: [FolderMini]` is selected down to its
+scalar fields, but `#/c/s/Folder--Mini` itself is never emitted (a #13-family cycle cut, not this
+bug).
+**Care:** do NOT extend the `Composed` rename to same-class clashes unless the schema comparison
+learns to ignore `description` — see the regression above. `Map`/`Union` still skip the check
+(same presumed gap).
+**AST:** identity change — the colliding `Composed` is renamed at visit, like #9; its members are
+built after the rename, so their `[inline:…]` ids use the new name. Ops without a collision are
+byte-identical.
+**Refs:** `src/oas/nodes/typeUtils.ts` (`collidesAcrossNodeClasses`/`resolveNameConflict` + moved
+checks), `src/oas/nodes/comp.ts` (`visit`), `src/oas/nodes/obj.ts` (delegates). Fixture
+`composed-name-collision.yaml` (the outer allOf needs 2+ members — with a single inline member,
+`updateName` takes the one-`$ref` branch, the name comes out `undefined` and the type is emitted
+as `type _`; separate small bug), test `test_composed_collision_with_stored_object_splits_by_container`.
 Found while triaging the #18 residue.
