@@ -46,6 +46,17 @@ export class OasContext {
   public generatedSet: Set<string> = new Set();
   public indent: number;
 
+  // #13: SDL-only prop replacements, keyed by the emitted instance. When same-id instances
+  // diverge on cycle cuts, generate() emits the donor's un-cut field while every path's
+  // *selection* keeps its own cut comment (mutating props leaked the field into the cut
+  // position's selection -> rover CIRCULAR_REFERENCE). Set by TypesCollector.collect.
+  // e.g. (confluence): two `Space` instances in one op —
+  //   under Content: Space { # history — cut }   <- collected first, wins emission
+  //   under Result:  Space { history: SpaceHistory }
+  //   entry: keptSpace -> { "history" -> donor prop }  => SDL emits `history: SpaceHistory`,
+  //   the Content path's selection still reads `# history: circular reference omitted`
+  public sdlPropOverrides: Map<IType, Map<string, IType>> = new Map();
+
   public stack: IType[] = new Array<IType>();
   public types: Map<string, IType | undefined> = new Map();
   public generateOptions: GenerateOptions;
@@ -66,6 +77,7 @@ export class OasContext {
 
   public reset(): void {
     this.generatedSet?.clear();
+    this.sdlPropOverrides.clear();
   }
 
   public enter(type: IType): void {

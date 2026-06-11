@@ -103,10 +103,15 @@ export class Obj extends Type {
     }
 
     const selected = this.selectedProps(selection);
+    // #13: another node of this same schema may still have a field that cycle detection
+    // removed from this one — emit that version of the field in the type definition. The
+    // selections are not affected. see TypesCollector.collect / context.sdlPropOverrides
+    const overrides = context.sdlPropOverrides.get(this);
 
     for (const prop of selected) {
-      trace(context, '-> [obj::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-      prop.generate(context, writer, selection);
+      const emitted = (overrides?.get(prop.name) as typeof prop) ?? prop;
+      trace(context, '-> [obj::generate]', `-> property: ${emitted.name} (parent: ${emitted.parent!.name})`);
+      emitted.generate(context, writer, selection);
     }
 
     writer.write('}\n\n');

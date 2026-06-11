@@ -3,6 +3,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Factory } from './factory.js';
+import { Naming } from '../utils/naming.js';
 
 // Build (once per selection array, cached by identity) the set of all `>`-boundary prefixes of every
 // selection entry. `someEntry.startsWith(path)` for a `>`-joined `path` is then exactly
@@ -103,10 +104,7 @@ export abstract class Type implements IType {
 
   public path(): string {
     const ancestors = this.ancestors();
-    return ancestors
-      .map((t) => t.id)
-      .join('>')
-      .replace(/#\/components\/schemas/g, '#/c/s');
+    return Naming.abbreviateRef(ancestors.map((t) => t.id).join('>'));
   }
 
   public pathToRoot(): string {

@@ -146,6 +146,17 @@ export class Naming {
     return /^[0-9]/.test(camel) ? Naming.NUMBER_PREFIX + camel : camel;
   }
 
+  // Selection paths abbreviate component refs to stay readable (`#/components/schemas/Space`
+  // -> `#/c/s/Space`); expandRef is the inverse, used when matching a path segment back
+  // against node ids.
+  public static abbreviateRef(path: string): string {
+    return path.replace(/#\/components\/schemas/g, '#/c/s');
+  }
+
+  public static expandRef(path: string): string {
+    return path.replace(/#\/c\/s/g, '#/components/schemas');
+  }
+
   public static genTypeName(name: string): string {
     // guarantee a valid type identifier: drop any leftover non-identifier chars (e.g. the
     // `[`/`]`/`:` of an `[inline:Foo]` placeholder used as a name prefix), then non-empty +

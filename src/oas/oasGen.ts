@@ -12,6 +12,7 @@ import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
 import { TypesCollector } from './generator/typesCollector.js';
 import { Mapper } from './mapper/types.js';
+import { Naming } from './utils/naming.js';
 
 interface IGenOptions {
   skipValidation: boolean;
@@ -246,7 +247,7 @@ export class OasGen {
     let i = 0;
     const parts = path.split('>');
     do {
-      const part = parts[i].replace(/#\/c\/s/g, '#/components/schemas');
+      const part = Naming.expandRef(parts[i]);
       current = collection.find((t) => t.id === part);
       if (!current) {
         throw new Error('Could not find type: ' + part + ' from ' + path + ', last: ' + last?.pathToRoot());

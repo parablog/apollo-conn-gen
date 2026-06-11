@@ -443,7 +443,7 @@ component is stored won't see the collision. Components are reached at shallower
 (`store`). Fixture `inline-vs-component-name.yaml`, test
 `test_inline_renamed_when_colliding_with_component_emitted_name`. Next Confluence blocker: #13.
 
-## 13 · Path-dependent cycle cuts make same-named instances diverge — ⬜ Open
+## 13 · Path-dependent cycle cuts make same-named instances diverge — 🟡 Mechanism fixed (working tree); ops gated behind the R2 union wall
 **Symptom:** with #10 + #12 in place, Confluence abstract fails compose with
 `SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`.
 
@@ -479,21 +479,32 @@ prefer the non-`PropCircRef` version. Then:
 
 **AST (proposed):** no new nodes — a collect-time prop merge on the kept instance.
 
-**Attempt notes (2026-06-10, implemented then reverted as too invasive — keep for the next try):**
-- Mutating `kept.props` is WRONG: the merged prop leaks into the *cut position's* selection, which
-  then genuinely re-enters the cycle → rover `CIRCULAR_REFERENCE`. The merge must be **SDL-only**;
-  each path's selection keeps its own cut comment.
-- The merge must also be **selection-guarded**: only take a prop whose own `path()` is in the final
-  selection — an unselected replacement emits an SDL field no selection resolves
-  (`CONNECTORS_UNRESOLVED_FIELD`, caught by `test_040` AdobeCommerce). Defer to after the collect
-  loop: `expanded` is still mutating during it.
-- Verified on confluence abstract: clears all 8 `SELECTED_FIELD_NOT_FOUND` ops (`history`/`Space`),
-  **but** they then hit the R2 discriminator-less-union wall (`GROUP_SELECTION_IS_NOT_OBJECT` on
-  `ContentMetadata.labels: LabelsUnion`) — net pass-rate unchanged until that R2 gap is also fixed.
-  Re-estimate the payoff jointly with R2 before re-attempting.
+**Fix (2026-06-11, working tree — incorporates the lessons of the reverted 06-10 attempt):**
+- The routes are already spelled out in the final selection, so no extra bookkeeping: for each
+  field a node lost to a cycle cut, find a selection path that carries the real field under the
+  same type id (`>obj:type:X>prop:…:name`, in the `#/c/s` short form `path()` writes) and walk
+  it to its node with the existing `collectPaths`.
+- **SDL-only:** the found node goes into `context.sdlPropOverrides`
+  (`Map<writtenInstance, Map<fieldName, node>>`), read by `Obj.generate` only — every route's
+  selection keeps its own "field removed" comment. Mutating `props` instead leaked the field
+  into the cut position's selection → rover `CIRCULAR_REFERENCE`.
+- **Selection-guarded by construction:** the replacement comes FROM the selection, so a field
+  nobody selects is never added to the SDL (`CONNECTORS_UNRESOLVED_FIELD`, caught by
+  `test_040` AdobeCommerce).
+- Runs after the collect loop, once `expanded` is final. (A first version tracked instance
+  pairs during the loop — the same pair is met once per route and confluence has thousands,
+  so it went quadratic and hung the sweep. Deriving from `expanded` avoids the whole class.)
 
-**Refs:** `src/oas/generator/typesCollector.ts` (`collect`, id-keyed `pendingTypes`),
-`src/oas/nodes/propCircRef.ts`. Until fixed the harness keeps `confluence.json::abstract` skipped.
+**Measured:** confluence abstract `SELECTED_FIELD_NOT_FOUND` 8 → 1; the unblocked ops now fail
+on the **R2 discriminator-less-union wall** (`GROUP_SELECTION_IS_NOT_OBJECT` on
+`ContentMetadata.labels: LabelsUnion`, 14 ops) — net pass-rate unchanged (69.2% both passes)
+until that R2 gap is fixed. Full corpus byte-identical otherwise (zero regressions, both
+passes). box's 9 INTERNAL_ERROR ops confirmed a *different* mechanism (referenced-but-unemitted
+`Folder--Mini`, R-collector family) — untouched by this merge.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`collect` + `findSelectedFieldNode`),
+`src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override
+lookup).
 
 ## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⬜ Open (upstream)
 **Symptom:** 26/43 Mercedes CCS ops fail the abstract pass with
