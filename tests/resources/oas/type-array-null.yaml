@@ -1,0 +1,29 @@
+openapi: 3.1.0
+info:
+  title: OAS 3.1 type-array nullable syntax (issue 23)
+  version: 1.0.0
+servers:
+  - url: https://example.com
+paths:
+  /settings:
+    get:
+      operationId: getSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projectRootPath:
+                    type:
+                      - string
+                      - "null"
+                    description: Path to dbt project root
+                  retries:
+                    type:
+                      - integer
+                      - "null"
+                  name:
+                    type: string

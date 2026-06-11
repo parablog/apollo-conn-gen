@@ -34,7 +34,7 @@ test('test_R5_security_apikey_header_emits_named_header', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  const schema = await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 17);
+  const schema = await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22);
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "x-api-key", value: "{$config.apiKey}" }'),

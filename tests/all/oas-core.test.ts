@@ -657,7 +657,7 @@ test('test_060_oas_test_additionalProperties_support', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 17);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22);
 });
 
 test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
@@ -665,7 +665,7 @@ test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 17);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22);
 });
 
 test('test_062_oas_test_images_additionalProperties', async () => {
@@ -871,4 +871,29 @@ test('test_anyof_param_coerced_to_string_arg', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/\bid: String!/.test(schema!), 'anyOf param coerced to a String arg');
   assert.ok(!/\bid: !/.test(schema!), 'no empty arg type');
+});
+
+test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
+  // OAS 3.1 nullable syntax `type: [string, 'null']` (no more `nullable: true`) reached
+  // createScalarType as the literal "string,null" and threw. The array collapses to its first
+  // non-null entry — GraphQL fields are nullable by default. see docs/issues.md #23
+  const schema = await runOasTest('type-array-null.yaml', ['get:/settings>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/projectRootPath: String\b/.test(schema!), 'string-or-null prop becomes String');
+  assert.ok(/retries: Int\b/.test(schema!), 'integer-or-null prop becomes Int');
+  assert.ok(/name: String\b/.test(schema!), 'plain single-type prop unchanged');
+});
+
+test('test_enum_fields_selected_and_degraded', async () => {
+  // `>**` expansion must include enum props (slack's ok-only stubs collapsed to zero types), and
+  // enums without a GraphQL form degrade honestly. see docs/issues.md #24
+  const schema = await runOasTest('enum-fields.yaml', ['get:/status>**'], 1, 2, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/ok: Boolean!/.test(schema!), 'boolean enum degrades to Boolean');
+  assert.ok(/state: State\b/.test(schema!), 'valid string enum keeps its enum type');
+  assert.ok(/enum State \{/.test(schema!), 'enum definition emitted (sanitised name)');
+  assert.ok(/\bsuspended\b/.test(schema!) && !/suspended /.test(schema!), 'sloppy value trimmed');
+  assert.ok(/reaction: String\b/.test(schema!), 'non-identifier enum values degrade to String');
+  assert.ok(/plus1: Int/.test(schema!) && /minus1: Int/.test(schema!), 'signed fields disambiguated');
+  assert.ok(/plus1: "\+1"/.test(schema!) && /minus1: "-1"/.test(schema!), 'selection aliases keep raw keys');
 });

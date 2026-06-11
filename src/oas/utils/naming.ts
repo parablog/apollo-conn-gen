@@ -118,6 +118,22 @@ class FinalConverter extends AbstractConverter {
   }
 }
 
+class EncodeLeadingSignConverter extends AbstractConverter {
+  // a leading sign would be dropped by the generic sanitiser, colliding `+1` and `-1` (github's
+  // ReactionRollup) into one `_1` field — encode it into the name instead. see docs/issues.md #24
+  public process(input: string): string {
+    if (input.startsWith('+')) return 'plus' + input.substring(1);
+    if (input.startsWith('-')) return 'minus' + input.substring(1);
+    return input;
+  }
+}
+
+class ParamNameConverter extends AbstractConverter {
+  public process(input: string): string {
+    return Naming.genParamName(input);
+  }
+}
+
 export class Naming {
   public static genParamName(param: string): string {
     // Split on any run of non-alphanumeric characters, camelCase the parts, then
@@ -143,12 +159,12 @@ export class Naming {
 
   public static sanitiseField(name: string): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
-    return Naming.genParamName(fieldName);
+    return Naming.FIELD_CONVERTER.convert(fieldName);
   }
 
   public static sanitiseFieldForSelect(name: string, isInput: boolean = false): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
-    const sanitised = Naming.genParamName(fieldName);
+    const sanitised = Naming.FIELD_CONVERTER.convert(fieldName);
 
     // The JSON key is already a valid identifier identical to the field — no alias needed.
     if (sanitised === name) {
@@ -228,6 +244,10 @@ export class Naming {
   );
 
   private static readonly REF_CONVERTER: Converter = new RemoveRefConverter(new FinalConverter());
+
+  private static readonly FIELD_CONVERTER: Converter = new EncodeLeadingSignConverter(
+    new ParamNameConverter(new FinalConverter()),
+  );
 
   // internal stuff
   private static readonly NUMBER_PREFIX = '_';

@@ -833,7 +833,7 @@ convention, cf. #19) instead of minting a field-less type. Walker-side counterpa
 `c13cfe5`). Verified: walker output byte-identical 0.8.3 → HEAD except `@link` versions — the
 bucket shift came from the R0 default bump (`72f625e`), not a walker change.
 
-## 22 · `Composed` skips the #9/#12 collision check → duplicate type definitions — ✅ Fixed (working tree)
+## 22 · `Composed` skips the #9/#12 collision check → duplicate type definitions — ✅ Fixed (`1669c6a`)
 **Symptom:** `INTERNAL_ERROR: the type Permissions is defined multiple times in the schema` —
 box `/files/{file_id}` and 8 sibling ops (9 per pass). Predates #18 (same counts before/after).
 
@@ -895,3 +895,90 @@ checks), `src/oas/nodes/comp.ts` (`visit`), `src/oas/nodes/obj.ts` (delegates). 
 `updateName` takes the one-`$ref` branch, the name comes out `undefined` and the type is emitted
 as `type _`; separate small bug), test `test_composed_collision_with_stored_object_splits_by_container`.
 Found while triaging the #18 residue.
+
+## 23 · OAS 3.1 type array (`type: [string, 'null']`) throws — ✅ Fixed (working tree)
+**Symptom:** `Cannot handle property type string,null` — generation throws, zero output.
+omni `get:/v1/connections/{connectionId}/dbt`, `get:/v1/documents`, `get:/v1/models/{modelId}/git`
+(3 ops, both passes). The R-genthrow-tail residue after #19 took sendgrid's three.
+
+**OAS** (omni — 3.1 nullable-type syntax; 3.0 would say `nullable: true`):
+```yaml
+projectRootPath:
+  type:
+  - string
+  - 'null'
+  description: Path to dbt project root
+```
+
+**Example** (before → after):
+```graphql
+# before: generation throws, the op emits nothing
+# after:
+projectRootPath: String
+```
+
+**Cause:**
+- OAS 3.1 replaced `nullable: true` with JSON Schema type arrays: `type: ["string","null"]`.
+- Every `schema.type` reader assumes a plain string.
+- The array reaches `createScalarType`; `gqlScalar("string,null")` matches nothing → throw.
+
+**Fix:** collapse the array to its first non-`"null"` entry, in place, on entry to
+`fromSchema`/`fromProp` (`lookupRef` shares schema instances, so one normalization covers every
+reader). GraphQL fields are nullable by default, so the `"null"` disjunct adds nothing.
+
+**Care:** a heterogeneous array (`type: ["string","integer"]`) coerces to its FIRST entry — the
+same single-scalar coercion as #11's `anyOf` params, not a scalar union (GraphQL has none).
+**Measured (omni):** default 45→48 ok (83.3→88.9%), abstract 44→47 (81.5→87.0%); GEN-THROW 3→0;
+all other buckets byte-identical. Suite 151/151.
+**AST:** none — normalization happens before any node is built; single-type schemas unchanged.
+**Refs:** `src/oas/nodes/factory.ts` (`normalizeTypeArray`, called from `fromSchema` + `fromProp`).
+
+## 24 · `>**` expansion silently drops every enum field — ✅ Fixed (working tree)
+**Symptom:** Slack 43/80 GETs generate ZERO types (the `ok`-only stubs); every other spec
+silently loses its enum fields from both SDL and selection (CCS alone: 5 enum types missing).
+The mechanism behind the **E-slack-ok** "enhancement" — it was a bug, not input quality.
+
+**OAS** (slack stub — `ok` is the only property, a boolean enum behind a `$ref`):
+```yaml
+schema:
+  type: object
+  additionalProperties: true
+  properties:
+    ok:
+      $ref: "#/components/schemas/defs_ok_true"   # { type: boolean, enum: [true] }
+  required: [ok]
+```
+
+**Example** (before → after):
+```graphql
+# before: zero types, op uncredited
+# after:
+type AdminAppsApprovedListResponse {
+  ok: Boolean!
+}
+```
+
+**Cause** (one dropped leaf, three latent bugs behind it):
+- `collectExpandedPaths` treats only `PropScalar`/scalar-array/`PropCircRef` as `>**` leaves —
+  `PropEn` never enters the selection, so enum fields vanish; stubs with only `ok` collapse to 0 types.
+- Once selected, three latent enum bugs surfaced (github -20/pass until fixed):
+  - boolean/number enums built an En with NO values → `enum X {}` is invalid GraphQL;
+  - En definitions emitted the raw ref leaf (`enum author-association`) while nothing sanitized it;
+  - github's ReactionRollup has literal `+1`/`-1` FIELDS — both sanitised to `_1` → duplicate field.
+
+**Fix** (four small pieces):
+- `PropEn` is a `>**` expansion leaf (typesCollector); its En lands via `dependencies()`.
+- enums whose (trimmed) values aren't all legal GraphQL enum identifiers degrade to the base
+  scalar (`ok: Boolean`, reactions `content: String`); TMF637's `'aborted '` trims, stays an enum.
+- En definition + PropEn reference both emit `genTypeName` (the #15 def/ref discipline).
+- `sanitiseField` encodes a leading sign (`+1`→`plus1`, `-1`→`minus1`); the selection alias keeps
+  the raw JSON key (`plus1: "+1"`).
+
+**Measured (corpus, both passes):** slack 46.3→96.3 (+40), github 86.5→91.7 / 84.9→90.1 (+23,
+composeFail 24→1 default), DO 93.8→94.5 (+1); github per-op matrix: 23 fail→pass, 0 pass→fail.
+Suite 152/152 (3 CCS count assertions bumped 17→22 — the 5 restored enum types).
+**Care:** slack's residual 3 GEN-EMPTY are non-JSON/file endpoints (input quality, cf. E-scalar-roots).
+**AST:** `PropScalar` replaces `PropEn` for non-identifier enums (id `prop:enum:` → `prop:scalar:`);
+explicit selection paths referencing those ids change shape.
+**Refs:** `src/oas/generator/typesCollector.ts` (leaf), `src/oas/nodes/factory.ts` (`isGqlEnum`),
+`src/oas/nodes/en.ts`/`propEn.ts` (def/ref names), `src/oas/utils/naming.ts` (`encodeLeadingSign`).

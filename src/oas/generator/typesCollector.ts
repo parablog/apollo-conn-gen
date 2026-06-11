@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
-import { IType, Prop, PropArray, PropCircRef, Scalar, T } from '../nodes/internal.js';
+import { IType, Prop, PropArray, PropCircRef, PropEn, Scalar, T } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 
 export class TypesCollector {
@@ -159,6 +159,10 @@ class PathsCollector {
       const root = _.last(stack)!;
       T.traverse(root, (child) => {
         if (T.isPropScalar(child) || (child instanceof PropArray && child.items instanceof Scalar)) {
+          newSelection.add(child.path());
+        } else if (child instanceof PropEn) {
+          // enum props are leaves too — without this, `>**` silently drops every enum field
+          // (slack's `ok`-only stubs collapsed to zero types). see docs/issues.md #24
           newSelection.add(child.path());
         } else if (child instanceof PropCircRef) {
           // a cut cycle is a leaf: include its path so the commented field is emitted (in both the

@@ -423,21 +423,24 @@ input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs ar
 — gitignored — because the published specs embed example secrets that block pushes; this section is the
 committed summary of what they showed.)
 
-**Corpus status (measured 2026-06-10 post-#18, stock rover 0.40 / composition 2.13):**
+**Corpus status (measured 2026-06-11 post-#23/#24, stock rover 0.40 / composition 2.13):**
 
 | Spec | GET ops | default (v0.3) | abstract (v0.4) |
 |---|--:|--:|--:|
 | googlebooks | 30 | 100% | 100% |
 | mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
-| digitalocean | 145 | 93.8% | 93.8% |
+| slack | 80 | 96.3% | 96.3% (was 46.3 — #24; residual 3 = file endpoints) |
+| digitalocean | 145 | 94.5% | 94.5% |
 | sendgrid | 154 | 92.9% | 92.9% |
+| github | 444 | 91.7% (1 compose-fail) | 90.1% |
 | openai | 10 | 90.0% | 90.0% (0 compose-fails) |
-| github | 444 | 86.5% | 84.9% |
+| omni | 54 | 88.9% | 87.0% |
 | asana | 79 | 86.1% | 86.1% |
-| omni | 54 | 83.3% | 81.5% |
 | box | 114 | 74.6% | 74.6% |
 | confluence | 65 | 69.2% | 69.2% |
-| slack | 80 | 46.3% | 46.3% (mostly input quality, see below) |
+
+#23+#24 measured corpus-wide: **+67 ops/pass** (slack +40, github +23, omni +3, DO +1); github
+per-op matrix 23 fail→pass / 0 pass→fail (both passes).
 
 #18 measured corpus-wide: **+36 ops/pass** (github +20, box +9, confluence +4, DO +2, slack +1).
 
@@ -451,24 +454,24 @@ shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, 
 |--:|---|--:|---|
 | 1 | ~~**#17** — param defaults dangle ` = `~~ | — | ✅ fixed `aae14ca` |
 | 2 | ~~**R-collector** — identical inline schemas rename instead of dedup → orphan types (#18)~~ | — | ✅ fixed `0cff45d`, +36 ops/pass corpus-wide; residue split into the two rows below |
-| 2a | **#22** — `Composed` skips the #9/#12 collision check → duplicate type definitions (box `/files/{file_id}` family) | 9/pass (box) | mechanism pinned, fix proposed in the entry; high blast radius (allOf naming) — own slice |
+| 2a | ~~**#22** — `Composed` skips the #9/#12 collision check → duplicate type definitions~~ | — | ✅ fixed `1669c6a`; the 9 box ops fail on a second bug (#13-family cycle cut) the duplicate was hiding |
 | 2b | **R-options-pairing** (open research) — same-named array items split (`Options` vs `OptionsItem`) but field/selection pair with the wrong half (box `/metadata_templates` family); #13-adjacent | 5/pass (box) | mechanism unpinned — likely the #13 collect-time prop-merge resolves it; verify when slicing #13 |
 | 3 | ~~**#19** — typeless `{}` schemas throw~~ | — | ✅ fixed `aae14ca` (sendgrid's 3 throws were this shape too; omni's 3 persist → R-genthrow-tail confirmed distinct) |
 | 4 | **R-anyof-empty** (open research; #20 reserved) — `anyOf: [$ref, empty-closed-object]` → zero types (10 github ops) | 10 | fix mechanism undecided: prove-placeholder (a) vs represent-as-JSON-branch (b, leaning) — dropping a *disjunct* is not the #5 allOf case |
-| 5 | **R-genthrow-tail** (open research) — sendgrid(3) + omni(3) GEN-THROW ops | 6 | throwing shapes unexamined; fold into #19 if same, else own note |
+| 5 | ~~**R-genthrow-tail** — omni(3) GEN-THROW ops~~ | — | ✅ fixed (#23, working tree): OAS 3.1 type arrays (`type: [string,'null']`) collapse to the first non-null entry; omni 83.3→88.9 |
 | 6 | **#13** — path-dependent cycle cuts diverge same-named instances | ~16 | open; collect-time prop-merge proposal ready in the entry |
 
 GEN-EMPTY resolution: of the non-Slack residue (25 ops/pass), 15 are legit input quality (non-JSON
 file endpoints on DO/confluence/github; scalar-rooted responses — the latter a possible future
-enhancement, not a bug) and 10 are R-anyof-empty. Slack's 43/pass remain input-quality stubs.
+enhancement, not a bug) and 10 are R-anyof-empty. Slack's stubs turned out to be **#24** (enum
+fields silently dropped from `>**` expansion), not input quality: fixed, 46.3→96.3 both passes;
+the residual 3 are real file endpoints.
 Bucket labels (INVALID_GRAPHQL/INTERNAL_ERROR/GROUP_SELECTION) shift across composition versions —
 re-derive counts per fix; don't trust the histogram labels.
 
 **Enhancements (not bugs — ideas only, mechanism untriaged):**
-- **E-slack-ok** — Slack's stub responses DO declare `ok: Boolean` (+ `required: [ok]`) yet the
-  generator emits nothing for them; emitting the trivial `{ ok: Boolean }` connector would be honest
-  output (success/failure calls work) and would lift Slack 45% → ~90% (~+36-43 ops/pass — estimate,
-  unmeasured). Needs a quick why-genEmpty triage first (the stub has properties, yet yields 0 types).
+- ~~**E-slack-ok**~~ — resolved by **#24** (it was a bug: `>**` dropped enum props; slack
+  46.3→96.3, +40 ops/pass — beating the estimate).
 - **E-scalar-roots** — scalar/Map-rooted responses (github `/emojis` string-map,
   `/gitignore/templates` `[string]`) yield nothing today; emitting scalar/Map roots is the companion
   enhancement (4 ops).

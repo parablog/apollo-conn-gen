@@ -57,6 +57,8 @@ export class Factory {
 
     if (!schema) throw new Error('Unknown or undefined schema');
     const schemaObj: SchemaObject = schema as SchemaObject;
+    // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
+    this.normalizeTypeArray(schemaObj);
 
     // Cycle cut (see docs/issues.md #10): a recursive schema can only close through a component `$ref`,
     // and `lookupRef` returns the same `SchemaObject` instance for a given ref. So if this resolved ref's
@@ -99,6 +101,33 @@ export class Factory {
     }
 
     return result;
+  }
+
+  /**
+   * OAS 3.1 type arrays (`type: ["string","null"]`) collapse to their first non-null entry:
+   * GraphQL fields are nullable by default, so the "null" disjunct adds nothing. Normalized
+   * in place (idempotent; `lookupRef` shares schema instances, so every reader sees it).
+   * see docs/issues.md #23
+   */
+  private static normalizeTypeArray(schema: SchemaObject): void {
+    const s = schema as Record<string, unknown>;
+    if (Array.isArray(s.type)) {
+      const real = (s.type as unknown[]).filter((t) => t && t !== 'null');
+      s.type = real[0];
+    }
+  }
+
+  // every member is a legal GraphQL enum value once trimmed (TMF637 ships `'aborted '`): a bare
+  // identifier that isn't a boolean/null literal. Anything else (numbers, "+1", "fast-forward",
+  // true) has no enum form. see #24
+  private static isGqlEnum(schema: SchemaObject): boolean {
+    const VALID_ENUM_VALUE = /^[_A-Za-z][_0-9A-Za-z]*$/;
+    const RESERVED = new Set(['true', 'false', 'null']);
+    return _.every(schema.enum, (value) => {
+      if (typeof value !== 'string') return false;
+      const trimmed = value.trim();
+      return VALID_ENUM_VALUE.test(trimmed) && !RESERVED.has(trimmed);
+    });
   }
 
   // Keywords that give a schema a renderable GraphQL shape; a schema with none is metadata-only. #5
@@ -249,6 +278,8 @@ export class Factory {
 
     // uses the type of the schema to find out what kind of property it is
     const schemaObj = schema as SchemaObject;
+    // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
+    this.normalizeTypeArray(schemaObj);
     const type = schemaObj.type;
 
     if (type) {
@@ -306,12 +337,17 @@ export class Factory {
           prop = new PropObj(parent, propName, schemaObj, propType);
         }
       } else if (ref && schemaObj?.enum) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
-        const stringEnum = _.every(schemaObj.enum, (value: any, _: string) => typeof value === 'string');
-        const en: En = new En(parent, ref, schemaObj, stringEnum ? (schemaObj.enum as string[]) : []);
-
-        prop = new PropEn(parent, propName, ref, schemaObj);
-        prop.add(en);
+        if (this.isGqlEnum(schemaObj)) {
+          const en: En = new En(parent, ref, schemaObj, (schemaObj.enum as string[]).map((v) => v.trim()));
+          prop = new PropEn(parent, propName, ref, schemaObj);
+          prop.add(en);
+        } else {
+          // No GraphQL enum form for this one — degrade to the base scalar instead of emitting
+          // an invalid definition: boolean/number enums (slack `ok: { enum: [true] }` ->
+          // `ok: Boolean`) and string enums with non-identifier values (github reactions
+          // `enum: ["+1", "-1", …]` -> String). see docs/issues.md #24
+          prop = new PropScalar(parent, propName, GqlUtils.getGQLScalarType(schemaObj), schemaObj);
+        }
       }
       // 3rd tries for scalar
       else if (GqlUtils.gqlScalar(type as string)) {
