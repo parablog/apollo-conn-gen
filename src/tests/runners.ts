@@ -76,7 +76,7 @@ export async function runOasTest(
     fs.writeFileSync(sampleFile, 'type Query { hello: String }', { encoding: 'utf-8', flag: 'w' });
   }
 
-  const [result, output] = compose(schemaFile, sampleFile, opts.composeFederationVersion);
+  const [result, output] = compose(schemaFile, sampleFile, opts.composeFederationVersion, opts.connectorSpecVersion);
 
   // connect v0.5 (@mapping) is preview-only: released supergraph builds reject it with
   // UNKNOWN_CONNECTORS_VERSION. When the local composer doesn't know v0.5, gate the compose
@@ -185,7 +185,20 @@ function isRoverAvailable(command: string): [boolean, string?] {
   return [result.status === 0, result.stdout.toString().trim()];
 }
 
-function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.12.0') {
+// connect v0.5 (@mapping) is unreleased: stock rover/supergraph reject it. When a local
+// composer build is present (gitignored; copy apollo-federation-cli from a v0.5-aware
+// checkout), v0.5 composes run through it instead — re-copy it when that branch advances.
+function localComposer(): string | undefined {
+  const cli = path.join(process.cwd(), 'tools', 'local', 'apollo-federation-cli');
+  return fs.existsSync(cli) ? cli : undefined;
+}
+
+function compose(
+  schemaPath: string,
+  samplePath?: string,
+  federationVersion: string = '2.12.0',
+  connectorSpecVersion?: string,
+) {
   console.info('schemaPath', schemaPath);
 
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');
@@ -213,7 +226,10 @@ subgraphs:
 
   fs.writeFileSync(supergraphFile, content, { encoding: 'utf-8', flag: 'w' });
 
-  const cmd = `${rover[1]} supergraph compose --config ${supergraphFile} --elv2-license accept`;
+  const local = connectorSpecVersion === 'v0.5' ? localComposer() : undefined;
+  const cmd = local
+    ? `${local} compose --config ${supergraphFile}`
+    : `${rover[1]} supergraph compose --config ${supergraphFile} --elv2-license accept`;
 
   // Write the rover command to a bash script for easy re-execution
   const scriptFile = path.join(os.tmpdir(), 'oas-test', 'run-rover.sh');

@@ -37,3 +37,6 @@ KNOWN_ISSUES.md
 /tests/resources/oas/github.yaml
 /tests/resources/oas/omni.yaml
 /tests/resources/oas/confluence.json
+
+# local unreleased composer build (connect v0.5 preview) used by v0.5 tests
+/tools/local/
