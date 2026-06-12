@@ -81,24 +81,23 @@ export class JsonGen {
     const types = this.context.getTypes();
     const root = types.find((t: JsonType) => t.getParent() === null);
     if (root) {
-      const orderedSet = new Set<JsonType>();
+      // only Obj nodes are collected — arrays recurse into their item type, scalars are skipped
+      const orderedSet = new Set<JsonObj>();
       this.writeType(root, orderedSet);
 
       const generatedSet = new Map<string, JsonType>();
-      orderedSet.forEach((t) => {
-        // Assumes t is an Obj
-        const obj = t as unknown as JsonObj;
+      orderedSet.forEach((obj) => {
         let typeName = obj.getType();
         if (generatedSet.has(typeName)) {
           // If same type, skip generation
           if (_.isEqual(obj, generatedSet.get(typeName))) {
             return;
           }
-          obj.setType(JsonGen.generateNewObjType(generatedSet, t, typeName));
+          obj.setType(JsonGen.generateNewObjType(generatedSet, obj, typeName));
           typeName = obj.getType();
         }
-        t.write(this.context, writer);
-        generatedSet.set(typeName, t);
+        obj.write(this.context, writer);
+        generatedSet.set(typeName, obj);
       });
     }
 
@@ -106,15 +105,15 @@ export class JsonGen {
   }
 
   // Recursive helper to order types
-  private writeType(type: JsonType, orderedSet: Set<JsonType>): void {
+  private writeType(type: JsonType, orderedSet: Set<JsonObj>): void {
     if (type instanceof JsonObj) {
       // Traverse children first
-      for (const child of Array.from((type as JsonObj).getFields().values())) {
+      for (const child of Array.from(type.getFields().values())) {
         this.writeType(child, orderedSet);
       }
       orderedSet.add(type);
     } else if (type instanceof JsonArray) {
-      const arrayType = (type as JsonArray).getArrayType();
+      const arrayType = type.getArrayType();
       if (arrayType) {
         this.writeType(arrayType, orderedSet);
       }

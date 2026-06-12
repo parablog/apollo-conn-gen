@@ -1,4 +1,4 @@
-import { Arr, CircularRef, En, IType, Obj, Prop, PropArray, PropEn, PropScalar, Scalar } from './internal.js';
+import { Arr, CircularRef, En, Get, IType, Obj, Op, Prop, PropArray, PropEn, PropScalar, Scalar } from './internal.js';
 import _ from 'lodash';
 import { Naming } from '../utils/naming.js';
 import type { OasContext } from '../oasContext.js';
@@ -19,6 +19,11 @@ export class T {
 
   public static isPropScalar(type: IType): boolean {
     return type instanceof PropScalar;
+  }
+
+  // every operation node (Get, Post, Put, Patch, Delete) derives from Get
+  public static isOp(type: IType): type is IType & Op {
+    return type instanceof Get;
   }
 
   public static traverse(node: IType, callback: (node: IType) => void): void {
