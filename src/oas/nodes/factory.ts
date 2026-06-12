@@ -338,7 +338,12 @@ export class Factory {
         }
       } else if (ref && schemaObj?.enum) {
         if (this.isGqlEnum(schemaObj)) {
-          const en: En = new En(parent, ref, schemaObj, (schemaObj.enum as string[]).map((v) => v.trim()));
+          const en: En = new En(
+            parent,
+            ref,
+            schemaObj,
+            (schemaObj.enum as string[]).map((v) => v.trim()),
+          );
           prop = new PropEn(parent, propName, ref, schemaObj);
           prop.add(en);
         } else {

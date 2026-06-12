@@ -111,7 +111,13 @@ export class Union extends Type {
         // selection already falls back to the flat merged form (see select); emit the matching
         // merged object here, or SDL says `union` while the selection selects a group on it
         // (GROUP_SELECTION_IS_NOT_OBJECT). see docs/issues.md #25
-        this.generateMergedObject(context, writer, selection, name, '#### no discriminator — union degraded to a merged object: ');
+        this.generateMergedObject(
+          context,
+          writer,
+          selection,
+          name,
+          '#### no discriminator — union degraded to a merged object: ',
+        );
       } else if (this.interfaceBaseRef) {
         // R2: promoted to an interface — the base (emitted as `interface`) and the members
         // (each `... implements Base`) carry the type system; emit no `union X = A | B` line.
