@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.11.0]
+
+### Changed
+- **Defaults follow LATEST**: no version asked for now means connect **v0.4** + federation
+  **v2.14** (was v0.3/v2.12). Real unions, `->match` `__typename` selections and interface
+  promotion are the default output; pass `--connector-spec-version v0.3` for the previous
+  consolidate-downgrade behaviour. The union form is derived from the connect version
+  (`resolveConsolidateUnions`) — an explicit ask for real unions below v0.4 downgrades with
+  a warning.
+- Heads-up: on stock (released) tooling, v0.4 schemas with `additionalProperties` maps hit an
+  upstream composition bug (`->entries` sub-selections, issue #14 — fix awaiting release).
+- Mutations corpus first measured and overhauled: **47% → 90.2%** pass-rate (1249 ops);
+  GETs 93.2%. Fast guards: `tests/all/corpus-mutations.test.ts`.
+
+### Fixed
+Details per id in `docs/issues.md`:
+- #27 mutations with params AND a body emitted two argument lists (invalid GraphQL)
+- #28 request-body selections used the response alias direction
+- #29 default values emitted as bare paths (`$(latest)`); `0`/`false` defaults dropped
+- #30 the body argument referenced the raw payload name, not the sanitised definition
+- #31 fieldless response schemas (googlebooks `Empty`) produced zero types
+- #32 ops whose only content is a JSON field emitted an empty type; body keys with colons
+  broke the parser
+- #33 four generation crashes: pointers INTO components, non-JSON responses, OAS 3.1 null
+  union members, `$ref`'d no-content responses
+- #34 real unions of `allOf` members emitted an empty member list; twin inline members
+  collapsed onto one id
+
 ## [0.10.0]
 
 ### Changed
