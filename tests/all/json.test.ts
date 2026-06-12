@@ -128,7 +128,13 @@ test('articles/search.json', async () => {
 
 test('articles/clockwatch', async () => {
   // known-bad: empty {} value emits a dangling type reference — see docs/issues.md #21
-  const output = await runJsonTest('articles/clockwatch', { shouldFail: true });
+  // pinned to v0.3: the #21 error shape this asserts is drowned by v0.4 #14 noise otherwise
+  const output = await runJsonTest('articles/clockwatch', {
+    shouldFail: true,
+    connectorSpecVersion: 'v0.3',
+    federationVersion: 'v2.12',
+    composeFederationVersion: '2.12.0',
+  });
   assert.ok(output !== undefined);
   assert.ok(output!.includes('MainAttributes'));
 });

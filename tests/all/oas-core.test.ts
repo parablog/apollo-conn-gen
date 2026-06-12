@@ -657,7 +657,12 @@ test('test_060_oas_test_additionalProperties_support', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22, false, false, undefined, false, false, {
+    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
+    connectorSpecVersion: 'v0.3',
+    federationVersion: 'v2.12',
+    composeFederationVersion: '2.12.0',
+  });
 });
 
 test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
@@ -665,7 +670,12 @@ test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22, false, false, undefined, false, false, {
+    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
+    connectorSpecVersion: 'v0.3',
+    federationVersion: 'v2.12',
+    composeFederationVersion: '2.12.0',
+  });
 });
 
 test('test_062_oas_test_images_additionalProperties', async () => {
@@ -673,7 +683,12 @@ test('test_062_oas_test_images_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>prop:map:images>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5, false, false, undefined, false, false, {
+    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
+    connectorSpecVersion: 'v0.3',
+    federationVersion: 'v2.12',
+    composeFederationVersion: '2.12.0',
+  });
 });
 
 test('test_ref_into_paths_pointer_resolves_and_composes', async () => {

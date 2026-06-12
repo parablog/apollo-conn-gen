@@ -92,6 +92,9 @@ export async function runOasTest(
 interface IJsonTestOptions {
   shouldFail: boolean;
   outputContains?: string;
+  connectorSpecVersion?: string;
+  federationVersion?: string;
+  composeFederationVersion?: string;
 }
 
 export async function runJsonTest(
@@ -106,7 +109,7 @@ export async function runJsonTest(
 
   const stats = fs.statSync(fileOrFolderPath);
   if (stats.isDirectory()) {
-    walker = JsonGen.new();
+    walker = JsonGen.new({ connectorSpecVersion: options.connectorSpecVersion, federationVersion: options.federationVersion });
 
     const sources = fs.readdirSync(fileOrFolderPath).filter((name) => name.toLowerCase().endsWith('.json'));
 
@@ -121,7 +124,10 @@ export async function runJsonTest(
     const json = fs.readFileSync(fileOrFolderPath, 'utf-8');
     assert.ok(json !== undefined);
 
-    walker = JsonGen.fromReader(json);
+    walker = JsonGen.fromReader(json, {
+      connectorSpecVersion: options.connectorSpecVersion,
+      federationVersion: options.federationVersion,
+    });
   }
 
   const context: JsonContext = walker.getContext();
@@ -147,7 +153,7 @@ export async function runJsonTest(
 
   fs.writeFileSync(schemaFile, schema, { encoding: 'utf-8', flag: 'w' });
 
-  const [result, output] = compose(schemaFile);
+  const [result, output] = compose(schemaFile, undefined, options.composeFederationVersion);
 
   if (options.shouldFail) {
     assert.ok(result === false);
@@ -169,7 +175,7 @@ function isRoverAvailable(command: string): [boolean, string?] {
   return [result.status === 0, result.stdout.toString().trim()];
 }
 
-function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.12.0') {
+function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.14.1') {
   console.info('schemaPath', schemaPath);
 
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');

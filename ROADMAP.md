@@ -11,8 +11,8 @@ Source of truth for the spec surface:
 
 | | Router `main` | apollo-conn-gen today |
 |---|---|---|
-| Connect spec | v0.1–v0.3 stable, **v0.4 preview** | **v0.3** default (`src/versions.ts`, since R0) |
-| Federation | current | **v2.12** default (since R0) |
+| Connect spec | v0.1–v0.3 stable, **v0.4 preview** | **LATEST** default (v0.4 today — `LATEST_CONNECT_VERSION`, 2026-06-12) |
+| Federation | current | **v2.14** default (latest released; v0.4 floor is v2.13) |
 
 What `gen` already emits well:
 
@@ -98,24 +98,25 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `ConnectHTTP` | `queryParams` block / JSONSelection | Partial (`$args{…}`) | R8 |
 | `ConnectHTTP` | `headers` (per-op) | Partial (static) | R5 |
 | `ConnectHTTP` | `body` (full JSONSelection) | Done (`$args.input`) | R9 (computed/literal only) |
-| `@connect` | `entity: true` (Query-field resolver) | Missing | R1 (1a) |
-| `@connect` | type-level on OBJECT + `$this` | Missing | R1 (1b) |
-| `@connect` | `errors`/`isSuccess` | Missing | R4 |
+| `@connect` | `entity: true` (Query-field resolver) | Deliberately not emitted (type-level `$this` favoured — R1 note) | R1 (1a) |
+| `@connect` | type-level on OBJECT + `$this` | Done (`--infer-entity-resolvers`) | R1 (1b) |
+| `@connect` | `errors`/`isSuccess` | Partial (`errors.extensions` + `$status`, opt-in; `message`/`isSuccess` pending) | R4 |
 | `@connect` | `batch` (ConnectBatch) | Missing | R6 |
-| `ConnectorErrors` | `message`, `extensions` | Missing | R4 |
+| `ConnectorErrors` | `message`, `extensions` | Partial (`extensions` done; `message` pending) | R4 |
 | `ConnectBatch` | `maxSize` | Missing | R6 |
 | `HTTPHeaderMapping` | `name` | Partial | R5 |
-| `HTTPHeaderMapping` | `value` (StringTemplate `{$config}`/`{$env}`/`{$context}`) | Missing | R5 |
+| `HTTPHeaderMapping` | `value` (StringTemplate `{$config}`/`{$env}`/`{$context}`) | Partial (`{$config.*}` on global `@source` auth; `$env`/`$context` pending) | R5 |
 | `HTTPHeaderMapping` | `from` (response-header extract) | Missing | R5 |
-| `@key` (federation) | key-field emission | Missing | R1 (1c) |
+| `@key` (federation) | key-field emission | Done (entity inference, R1) | R1 (1c) |
 | JSONSelection | field selection + nesting + `->entries` | Done | — |
-| JSONSelection | aliasing / quoted keys / camelCase | Missing | R3 |
-| JSONSelection | methods, literals, spreads, `??`/`?!`, optional chaining | Missing | R7 |
-| OAS `oneOf`/`anyOf` + discriminator | unions/interfaces | Partial (real `union` + consolidate downgrade both implemented; no discriminator/`__typename`, no interfaces) | R2 |
+| JSONSelection | aliasing / quoted keys / camelCase | Done (responses R3; request bodies #28/#32) | R3 |
+| JSONSelection | methods, literals, spreads, `??`/`?!`, optional chaining | Partial (`->entries`, `->match`, `$(literal)` defaults/`__typename` done; spreads/coalescing/chaining pending) | R7 |
+| OAS `oneOf`/`anyOf` + discriminator | unions/interfaces | Done (real `union` + `->match` `__typename` + interface promotion on v0.4; consolidate/merged-object downgrades below; version-derived) | R2 |
 | Variables | `$args` | Done | — |
-| Variables | `$this`, `$config`, `$env`, `$batch`, `$request.*`, `$response.*`, `$status`, `@` | Missing | Cross-cutting (see variable table; lands with R1/R4/R5/R6/R7/R9) |
+| Variables | `$this` (R1), `$config` (R5), `$status` (R4) | Done | — |
+| Variables | `$env`, `$batch`, `$request.*`, `$response.*`, `@` | Missing | Cross-cutting (lands with R4/R5/R6/R7/R9) |
 | Variables | `$context` | Missing | Non-goal |
-| Version enum / `@link` | v0.1–v0.4 selection + gating | Missing | R0 |
+| Version enum / `@link` | v0.1–v0.4 selection + gating | Done (R0 plumbing; union form version-derived, #34) | R0 |
 
 **Explicit non-goals (named so they are not mistaken for missed work):**
 
@@ -142,7 +143,7 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 |---|---|---|
 | R0. Version gating | ✅ Done | defaults v0.3/v2.12, version table + gate plumbing |
 | R1. Entity resolution | ✅ Done | `entity`/`@key`/`$this` (`--infer-entity-resolvers`) |
-| R2. Unions & interfaces | 🟡 Partial | real `union` + discriminator→`__typename` + **`oneOf`+shared-`allOf`-base → `interface`/`implements`** (all `->match`, v0.4) + consolidate downgrade done; broader `allOf`→interface, real-union fix for allOf members, + auto version-gate pending |
+| R2. Unions & interfaces | ✅ Done (one deferral) | real `union`/`->match`/interface promotion (v0.4), consolidate downgrade (< v0.4), discriminator-less merged-object degrade (#25), allOf-member unions (#34), version-derived form (`resolveConsolidateUnions`); broader `allOf`→interface deferred to its own slice |
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
 | R4. Error handling | 🟡 Partial | baseline `@connect(errors: { extensions })` w/ `$status` (opt-in, v0.2+); `message`/`isSuccess`/source-level pending |
 | R5. Dynamic headers / auth | 🟡 Partial | slice 1 done (global `@source` `$config` header); per-op, `$env`, `from:`, `$request.headers` remain |
@@ -158,7 +159,8 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 **Why:** v0.4-dependent items (unions) and v0.2-dependent items (errors, batch) can't be
 emitted safely without a version gate.
 
-**Status:** Done (commit `72f625e`). Defaults bumped to connect v0.3 / federation v2.12;
+**Status:** Done (commit `72f625e`; defaults re-bumped 2026-06-12: no version asked for
+means LATEST — connect v0.4 / federation v2.14, via `LATEST_CONNECT_VERSION`). Originally:
 version table, `parseVersion`/`compareVersions`/`meetsMinimum`, and the
 reject-or-downgrade gate plumbing live in `src/versions.ts` and are consumed by later
 items (e.g. R1).
@@ -223,7 +225,7 @@ into three separately-emittable cases; conflating them produces invalid schemas.
 
 > Do 1c alongside 1a/1b — never standalone.
 
-### R2. Unions & interfaces (OAS `oneOf` / `anyOf` + discriminators) — 🟡 Partial
+### R2. Unions & interfaces (OAS `oneOf` / `anyOf` + discriminators) — ✅ Done (one deferral)
 
 **Why:** Router v0.4 adds interface/union support. `gen` already has substantial union
 machinery; this item finishes the gaps and ties the fallback to the version gate.
@@ -243,14 +245,8 @@ machinery; this item finishes the gaps and ties the fallback to the version gate
   `#### NOT SUPPORTED YET BY CONNECTORS!!! union …` marker. The new abstract path only
   triggers when `consolidateUnions: false` AND a discriminator exists, so default output
   is byte-identical (`test_R2_union_consolidate_downgrade_unchanged`).
-- ⚠️ **Still not driven by the spec version.** The real-union vs. consolidate choice keys
-  off the `consolidateUnions` *option*, not the selected connector version — R0's gate is
-  not wired in, and the downgrade is not logged as a downgrade.
-- ❌ **`allOf` → interfaces** not done: `Composed` (`comp.ts`) flattens `allOf` into a
-  merged OBJECT `type`; no `interface` / `implements` emitted. High blast radius (every
-  TMF/allOf fixture) — deferred to its own slice.
-- ⚠️ **Unions without a discriminator** still fall back to the flat (invalid-for-union)
-  selection; only discriminated unions get the correct `->match` form.
+- (the earlier gaps here — version-gate wiring, discriminator-less fallback, allOf-member
+  unions — are closed below; broader `allOf` → interface remains the one deferral)
 
 **Done this slice — `oneOf` + shared `allOf` base → `interface`:** when a discriminated `oneOf`'s
 members are all `allOf` compositions sharing **exactly one** common base ref, the base is promoted to
@@ -262,23 +258,19 @@ to `inferEntityResolvers`): flags `Obj.emitAsInterface` / `Composed.implementsIn
 promotion (loudly) when the base is used concretely elsewhere among the selected ops. Tested
 (`test_R2_interface_*`).
 
-**Remaining scope:**
+**Closed 2026-06-12 (#34 + #25, details in `docs/issues.md`):**
+- ✅ real-union path for `allOf` members: shared `selectedMembers` filter + unique twin-member
+  ids (`Type.withUniqueName`); the rule-3-skip case now lists its members and DO's
+  `oneOf`-of-`allOf` bodies generate.
+- ✅ version-gate wiring: `resolveConsolidateUnions` derives the union form from the connect
+  version (v0.4+ → abstract types; below → consolidate downgrade); an explicit ask for real
+  unions on < v0.4 downgrades with a warning. The CLI no longer hardcodes consolidation.
+- ✅ discriminator-less unions: superseded by #25 — they degrade to the merged object on v0.4
+  too (a tag cannot be inferred reliably; `->match` needs one).
+
+**Remaining scope (own slice):**
 - **Broader `allOf` → interface** beyond the discriminated-`oneOf` case (e.g. promote shared bases
-  like `Extensible`/`Entity` used across many TMF types). Large blast radius; own slice.
-- **Fix the real-union path for `allOf`-composed members.** Discovered during this slice: with
-  `consolidateUnions:false`, a `oneOf` whose members are `allOf` `Composed` and that is *not* promoted
-  (no discriminator, or rule-3 skip) emits an empty `union X = ` and may drop a concretely-used shared
-  base. Only the committed plain-object-member union path and the promoted interface path are sound.
-  Interface promotion *is* the fix for the discriminated allOf case; the generic fallback still needs
-  work.
-- **Wire the real-union/interface vs. consolidate choice to the version gate** (connect ≥ v0.4 →
-  abstract types; < v0.4 → consolidate downgrade, logged) instead of the bare `consolidateUnions`
-  flag, and make `consolidateUnions` derived from `connectorSpecVersion`. Rationale: connect **v0.4 is
-  preview-only** — verified in source: `apollo-router` `connectors.preview_connect_v0_4` +
-  `feature_gate_enforcement.rs`; federation PR #3413 (RH-1321) marks `connect/v0.4` preview so
-  composition won't inject it unless a subgraph uses it. So consolidate stays as the < v0.4 downgrade
-  and can be retired only once v0.4 is GA. (Default is still connect v0.3.)
-- Discriminator-less unions (no `mapping`): infer the tag from member enums, or warn.
+  like `Extensible`/`Entity` used across many TMF types). Large blast radius.
 
 **Test infra:** `runOasTest` gained an `opts` arg
 (`{ consolidateUnions, connectorSpecVersion, federationVersion, composeFederationVersion }`)
@@ -443,39 +435,22 @@ Overall GET: **default 93.2% (1135/1218) · abstract 93.3% (1137/1218)**, abstra
 the #14 patch ships. Increments: #23+#24 +67/pass, #25 +6 abstract, #26 +76 (76 fail→pass /
 0 pass→fail), #33 +26 GETs (file endpoints → synthetic success).
 
-| Spec | GET ops | default (v0.3) | abstract (v0.4) |
-|---|--:|--:|--:|
-| googlebooks | 30 | 100% | 100% |
-| asana | 79 | 100% | 100% (was 86.1 — #26) |
-| mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
-| slack | 80 | 96.3% | 96.3% (was 46.3 — #24; residual 3 = file endpoints) |
-| digitalocean | 145 | 94.5% | 94.5% |
-| github | 444 | 91.7% (1 compose-fail) | 94.6% (#25+#26) |
-| sendgrid | 154 | 92.9% | 92.9% |
-| omni | 54 | 90.7% | 88.9% |
-| openai | 10 | 90.0% | 90.0% (0 compose-fails) |
-| box | 114 | 84.2% (was 74.6 — #26) | 90.4% |
-| confluence | 65 | 69.2% (16 DEGRADED) | 83.1% (was 69.2 — #25+#26) |
-
-Overall: **default 91.5% (1115/1218) · abstract 91.7% (1117/1218)**, abstract ~95%+ once the
-#14 patch ships. #23+#24 measured **+67 ops/pass**; #26 measured **+76 ops** (per-op matrix
-76 fail→pass / 0 pass→fail across all specs and passes); #25 +6 abstract.
 
 **Mutations corpus (post:/put:/patch:/del:, 1249 ops/pass — first measured 2026-06-12, sweep via
 `--verbs mutations`; fast guard: `tests/all/corpus-mutations.test.ts`):**
 
 | Spec | mutation ops | default (v0.3) | abstract (v0.4) |
 |---|--:|--:|--:|
-| googlebooks | 21 | 100% | 100% (was 28.6 — #27/#31) |
+| googlebooks | 21 | 100% | 100% |
 | slack | 94 | 100% | 100% |
 | sendgrid | 180 | 95.6% | 95.6% |
-| github | 401 | 92.8% | 96.0% (was 47.9 — #27) |
-| omni | 92 | 92.4% | 92.4% (#33) |
-| digitalocean | 145 | 87.6% | 87.6% (was 39.3 — #27-#33) |
+| github | 401 | 92.8% | 96.0% |
+| omni | 92 | 92.4% | 92.4% |
+| digitalocean | 145 | 87.6% | 87.6% |
 | box | 144 | 81.9% | 86.1% |
-| asana | 88 | 83.0% | 83.0% (was 2.3 — #27/#32) |
-| openai | 18 | 100% | 100% (was 66.7 — #33) |
-| confluence | 65 | 70.8% | 76.9% (#33) |
+| asana | 88 | 83.0% | 83.0% |
+| openai | 18 | 100% | 100% |
+| confluence | 65 | 70.8% | 76.9% |
 
 Mutations overall: **47% → 90.2% default (1127/1249) · 92.2% abstract — TARGET MET** in one
 arc — #27 one argument list
@@ -528,10 +503,10 @@ params, #12 inline-vs-component emitted-name collision (cleared Confluence `CIRC
 `INVALID_GRAPHQL` 143→39), **#18** identical-inline-schema dedup + convergent renames (`0cff45d` —
 box 66.7→74.6, DO 92.4→93.8, both passes).
 
-**Mutation arc (2026-06-12, details per id in `docs/issues.md`):** #27 one argument list for
-params + body (`4e5e479`), #28 body-direction aliases, #29 quoted default literals + falsy-guard
-sweep, #30 sanitised body-arg name, #31 empty-response → synthetic `success: Boolean`, #32
-free-form JSON fields as selectable leaves (#28-#32 working tree, sweep in flight).
+**Mutation arc (2026-06-12, details per id in `docs/issues.md`):** #27 one argument list
+(`4e5e479`), #28-#31 body direction/literals/names/empty responses (`4b5c986`), #32 JSON-only
+ops + quoted body keys (`556f302`), #33 four crash families (`0c7c450`), #34 allOf-member
+unions + version-derived union form (working tree).
 
 **Upstream / parked:**
 - **#14** (upstream): composition's v0.4 shape validator drops `Array` shapes → `->entries`
@@ -541,7 +516,8 @@ free-form JSON fields as selectable leaves (#28-#32 working tree, sweep in fligh
 - **#16** (⏸ parked): mark OAS-optional fields with `?` in selections. Semantically correct and the
   plumbing exists (`Prop.required`), but `?`-groups don't compose on released toolchains
   (2.13/2.14) — gate: composition ≥ 2.15 ships in rover. Do not emit earlier or upgrades from
-  2.11 onwards regress.
+  2.11 onwards regress. The old implementation is archived on the remote branch
+  `feat/optional-chaining-operator` (kept through the 2026-06-12 branch cleanup).
 
 **Input quality (NOT our bug — don't chase):** Slack's published spec declares ~146 methods with
 *"a verbose schema is not available for this method"* — stub responses with nothing to generate;
