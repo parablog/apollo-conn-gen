@@ -1091,3 +1091,42 @@ AFTER consolidation. The one allowed write is `Composed.consolidate` (idempotent
 **Refs:** `src/oas/generator/typesCollector.ts` (`collectReachable`), `iType.ts`/`type.ts`
 (`dependencies`), one-line overrides in `propObj/propArray/propComp/res/body/arr.ts`, container
 overrides in `obj/comp/union.ts`, `T.isEmittable`.
+
+## 27 · Mutations with params AND a body emit two argument lists — ✅ Fixed (working tree)
+**Symptom:** every mutation that has parameters (path OR query) plus a request body is invalid
+GraphQL — ~390 ops per pass corpus-wide (asana 2.3%→55.7, omni 40→87, github 48→86.5). rover
+labels the syntax error INTERNAL_ERROR or CONNECTORS_UNRESOLVED_FIELD, hiding the size.
+
+**OAS** (petstore — one path param + a JSON body):
+```yaml
+/user/{username}:
+  put:
+    parameters:
+      - name: username
+        in: path
+        required: true
+    requestBody:
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/User' }
+```
+
+**Example** (before → after):
+```graphql
+updateUserByUsername(username: String!)(input: UserInput!): …   # ✗ two argument lists
+updateUserByUsername(username: String!, input: UserInput!): …   # ✓ one
+```
+
+**Cause:** `generateParameters` wrote `(params)` and `generateBodyInput` wrote a second
+`(input: X!)` — fine when an op has only one of the two, invalid with both.
+
+**Fix:** one argument list — `Get.generateParameters` takes an optional body arg appended last;
+`Post.bodyArg()` supplies `input: <Payload>!`; all mutation verbs inherit from `Post`.
+
+**Measured (mutation sweep, 1249 ops/pass, both passes): 778 fail→pass, 0 pass→fail** —
+mutations 47% → 77.6% default. GET output byte-identical (no body arg → same list).
+**Care:** rover's error labels masked this as two different buckets (the ROADMAP histogram
+warning applies); the first mutation triage should always start from raw compose errors.
+**AST:** none — emission-only; `Body`/`Param` nodes unchanged.
+**Refs:** `src/oas/nodes/get.ts` (`generateParameters`), `src/oas/nodes/post.ts` (`bodyArg`),
+test `test_mutation_params_and_body_share_one_argument_list`.

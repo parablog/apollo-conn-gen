@@ -897,3 +897,15 @@ test('test_enum_fields_selected_and_degraded', async () => {
   assert.ok(/plus1: Int/.test(schema!) && /minus1: Int/.test(schema!), 'signed fields disambiguated');
   assert.ok(/plus1: "\+1"/.test(schema!) && /minus1: "-1"/.test(schema!), 'selection aliases keep raw keys');
 });
+
+test('test_mutation_params_and_body_share_one_argument_list', async () => {
+  // an op with params AND a body emitted two parenthesised lists — `(username: String!)(input:
+  // UserInput!)` — which is not valid GraphQL. One list, body last. see docs/issues.md #27
+  const schema = await runOasTest('petstore.yaml', ['put:/user/{username}>**'], 19, 2, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /updateUserByUsername\(username: String!, input: UserInput!\)/.test(schema!),
+    'params and body in one argument list',
+  );
+  assert.ok(!/\)\(/.test(schema!), 'no adjacent argument lists anywhere');
+});

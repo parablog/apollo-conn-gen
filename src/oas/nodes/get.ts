@@ -214,10 +214,12 @@ export class Get extends Type implements Op {
     trace(context, '<- [get::responses::ref]', `out: ${this.name}, ref: ${ref.$ref}`);
   }
 
-  protected generateParameters(context: OasContext, writer: Writer, selection: string[]): void {
+  // one argument list for the whole operation; mutations pass their body as the last arg
+  // (`(id: ID!, input: PetInput!)`) — a second parenthesised list is not valid GraphQL. #27
+  protected generateParameters(context: OasContext, writer: Writer, selection: string[], bodyArg?: string): void {
     const sorted = this.params.sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0));
 
-    if (sorted.length === 0) {
+    if (sorted.length === 0 && !bodyArg) {
       return;
     }
 
@@ -229,6 +231,13 @@ export class Get extends Type implements Op {
       }
       parameter.generate(context, writer, selection);
     });
+
+    if (bodyArg) {
+      if (sorted.length > 0) {
+        writer.write(', ');
+      }
+      writer.write(bodyArg);
+    }
 
     writer.write(')');
   }

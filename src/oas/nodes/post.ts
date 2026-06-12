@@ -76,8 +76,7 @@ export class Post extends Get {
 
     this.writeOpName(context, writer);
 
-    this.generateParameters(context, writer, selection);
-    this.generateBodyInput(context, writer);
+    this.generateParameters(context, writer, selection, this.bodyArg());
 
     if (this.resultType) {
       writer.write(': ');
@@ -125,16 +124,11 @@ export class Post extends Get {
     trace(context, '<- [post::visitBody]', `out: ${this.name}`);
   }
 
-  private generateBodyInput(context: OasContext, writer: Writer) {
-    if (!this.body || !this.body.payload) return;
+  // `input: <Payload>!`, or undefined when the op has no JSON body
+  private bodyArg(): string | undefined {
+    if (!this.body || !this.body.payload) return undefined;
 
     const payload = this.body.payload as Type;
-
-    writer.write('(');
-
-    const name = Naming.getRefName(payload.name!) + payload.nameSuffix();
-    writer.write('input').write(': ').write(name).write('!');
-
-    writer.write(')');
+    return 'input: ' + Naming.getRefName(payload.name!) + payload.nameSuffix() + '!';
   }
 }
