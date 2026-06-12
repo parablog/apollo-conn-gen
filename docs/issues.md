@@ -1130,3 +1130,178 @@ warning applies); the first mutation triage should always start from raw compose
 **AST:** none — emission-only; `Body`/`Param` nodes unchanged.
 **Refs:** `src/oas/nodes/get.ts` (`generateParameters`), `src/oas/nodes/post.ts` (`bodyArg`),
 test `test_mutation_params_and_body_share_one_argument_list`.
+
+## 28 · Request-body selections use the response alias direction — ✅ Fixed (working tree)
+**Symptom:** `INVALID_BODY: FunctionsItemInput doesn't have a field named log_destinations` —
+DO `post:/v2/apps` and the whole INVALID_BODY family (~60 mutation ops with #29).
+
+**OAS** (DO — a nested object inside a request body, snake_case key):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        properties:
+          log_destinations: { type: object, properties: { … } }
+```
+
+**Example** (before → after, inside `body: """…"""`):
+```graphql
+logDestinations: "log_destinations" { … }   # ✗ response direction: field <- json key
+log_destinations: "logDestinations" { … }   # ✓ body direction: json key <- input field
+```
+
+**Cause:** `sanitiseFieldForSelect(name, isInput)` flips the mapping for bodies, but only
+`PropScalar`/`PropArray` passed `isInput` — `PropObj`/`PropComp`/`PropEn`/`PropMap` didn't, so
+every nested non-scalar field inside a body kept the response direction.
+
+**Fix:** pass `this.parent?.kind === 'input'` at the four missing sites (identical to the two
+that already did).
+
+**Measured:** with #29, mutations 77.6 → 82.7% default (+132 ops both passes, 0 pass→fail).
+**AST:** none — emission-only.
+**Refs:** `src/oas/nodes/propObj.ts`/`propComp.ts`/`propEn.ts`/`propMap.ts` (`select`), fixture
+`body-aliases-defaults.yaml`, test `test_body_alias_direction_and_default_literals`.
+
+## 29 · Default values emit as bare paths, and falsy defaults vanish — ✅ Fixed (working tree)
+**Symptom:** `INVALID_BODY: ImageInput.* doesn't have a field named latest` (DO `post:/v2/apps`);
+and `default: 0` / `default: false` silently never emitted (the #17 falsy-guard class, two more
+sites).
+
+**OAS** (DO — a string default):
+```yaml
+tag:
+  type: string
+  default: latest
+```
+
+**Example** (before → after):
+```graphql
+tag: $(latest)     # ✗ `latest` reads as a field path
+tag: $("latest")   # ✓ a string literal; numbers/booleans stay bare: retries: $(0)
+```
+
+**Cause:**
+- `Scalar.select` wrote the default raw — a bare word inside `$()` is a path, not a value.
+- Both `Scalar.select` and `PropScalar.select` gated on `if (schema.default)` — `0`/`false`
+  dropped.
+
+**Fix:** quote string defaults, `String(...)` the rest; both gates use `!= null`.
+
+**Measured:** with #28, mutations +132 ops; the quoting alone also recovered **12 GET ops**
+(string defaults appear in response selections too) — 0 pass→fail in either sweep.
+**AST:** none — emission-only.
+**Refs:** `src/oas/nodes/scalar.ts` (`select`), `src/oas/nodes/propScalar.ts` (`select`),
+fixture `body-aliases-defaults.yaml` (shared with #28).
+
+## 30 · Body arg references the raw payload name — ✅ Fixed (working tree)
+**Symptom:** `INTERNAL_ERROR: cannot find type 'ssh_keysItemInput' in this document` — DO
+`post:/v2/account/keys` and the mutation INTERNAL_ERROR family.
+
+**OAS** (DO — the body payload is named from a snake_case pointer):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        $ref: "#/paths/…/properties/ssh_keys/items"
+```
+
+**Example** (before → after):
+```graphql
+createV2AccountKeys(input: ssh_keysItemInput!): …   # ✗ definition is `input SshKeysItemInput`
+createV2AccountKeys(input: SshKeysItemInput!): …    # ✓ same name both sides
+```
+
+**Cause:** `bodyArg` used `getRefName` (raw) while the input definition emits `genTypeName` —
+the #15 def/ref divergence, on the body argument.
+
+**Fix:** the same `genTypeName` conditional the definitions use (cf. #15, obj.ts/comp.ts).
+**AST:** none — emission-only.
+**Refs:** `src/oas/nodes/post.ts` (`bodyArg`), test `test_body_input_name_matches_definition`.
+
+## 31 · Empty response schemas produce zero types — ✅ Fixed (working tree)
+**Symptom:** GEN-EMPTY — googlebooks 11 ops/pass (deleteBook, familysharing.share, …): the op
+generates nothing at all.
+
+**OAS** (googlebooks — every "no result" op returns `Empty`):
+```yaml
+responses:
+  "200":
+    content:
+      application/json:
+        schema: { $ref: "#/components/schemas/Empty" }
+# components: Empty: { description: …, type: object, properties: {} }
+```
+
+**Example** (before → after):
+```graphql
+# before: zero types, op uncredited
+# after (same as an op with no response content at all):
+type CreateBooksV1CloudloadingDeleteBookResponse { success: Boolean }
+# selection: success: $(true)
+```
+
+**Cause:**
+- the synthetic `success: Boolean` response only kicked in when a response had NO content;
+- a contentful response resolving to a fieldless schema fell through to the JSON-scalar route
+  (#19) → a scalar root collects no types (cf. E-scalar-roots).
+- `isShapelessObject` also rejected `type: object, properties: {}` (the `'type'` keyword was
+  on its no-shape list) — widened to allow an explicit object type, like #24 did for enums.
+
+**Fix:** resolve the response schema and route it to `SYN_SUCCESS_RESPONSE` when it renders no
+fields (`isEmptySchema || isShapelessObject`); the synthetic default is now a real boolean
+(`$(true)`, not `$("true")` — interacts with #29's quoting).
+**AST:** shape change for these ops only — a synthetic response Obj where there was a JSON
+scalar (or nothing).
+**Refs:** `src/oas/nodes/get.ts` (`visitResponseContent`), `src/oas/nodes/factory.ts`
+(`isShapelessObject`), `src/oas/schemas/index.ts`, test `test_empty_response_schema_synthesizes_success`.
+
+## 32 · Ops whose only content is a JSON field emit an empty type; body keys with colons break the parser — ✅ Fixed (working tree)
+**Symptom:** two related body/selection failures:
+- asana (28 ops): `type CreateGoals…Response {}` — empty braces, invalid GraphQL. The response's
+  only field is a free-form JSON object, which the `>**` expansion had no leaf rule for.
+- omni SCIM: `INVALID_BODY … ErrorKind::Eof` — a body key with colons written unquoted.
+
+**OAS** (asana — the response's only field resolves to a fieldless object):
+```yaml
+responses:
+  "200":
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            data: { $ref: "#/components/schemas/EmptyResponse" }   # { type: object } only
+```
+
+**Example** (before → after):
+```graphql
+type CreateGoalsRemoveSupportingRelationshipResponse {}      # ✗ empty braces
+type CreateGoalsRemoveSupportingRelationshipResponse { data: JSON }   # ✓ selection: data
+
+urn:omni:params:1.0:UserAttribute: urnOmniParams10UserAttribute       # ✗ body key unparseable
+"urn:omni:params:1.0:UserAttribute": urnOmniParams10UserAttribute     # ✓ quoted key
+```
+
+**Cause:**
+- free-form JSON fields (`data: JSON`, #19) were never selection leaves, so an op with nothing
+  else selected nothing and emitted its response type with no fields;
+- the body-direction alias quoted the wrong side: the field reference (always a bare
+  identifier) instead of the JSON key (which may contain `:`/spaces/etc.).
+
+**Fix:**
+- when an op's expansion finds nothing selectable, take its free-form JSON fields as the
+  leaves. **Deliberately scoped to otherwise-empty ops:** applying it everywhere diverged the
+  per-connector selections of types shared across connectors (AdobeCommerce satisfiability,
+  omni INVALID_BODY) — measured +62/-4 broad vs **+26/-0 narrowed**.
+- body aliases quote the KEY when it isn't a bare identifier: `"json:key": graphqlField`.
+
+**Measured (both passes): +26 mutation ops, 0 pass→fail; GETs byte-identical.** Mutations
+47% → **88.8%** default across the arc (#27-#32).
+**Care:** the broad leaf rule is the honest long-term form — it needs per-connector selection
+agreement for shared types first (the #13/#26 family, input side).
+**AST:** none — selection-time only.
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths` post-pass),
+`src/oas/utils/naming.ts` (`sanitiseFieldForSelect` input branch), fixture coverage via
+`corpus-mutations.test.ts` (asana) + `test_body_alias_direction_and_default_literals`.

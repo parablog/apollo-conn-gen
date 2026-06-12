@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
-import { IType, Prop, PropArray, PropCircRef, PropEn, Scalar, T } from '../nodes/internal.js';
+import { IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Scalar, T } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
 
@@ -273,6 +273,19 @@ class PathsCollector {
           this.gen.expand(child);
         }
       });
+
+      // an op whose expansion found nothing selectable still has fields to write when its only
+      // content is a free-form JSON object (asana: `data: $ref EmptyResponse` -> `data: JSON`,
+      // emitted as an EMPTY invalid type before) — take those fields as the leaves. Scoped to
+      // otherwise-empty ops on purpose: doing it everywhere diverged the selections of types
+      // shared across connectors. see docs/issues.md #32
+      if (!Array.from(newSelection).some((p) => p.startsWith(root.path()))) {
+        T.traverse(root, (child) => {
+          if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
+            newSelection.add(child.path());
+          }
+        });
+      }
     });
 
     // finally remove the expanded paths from the selection

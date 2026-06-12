@@ -443,6 +443,30 @@ Overall: **default 91.5% (1115/1218) · abstract 91.7% (1117/1218)**, abstract ~
 #14 patch ships. #23+#24 measured **+67 ops/pass**; #26 measured **+76 ops** (per-op matrix
 76 fail→pass / 0 pass→fail across all specs and passes); #25 +6 abstract.
 
+**Mutations corpus (post:/put:/patch:/del:, 1249 ops/pass — first measured 2026-06-12, sweep via
+`--verbs mutations`; fast guard: `tests/all/corpus-mutations.test.ts`):**
+
+| Spec | mutation ops | default (v0.3) | abstract (v0.4) |
+|---|--:|--:|--:|
+| googlebooks | 21 | 100% | 100% (was 28.6 — #27/#31) |
+| slack | 94 | 100% | 100% |
+| sendgrid | 180 | 95.6% | 95.6% |
+| github | 401 | 92.3% | 95.8% (was 47.9 — #27) |
+| omni | 92 | 89.1% | 89.1% |
+| digitalocean | 145 | 86.9% | 86.9% (was 39.3 — #27-#30) |
+| box | 144 | 81.9% | 86.1% |
+| asana | 88 | 83.0% | 83.0% (was 2.3 — #27/#32) |
+| openai | 18 | 66.7% | 66.7% (6 GEN-THROW) |
+| confluence | 65 | 61.5% | 67.7% |
+
+Mutations overall: **47% → 88.8% default (1109/1249)** in one arc — #27 one argument list
+(+389/pass), #28/#29 body alias direction + default literals (+66/pass), #30 body-arg name
+(#15 discipline) + #31 empty-response synthetic (+63/pass), #32 JSON-only ops + quoted body
+keys (+26/pass, deliberately narrowed: the broad leaf rule diverged shared-type selections —
+see the entry's Care note). Every fix matrix-verified (0 pass→fail). Remaining buckets:
+GEN-THROW families openai 6 / omni 6 / DO 7 (~19/pass — the path to 90%+), asana/box
+composeFail residue, DEGRADED unions (by design on v0.3).
+
 #18 measured corpus-wide: **+36 ops/pass** (github +20, box +9, confluence +4, DO +2, slack +1).
 
 With the **#14 patch** applied to composition (verified via local `apollo-federation-cli` + rover
@@ -458,9 +482,9 @@ shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, 
 | 2a | ~~**#22** — `Composed` skips the #9/#12 collision check → duplicate type definitions~~ | — | ✅ fixed `1669c6a`; the 9 box ops fail on a second bug (#13-family cycle cut) the duplicate was hiding |
 | 2b | **R-options-pairing** (open research) — same-named array items split (`Options` vs `OptionsItem`) but field/selection pair with the wrong half (box `/metadata_templates` family); #13-adjacent | 5/pass (box) | mechanism unpinned — likely the #13 collect-time prop-merge resolves it; verify when slicing #13 |
 | 3 | ~~**#19** — typeless `{}` schemas throw~~ | — | ✅ fixed `aae14ca` (sendgrid's 3 throws were this shape too; omni's 3 persist → R-genthrow-tail confirmed distinct) |
-| 4 | **R-anyof-empty** (open research; #20 reserved) — `anyOf: [$ref, empty-closed-object]` → zero types (10 github ops) | 10 | fix mechanism undecided: prove-placeholder (a) vs represent-as-JSON-branch (b, leaning) — dropping a *disjunct* is not the #5 allOf case |
-| 5 | ~~**R-genthrow-tail** — omni(3) GEN-THROW ops~~ | — | ✅ fixed (#23, working tree): OAS 3.1 type arrays (`type: [string,'null']`) collapse to the first non-null entry; omni 83.3→88.9 |
-| 6 | **#13** — path-dependent cycle cuts diverge same-named instances | ~16 | open; collect-time prop-merge proposal ready in the entry |
+| 4 | **R-anyof-empty** (open research; #20 reserved) — `anyOf: [$ref, empty-closed-object]` → zero types (10 github ops) | 10 | single-real-member collapse parked in stash (`anyof-collapse #20`): its DO/slack regressions were collector-orphan failures — **retest against #26** |
+| 5 | ~~**R-genthrow-tail** — omni(3) GEN-THROW ops~~ | — | ✅ fixed `00c0d4b` (#23): OAS 3.1 type arrays collapse to the first non-null entry; omni 83.3→88.9 |
+| 6 | ~~**#13** — path-dependent cycle cuts diverge same-named instances~~ | — | ✅ mechanism fixed `3525085` (SDL-only overrides from sibling routes); the gated ops then fell to #25 (`b061b80`) and #26 (`824b1c2`) — confluence abstract 69.2→83.1 |
 
 GEN-EMPTY resolution: of the non-Slack residue (25 ops/pass), 15 are legit input quality (non-JSON
 file endpoints on DO/confluence/github; scalar-rooted responses — the latter a possible future
@@ -484,6 +508,11 @@ params, #12 inline-vs-component emitted-name collision (cleared Confluence `CIRC
 **#15** def/ref type-name divergence (`44b628d` — sendgrid 77.9→89.0, box 57→66.7, DO 86.2→91.7,
 `INVALID_GRAPHQL` 143→39), **#18** identical-inline-schema dedup + convergent renames (`0cff45d` —
 box 66.7→74.6, DO 92.4→93.8, both passes).
+
+**Mutation arc (2026-06-12, details per id in `docs/issues.md`):** #27 one argument list for
+params + body (`4e5e479`), #28 body-direction aliases, #29 quoted default literals + falsy-guard
+sweep, #30 sanitised body-arg name, #31 empty-response → synthetic `success: Boolean`, #32
+free-form JSON fields as selectable leaves (#28-#32 working tree, sweep in flight).
 
 **Upstream / parked:**
 - **#14** (upstream): composition's v0.4 shape validator drops `Array` shapes → `->entries`

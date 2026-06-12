@@ -37,3 +37,4 @@ KNOWN_ISSUES.md
 /tests/resources/oas/github.yaml
 /tests/resources/oas/omni.yaml
 /tests/resources/oas/confluence.json
+tools/local/apollo-federation-cli

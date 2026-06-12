@@ -183,10 +183,11 @@ export class Naming {
     }
 
     if (isInput) {
-      // Request-body direction (unchanged): GraphQL field maps into the JSON key.
-      const needsQuotes = /[:_\-.]/.test(fieldName) || name.startsWith('@');
-      const value = name.startsWith('@') ? name : sanitised;
-      return fieldName + ': ' + (needsQuotes ? `"${value}"` : value);
+      // Request-body direction: original JSON key <- GraphQL input field. The KEY is quoted
+      // when it isn't a bare identifier (omni's `urn:omni:params:1.0:UserAttribute` broke the
+      // parser unquoted); the field reference is always a bare identifier. see #32
+      const key = /^[_A-Za-z][_0-9A-Za-z]*$/.test(name) ? name : `"${name}"`;
+      return key + ': ' + sanitised;
     }
 
     // Response direction: safe GraphQL field <- original JSON key, always quoted (the key
