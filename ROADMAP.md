@@ -95,7 +95,7 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `@connect` directive | `http.{GET,POST,PUT,PATCH,DELETE}` | Done | — |
 | `ConnectHTTP` | path templating `{$args.x}` | Done | — |
 | `ConnectHTTP` | `path` as full JSONSelection | Partial (literal only) | R8 |
-| `ConnectHTTP` | `queryParams` block / JSONSelection | Partial (`$args{…}`) | R8 |
+| `ConnectHTTP` | `queryParams` block / JSONSelection | Partial (`$args{…}` + array serialization joins) | R8 |
 | `ConnectHTTP` | `headers` (per-op) | Partial (static) | R5 |
 | `ConnectHTTP` | `body` (full JSONSelection) | Done (`$args.input`) | R9 (computed/literal only) |
 | `@connect` | `entity: true` (Query-field resolver) | Deliberately not emitted (type-level `$this` favoured — R1 note) | R1 (1a) |
@@ -110,7 +110,7 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `@key` (federation) | key-field emission | Done (entity inference, R1) | R1 (1c) |
 | JSONSelection | field selection + nesting + `->entries` | Done | — |
 | JSONSelection | aliasing / quoted keys / camelCase | Done (responses R3; request bodies #28/#32) | R3 |
-| JSONSelection | methods, literals, spreads, `??`/`?!`, optional chaining | Partial (`->entries`, `->match`, `$(literal)` defaults/`__typename` done; spreads/coalescing/chaining pending) | R7 |
+| JSONSelection | methods, literals, spreads, `??`/`?!`, optional chaining | Partial (`->entries`, `->match`, `->joinNotNull`, `??` coalesced defaults, `$(literal)`/`__typename` done; spreads/`?!`/chaining pending) | R7 |
 | OAS `oneOf`/`anyOf` + discriminator | unions/interfaces | Done (real `union` + `->match` `__typename` + interface promotion on v0.4; consolidate/merged-object downgrades below; version-derived) | R2 |
 | Variables | `$args` | Done | — |
 | Variables | `$this` (R1), `$config` (R5), `$status` (R4) | Done | — |
@@ -148,8 +148,8 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 | R4. Error handling | 🟡 Partial | baseline `@connect(errors: { extensions })` w/ `$status` (opt-in, v0.2+); `message`/`isSuccess`/source-level pending |
 | R5. Dynamic headers / auth | 🟡 Partial | slice 1 done (global `@source` `$config` header); per-op, `$env`, `from:`, `$request.headers` remain |
 | R6. Batch entity resolution | ⬜ Not started | depends on R1 |
-| R7. Richer JSONSelection | ⬜ Not started | methods/literals/spreads/coalescing |
-| R8. `path`/`queryParams` JSONSelection | ⬜ Not started | computed segments/objects |
+| R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
+| R8. `path`/`queryParams` JSONSelection | 🟡 Partial | array-param serialization joins (`->joinNotNull`); computed path segments have no OAS signal |
 | R9. Computed / literal bodies | ⬜ Not started | base `$args.input` body done; computed remainder open |
 
 ### Foundation (must precede version-sensitive items)
@@ -369,28 +369,39 @@ with `batch: { maxSize }` and a `$batch`-based selection.
 **Files:** `src/oas/io/operationWriter.ts`, entity detection (shared with R1).
 (gate: v0.2+)
 
-### R7. Richer JSONSelection — methods, literals, spreads, coalescing, optional chaining — ⬜ Not started
+### R7. Richer JSONSelection — methods, literals, spreads, coalescing, optional chaining — 🟡 Partial
 
 **Why:** Handles real response shapes: envelope unwrapping (`data.items`), literal
 `__typename`, fallbacks.
 
-**Scope (opportunistic, inferable intent only):** methods (`->first`, `->match`,
-`->joinNotNull`, …), literals (`__typename: "Book"`), spreads (`...$args`),
-null-coalescing `??` / `?!`, optional chaining `author?.name`.
+**Done:** OAS `default:` values now coalesce instead of replacing — `tag: tag ?? $("latest")`
+keeps the real value and falls back (response and body directions; the synthetic `success`
+field keeps its pure `$(true)`). Bare literals remain below the gate — `??` needs connect
+v0.4 AND federation v2.14: the 2.13 composer rejects the grammar (verified on 2.13.0
+vs 2.14.1). `->match` literals already land via R2; `->entries` via maps; `->joinNotNull` via R8.
 
-**Requires:** `@`.
+**Remaining (no OAS signal — needs a heuristic or user intent):** envelope unwrapping
+(`data.items`), `->first`, spreads (`...$args`), `?!`, optional chaining (parked as #16,
+archived branch `feat/optional-chaining-operator`).
 
-**Files:** `src/oas/nodes/prop*.ts`, `src/oas/nodes/body.ts`, JSON walker selection.
-(gate: v0.1+; `??`/`?!`/extended grammar best on v0.4)
+**Files:** `src/oas/nodes/scalar.ts` (`??` defaults), `src/oas/nodes/prop*.ts`,
+`src/oas/nodes/body.ts`. (gate: v0.1+; `??` gated to connect v0.4 + federation v2.14)
 
-### R8. `path` / `queryParams` as full JSONSelection — ⬜ Not started
+### R8. `path` / `queryParams` as full JSONSelection — 🟡 Partial
 
 **Why:** More flexible than the current `{$args.x}` / `$args { … }` forms — computed
 segments and computed query objects with renaming/methods, on both `SourceHTTP` and
 `ConnectHTTP`. (Base `{$args.x}` / `$args { … }` forms already emitted; this is the
 computed extension.)
 
-**Files:** `src/oas/io/operationWriter.ts`. (gate: v0.2+)
+**Done:** OAS array-param serialization — a non-exploded array param emits the matching
+join (`"ids": ids->joinNotNull(",")`; `spaceDelimited` → `" "`, `pipeDelimited` → `"|"`).
+Exploded arrays (the OAS default) already work as plain array values.
+
+**Remaining:** computed `path` segments — no OAS source expresses this; revisit only with
+explicit user intent (CLI mapping), not inference. Same for renamed/computed query keys.
+
+**Files:** `src/oas/io/operationWriter.ts` (`arrayJoin`). (gate: v0.2+; joins on all versions)
 
 ### R9. Computed / literal request bodies — ⬜ Not started
 
@@ -476,7 +487,7 @@ shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, 
 | 2a | ~~**#22** — `Composed` skips the #9/#12 collision check → duplicate type definitions~~ | — | ✅ fixed `1669c6a`; the 9 box ops fail on a second bug (#13-family cycle cut) the duplicate was hiding |
 | 2b | **R-options-pairing** (open research) — same-named array items split (`Options` vs `OptionsItem`) but field/selection pair with the wrong half (box `/metadata_templates` family); #13-adjacent | 5/pass (box) | mechanism unpinned — likely the #13 collect-time prop-merge resolves it; verify when slicing #13 |
 | 3 | ~~**#19** — typeless `{}` schemas throw~~ | — | ✅ fixed `aae14ca` (sendgrid's 3 throws were this shape too; omni's 3 persist → R-genthrow-tail confirmed distinct) |
-| 4 | **R-anyof-empty** (open research; #20 reserved) — `anyOf: [$ref, empty-closed-object]` → zero types (10 github ops) | 10 | single-real-member collapse parked in stash (`anyof-collapse #20`): its DO/slack regressions were collector-orphan failures — **retest against #26** |
+| 4 | ~~**R-anyof-empty** (#20) — `anyOf: [$ref, empty-closed-object]` → zero types~~ | — | ✅ fixed (working tree): single-real-member collapse, +6 ops / 0 regressions once #26 cleared the collector orphans that blocked it |
 | 5 | ~~**R-genthrow-tail** — omni(3) GEN-THROW ops~~ | — | ✅ fixed `00c0d4b` (#23): OAS 3.1 type arrays collapse to the first non-null entry; omni 83.3→88.9 |
 | 6 | ~~**#13** — path-dependent cycle cuts diverge same-named instances~~ | — | ✅ mechanism fixed `3525085` (SDL-only overrides from sibling routes); the gated ops then fell to #25 (`b061b80`) and #26 (`824b1c2`) — confluence abstract 69.2→83.1 |
 

@@ -136,7 +136,7 @@ export class OperationWriter {
         writer.write(spacing).write(`$args {\n`);
         spacing = ' '.repeat(10);
         for (const p of queryParams) {
-          writer.write(spacing).write(`"${p.name}": ${Naming.genParamName(p.name)}\n`);
+          writer.write(spacing).write(`"${p.name}": ${Naming.genParamName(p.name)}${this.arrayJoin(p)}\n`);
         }
         spacing = ' '.repeat(8);
         writer.write(spacing).write('}\n');
@@ -180,6 +180,17 @@ export class OperationWriter {
     }
 
     writer.write('}');
+  }
+
+  // a non-exploded array param (`?ids=1,2,3`) needs its values joined: `ids->joinNotNull(",")`. see ROADMAP R8
+  // exploded arrays (the OAS default) already work as a plain array value
+  private arrayJoin(p: Param): string {
+    const parameter = p.parameter;
+    if (_.get(parameter, 'schema.type') !== 'array' || parameter.explode !== false) {
+      return '';
+    }
+    const delimiter = parameter.style === 'spaceDelimited' ? ' ' : parameter.style === 'pipeDelimited' ? '|' : ',';
+    return `->joinNotNull("${delimiter}")`;
   }
 
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {

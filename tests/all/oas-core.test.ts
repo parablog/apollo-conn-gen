@@ -932,8 +932,9 @@ test('test_body_alias_direction_and_default_literals', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/log_destinations: logDestinations \{/.test(schema!), 'body alias maps key <- field');
   assert.ok(!/logDestinations: "log_destinations"/.test(schema!), 'no response-direction alias in the body');
-  assert.ok(/tag: \$\("latest"\)/.test(schema!), 'string default quoted');
-  assert.ok(/retries: \$\(0\)/.test(schema!), 'zero default emitted');
+  // R7: body defaults coalesce too — the caller's value wins, the default only fills gaps
+  assert.ok(/tag: tag \?\? \$\("latest"\)/.test(schema!), 'string default quoted, coalesced');
+  assert.ok(/retries: retries \?\? \$\(0\)/.test(schema!), 'zero default emitted, coalesced');
 });
 
 test('test_body_input_name_matches_definition', async () => {
@@ -952,4 +953,15 @@ test('test_empty_response_schema_synthesizes_success', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/success: Boolean/.test(schema!), 'synthetic success field emitted');
   assert.ok(/success: \$\(true\)/.test(schema!), 'selection sets the boolean literal');
+});
+
+test('test_R7_default_coalesces_R8_array_params_join', async () => {
+  // R7: defaults coalesce (`tag: tag ?? $("latest")`); R8: non-exploded array params join
+  // (`ids->joinNotNull(",")`). Both on the default versions (connect v0.4, fed v2.14).
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/tag: tag \?\? \$\("latest"\)/.test(schema!), 'default coalesces instead of replacing');
+  assert.ok(/"ids": ids->joinNotNull\(","\)/.test(schema!), 'form/explode:false joins with comma');
+  assert.ok(/"tags": tags->joinNotNull\("\|"\)/.test(schema!), 'pipeDelimited joins with |');
+  assert.ok(/"page": page\n/.test(schema!), 'plain params unchanged');
 });
