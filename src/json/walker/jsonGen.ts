@@ -184,7 +184,10 @@ export class JsonGen {
       const arrayType = this.walkElement(context, parent, name, firstElement);
       result.setArrayType(arrayType);
     } else {
-      warn(context, '   [walkArray]', "Array is empty -- cannot derive type for field '" + name + "'");
+      // an empty [] gives no item shape — a typeless array is dropped from the SDL but still
+      // selected, breaking compose; `[JSON]` keeps both artifacts consistent (#19/#21 convention). #35
+      warn(context, '   [walkArray]', "Array is empty -- using JSON for field '" + name + "'");
+      result.setArrayType(new JsonScalar(name, result, 'JSON'));
     }
     trace(context, '-> [walkArray]', 'in: ' + name);
     return result;

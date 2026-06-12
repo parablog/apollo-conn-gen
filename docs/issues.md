@@ -1424,7 +1424,7 @@ The CLI no longer hardcodes consolidation: `--connector-spec-version v0.4` gets 
 (`resolveConsolidateUnions`), `src/oas/oasGen.ts` (constructor), `src/cli/oas.ts`.
 
 
-## 35 · JSON walker: same-named objects across documents diverge on fields — ⬜ Open
+## 35 · JSON walker: same-named objects across documents diverge on fields — ✅ Fixed (working tree)
 **Symptom:** `SELECTED_FIELD_NOT_FOUND: selection contains field 'references', which does not
 exist on 'ContentTags'` (clockwatch, multi-document walk) — surfaced when #21's dangling
 reference was fixed.
@@ -1435,10 +1435,17 @@ reference was fixed.
 { "tags": { "name": "…", "references": […] } }    // doc B -> selects references too
 ```
 
-**Cause (suspected):** the walker stores types by name across documents; one instance wins
-emission while the merged selection selects the union of fields — the JSON-path twin of the
-OAS #13 mechanism, with none of its machinery (no per-route cuts, no SDL overrides).
-**Proposed fix:** merge same-named objects' fields at store time (the walker has no cycle
-cuts, so a plain field-union merge is safe — unlike OAS #13).
-**Refs:** `src/json/walker/jsonGen.ts` (`walkObject`/`context.store`), fixture
-`tests/resources/json/articles/clockwatch`, test `articles/clockwatch` (pins the shape).
+**Cause (measured):** two mechanisms, not one.
+- An empty `[]` leaves the array typeless: the SDL drops the field (`### NO TYPE FOUND`
+  comment) but the selection still emits it → `SELECTED_FIELD_NOT_FOUND`.
+- `store()` merged one-directionally (incoming → stored), but the written tree points at the
+  *incoming* instance — fields from earlier documents were lost, and a `[]`/`{}` twin could
+  clobber a typed field (last doc wins).
+**Fix (2026-06-12):**
+- an empty `[]` walks to `[JSON]` (the #19/#21 unknown-shape convention) — SDL and selection agree;
+- `merge()` converges *both* instances on the field union, and an unknown-shape twin
+  (`isUnknownShape`: JSON scalar, or array thereof) never replaces a typed field.
+Flipped four known-bad pins to passing: `articles/clockwatch`, `articles/blog`,
+`articles/article` and the single-article file (all the same mechanism).
+**Refs:** `src/json/walker/jsonGen.ts` (`walkArray`), `src/json/walker/jsonContext.ts`
+(`merge`/`isUnknownShape`), fixture `tests/resources/json/articles/clockwatch`.
