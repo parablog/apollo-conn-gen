@@ -55,6 +55,18 @@ export abstract class Type implements IType {
     return [];
   }
 
+  // children are addressed by id (name-derived): two same-named siblings would collapse into
+  // one path — suffix the duplicate (`[inline:Input]`, `[inline:Input]:1`). see #34
+  protected withUniqueName(child: IType): IType {
+    let name = child.name;
+    let idx = 0;
+    while (this.children.some((c) => c.name === name)) {
+      name = `${child.name}:${++idx}`;
+    }
+    child.name = name;
+    return child;
+  }
+
   public find(path: string, collection: IType[]): IType | boolean {
     const parts = path.split('>');
     let current: IType | undefined;

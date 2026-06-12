@@ -38,7 +38,6 @@ async function main(sourceFile: string, opts: any): Promise<void> {
 
   const gen = await OasGen.fromFile(sourceFile, {
     ...opts,
-    consolidateUnions: true,
     showParentInSelections: false,
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,

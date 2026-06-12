@@ -12,18 +12,22 @@
 // Connect spec identifiers are plain `vMAJOR.MINOR` (e.g. "v0.4"). Ordering is fully
 // defined by `(major, minor)` as integers.
 
-export const DEFAULT_VERSIONS = {
-  // Kept in lock-step with the connect default: connect v0.3 requires federation
-  // >= v2.12 (per the Apollo connectors version-requirements matrix).
-  federationVersion: 'v2.12',
-  connectorSpecVersion: 'v0.3',
-} as const;
-
-export type Versions = typeof DEFAULT_VERSIONS;
-
 // Authoritative list of connect spec identifiers we will emit in an `@link` URL.
 export const SUPPORTED_CONNECT_VERSIONS = ['v0.1', 'v0.2', 'v0.3', 'v0.4'] as const;
 export type ConnectVersion = (typeof SUPPORTED_CONNECT_VERSIONS)[number];
+
+// The newest version we can emit — and the default: no version asked for means LATEST.
+export const LATEST_CONNECT_VERSION: ConnectVersion =
+  SUPPORTED_CONNECT_VERSIONS[SUPPORTED_CONNECT_VERSIONS.length - 1];
+
+export const DEFAULT_VERSIONS = {
+  // LATEST released federation (2.15 is unreleased); connect v0.4 needs >= v2.13 so this
+  // also satisfies the floor.
+  federationVersion: 'v2.14',
+  connectorSpecVersion: LATEST_CONNECT_VERSION,
+} as const;
+
+export type Versions = typeof DEFAULT_VERSIONS;
 
 const VERSION_RE = /^v(\d+)\.(\d+)$/;
 
@@ -69,6 +73,24 @@ export function requireConnectVersion(feature: string, target: string, min: stri
   if (!meetsMinimum(target, min)) {
     throw new Error(`${feature} requires connect ${min}, but target is ${target}`);
   }
+}
+
+/**
+ * Real unions/interfaces need connect v0.4; below that the only valid form is the consolidate
+ * downgrade. Derived from the version when not chosen explicitly; an explicit choice is
+ * respected unless it would emit constructs the target cannot parse — that downgrades loudly
+ * (the R0 contract: never silently emit what the target can't read). see ROADMAP R2
+ */
+export function resolveConsolidateUnions(connect: string, explicit?: boolean): boolean {
+  const supportsAbstractTypes = meetsMinimum(connect, 'v0.4');
+  if (explicit === false && !supportsAbstractTypes) {
+    console.warn(
+      `Warning: real unions/interfaces require connect v0.4, but target is ${connect} — ` +
+        'downgrading to consolidated unions.',
+    );
+    return true;
+  }
+  return explicit ?? !supportsAbstractTypes;
 }
 
 /** Non-blocking heads-up that v0.4 is experimental and needs router opt-in. */

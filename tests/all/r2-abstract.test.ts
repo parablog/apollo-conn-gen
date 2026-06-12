@@ -81,6 +81,7 @@ test('test_R2_interface_skips_when_base_used_concretely', async () => {
   });
   assert.ok(schema !== undefined);
   assert.ok(!/interface Product/.test(schema!), 'base used concretely must NOT be promoted');
+  assert.ok(/union ItemResponse = Book \| Movie/.test(schema!), 'the un-promoted union lists its members (#34)');
   assert.ok(
     warnings.some((w) => /not promoting .*Product.* concrete/.test(w)),
     `expected a rule-3 skip warning, got: ${warnings.join(' | ')}`,
@@ -131,4 +132,35 @@ test('test_R2_collect_twice_is_byte_identical', async () => {
   const first = gen.generateSchema(['get:/item>**']);
   const second = gen.generateSchema(['get:/item>**']);
   assert.strictEqual(second, first, 'second generation must be byte-identical');
+});
+
+test('test_R2_union_form_derived_from_connect_version', async () => {
+  // not asked explicitly: connect >= v0.4 emits real unions, below it the consolidate
+  // downgrade — and an explicit ask for real unions on v0.3 downgrades loudly. see ROADMAP R2
+  const real = await OasGen.fromFile(`${oasBasePath}/simple-oneOf-example.yaml`, {
+    skipValidation: false,
+    showParentInSelections: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+  });
+  await real.visit();
+  assert.ok(/union ItemResponse = Book \| Movie/.test(real.generateSchema(['get:/item>**'])), 'v0.4 derives real unions');
+
+  const warnings = await captureWarnings(async () => {
+    const downgraded = await OasGen.fromFile(`${oasBasePath}/simple-oneOf-example.yaml`, {
+      skipValidation: false,
+      consolidateUnions: false,
+      showParentInSelections: false,
+      connectorSpecVersion: 'v0.3',
+      federationVersion: 'v2.12',
+    });
+    await downgraded.visit();
+    const schema = downgraded.generateSchema(['get:/item>**']);
+    assert.ok(schema.includes('NOT SUPPORTED YET'), 'v0.3 downgrades to consolidate');
+    assert.ok(!/^union \w+ =/m.test(schema), 'no real union on v0.3');
+  });
+  assert.ok(
+    warnings.some((w) => /require connect v0\.4/.test(w)),
+    `expected the downgrade warning, got: ${warnings.join(' | ')}`,
+  );
 });

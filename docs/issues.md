@@ -1345,3 +1345,47 @@ representable; revisit if a raw-passthrough form ever exists.
 **AST:** shape changes only where generation previously threw (a node tree now exists).
 **Refs:** `src/oas/oasContext.ts` (`lookupRef`), `src/oas/nodes/get.ts` (`visitResponse`),
 `src/oas/nodes/union.ts` (`visit`), `src/oas/io/operationWriter.ts` (`writeConnector`).
+
+## 34 · Real unions of allOf members: empty member list, twin member ids — ✅ Fixed (working tree)
+**Symptom:** two failures of the same family (the R2 "allOf-member union" gap):
+- a discriminated `oneOf` of `allOf` members that is NOT interface-promoted (rule-3 skip)
+  emits `union ItemResponse = ` — no members, invalid GraphQL;
+- DO `post:/v2/certificates`/`/v2/droplets` (a `oneOf` of `allOf`s as the request body) crash
+  the collector: two inline members share one id, so the path walk finds the wrong twin.
+
+**OAS** (the body shape, DO):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        oneOf:
+          - allOf: [ { … }, { … } ]   # both inline members were named `[inline:Input]`
+          - allOf: [ { … }, { … } ]
+```
+
+**Example** (before → after):
+```graphql
+union ItemResponse =                       # ✗ empty
+union ItemResponse = Book | Movie          # ✓ members with selected fields
+```
+
+**Cause:**
+- the union line filtered members by prop-parent identity — an allOf member's folded props
+  keep the inner part as parent, so no member ever matched (`selectAbstract` already had the
+  correct any-selected-field filter);
+- `Composed.add` suffixes duplicate child names but `Union.add` didn't, so twin inline members
+  collapsed onto one id and broke path addressing.
+
+**Fix:** shared `Union.selectedMembers` (consolidates Composed members, filters by selected
+fields) used by both the union line and `->match`; the duplicate-name suffixing hoisted to
+`Type.withUniqueName` and used by both `Composed.add` and `Union.add`.
+
+**Also in this slice (R2 gate):** the union form is now derived from the connect version —
+v0.4+ emits real unions/interfaces, below that the consolidate downgrade; an explicit ask for
+real unions on < v0.4 downgrades with a warning (`resolveConsolidateUnions`, the R0 contract).
+The CLI no longer hardcodes consolidation: `--connector-spec-version v0.4` gets abstract types.
+**AST:** identity change for twin union members only (`[inline:Input]` → `[inline:Input]:1`).
+**Refs:** `src/oas/nodes/union.ts` (`add`/`selectedMembers`), `src/oas/nodes/type.ts`
+(`withUniqueName`), `src/oas/nodes/comp.ts` (`add` delegates), `src/versions.ts`
+(`resolveConsolidateUnions`), `src/oas/oasGen.ts` (constructor), `src/cli/oas.ts`.

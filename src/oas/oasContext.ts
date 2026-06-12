@@ -9,7 +9,7 @@ import { IType } from './nodes/internal.js';
 import { Mapper } from './mapper/index.js';
 
 export type GenerateOptions = {
-  consolidateUnions: boolean;
+  consolidateUnions?: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
