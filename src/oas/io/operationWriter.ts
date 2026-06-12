@@ -1,7 +1,8 @@
 import _ from 'lodash';
-import { OasContext } from '../oasContext.js';
+import { ParameterObject } from 'oas/types';
+import { OasContext, RequestOverride } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { Body, IType, Op, Param, Type } from '../nodes/internal.js';
+import { Body, IType, Op, Param, T } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
 import { Writer } from './writer.js';
 import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
@@ -45,8 +46,12 @@ export class OperationWriter {
   }
 
   public writeConnector(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
+    if (!T.isOp(type)) {
+      throw new Error(`expected an operation node, got ${type.id}`);
+    }
+
+    const op = type;
     const indent = 0;
-    const op = type as unknown as Op; // assume type is GetOp
     let spacing = ' '.repeat(indent + 4);
     writer.write(spacing).write('@connect(\n');
 
@@ -58,8 +63,8 @@ export class OperationWriter {
     writer.write('\n').write(spacing).write('selection: """\n');
 
     // truthiness, not _.has — the declared-but-unset field is still an own property. #33
-    if (_.get(op, 'resultType')) {
-      this.writeSelection(context, writer, _.get(op, 'resultType') as Type, selection);
+    if (op.resultType) {
+      this.writeSelection(context, writer, op.resultType, selection);
     }
 
     writer.write(spacing).write('"""\n');
@@ -106,80 +111,115 @@ export class OperationWriter {
     return op.operation.getResponseStatusCodes().some((code: string) => /^[45](\d\d|XX)$/i.test(code));
   }
 
-  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], indent: number): void {
-    // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
-    const verb = op.verb;
-    const templatedPath = op.operation.path.replace(
-      /\{([^}]+)\}/g,
-      (_m, name) => `{$args.${Naming.genParamName(name)}}`,
-    );
-    writer.write(`{ ${verb}: `).write('"' + templatedPath + '"');
+  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], _indent: number): void {
+    const override = context.generateOptions.overrides?.[op.id];
 
-    if (op.params.length > 0) {
-      // we now include all query params, not just required ones. if they are not set,
-      // then the connectors will not include them in the request.
-      let queryParams = op.params.filter((p: Param) => {
-        return p.parameter.in && p.parameter.in.toLowerCase() === 'query';
-      });
+    // write HTTP stuff first, then headers, query params and lastly headers
+    writer.write(`{ ${op.verb}: `).write('"' + this.templatedPath(op, override) + '"');
+    this.writeQueryParams(context, writer, op, override);
+    this.writeHeaders(writer, op, override);
 
-      // Skip optional params if skipOptionalArgs is true
-      if (context.generateOptions?.skipOptionalArgs) {
-        queryParams = queryParams.filter((p: Param) => p.required);
-      }
-
-      if (queryParams.length > 0) {
-        writer.write('\n');
-        let spacing = ' '.repeat(6);
-
-        writer.write(spacing).write(`queryParams: """\n`);
-        spacing = ' '.repeat(8);
-        writer.write(spacing).write(`$args {\n`);
-        spacing = ' '.repeat(10);
-        for (const p of queryParams) {
-          writer.write(spacing).write(`"${p.name}": ${Naming.genParamName(p.name)}${this.arrayJoin(p)}\n`);
-        }
-        spacing = ' '.repeat(8);
-        writer.write(spacing).write('}\n');
-        spacing = ' '.repeat(6);
-        writer.write(spacing).write('"""\n');
-      }
-
-      const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
-
-      if (headers.length > 0) {
-        let spacing = ' '.repeat(6);
-        writer.write(spacing + 'headers: [\n');
-        spacing = ' '.repeat(8);
-
-        for (const p of headers) {
-          let value: string | null = null;
-
-          if (p.example != null) {
-            value = p.example.toString();
-          }
-
-          if (p.examples && Object.keys(p.examples).length > 0) {
-            value = Object.keys(p.examples).join(',');
-          }
-
-          if (value == null) {
-            value = '<placeholder>';
-          }
-
-          writer.write(spacing + `{ name: "${p.name}", value: "${value}" }\n`);
-        }
-
-        spacing = ' '.repeat(6);
-        writer.write(spacing + ']');
-      }
-    }
-
+    // only fo PUT, POST, etc.
     if (_.has(op, 'body')) {
-      const body = op.body as Body;
-      this.writeBodySelection(context, writer, body, selection);
+      this.writeBodySelection(context, writer, op.body as Body, selection);
     }
 
     writer.write('}');
+  }
+
+  // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
+  // an override path may already template (`{$args.id}`, `{$config.v}`) — leave `$` segments alone
+  private templatedPath(op: Op, override?: RequestOverride): string {
+    return (override?.path ?? op.operation.path).replace(/\{([^}]+)\}/g, (m, name) =>
+      name.startsWith('$') ? m : `{$args.${Naming.genParamName(name)}}`,
+    );
+  }
+
+  private writeQueryParams(context: OasContext, writer: Writer, op: Op, override?: RequestOverride): void {
+    // we now include all query params, not just required ones. if they are not set,
+    // then the connectors will not include them in the request.
+    let queryParams = op.params.filter((p: Param) => {
+      return p.parameter.in && p.parameter.in.toLowerCase() === 'query';
+    });
+
+    // Skip optional params if skipOptionalArgs is true
+    if (context.generateOptions?.skipOptionalArgs) {
+      queryParams = queryParams.filter((p: Param) => p.required);
+    }
+
+    // e.g. `"api-version": $('2024-01')` appended, `"ids": ids->joinNotNull(";")` replaced
+    const entries = this.mergeOverrides(
+      queryParams,
+      override?.queryParams ?? {},
+      (p) => `${Naming.genParamName(p.name)}${this.arrayJoin(p)}`,
+    );
+    if (entries.length === 0) {
+      return;
+    }
+
+    writer.write('\n');
+    let spacing = ' '.repeat(6);
+
+    writer.write(spacing).write(`queryParams: """\n`);
+    spacing = ' '.repeat(8);
+    writer.write(spacing).write(`$args {\n`);
+    spacing = ' '.repeat(10);
+    for (const [key, value] of entries) {
+      writer.write(spacing).write(`"${key}": ${value}\n`);
+    }
+    spacing = ' '.repeat(8);
+    writer.write(spacing).write('}\n');
+    spacing = ' '.repeat(6);
+    writer.write(spacing).write('"""\n');
+  }
+
+  private writeHeaders(writer: Writer, op: Op, override?: RequestOverride): void {
+    const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
+    const entries = this.mergeOverrides(headers, override?.headers ?? {}, (p) => this.headerExample(p));
+    if (entries.length === 0) {
+      return;
+    }
+
+    let spacing = ' '.repeat(6);
+    writer.write(spacing + 'headers: [\n');
+    spacing = ' '.repeat(8);
+
+    for (const [key, value] of entries) {
+      writer.write(spacing + `{ name: "${key}", value: "${value}" }\n`);
+    }
+
+    spacing = ' '.repeat(6);
+    writer.write(spacing + ']');
+  }
+
+  // merge user overrides over the inferred params: a string replaces the inferred value,
+  // null drops the entry, an unknown key is appended. see ROADMAP R8
+  private mergeOverrides<T extends { name: string }>(
+    inferred: T[],
+    overrides: Record<string, string | null>,
+    inferredValue: (item: T) => string,
+  ): Array<[string, string]> {
+    const kept = inferred
+      .filter((item) => overrides[item.name] !== null)
+      .map((item): [string, string] => [item.name, overrides[item.name] ?? inferredValue(item)]);
+
+    const known = new Set(inferred.map((item) => item.name));
+    const appended = Object.entries(overrides).filter(
+      (entry): entry is [string, string] => !known.has(entry[0]) && entry[1] != null,
+    );
+
+    return [...kept, ...appended];
+  }
+
+  // inferred header value: the example, the example keys, or a placeholder for the user to fill
+  private headerExample(p: ParameterObject): string {
+    if (p.example != null) {
+      return p.example.toString();
+    }
+    if (p.examples && Object.keys(p.examples).length > 0) {
+      return Object.keys(p.examples).join(',');
+    }
+    return '<placeholder>';
   }
 
   // a non-exploded array param (`?ids=1,2,3`) needs its values joined: `ids->joinNotNull(",")`. see ROADMAP R8

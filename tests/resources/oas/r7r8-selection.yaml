@@ -29,6 +29,15 @@ paths:
           in: query
           schema:
             type: integer
+        - name: X-Version
+          in: header
+          example: "1"
+          schema:
+            type: string
+        - name: X-Trace
+          in: header
+          schema:
+            type: string
       responses:
         "200":
           description: ok

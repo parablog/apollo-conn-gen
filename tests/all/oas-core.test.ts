@@ -955,6 +955,28 @@ test('test_empty_response_schema_synthesizes_success', async () => {
   assert.ok(/success: \$\(true\)/.test(schema!), 'selection sets the boolean literal');
 });
 
+test('test_overrides_rewire_path_and_query_params', async () => {
+  // user-intent request rewiring (R8): replace the path (`$` templates left alone), and
+  // per query param: a string replaces the value, null drops it, an unknown key is appended
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true, undefined, false, false, {
+    overrides: {
+      'get:/things': {
+        path: '/v2/things/{$config.tenant}',
+        queryParams: { ids: 'ids->joinNotNull(";")', page: null, 'api-version': '$("2024-01")' },
+        headers: { 'X-Version': '{$config.version}', 'X-Trace': null, 'X-Api-Key': '{$config.apiKey}' },
+      },
+    },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/GET: "\/v2\/things\/\{\$config\.tenant\}"/.test(schema!), 'path replaced, $ template untouched');
+  assert.ok(/"ids": ids->joinNotNull\(";"\)/.test(schema!), 'param value replaced');
+  assert.ok(!/"page"/.test(schema!), 'null drops the param');
+  assert.ok(/"api-version": \$\("2024-01"\)/.test(schema!), 'unknown key appended');
+  assert.ok(/\{ name: "X-Version", value: "\{\$config\.version\}" \}/.test(schema!), 'header value replaced');
+  assert.ok(!/X-Trace/.test(schema!), 'null drops the header');
+  assert.ok(/\{ name: "X-Api-Key", value: "\{\$config\.apiKey\}" \}/.test(schema!), 'unknown header appended');
+});
+
 test('test_base_url_overrides_servers', async () => {
   // a spec's servers[0] can be stale or wrong (petstore) — an explicit baseURL replaces it
   const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true, undefined, false, false, {

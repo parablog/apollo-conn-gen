@@ -94,9 +94,9 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `@connect` directive | `source` ref | Done | — |
 | `@connect` directive | `http.{GET,POST,PUT,PATCH,DELETE}` | Done | — |
 | `ConnectHTTP` | path templating `{$args.x}` | Done | — |
-| `ConnectHTTP` | `path` as full JSONSelection | Partial (literal only) | R8 |
-| `ConnectHTTP` | `queryParams` block / JSONSelection | Partial (`$args{…}` + array serialization joins) | R8 |
-| `ConnectHTTP` | `headers` (per-op) | Partial (static) | R5 |
+| `ConnectHTTP` | `path` as full JSONSelection | Done (templated + per-op override) | R8 |
+| `ConnectHTTP` | `queryParams` block / JSONSelection | Done (`$args{…}` + serialization joins + per-op override) | R8 |
+| `ConnectHTTP` | `headers` (per-op) | Partial (static examples + per-op override w/ `$config` templates) | R5 |
 | `ConnectHTTP` | `body` (full JSONSelection) | Done (`$args.input`) | R9 (computed/literal only) |
 | `@connect` | `entity: true` (Query-field resolver) | Deliberately not emitted (type-level `$this` favoured — R1 note) | R1 (1a) |
 | `@connect` | type-level on OBJECT + `$this` | Done (`--infer-entity-resolvers`) | R1 (1b) |
@@ -149,7 +149,7 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 | R5. Dynamic headers / auth | 🟡 Partial | slice 1 done (global `@source` `$config` header); per-op, `$env`, `from:`, `$request.headers` remain |
 | R6. Batch entity resolution | ⬜ Not started | depends on R1 |
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
-| R8. `path`/`queryParams` JSONSelection | 🟡 Partial | array-param serialization joins (`->joinNotNull`); computed path segments have no OAS signal |
+| R8. `path`/`queryParams` JSONSelection | ✅ Done | serialization joins (inferred) + per-op `overrides` for path/queryParams (user intent) |
 | R9. Computed / literal bodies | ⬜ Not started | base `$args.input` body done; computed remainder open |
 
 ### Foundation (must precede version-sensitive items)
@@ -387,7 +387,7 @@ archived branch `feat/optional-chaining-operator`).
 **Files:** `src/oas/nodes/scalar.ts` (`??` defaults), `src/oas/nodes/prop*.ts`,
 `src/oas/nodes/body.ts`. (gate: v0.1+; `??` gated to connect v0.4 + federation v2.14)
 
-### R8. `path` / `queryParams` as full JSONSelection — 🟡 Partial
+### R8. `path` / `queryParams` as full JSONSelection — ✅ Done (one deferral)
 
 **Why:** More flexible than the current `{$args.x}` / `$args { … }` forms — computed
 segments and computed query objects with renaming/methods, on both `SourceHTTP` and
@@ -398,10 +398,16 @@ computed extension.)
 join (`"ids": ids->joinNotNull(",")`; `spaceDelimited` → `" "`, `pipeDelimited` → `"|"`).
 Exploded arrays (the OAS default) already work as plain array values.
 
-**Remaining:** computed `path` segments — no OAS source expresses this; revisit only with
-explicit user intent (CLI mapping), not inference. Same for renamed/computed query keys.
+**Done (user intent):** per-operation `overrides` (`--overrides <file>` / API object, keyed by
+op id) replace the HTTP path and add/replace/drop query params (raw JSONSelection values) and
+headers (string templates) — the explicit-intent channel for everything OAS cannot express.
+`--base-url` overrides the `@source` URL. Unmatched override keys warn (typo guard).
 
-**Files:** `src/oas/io/operationWriter.ts` (`arrayJoin`). (gate: v0.2+; joins on all versions)
+**Remaining:** a dropped query param keeps its GraphQL argument (unsent); prune it from the
+operation signature if that proves annoying.
+
+**Files:** `src/oas/io/operationWriter.ts` (`arrayJoin`, override merge),
+`src/oas/oasContext.ts` (`RequestOverride`). (gate: v0.2+; joins on all versions)
 
 ### R9. Computed / literal request bodies — ⬜ Not started
 

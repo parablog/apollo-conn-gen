@@ -1,4 +1,4 @@
-import { JsonGen, OasGen } from '../index.js';
+import { JsonGen, OasGen, RequestOverride } from '../index.js';
 import { JsonContext, JsonType } from '../json/index.js';
 import assert from 'node:assert';
 import path from 'path';
@@ -27,6 +27,7 @@ export async function runOasTest(
   // unions/interfaces (`consolidateUnions: false`) need connect v0.4 + fed 2.13.
   opts: {
     baseURL?: string;
+    overrides?: Record<string, RequestOverride>;
     consolidateUnions?: boolean;
     connectorSpecVersion?: string;
     federationVersion?: string;
@@ -37,6 +38,7 @@ export async function runOasTest(
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
     baseURL: opts.baseURL,
+    overrides: opts.overrides,
     consolidateUnions: opts.consolidateUnions ?? true,
     showParentInSelections: false,
     mapper,
@@ -80,7 +82,7 @@ export async function runOasTest(
   if (shouldFail) {
     assert.ok(!result);
     assert.ok(output !== undefined);
-    return output as unknown as string | undefined;
+    return output;
   } else {
     assert.ok(output === undefined, 'should have been undefined, but it is: ' + output);
     assert.ok(result);
@@ -116,7 +118,7 @@ export async function runJsonTest(
       federationVersion: options.federationVersion,
     });
 
-    const sources = fs.readdirSync(fileOrFolderPath).filter((name) => name.toLowerCase().endsWith('.json'));
+    const sources = fs.readdirSync(fileOrFolderPath).filter((name: string) => name.toLowerCase().endsWith('.json'));
 
     for (const source of sources) {
       const fullPath = path.join(fileOrFolderPath, source);
@@ -163,7 +165,7 @@ export async function runJsonTest(
   if (options.shouldFail) {
     assert.ok(result === false);
     assert.ok(output !== undefined);
-    return output as unknown as string | undefined;
+    return output;
   } else {
     assert.ok(output === undefined);
     assert.ok(result === true);
@@ -180,7 +182,7 @@ function isRoverAvailable(command: string): [boolean, string?] {
   return [result.status === 0, result.stdout.toString().trim()];
 }
 
-function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.14.1') {
+function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.14.1'): [boolean, string?] {
   console.info('schemaPath', schemaPath);
 
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');

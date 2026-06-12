@@ -1,7 +1,9 @@
+import fs from 'fs';
 import { Command } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
+import { RequestOverride } from '../oas/oasContext.js';
 import { RulesLoader, OpNameMapper, MapRules, Mapper } from '../oas/mapper/index.js';
 
 const originalConsole = Object.assign(
@@ -30,15 +32,30 @@ function loadRules(opts: any): Mapper | undefined {
   return mapper;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadOverrides(opts: any): Record<string, RequestOverride> | undefined {
+  if (!opts.overrides) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(opts.overrides, 'utf-8'));
+  } catch (error) {
+    console.error(`Error loading overrides: ${error}`);
+    return undefined;
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
 async function main(sourceFile: string, opts: any): Promise<void> {
   console.log = () => {};
 
   const mapper = loadRules(opts);
+  const overrides = loadOverrides(opts);
 
   const gen = await OasGen.fromFile(sourceFile, {
     ...opts,
     baseURL: opts.baseUrl,
+    overrides,
     showParentInSelections: false,
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
@@ -101,6 +118,7 @@ program
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .option('--base-url <url>', 'Override the @source base URL (default: servers[0] from the spec)')
+  .option('--overrides <file>', 'Load per-operation path/queryParams overrides from a JSON file')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
   .parse(process.argv);
