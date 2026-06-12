@@ -993,3 +993,48 @@ Suite 152/152 (3 CCS count assertions bumped 17→22 — the 5 restored enum typ
 explicit selection paths referencing those ids change shape.
 **Refs:** `src/oas/generator/typesCollector.ts` (leaf), `src/oas/nodes/factory.ts` (`isGqlEnum`),
 `src/oas/nodes/en.ts`/`propEn.ts` (def/ref names), `src/oas/utils/naming.ts` (`encodeLeadingSign`).
+
+## 25 · Discriminator-less `oneOf` emits a real union the selection cannot satisfy — ✅ Fixed (working tree)
+**Symptom:** abstract pass (v0.4) fails compose with `GROUP_SELECTION_IS_NOT_OBJECT` —
+confluence 14 ops, box 3, github 3 (`ContentMetadata.labels: LabelsUnion` and friends).
+
+**OAS** (confluence — a `oneOf` with no `discriminator`):
+```yaml
+labels:
+  oneOf:
+    - $ref: '#/components/schemas/LabelArray'
+    - type: object
+      properties: { … }
+```
+
+**Example** (before → after, abstract pass):
+```graphql
+# before: SDL and selection disagree
+union LabelsUnion = LabelArray | LabelsUnion2     # SDL: a union…
+selection: """ labels { limit size start } """    # …selected as a group -> rejected
+
+# after: both sides agree on the merged-object form (same shape the default pass emits)
+#### no discriminator — union degraded to a merged object: LabelsUnion = LabelArray | LabelsUnion2
+type LabelsUnion { limit: Int size: Int! start: Int }
+```
+
+**Cause:**
+- `Union.select` already falls back to the flat merged selection when there is no
+  discriminator (`selectAbstract` is guarded on it — `->match` needs a tag field to dispatch on).
+- `Union.generate` still emitted the real `union` line → SDL says union, selection selects a
+  group on it → `GROUP_SELECTION_IS_NOT_OBJECT`.
+
+**Fix:** real `union` + `->match` only when a discriminator exists; otherwise both passes share
+the merged-object downgrade (`generateMergedObject`, headline comment names the original union)
+and member refcounts are absorbed at visit. Discriminated unions and promoted interfaces (R2)
+are untouched.
+
+**Measured (abstract pass):** box 74.6→77.2 (+3), github 90.1→90.8 (+3); per-op 3+3 fail→pass,
+0 pass→fail; default pass byte-identical. confluence unchanged at 69.2: its 14 GROUP_SELECTION
+failures move down a layer to the orphan-type family (`CONNECTORS_UNRESOLVED_FIELD` 11 /
+`CIRCULAR_REFERENCE` 4) — types like `Label` are emitted with fields no selection provides.
+v0.3 emits the SAME orphans but its legacy validator doesn't check them; v0.4's shape validator
+does. That residue is the R-collector orphan slice, not a union problem.
+**AST:** none — emission-time branch only; the union node and its members are unchanged.
+**Refs:** `src/oas/nodes/union.ts` (`generate`/`generateMergedObject`/`visit` refcounts),
+fixture `oneof-no-discriminator.yaml`, test `test_R2_union_without_discriminator_degrades_to_merged_object`.

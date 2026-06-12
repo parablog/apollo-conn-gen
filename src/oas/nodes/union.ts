@@ -67,7 +67,10 @@ export class Union extends Type {
 
     if (this.name != null) {
       context.store(this.name, this);
-      if (context.generateOptions.consolidateUnions) {
+      // members are absorbed into the merged object whenever we downgrade — in consolidate
+      // mode, and in v0.4 mode when there is no discriminator (no tag field for ->match, so
+      // generate() emits the merged object there too). see docs/issues.md #25
+      if (context.generateOptions.consolidateUnions || !this.discriminator) {
         this.children.forEach((child) => context.decRefCount(child.name));
       }
     }
@@ -102,37 +105,13 @@ export class Union extends Type {
       const name = sanitised === refName ? refName : sanitised;
 
       if (context.generateOptions.consolidateUnions) {
-        if (!this.consolidated) {
-          this.consolidate(selection).forEach((type) => context.decRefCount(type.name));
-        }
-
-        // When generating this union in GQL it might look like:
-        // union MyUnion = Type1 | Type2 | Type3
-        writer.write('#### NOT SUPPORTED YET BY CONNECTORS!!! union ').write(name).write(' = ');
-
-        const childrenTypes = this.children.map((child) => Naming.getRefName(child.name));
-        const childrenNames = childrenTypes.join(' | ');
-        writer.write(childrenNames).write('\n\n');
-
-        trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
-
-        writer
-          .write(this.kind + ' ')
-          .write(name)
-          .write(this.nameSuffix())
-          .write(' { #### replacement for Union ')
-          .write(name)
-          .write('\n');
-
-        const selected = this.selectedProps(selection);
-        const generated = new Set<string>();
-        for (const prop of selected) {
-          trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-          if (!generated.has(prop.id)) prop.generate(context, writer, selection);
-          generated.add(prop.id);
-        }
-
-        writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
+        this.generateMergedObject(context, writer, selection, name, '#### NOT SUPPORTED YET BY CONNECTORS!!! union ');
+      } else if (!this.discriminator) {
+        // No tag field for `->match` to dispatch on, so a real union cannot be selected — the
+        // selection already falls back to the flat merged form (see select); emit the matching
+        // merged object here, or SDL says `union` while the selection selects a group on it
+        // (GROUP_SELECTION_IS_NOT_OBJECT). see docs/issues.md #25
+        this.generateMergedObject(context, writer, selection, name, '#### no discriminator — union degraded to a merged object: ');
       } else if (this.interfaceBaseRef) {
         // R2: promoted to an interface — the base (emitted as `interface`) and the members
         // (each `... implements Base`) carry the type system; emit no `union X = A | B` line.
@@ -156,6 +135,43 @@ export class Union extends Type {
 
     trace(context, '<- [union::generate]', 'out: ' + schemas);
     context.leave(this);
+  }
+
+  // The downgrade shape both passes share: an info comment naming the original union, then one
+  // object type carrying every member's selected fields (the selection selects the same flat set).
+  private generateMergedObject(
+    context: OasContext,
+    writer: Writer,
+    selection: string[],
+    name: string,
+    headline: string,
+  ): void {
+    if (!this.consolidated) {
+      this.consolidate(selection).forEach((type) => context.decRefCount(type.name));
+    }
+
+    const childrenTypes = this.children.map((child) => Naming.getRefName(child.name));
+    writer.write(headline).write(name).write(' = ').write(childrenTypes.join(' | ')).write('\n\n');
+
+    trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
+
+    writer
+      .write(this.kind + ' ')
+      .write(name)
+      .write(this.nameSuffix())
+      .write(' { #### replacement for Union ')
+      .write(name)
+      .write('\n');
+
+    const selected = this.selectedProps(selection);
+    const generated = new Set<string>();
+    for (const prop of selected) {
+      trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
+      if (!generated.has(prop.id)) prop.generate(context, writer, selection);
+      generated.add(prop.id);
+    }
+
+    writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {

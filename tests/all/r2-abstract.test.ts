@@ -96,3 +96,23 @@ test('test_R2_interface_default_consolidate_unchanged', async () => {
   assert.ok(!schema!.includes('interface '), 'default path must not emit an interface');
   assert.ok(!schema!.includes('->match('), 'default path must not emit the v0.4 match form');
 });
+
+test('test_R2_union_without_discriminator_degrades_to_merged_object', async () => {
+  // No tag field means `->match` has nothing to dispatch on, so a real union cannot be selected.
+  // The abstract pass degrades to the same merged-object form the default pass emits — SDL and
+  // selection agree, and composition passes. see docs/issues.md #25
+  // typesSize 4: response + union + both members (members are absorbed at write time via
+  // refCount, not removed from the collection)
+  const schema = await runOasTest('oneof-no-discriminator.yaml', ['get:/search>**'], 1, 4, false, false, undefined, false, false, {
+    consolidateUnions: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+    composeFederationVersion: '2.13.0',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union line without a discriminator');
+  assert.ok(/no discriminator — union degraded/.test(schema!), 'the degrade is announced');
+  assert.ok(/type ResultUnion \{/.test(schema!), 'merged object replaces the union');
+  assert.ok(/minutes: Int/.test(schema!) && /pages: Int/.test(schema!), 'fields from both members merged');
+  assert.ok(!/->match\(/.test(schema!), 'no ->match without a discriminator');
+});

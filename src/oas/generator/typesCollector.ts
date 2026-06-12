@@ -103,7 +103,7 @@ export class TypesCollector {
     // broken: rover CIRCULAR_REFERENCE). Because the replacement comes FROM the selection, a
     // field nobody selects is never added (CONNECTORS_UNRESOLVED_FIELD, test_040 AdobeCommerce).
     // see docs/issues.md #13
-    const context0 = this.gen.context!;
+    const context = this.gen.context!;
     for (const kept of pendingTypes.values()) {
       kept.props.forEach((prop, name) => {
         if (!(prop instanceof PropCircRef)) {
@@ -111,10 +111,10 @@ export class TypesCollector {
         }
         const donor = this.findSelectedFieldNode(kept, name, expanded);
         if (donor) {
-          let overrides = context0.sdlPropOverrides.get(kept);
+          let overrides = context.sdlPropOverrides.get(kept);
           if (!overrides) {
             overrides = new Map();
-            context0.sdlPropOverrides.set(kept, overrides);
+            context.sdlPropOverrides.set(kept, overrides);
           }
           overrides.set(name, donor);
         }
@@ -126,7 +126,6 @@ export class TypesCollector {
       .filter((t) => t instanceof Composed)
       .map((t) => t as Composed);
 
-    const context = this.gen.context!;
     for (const comp of composed) {
       if (!comp.visited) comp.visit(context);
       comp.consolidate(expanded).forEach((id) => pendingTypes.delete(id));
