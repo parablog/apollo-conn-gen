@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.10.0]
+
+### Changed
+- Generated schemas change visibly on regeneration: enum fields now appear in selections and
+  SDL (#24), types nothing references are no longer emitted (#26), and discriminator-less
+  `oneOf`s degrade to the merged-object form in connect v0.4 too (#25).
+- Corpus pass-rate (per-op generate + compose, 1218 GET ops): default 84.2% → 91.5%,
+  abstract 81.4% → 91.7%.
+
+### Fixed
+Details per id in `docs/issues.md`:
+- #18 identical inline schemas dedup instead of renaming; renamed twins converge on one name
+- #22 inline `allOf` comps colliding with a stored type of another class are renamed
+- #23 OAS 3.1 type arrays (`type: [string, 'null']`) collapse to their first non-null entry
+- #24 enum fields were silently dropped from `>**` expansion; non-identifier enum values
+  degrade to scalars, `+1`/`-1` fields disambiguate to `plus1`/`minus1`
+- #13 fields cut by cycle detection on one route are emitted from a sibling route's version
+- #25 discriminator-less `oneOf` no longer emits a `union` its selection cannot satisfy (v0.4)
+- #26 the collector keeps exactly the types the written schema references — orphaned
+  definitions dropped, over-deleted ones restored (driven by per-node `dependencies()`)
+
 ## [0.9.1]
 
 ### Added
