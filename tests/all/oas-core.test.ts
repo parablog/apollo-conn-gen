@@ -955,6 +955,16 @@ test('test_empty_response_schema_synthesizes_success', async () => {
   assert.ok(/success: \$\(true\)/.test(schema!), 'selection sets the boolean literal');
 });
 
+test('test_base_url_overrides_servers', async () => {
+  // a spec's servers[0] can be stale or wrong (petstore) — an explicit baseURL replaces it
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true, undefined, false, false, {
+    baseURL: 'https://api.example.test/v2',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/baseURL: "https:\/\/api\.example\.test\/v2"/.test(schema!), 'override wins');
+  assert.ok(!/https:\/\/example\.com/.test(schema!), 'spec server URL gone');
+});
+
 test('test_R7_default_coalesces_R8_array_params_join', async () => {
   // R7: defaults coalesce (`tag: tag ?? $("latest")`); R8: non-exploded array params join
   // (`ids->joinNotNull(",")`). Both on the default versions (connect v0.4, fed v2.14).

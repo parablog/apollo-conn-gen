@@ -444,6 +444,7 @@ type Query {
 - `--federation-version <version>`: Federation version to use (default: `v2.11`).
 - `--connector-spec-version <version>`: Connector spec version to use (default: `v0.2`).
 - `--skip-optional-args`: Skip optional arguments in queries (default: `false`).
+- `--base-url <url>`: Override the `@source` base URL (default: `servers[0]` from the spec).
 
 For a complete list of options, run:
 

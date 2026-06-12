@@ -38,6 +38,7 @@ async function main(sourceFile: string, opts: any): Promise<void> {
 
   const gen = await OasGen.fromFile(sourceFile, {
     ...opts,
+    baseURL: opts.baseUrl,
     showParentInSelections: false,
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
@@ -99,6 +100,7 @@ program
   .option('-t --transform-rules <file>', 'Load transform rules from a JSON file to apply multiple name transformations')
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
+  .option('--base-url <url>', 'Override the @source base URL (default: servers[0] from the spec)')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
   .parse(process.argv);

@@ -13,7 +13,8 @@ export class SchemaWriter {
 
   public writeDirectives(writer: Writer): void {
     const api: Oas = this.gen.parser;
-    const host = this.getServerUrl(api.getDefinition().servers?.[0]);
+    // a spec's servers[0] can be stale or wrong (petstore) — an explicit baseURL wins
+    const host = this.gen.options.baseURL ?? this.getServerUrl(api.getDefinition().servers?.[0]);
     const federationVersion = this.gen.options.federationVersion || DEFAULT_VERSIONS.federationVersion;
     const connectorSpecVersion = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
     const authHeader = this.securityHeader(api);

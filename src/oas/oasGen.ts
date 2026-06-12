@@ -16,6 +16,7 @@ import { Naming } from './utils/naming.js';
 
 interface IGenOptions {
   skipValidation: boolean;
+  baseURL?: string;
   consolidateUnions?: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;

@@ -26,6 +26,7 @@ export async function runOasTest(
   // (consolidate unions, compose at fed 2.12) so existing callers are unaffected. Real
   // unions/interfaces (`consolidateUnions: false`) need connect v0.4 + fed 2.13.
   opts: {
+    baseURL?: string;
     consolidateUnions?: boolean;
     connectorSpecVersion?: string;
     federationVersion?: string;
@@ -35,6 +36,7 @@ export async function runOasTest(
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
+    baseURL: opts.baseURL,
     consolidateUnions: opts.consolidateUnions ?? true,
     showParentInSelections: false,
     mapper,
