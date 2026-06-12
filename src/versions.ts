@@ -17,8 +17,7 @@ export const SUPPORTED_CONNECT_VERSIONS = ['v0.1', 'v0.2', 'v0.3', 'v0.4'] as co
 export type ConnectVersion = (typeof SUPPORTED_CONNECT_VERSIONS)[number];
 
 // The newest version we can emit — and the default: no version asked for means LATEST.
-export const LATEST_CONNECT_VERSION: ConnectVersion =
-  SUPPORTED_CONNECT_VERSIONS[SUPPORTED_CONNECT_VERSIONS.length - 1];
+export const LATEST_CONNECT_VERSION: ConnectVersion = SUPPORTED_CONNECT_VERSIONS[SUPPORTED_CONNECT_VERSIONS.length - 1];
 
 export const DEFAULT_VERSIONS = {
   // LATEST released federation (2.15 is unreleased); connect v0.4 needs >= v2.13 so this

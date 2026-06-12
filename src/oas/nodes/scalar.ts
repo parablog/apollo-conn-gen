@@ -40,8 +40,7 @@ export class Scalar extends Type {
 
     // a string default must be quoted — `$(latest)` reads as a field path, `$("latest")` is
     // the literal. Numbers/booleans stay bare. see docs/issues.md #28
-    const value =
-      typeof this.schema.default === 'string' ? `"${this.schema.default}"` : String(this.schema.default);
+    const value = typeof this.schema.default === 'string' ? `"${this.schema.default}"` : String(this.schema.default);
     writer.write(': $(').write(value).write(')');
   }
 }

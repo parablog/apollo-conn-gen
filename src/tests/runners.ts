@@ -109,7 +109,10 @@ export async function runJsonTest(
 
   const stats = fs.statSync(fileOrFolderPath);
   if (stats.isDirectory()) {
-    walker = JsonGen.new({ connectorSpecVersion: options.connectorSpecVersion, federationVersion: options.federationVersion });
+    walker = JsonGen.new({
+      connectorSpecVersion: options.connectorSpecVersion,
+      federationVersion: options.federationVersion,
+    });
 
     const sources = fs.readdirSync(fileOrFolderPath).filter((name) => name.toLowerCase().endsWith('.json'));
 
