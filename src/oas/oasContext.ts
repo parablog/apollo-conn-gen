@@ -125,13 +125,19 @@ export class OasContext {
 
   public lookupRef(ref: string | null): SchemaObject | null {
     if (ref && ref.startsWith(OasContext.COMPONENTS_SCHEMAS)) {
-      const currentCount = this.refCount.get(ref) || 0;
-      this.refCount.set(ref, currentCount + 1);
-
       const definition = this.parser.getDefinition();
       const schemas = definition.components?.schemas ?? {};
+      // the named component, when the ref points AT one (`#/components/schemas/User` -> `User`)
+      const direct = schemas[Naming.getRefName(ref)!];
 
-      return schemas ? schemas[Naming.getRefName(ref)!] : null;
+      if (direct) {
+        // count the reference only when it actually resolves to a named component
+        const currentCount = this.refCount.get(ref) || 0;
+        this.refCount.set(ref, currentCount + 1);
+        return direct;
+      }
+      // not a named component but a pointer INTO one (openai:
+      // `#/components/schemas/CreateCompletionRequest/properties/logit_bias`) — walk it below. #33
     }
 
     // generic JSON-pointer schema ref (e.g. #/paths/…); not a named component, so it skips

@@ -423,7 +423,25 @@ input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs ar
 — gitignored — because the published specs embed example secrets that block pushes; this section is the
 committed summary of what they showed.)
 
-**Corpus status (measured 2026-06-12 post-#26, stock rover 0.40 / composition 2.13):**
+**Corpus status (measured 2026-06-12 post-#33, stock rover 0.40 / composition 2.13):**
+
+| Spec | GET ops | default (v0.3) | abstract (v0.4) |
+|---|--:|--:|--:|
+| googlebooks | 30 | 100% | 100% |
+| asana | 79 | 100% | 100% |
+| mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
+| digitalocean | 145 | 97.9% | 97.9% (#33 file endpoints) |
+| slack | 80 | 96.3% | 96.3% |
+| sendgrid | 154 | 95.5% | 95.5% |
+| github | 444 | 92.1% | 95.0% |
+| omni | 54 | 92.6% | 90.7% |
+| openai | 10 | 90.0% | 90.0% |
+| box | 114 | 87.7% (#33) | 93.9% |
+| confluence | 65 | 75.4% (16 DEGRADED) | 89.2% (#33) |
+
+Overall GET: **default 93.2% (1135/1218) · abstract 93.3% (1137/1218)**, abstract ~96%+ once
+the #14 patch ships. Increments: #23+#24 +67/pass, #25 +6 abstract, #26 +76 (76 fail→pass /
+0 pass→fail), #33 +26 GETs (file endpoints → synthetic success).
 
 | Spec | GET ops | default (v0.3) | abstract (v0.4) |
 |---|--:|--:|--:|
@@ -451,21 +469,22 @@ Overall: **default 91.5% (1115/1218) · abstract 91.7% (1117/1218)**, abstract ~
 | googlebooks | 21 | 100% | 100% (was 28.6 — #27/#31) |
 | slack | 94 | 100% | 100% |
 | sendgrid | 180 | 95.6% | 95.6% |
-| github | 401 | 92.3% | 95.8% (was 47.9 — #27) |
-| omni | 92 | 89.1% | 89.1% |
-| digitalocean | 145 | 86.9% | 86.9% (was 39.3 — #27-#30) |
+| github | 401 | 92.8% | 96.0% (was 47.9 — #27) |
+| omni | 92 | 92.4% | 92.4% (#33) |
+| digitalocean | 145 | 87.6% | 87.6% (was 39.3 — #27-#33) |
 | box | 144 | 81.9% | 86.1% |
 | asana | 88 | 83.0% | 83.0% (was 2.3 — #27/#32) |
-| openai | 18 | 66.7% | 66.7% (6 GEN-THROW) |
-| confluence | 65 | 61.5% | 67.7% |
+| openai | 18 | 100% | 100% (was 66.7 — #33) |
+| confluence | 65 | 70.8% | 76.9% (#33) |
 
-Mutations overall: **47% → 88.8% default (1109/1249)** in one arc — #27 one argument list
+Mutations overall: **47% → 90.2% default (1127/1249) · 92.2% abstract — TARGET MET** in one
+arc — #27 one argument list
 (+389/pass), #28/#29 body alias direction + default literals (+66/pass), #30 body-arg name
 (#15 discipline) + #31 empty-response synthetic (+63/pass), #32 JSON-only ops + quoted body
 keys (+26/pass, deliberately narrowed: the broad leaf rule diverged shared-type selections —
-see the entry's Care note). Every fix matrix-verified (0 pass→fail). Remaining buckets:
-GEN-THROW families openai 6 / omni 6 / DO 7 (~19/pass — the path to 90%+), asana/box
-composeFail residue, DEGRADED unions (by design on v0.3).
+see the entry's Care note), #33 four crash families (+37 mutations, +26 GETs). Every fix
+matrix-verified (0 pass→fail). Remaining: asana/box/confluence composeFail residue, DO's
+oneOf-of-allOf bodies (2, the R2 allOf-member gap), DEGRADED unions (by design on v0.3).
 
 #18 measured corpus-wide: **+36 ops/pass** (github +20, box +9, confluence +4, DO +2, slack +1).
 

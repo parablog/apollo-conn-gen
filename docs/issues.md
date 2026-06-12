@@ -1305,3 +1305,43 @@ agreement for shared types first (the #13/#26 family, input side).
 **Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths` post-pass),
 `src/oas/utils/naming.ts` (`sanitiseFieldForSelect` input branch), fixture coverage via
 `corpus-mutations.test.ts` (asana) + `test_body_alias_direction_and_default_literals`.
+
+## 33 · Four generation crashes: nested component pointers, non-JSON responses, null union members, $ref'd no-content responses — ✅ Fixed (working tree)
+**Symptom:** ~19 GEN-THROW ops/pass across four small families:
+- openai (6): `Cannot read properties of undefined (reading 'type')`
+- github (4): `Cannot read properties of undefined (reading 'select')`
+- omni (6): `Cannot handle property type null`
+- DO (3): `Not yet implemented for: {"description":"The action was successful…"}`
+
+**OAS** (one snippet per family):
+```yaml
+# openai — a $ref INTO a component, not to one:
+logit_bias: { $ref: "#/components/schemas/CreateCompletionRequest/properties/logit_bias" }
+# github /markdown — the 200 has no JSON content:
+responses: { "200": { content: { "text/html": { … } } } }
+# omni — OAS 3.1 null union member (the member form of #23):
+oneOf: [ { $ref: "#/…/Query" }, { type: "null" } ]
+# DO — a shared $ref'd response with headers but no content:
+responses: { "200": { $ref: "#/components/responses/no_content" } }
+```
+
+**Cause / fix, one line each:**
+- `lookupRef`'s component branch returned undefined for pointers INTO a component instead of
+  falling through to `resolvePointer` (which handles exactly that) → falls through now.
+- non-JSON-only responses left `resultType` unset and `writeConnector` checked `_.has`
+  (true for a declared-but-unset field) → route to the synthetic success (#31's umbrella) and
+  check truthiness.
+- a `{ type: "null" }` union member adds nothing (GraphQL fields are nullable) → skipped, like
+  #23's type arrays.
+- the no-content fallback was gated on `code === '200' | 'default'`, but `$ref`'d responses
+  arrive with the REF STRING as the code → the gate is gone; no content ⇒ synthetic success.
+
+**Care:** non-JSON GET endpoints (slack/DO file downloads) now emit `success: Boolean` ops
+instead of generating nothing — composable and callable, but the response body itself is not
+representable; revisit if a raw-passthrough form ever exists.
+**Still open in this family:** DO `post:/v2/certificates`/`/v2/droplets` (2 ops) — a `oneOf` of
+`allOf`s as the request body; the collector cannot re-walk the expanded path (the known R2
+"real-union with allOf members" gap, input side).
+**AST:** shape changes only where generation previously threw (a node tree now exists).
+**Refs:** `src/oas/oasContext.ts` (`lookupRef`), `src/oas/nodes/get.ts` (`visitResponse`),
+`src/oas/nodes/union.ts` (`visit`), `src/oas/io/operationWriter.ts` (`writeConnector`).

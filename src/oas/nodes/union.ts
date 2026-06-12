@@ -54,6 +54,11 @@ export class Union extends Type {
     }
 
     for (const refSchema of this.schemas) {
+      // OAS 3.1 writes nullability as a `{ type: "null" }` member — GraphQL fields are
+      // nullable by default, so it adds nothing (the member form of #23's type arrays). #33
+      if (refSchema && refSchema.type === 'null') {
+        continue;
+      }
       const type = Factory.fromSchema(context, this, refSchema);
       this.add(type);
 

@@ -165,15 +165,17 @@ export class Get extends Type implements Op {
       const json = keys ? response.content![keys] : undefined;
       if (!json) {
         warn(context, `  [${code}]`, 'No JSON content found!');
+        // non-JSON content (github /markdown returns text/html): nothing a connector can
+        // select — fall back to the synthetic success response, like a missing body. #33
+        this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
       } else {
         this.visitResponseContent(context, code, json);
       }
-    } else if ((code === 'default' || code === '200') && !content) {
-      // there is no response for this operation
-      // TODO: should we synthesize one?
-      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
     } else {
-      throw new Error('Not yet implemented for: ' + JSON.stringify(response));
+      // the response declares no content — nothing to select, so answer with the synthetic
+      // success. Don't gate this on `code`: a $ref'd shared response (DO's `no_content`)
+      // arrives with the ref string as `code`, not "200". #33
+      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
     }
   }
 

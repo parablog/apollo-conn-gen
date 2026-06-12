@@ -57,8 +57,8 @@ export class OperationWriter {
 
     writer.write('\n').write(spacing).write('selection: """\n');
 
-    if (_.has(op, 'resultType')) {
-      // scalar types don't need to be generated?
+    // truthiness, not _.has — the declared-but-unset field is still an own property. #33
+    if (_.get(op, 'resultType')) {
       this.writeSelection(context, writer, _.get(op, 'resultType') as Type, selection);
     }
 
