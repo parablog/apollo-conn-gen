@@ -120,6 +120,12 @@ export class Obj extends Type {
     context.leave(this);
   }
 
+  // the selected props (a cycle-cut one swapped for its #13 replacement, like generate does)
+  dependencies(context: OasContext, selection: string[]): IType[] {
+    const overrides = context.sdlPropOverrides.get(this);
+    return this.selectedProps(selection).map((prop) => overrides?.get(prop.name) ?? prop);
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [obj::select]', `-> in: ${this.name}`);
 

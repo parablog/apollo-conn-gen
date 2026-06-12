@@ -49,6 +49,12 @@ export abstract class Type implements IType {
 
   public abstract select(context: OasContext, writer: Writer, selection: string[]): void;
 
+  // The nodes this node's written output needs (a field's target type, a wrapper's payload, a
+  // map's value …). Leaves return nothing. Overridden per class, next to the code it mirrors.
+  public dependencies(_context: OasContext, _selection: string[]): IType[] {
+    return [];
+  }
+
   public find(path: string, collection: IType[]): IType | boolean {
     const parts = path.split('>');
     let current: IType | undefined;

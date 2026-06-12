@@ -52,6 +52,12 @@ export class T {
       .map((child) => child);
   }
 
+  // emitted as its own definition in the schema (`type X` / `enum X`), unlike props, wrappers,
+  // scalars and cycle cuts which only appear inside other definitions
+  public static isEmittable(node: IType): boolean {
+    return T.isContainer(node) || node.id.startsWith('enum:');
+  }
+
   public static isContainer(node: IType): boolean {
     return (
       node.id.startsWith('obj:') ||

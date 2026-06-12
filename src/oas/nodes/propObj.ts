@@ -60,6 +60,10 @@ export class PropObj extends Prop {
     return Naming.genTypeName(this.obj!.name!) + (this.obj as Obj).nameSuffix();
   }
 
+  dependencies(): IType[] {
+    return [this.obj];
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [prop-obj:select]', 'in ' + this.name + ', obj: ' + this.obj.name);
 

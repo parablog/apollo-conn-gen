@@ -58,16 +58,6 @@ export class TypesCollector {
         i++;
       } while (i < parts.length);
 
-      // optional hook -- if the type in question has deps, add them here
-      const deps: IType[] = _.invoke(current, 'dependencies', [this.gen.context]);
-      if (deps) {
-        deps
-          .filter((i) => !pendingTypes.has(i.id))
-          .forEach((i) => {
-            pendingTypes.set(i.id, i);
-          });
-      }
-
       if (current && !(current instanceof Scalar)) {
         const parentType = T.findNonPropParent(current as IType);
         if (!pendingTypes.has(parentType.id)) {
@@ -131,8 +121,57 @@ export class TypesCollector {
       comp.consolidate(expanded).forEach((id) => pendingTypes.delete(id));
     }
 
+    // keep exactly the types the written schema references: confluence emitted `Label` with
+    // nothing selecting it, box dropped `Folder--Mini` while still referencing it. see #26
+    const reachable = this.collectReachable(expanded);
+    for (const [id, type] of Array.from(pendingTypes.entries())) {
+      if (!reachable.has(type)) {
+        pendingTypes.delete(id);
+      }
+    }
+    for (const type of reachable) {
+      if (!pendingTypes.has(type.id)) {
+        pendingTypes.set(type.id, type);
+      }
+    }
+
     this.types = pendingTypes;
     this.expanded = expanded;
+  }
+
+  // Every type the written schema will point at, walked over each node's own dependencies()
+  // from the selected operations' result/body. e.g. `getUser: User` + `User.address: Address`
+  // reaches { User, Address }. see #26
+  private collectReachable(expanded: string[]): Set<IType> {
+    const context = this.gen.context!;
+    const opIds = new Set(expanded.map((p) => p.split('>')[0]));
+
+    const queue: IType[] = [];
+    for (const op of this.gen.paths.values()) {
+      if (opIds.has(op.id)) {
+        const roots = [_.get(op, 'resultType'), _.get(op, 'body')] as Array<IType | undefined>;
+        queue.push(...roots.filter((n): n is IType => !!n));
+      }
+    }
+
+    const visited = new Set<IType>();
+    while (queue.length > 0) {
+      const node = queue.pop()!;
+      if (visited.has(node)) {
+        continue;
+      }
+      // every container was expanded by the collect loop before this walk — an unvisited one
+      // means a missed reference, and writing it would silently truncate the schema. Enums are
+      // exempt: they are complete at construction and their visit() only registers the name.
+      // dependencies() implementations must stay read-only: no visit(), no context stack. #26
+      if (!node.visited && T.isContainer(node)) {
+        throw new Error(`collectReachable: unvisited type ${node.id} — the collect walk missed a reference`);
+      }
+      visited.add(node);
+      queue.push(...node.dependencies(context, expanded));
+    }
+
+    return new Set(Array.from(visited).filter(T.isEmittable));
   }
 
   // A selection path that carries the real `name` field under this type id (`>obj:type:X>prop:…:name>`),

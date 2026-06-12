@@ -423,24 +423,25 @@ input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs ar
 — gitignored — because the published specs embed example secrets that block pushes; this section is the
 committed summary of what they showed.)
 
-**Corpus status (measured 2026-06-11 post-#23/#24, stock rover 0.40 / composition 2.13):**
+**Corpus status (measured 2026-06-12 post-#26, stock rover 0.40 / composition 2.13):**
 
 | Spec | GET ops | default (v0.3) | abstract (v0.4) |
 |---|--:|--:|--:|
 | googlebooks | 30 | 100% | 100% |
+| asana | 79 | 100% | 100% (was 86.1 — #26) |
 | mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
 | slack | 80 | 96.3% | 96.3% (was 46.3 — #24; residual 3 = file endpoints) |
 | digitalocean | 145 | 94.5% | 94.5% |
+| github | 444 | 91.7% (1 compose-fail) | 94.6% (#25+#26) |
 | sendgrid | 154 | 92.9% | 92.9% |
-| github | 444 | 91.7% (1 compose-fail) | 90.1% |
+| omni | 54 | 90.7% | 88.9% |
 | openai | 10 | 90.0% | 90.0% (0 compose-fails) |
-| omni | 54 | 88.9% | 87.0% |
-| asana | 79 | 86.1% | 86.1% |
-| box | 114 | 74.6% | 74.6% |
-| confluence | 65 | 69.2% | 69.2% |
+| box | 114 | 84.2% (was 74.6 — #26) | 90.4% |
+| confluence | 65 | 69.2% (16 DEGRADED) | 83.1% (was 69.2 — #25+#26) |
 
-#23+#24 measured corpus-wide: **+67 ops/pass** (slack +40, github +23, omni +3, DO +1); github
-per-op matrix 23 fail→pass / 0 pass→fail (both passes).
+Overall: **default 91.5% (1115/1218) · abstract 91.7% (1117/1218)**, abstract ~95%+ once the
+#14 patch ships. #23+#24 measured **+67 ops/pass**; #26 measured **+76 ops** (per-op matrix
+76 fail→pass / 0 pass→fail across all specs and passes); #25 +6 abstract.
 
 #18 measured corpus-wide: **+36 ops/pass** (github +20, box +9, confluence +4, DO +2, slack +1).
 

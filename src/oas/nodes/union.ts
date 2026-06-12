@@ -174,6 +174,18 @@ export class Union extends Type {
     writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
   }
 
+  // a real `union X = Book | Movie` needs its members (and a member's shared $ref base, which
+  // the writer may promote to an interface — R2); a merged one needs its flat fields instead
+  dependencies(context: OasContext, selection: string[]): IType[] {
+    if (context.generateOptions.consolidateUnions || !this.discriminator) {
+      return this.selectedProps(selection);
+    }
+    return this.children.flatMap((member) => [
+      member,
+      ...(member instanceof Composed ? T.containers(member).filter((c) => T.isRef(c.name)) : []),
+    ]);
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '-> [union::select]', `-> in: ${this.name}`);
 

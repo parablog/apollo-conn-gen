@@ -255,13 +255,13 @@ test('test_019_oas_test_010_TMF633_IntentOrValue_to_Union', async () => {
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:description',
   ];
-  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 4);
+  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 2);
 });
 
 test('test_020_oas_test_010_TMF633_IntentOrValue_to_Union_Full', async () => {
   const paths = ['get:/product/{id}>**'];
 
-  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 4);
+  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 2);
 });
 test('test_021_oas_test_011_TMF637_001_ComposedTest', async () => {
   const paths = ['get:/product/{id}>**'];
@@ -321,7 +321,7 @@ test('test_024_oas_test_014_testTMF637_TestRecursion', async () => {
   ];
 
   // expect.assertions(6);
-  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 4);
+  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 3);
   // expect(error).toContain("Circular reference detected in `@connect(selection:)` on `Query.productById`");
 });
 
@@ -612,7 +612,7 @@ test('test_047_oas_test_030_post-body-allOf', async () => {
 test('test_048_oas_test_031_post-body-oneOf', async () => {
   const paths = ['post:/event>**'];
 
-  await runOasTest(`post-sample.yaml`, paths, 3, 4);
+  await runOasTest(`post-sample.yaml`, paths, 3, 2);
 });
 
 test('test_049_oas_test_032_mindbody-JSON', async () => {
@@ -640,7 +640,7 @@ test('test_052_oas_test_035_adobe-commerce-delete-address', async () => {
 
 test('test_053_oas_test_036_time-series', async () => {
   const paths = ['post:/market-data-services/time-series/search>**'];
-  await runOasTest('time-series-1.0.28.yaml', paths, 1, 12);
+  await runOasTest('time-series-1.0.28.yaml', paths, 1, 9);
 });
 
 test('test_054_oas_test-better-naming', async () => {
@@ -650,7 +650,7 @@ test('test_054_oas_test-better-naming', async () => {
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name'
   ]
 
-  await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 5);
+  await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 3);
 });
 test('test_060_oas_test_additionalProperties_support', async () => {
   // Test additionalProperties support with VehicleComponentTree

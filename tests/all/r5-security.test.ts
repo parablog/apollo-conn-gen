@@ -10,7 +10,7 @@ import { captureWarnings } from './_setup.js';
 // warnings are actually observable.
 test('test_R5_security_bearer_emits_authorization_header', async () => {
   // Global bearerAuth (http/bearer), no per-op overrides -> Authorization: Bearer.
-  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 9);
+  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 6);
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),
@@ -109,7 +109,7 @@ test('test_R5_security_global_plus_op_override_emits_no_global_header_and_warns'
   // no @source header, a per-operation warning.
   let schema: string | undefined;
   const warnings = await captureWarnings(async () => {
-    schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 12);
+    schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 9);
   });
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('headers:'), 'op override must suppress the global @source header');

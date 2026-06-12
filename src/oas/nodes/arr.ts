@@ -52,6 +52,10 @@ export class Arr extends Type {
     context.leave(this);
   }
 
+  dependencies(): IType[] {
+    return this.itemsType ? [this.itemsType] : [];
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [array::select]', `-> in: ${this.name}`);
 

@@ -109,6 +109,14 @@ export class Composed extends Type {
     context.leave(this);
   }
 
+  // the selected props, once the allOf members are folded in (same shape select writes)
+  dependencies(_context: OasContext, selection: string[]): IType[] {
+    if (this.schema.allOf != null && !this.consolidated) {
+      this.consolidate(selection);
+    }
+    return this.selectedProps(selection);
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [comp::select]', `-> in: ${this.name}`);
     if (!this.consolidated) {

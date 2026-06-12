@@ -1038,3 +1038,56 @@ does. That residue is the R-collector orphan slice, not a union problem.
 **AST:** none — emission-time branch only; the union node and its members are unchanged.
 **Refs:** `src/oas/nodes/union.ts` (`generate`/`generateMergedObject`/`visit` refcounts),
 fixture `oneof-no-discriminator.yaml`, test `test_R2_union_without_discriminator_degrades_to_merged_object`.
+
+## 26 · Collector keeps types the output never references, drops ones it does — ✅ Fixed (working tree)
+**Symptom:** two mirror failures, both passes, ~76 ops corpus-wide:
+- emitted-but-unreferenced: `type Label { id … }` written, but every route to it renders as a
+  cycle-cut comment → v0.4 `CONNECTORS_UNRESOLVED_FIELD` (confluence 9, github 17 abstract);
+- referenced-but-dropped: `entries: [FolderMini]` written, `Folder--Mini` deleted with its
+  consolidated parent → `cannot find type` / `INTERNAL_ERROR` (box 11-15, asana 11 per pass).
+
+**OAS** (confluence — the only route to `Label` closes a cycle, so its field is cut):
+```yaml
+LabelArray:
+  properties:
+    results:
+      items: { $ref: '#/components/schemas/Label' }   # cut: re-enters the Label cycle
+```
+
+**Example** (before → after):
+```graphql
+# before: Label written, selection only has "# results: [Label] - circular reference omitted"
+type Label { id: String! label: String! name: String! prefix: String! }   # ✗ UNRESOLVED_FIELD
+# after: Label is not written at all — nothing references it
+```
+
+**Cause:** the collect loop keeps the first node per id and the consolidation loop deletes
+absorbed ids — both decide by bookkeeping, neither asks what the written schema points at.
+
+**Fix:** after collecting, walk the types the written output actually references — each node
+answers for itself via `dependencies(context, selection)` (the hook Map/PropEn/PropMap already
+had, now on the `Type` base: a field points at its target type, a wrapper at its payload, a
+real union at its members, a merged one at its flat fields) — and make the collection exactly
+that set: drop what nothing references, restore what the deletions over-removed.
+
+**Measured (corpus, per-op matrix): 76 fail→pass, 0 pass→fail.** asana 86.1→100 (both),
+box 74.6→84.2 / 77.2→90.4, github abstract 90.8→94.6 (composeFail 25→8), confluence abstract
+69.2→83.1, omni +1/pass. Suite 154/154 (12 typesSize assertions updated — merged-union members
+and inline allOf parts are no longer collected; the polymorphic refactor verified
+verdict-identical on all 22 spec/pass dumps).
+**Care:** `dependencies()` overrides must mirror their class's `select`/`generate` — they live
+next to them on purpose. A real union also keeps a member's shared `$ref` base (the writer may
+promote it, R2); inline `[inline:…]` parts stay absorbed.
+**Care (history — a node-level `dependencies(context)` existed once and was removed in `d2e2672`,
+Feb 2025; do not reintroduce its failure modes):**
+- it called `visit()` during the walk → built nodes / stored names / triggered renames mid-collection;
+- it pushed onto the shared context stack (`enter`/`leave`) mid-walk;
+- it ignored the selection → over-collected;
+- it pulled in members that consolidation was absorbing (the reason `consolidate()` replaced it).
+The #26 version must stay read-only (no `visit()`, no context stack), selection-scoped, and run
+AFTER consolidation. The one allowed write is `Composed.consolidate` (idempotent, the same call
+`select()` makes) — guarded by `test_R2_collect_twice_is_byte_identical`.
+**AST:** none — collection-time only; node trees and emission code are unchanged.
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectReachable`), `iType.ts`/`type.ts`
+(`dependencies`), one-line overrides in `propObj/propArray/propComp/res/body/arr.ts`, container
+overrides in `obj/comp/union.ts`, `T.isEmittable`.

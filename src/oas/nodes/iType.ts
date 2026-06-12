@@ -37,4 +37,6 @@ export interface IType {
   find(path: string, collection: IType[]): IType | boolean;
 
   select(context: OasContext, writer: Writer, selection: string[]): void;
+
+  dependencies(context: OasContext, selection: string[]): IType[];
 }
