@@ -909,3 +909,32 @@ test('test_mutation_params_and_body_share_one_argument_list', async () => {
   );
   assert.ok(!/\)\(/.test(schema!), 'no adjacent argument lists anywhere');
 });
+
+test('test_body_alias_direction_and_default_literals', async () => {
+  // request-body selections map jsonKey <- graphqlField (the reverse of responses), string
+  // defaults are quoted literals, and 0/false are real defaults. see docs/issues.md #28, #29
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/things>**'], 3, 3, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/log_destinations: logDestinations \{/.test(schema!), 'body alias maps key <- field');
+  assert.ok(!/logDestinations: "log_destinations"/.test(schema!), 'no response-direction alias in the body');
+  assert.ok(/tag: \$\("latest"\)/.test(schema!), 'string default quoted');
+  assert.ok(/retries: \$\(0\)/.test(schema!), 'zero default emitted');
+});
+
+test('test_body_input_name_matches_definition', async () => {
+  // the body arg referenced the raw payload name (`input: ssh_keysItemInput!`) while the input
+  // definition emits the sanitised one — the #15 def/ref discipline applies. see #30
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/keys>**'], 3, 2, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/createKeys\(input: SshKeyInput!\)/.test(schema!), 'body arg uses the sanitised input name');
+  assert.ok(/input SshKeyInput \{/.test(schema!), 'definition matches the reference');
+});
+
+test('test_empty_response_schema_synthesizes_success', async () => {
+  // a response with no fields to select (googlebooks `Empty`: `type: object, properties: {}`)
+  // produced zero types; it now gets the synthetic success response. see #31
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/flush>**'], 3, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/success: Boolean/.test(schema!), 'synthetic success field emitted');
+  assert.ok(/success: \$\(true\)/.test(schema!), 'selection sets the boolean literal');
+});

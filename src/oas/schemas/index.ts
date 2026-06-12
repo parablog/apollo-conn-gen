@@ -14,8 +14,10 @@ export const SYN_SUCCESS_RESPONSE: ResponseObject = {
             description:
               'A synthetic response used when an operation returns no value. ' +
               'Set to "true" in the connector selection.',
+            // a real boolean — a string here would emit the quoted literal $("true") into a
+            // Boolean field now that #29 quotes string defaults
             type: 'boolean',
-            default: 'true',
+            default: true,
           },
         },
       },

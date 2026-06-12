@@ -56,8 +56,9 @@ export class PropScalar extends Prop {
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
     // we can only write the default value if and only if the name is the same as the sanitised name,
-    // otherwise we'll end up with an expression like "someField: some_field: $(value)" which is not legal
-    if (sanitised === this.name && this.schema.default) {
+    // otherwise we'll end up with an expression like "someField: some_field: $(value)" which is not legal.
+    // `!= null`, not truthiness — `default: 0` and `default: false` are real defaults. see #29
+    if (sanitised === this.name && this.schema.default != null) {
       for (const child of this.children) {
         child.select(context, writer, selection);
       }

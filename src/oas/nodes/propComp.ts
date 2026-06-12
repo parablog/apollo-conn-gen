@@ -59,7 +59,7 @@ export class PropComp extends Prop {
     trace(context, '-> [prop-comp:select]', 'in ' + this.name + ', obj: ' + comp.name);
 
     const fieldName = this.name;
-    const sanitised = Naming.sanitiseFieldForSelect(fieldName);
+    const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 

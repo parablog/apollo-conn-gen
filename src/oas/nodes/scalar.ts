@@ -34,12 +34,14 @@ export class Scalar extends Type {
   }
 
   public select(_context: OasContext, writer: Writer, _selection: string[]) {
-    if (this.schema.default) {
-      writer
-        .write(': ') // We'll write the value as a literal. No type checking for now.
-        .write('$(')
-        .write(this.schema.default)
-        .write(')');
+    if (this.schema.default == null) {
+      return;
     }
+
+    // a string default must be quoted — `$(latest)` reads as a field path, `$("latest")` is
+    // the literal. Numbers/booleans stay bare. see docs/issues.md #28
+    const value =
+      typeof this.schema.default === 'string' ? `"${this.schema.default}"` : String(this.schema.default);
+    writer.write(': $(').write(value).write(')');
   }
 }

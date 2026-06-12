@@ -1,0 +1,73 @@
+openapi: 3.0.0
+info:
+  title: request-body alias direction + default literals (issues 28, 29)
+  version: 1.0.0
+servers:
+  - url: https://example.com
+paths:
+  /things:
+    post:
+      operationId: createThing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tag:
+                  type: string
+                  default: latest
+                retries:
+                  type: integer
+                  default: 0
+                log_destinations:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+  /keys:
+    post:
+      operationId: addKey
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ssh_key"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ssh_key"
+  /flush:
+    post:
+      operationId: flush
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmptyMessage"
+components:
+  schemas:
+    ssh_key:
+      type: object
+      properties:
+        fingerprint:
+          type: string
+    EmptyMessage:
+      description: an empty response
+      type: object
+      properties: {}

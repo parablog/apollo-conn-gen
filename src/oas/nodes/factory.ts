@@ -149,14 +149,16 @@ export class Factory {
   }
 
   /**
-   * True for an object with no declared fields: no shape keyword except (at most) a boolean
-   * `additionalProperties` (`{}`, `{ additionalProperties: false }`, …). A real map
-   * (`additionalProperties: <schema>`) is NOT shapeless. see docs/issues.md #19
+   * True for an object with no declared fields: no shape keyword except (at most) an explicit
+   * object `type` and a boolean `additionalProperties` (`{}`, `{ additionalProperties: false }`,
+   * `{ type: object, properties: {} }` — googlebooks `Empty`). A real map
+   * (`additionalProperties: <schema>`) is NOT shapeless. see docs/issues.md #19, #31
    */
-  private static isShapelessObject(schema: SchemaObject): boolean {
+  public static isShapelessObject(schema: SchemaObject): boolean {
     const s = schema as Record<string, unknown>;
-    const noShape = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf'].every((k) => s[k] == null);
-    return noShape && _.isEmpty(s.properties) && typeof s.additionalProperties !== 'object';
+    const noShape = ['$ref', 'enum', 'items', 'allOf', 'oneOf', 'anyOf'].every((k) => s[k] == null);
+    const objectOrUntyped = s.type == null || s.type === 'object';
+    return noShape && objectOrUntyped && _.isEmpty(s.properties) && typeof s.additionalProperties !== 'object';
   }
 
   private static createScalarType(schema: SchemaObject | null, parent: IType) {

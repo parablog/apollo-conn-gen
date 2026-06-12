@@ -68,7 +68,7 @@ export class PropObj extends Prop {
     trace(context, '-> [prop-obj:select]', 'in ' + this.name + ', obj: ' + this.obj.name);
 
     const fieldName = this.name;
-    const sanitised = Naming.sanitiseFieldForSelect(fieldName);
+    const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 

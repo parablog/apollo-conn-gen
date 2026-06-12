@@ -179,10 +179,17 @@ export class Get extends Type implements Op {
 
   private visitResponseContent(context: OasContext, _code: string, media: MediaTypeObject): void {
     trace(context, '-> [get::responses::content]', 'in ' + this.name);
-    const schema = media!.schema as SchemaObject;
+    let schema = media!.schema as SchemaObject;
 
     if (!schema) {
       throw new Error('No schema content found!');
+    }
+
+    // a response schema with no fields to select (googlebooks `Empty`: description +
+    // `properties: {}`) — synthesize the same `success: Boolean` response as a missing body. #31
+    const resolved = '$ref' in schema ? (context.lookupRef((schema as ReferenceObject).$ref!) as SchemaObject) : schema;
+    if (resolved && (Factory.isEmptySchema(resolved) || Factory.isShapelessObject(resolved))) {
+      schema = SYN_SUCCESS_RESPONSE.content!['application/json'].schema as SchemaObject;
     }
 
     this.resultType = Factory.fromResponse(context, this, schema);
