@@ -135,9 +135,14 @@ export class JsonGen {
     let result: JsonType;
 
     if (typeof element === 'object' && !Array.isArray(element) && element !== null) {
-      // JSON object
-      result = this.walkObject(context, parent, name, element);
-      context.store(result);
+      // an empty {} value declares no fields — a field-less type would be skipped at write
+      // time, dangling its reference; use the JSON scalar instead (the #19 convention). #21
+      if (Object.keys(element).length === 0) {
+        result = new JsonScalar(name, parent, 'JSON');
+      } else {
+        result = this.walkObject(context, parent, name, element);
+        context.store(result);
+      }
     } else if (Array.isArray(element)) {
       result = this.walkArray(context, parent, name, element);
     } else if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {

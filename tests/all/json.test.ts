@@ -127,8 +127,8 @@ test('articles/search.json', async () => {
 });
 
 test('articles/clockwatch', async () => {
-  // known-bad: empty {} value emits a dangling type reference — see docs/issues.md #21
-  // pinned to v0.3: the #21 error shape this asserts is drowned by v0.4 #14 noise otherwise
+  // #21 (empty {} -> dangling MainAttributes) is fixed; the fixture now exposes the next
+  // walker bug: same-named objects across documents diverge on fields. see docs/issues.md #35
   const output = await runJsonTest('articles/clockwatch', {
     shouldFail: true,
     connectorSpecVersion: 'v0.3',
@@ -136,7 +136,7 @@ test('articles/clockwatch', async () => {
     composeFederationVersion: '2.12.0',
   });
   assert.ok(output !== undefined);
-  assert.ok(output!.includes('MainAttributes'));
+  assert.ok(output!.includes('ContentTags'), 'the known-bad #35 shape');
 });
 
 test('test/merge', async () => {

@@ -808,12 +808,42 @@ routed to `Scalar(JSON)` in `fromSchema`. Fixture `shapeless-object.yaml`, test
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema`/`createScalarType`, throw at :129),
 `isEmptySchema` (#5) as the predicate's relative.
 
-## 20 · (reserved) `anyOf: [$ref, empty-closed-object]` → zero types — see ROADMAP `R-anyof-empty`
-10 github GET ops generate nothing. Fix mechanism undecided (prove-placeholder vs
-represent-as-JSON-branch); the id is reserved and this entry will be written when the mechanism is
-pinned. Tracked as **R-anyof-empty** in `ROADMAP.md`.
+## 20 · `anyOf: [$ref, empty-closed-object]` → zero types — ✅ Fixed (working tree)
+**Symptom:** github's "maybe empty" convention generates nothing — 3 `interaction-limits` GET
+ops per pass (the research estimate of 10 lumped in multi-member anyOfs, which are a different
+case — see Care).
 
-## 21 · JSON walker: empty `{}` value emits a dangling type reference — ⬜ Open
+**OAS** (github):
+```yaml
+anyOf:
+  - $ref: "#/components/schemas/interaction-limit-response"
+  - additionalProperties: false
+    properties: {}
+    type: object
+```
+
+**Example** (before → after):
+```graphql
+# before: the anyOf was dropped entirely -> zero types, op uncredited
+# after: the fieldless member adds nothing; the anyOf collapses to its one real member
+interactionLimits: InteractionLimitResponse
+```
+
+**Cause:** `createContainerType` built unions from `oneOf` only — `anyOf` members were
+dropped, leaving an empty union and no types.
+
+**Fix:** when an `anyOf` has exactly ONE member left after removing fieldless ones
+(`isShapelessObject`), build that member directly — no union.
+
+**Care (why this sat parked for two days):** the first attempt regressed DO -4 / slack -2 —
+the collapsed members surfaced types the collector then orphaned (`UNRESOLVED_FIELD`). Those
+were #26's bugs, not this fix's: retested after #26, the collapse is **+6 ops / 0 regressions**.
+Multi-member anyOfs stay dropped on purpose — building real unions from them regressed ~10
+github ops into the R2 union wall when measured.
+**AST:** shape change for the collapsing case only — the member's node replaces an empty Union.
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema` collapse + `isShapelessObject`).
+
+## 21 · JSON walker: empty `{}` value emits a dangling type reference — ✅ Fixed (working tree)
 **Symptom:** compose fails `INVALID_GRAPHQL: cannot find type MainAttributes in this document`
 (`articles/clockwatch`, fed 2.12). Under fed 2.11 the same schema bucketed as
 `SELECTED_FIELD_NOT_FOUND` instead — bucket labels are composition-version dependent (cf. the
@@ -836,9 +866,12 @@ type BodyAttributes { pinned: Boolean }          # body's type exists
 - The writer skips field-less types at generation.
 - The parent field still renders its reference → `cannot find type`.
 - Same failure family as #19's **Care** note (empty type dangles the reference), JSON-walker path.
-**Proposed fix:** route an empty-object *value* to the `JSON` scalar (the unknown-shape
-convention, cf. #19) instead of minting a field-less type. Walker-side counterpart of
-`Factory.isShapelessObject`.
+**Fix (2026-06-12):** an empty-object *value* routes to the `JSON` scalar (the unknown-shape
+convention, cf. #19) instead of minting a field-less type; the JSON writer now declares
+`scalar JSON`. Walker-side counterpart of `Factory.isShapelessObject`.
+**Care:** fixing this exposed #35 on the same fixture (same-named objects diverging on
+fields) — the clockwatch test now pins that shape instead.
+**Refs:** `src/json/walker/jsonGen.ts` (`walkElement`), `src/json/io/writer.ts`.
 **AST:** shape change (proposed) — scalar node instead of an empty object type.
 **Refs:** `src/json/walker/`, test `articles/clockwatch` (`tests/all/json.test.ts`, repinned
 `c13cfe5`). Verified: walker output byte-identical 0.8.3 → HEAD except `@link` versions — the
@@ -1389,3 +1422,23 @@ The CLI no longer hardcodes consolidation: `--connector-spec-version v0.4` gets 
 **Refs:** `src/oas/nodes/union.ts` (`add`/`selectedMembers`), `src/oas/nodes/type.ts`
 (`withUniqueName`), `src/oas/nodes/comp.ts` (`add` delegates), `src/versions.ts`
 (`resolveConsolidateUnions`), `src/oas/oasGen.ts` (constructor), `src/cli/oas.ts`.
+
+
+## 35 · JSON walker: same-named objects across documents diverge on fields — ⬜ Open
+**Symptom:** `SELECTED_FIELD_NOT_FOUND: selection contains field 'references', which does not
+exist on 'ContentTags'` (clockwatch, multi-document walk) — surfaced when #21's dangling
+reference was fixed.
+
+**JSON** (two documents, the same `tags` object with different field sets):
+```json
+{ "tags": { "name": "…" } }                       // doc A -> ContentTags { name }
+{ "tags": { "name": "…", "references": […] } }    // doc B -> selects references too
+```
+
+**Cause (suspected):** the walker stores types by name across documents; one instance wins
+emission while the merged selection selects the union of fields — the JSON-path twin of the
+OAS #13 mechanism, with none of its machinery (no per-route cuts, no SDL overrides).
+**Proposed fix:** merge same-named objects' fields at store time (the walker has no cycle
+cuts, so a plain field-union merge is safe — unlike OAS #13).
+**Refs:** `src/json/walker/jsonGen.ts` (`walkObject`/`context.store`), fixture
+`tests/resources/json/articles/clockwatch`, test `articles/clockwatch` (pins the shape).

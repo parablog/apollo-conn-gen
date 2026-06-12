@@ -70,6 +70,15 @@ export class Factory {
       return this.fromRefCircRef(parent, cyclic, ref!);
     }
 
+    // github's "maybe empty" anyOf (`anyOf: [member, {}]`): the fieldless member renders
+    // nothing, so a single real member collapses to it. see docs/issues.md #20
+    if (schemaObj.anyOf && !schemaObj.oneOf && !schemaObj.allOf) {
+      const real = schemaObj.anyOf.filter((m) => !this.isShapelessObject(m as SchemaObject));
+      if (real.length === 1) {
+        return this.fromSchema(context, parent, real[0] as SchemaObject | ReferenceObject);
+      }
+    }
+
     // implied array: `items` present even without an explicit `type: array`. see docs/issues.md #4
     if (_.get(schemaObj, 'items') && (schemaObj.type === 'array' || schemaObj.type == null)) {
       result = this.createArrayType(parent, schemaObj, context);
