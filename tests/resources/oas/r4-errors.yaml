@@ -70,6 +70,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Widget'
+  /legacy:
+    get:
+      operationId: getLegacy
+      # both error shapes document only `error` -> message falls back to it
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegacyError'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegacyError'
+  /mixed:
+    get:
+      operationId: getMixed
+      # 404 has `message`, 500 has only `code` -> no field common to all shapes, no message
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeOnlyError'
 components:
   schemas:
     Widget:
@@ -84,5 +130,15 @@ components:
       properties:
         message:
           type: string
+        code:
+          type: string
+    LegacyError:
+      type: object
+      properties:
+        error:
+          type: string
+    CodeOnlyError:
+      type: object
+      properties:
         code:
           type: string

@@ -456,9 +456,15 @@ type Query {
       "path": "/v2/pets/{id}",
       "queryParams": { "page": null, "api-version": "$(\"2024-01\")" },
       "headers": { "X-Api-Key": "{$config.apiKey}" }
+    },
+    "post:/pets": {
+      "body": "name: $args.input.name\nsource: $(\"web\")"
     }
   }
   ```
+
+  `body` is one raw JSONSelection string replacing the whole inferred `$args.input { … }`
+  mapping (`null` drops the body).
 
 For a complete list of options, run:
 

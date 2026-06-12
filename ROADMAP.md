@@ -97,12 +97,12 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `ConnectHTTP` | `path` as full JSONSelection | Done (templated + per-op override) | R8 |
 | `ConnectHTTP` | `queryParams` block / JSONSelection | Done (`$args{…}` + serialization joins + per-op override) | R8 |
 | `ConnectHTTP` | `headers` (per-op) | Partial (static examples + per-op override w/ `$config` templates) | R5 |
-| `ConnectHTTP` | `body` (full JSONSelection) | Done (`$args.input`) | R9 (computed/literal only) |
+| `ConnectHTTP` | `body` (full JSONSelection) | Done (`$args.input` inferred + per-op override) | R9 |
 | `@connect` | `entity: true` (Query-field resolver) | Deliberately not emitted (type-level `$this` favoured — R1 note) | R1 (1a) |
 | `@connect` | type-level on OBJECT + `$this` | Done (`--infer-entity-resolvers`) | R1 (1b) |
-| `@connect` | `errors`/`isSuccess` | Partial (`errors.extensions` + `$status`, opt-in; `message`/`isSuccess` pending) | R4 |
+| `@connect` | `errors` | Done opt-in (`message: "$.message"` heuristic + `extensions`/`$status`; `isSuccess` not in the spec SDL) | R4 |
 | `@connect` | `batch` (ConnectBatch) | Missing | R6 |
-| `ConnectorErrors` | `message`, `extensions` | Partial (`extensions` done; `message` pending) | R4 |
+| `ConnectorErrors` | `message`, `extensions` | Done (opt-in; `message` heuristic + `extensions`) | R4 |
 | `ConnectBatch` | `maxSize` | Missing | R6 |
 | `HTTPHeaderMapping` | `name` | Partial | R5 |
 | `HTTPHeaderMapping` | `value` (StringTemplate `{$config}`/`{$env}`/`{$context}`) | Partial (`{$config.*}` on global `@source` auth; `$env`/`$context` pending) | R5 |
@@ -145,12 +145,12 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 | R1. Entity resolution | ✅ Done | `entity`/`@key`/`$this` (`--infer-entity-resolvers`) |
 | R2. Unions & interfaces | ✅ Done (one deferral) | real `union`/`->match`/interface promotion (v0.4), consolidate downgrade (< v0.4), discriminator-less merged-object degrade (#25), allOf-member unions (#34), version-derived form (`resolveConsolidateUnions`); broader `allOf`→interface deferred to its own slice |
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
-| R4. Error handling | 🟡 Partial | baseline `@connect(errors: { extensions })` w/ `$status` (opt-in, v0.2+); `message`/`isSuccess`/source-level pending |
+| R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status` (v0.2+); only `@source`-level errors pending |
 | R5. Dynamic headers / auth | 🟡 Partial | slice 1 done (global `@source` `$config` header); per-op, `$env`, `from:`, `$request.headers` remain |
 | R6. Batch entity resolution | ⬜ Not started | depends on R1 |
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
 | R8. `path`/`queryParams` JSONSelection | ✅ Done | serialization joins (inferred) + per-op `overrides` for path/queryParams (user intent) |
-| R9. Computed / literal bodies | ⬜ Not started | base `$args.input` body done; computed remainder open |
+| R9. Computed / literal bodies | ✅ Done | inferred `$args.input { … }` + `overrides[opId].body` raw JSONSelection (replace/drop) |
 
 ### Foundation (must precede version-sensitive items)
 
@@ -301,7 +301,7 @@ leading digit, reserved words) or snake_case keys produce invalid/awkward schema
 
 ### Medium value
 
-### R4. Error handling — `errors: { message, extensions }` (+ `isSuccess`) — 🟡 Partial
+### R4. Error handling — `errors: { message, extensions }` — 🟡 Partial (source-level only)
 
 **Spec shape (verified against the connect spec + docs):** `errors` is a single input
 `ConnectorErrors { message: JSONSelection, extensions: JSONSelection }` on **both** `@connect` and
@@ -319,17 +319,27 @@ version-gated — below v0.2 it skips with a logged downgrade. The error-respons
 `hasDocumentedErrors`), options threaded in `oasGen.ts`/`oasContext.ts`/`runners.ts`. Tested
 (`tests/all/r4-errors.test.ts`).
 
+**B — heuristic `errors.message` (✅ done):** the error body's string message field becomes
+`errors: { message: "$.message" … }` (the `$.` path form — a bare `message` selection builds an
+object, which the composer rejects with `INVALID_ERRORS_MESSAGE`). Field priority is
+corpus-measured: `message` (755 error schemas), `error` (362), `detail` (7); the field must be a
+string on EVERY documented JSON error shape of the op, else no message is emitted (a partial
+field would yield null messages on some statuses). Non-JSON/shapeless error responses don't
+veto. Resolution is read-only (`resolvePointer`, not `lookupRef` — no refCount bumps).
+
+**C — `isSuccess`: dropped from scope** — the spec's `ConnectorErrors` SDL has only `message`
+and `extensions` (re-verified 2026-06-12); `isSuccess` appears in docs but not in the
+composable directive, and OAS gives no reliable success-code signal anyway. Revisit only if
+it lands in the SDL.
+
 **Remaining:**
-- **B — heuristic `errors.message`:** detect a string message field in the documented error body
-  (`message` / `error` / `error.message` / `detail` / `title`) and emit `errors.message`. Heuristic; the
-  composer rejects a non-string result.
-- **C — `isSuccess`:** verify its compose-version first; inferring success-codes from OAS is unreliable.
-- **`@source`-level `errors`** applied across all connectors of a source.
+- **`@source`-level `errors`** applied across all connectors of a source (needs cross-op
+  uniformity analysis to be worth lifting).
 
 **Requires:** `$status` (done), `$response.headers`, `@` (see variable table).
 
-**Files:** `src/oas/io/operationWriter.ts` (done); `src/oas/io/schemaWriter.ts` (source-level, pending).
-(gate: v0.2+)
+**Files:** `src/oas/io/errorsWriter.ts` (all errors emission);
+`src/oas/io/schemaWriter.ts` (source-level, pending). (gate: v0.2+)
 
 ### R5. Dynamic headers / auth from OAS security schemes — 🟡 Partial
 
@@ -409,18 +419,17 @@ operation signature if that proves annoying.
 **Files:** `src/oas/io/operationWriter.ts` (`arrayJoin`, override merge),
 `src/oas/oasContext.ts` (`RequestOverride`). (gate: v0.2+; joins on all versions)
 
-### R9. Computed / literal request bodies — ⬜ Not started
+### R9. Computed / literal request bodies — ✅ Done
 
 **Why:** `ConnectHTTP.body` is already emitted as a straight `$args.input { … }`
-mapping (done). The remaining gap is bodies that are not a direct passthrough.
-(Verified: `body.ts` emits only the `$args.input` form — no `$config`/`$this`/literals.)
+mapping (done). The remaining gap was bodies that are not a direct passthrough.
 
-**Scope:** Literal object fields, renamed keys, and values from variables other than
-`$args.input` (e.g. `$config`, `$this`). Builds on existing `body.ts` machinery.
+**Done:** `overrides[opId].body` (R8 channel) — a raw JSONSelection replaces the whole
+inferred mapping (`name: $args.input.name` + `source: $("web")` literals, `$config`/`$this`
+values, renamed keys); `null` drops the body. No OAS signal expresses computed bodies, so
+this is user intent by design, like the rest of the overrides.
 
-**Requires:** `$config`.
-
-**Files:** `src/oas/nodes/body.ts`. (gate: v0.2+)
+**Files:** `src/oas/io/operationWriter.ts` (`writeBodyOverride`). (gate: v0.2+)
 
 ---
 

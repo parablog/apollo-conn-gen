@@ -9,37 +9,57 @@ import { captureErrors } from './_setup.js';
 test('test_R4_errors_emitted_for_numeric_codes_and_composes', async () => {
   // GET /widgets/{id} documents 404/500 -> with emitConnectorErrors on, the connector emits
   // errors: { extensions: """ statusCode: $status """ } and still composes (rover).
-  const schema = await runOasTest('r4-errors.yaml', ['get:/widgets/{id}>**'], 3, 1, false, false, undefined, false, false, {
+  const schema = await runOasTest('r4-errors.yaml', ['get:/widgets/{id}>**'], 5, 1, false, false, undefined, false, false, {
     emitConnectorErrors: true,
   });
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('errors: { extensions: """'), 'expected an errors.extensions block');
+  // the Error schema documents `message: string` -> it becomes the GraphQL error message
+  assert.ok(schema!.includes('errors: { message: "$.message" extensions: """'), 'expected message + extensions');
   assert.ok(schema!.includes('statusCode: $status'), 'expected statusCode: $status in extensions');
 });
 
 test('test_R4_errors_emitted_for_range_keys', async () => {
   // GET /gadgets documents OAS range keys 4XX/5XX (not concrete codes) -> must also opt in.
-  const schema = await runOasTest('r4-errors.yaml', ['get:/gadgets>**'], 3, 1, false, false, undefined, false, false, {
+  const schema = await runOasTest('r4-errors.yaml', ['get:/gadgets>**'], 5, 1, false, false, undefined, false, false, {
     emitConnectorErrors: true,
   });
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('errors: { extensions: """'), 'range-key error responses must opt into errors');
+  assert.ok(schema!.includes('errors: { message: "$.message" extensions: """'), 'range-key errors must opt in too');
 });
 
 test('test_R4_errors_off_by_default_is_unchanged', async () => {
   // Flag off (default): no errors block at all, even though the op documents 404/500.
-  const schema = await runOasTest('r4-errors.yaml', ['get:/widgets/{id}>**'], 3, 1);
+  const schema = await runOasTest('r4-errors.yaml', ['get:/widgets/{id}>**'], 5, 1);
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('errors: {'), 'default path must not emit errors');
 });
 
 test('test_R4_errors_not_emitted_when_no_error_responses', async () => {
   // GET /health documents only 200 -> never gets an errors block, even with the flag on.
-  const schema = await runOasTest('r4-errors.yaml', ['get:/health>**'], 3, 1, false, false, undefined, false, false, {
+  const schema = await runOasTest('r4-errors.yaml', ['get:/health>**'], 5, 1, false, false, undefined, false, false, {
     emitConnectorErrors: true,
   });
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('errors: {'), '200-only op must not emit errors');
+});
+
+test('test_R4_errors_message_falls_back_to_error_field', async () => {
+  // /legacy's error shapes document only `error: string` -> message falls back to it
+  const schema = await runOasTest('r4-errors.yaml', ['get:/legacy>**'], 5, 1, false, false, undefined, false, false, {
+    emitConnectorErrors: true,
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('errors: { message: "$.error" extensions: """'), 'falls back to the error field');
+});
+
+test('test_R4_errors_message_omitted_when_shapes_disagree', async () => {
+  // /mixed: 404 has `message`, 500 only `code` -> no field common to all shapes, no message
+  const schema = await runOasTest('r4-errors.yaml', ['get:/mixed>**'], 5, 1, false, false, undefined, false, false, {
+    emitConnectorErrors: true,
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('errors: { extensions: """'), 'extensions still emitted');
+  assert.ok(!schema!.includes('message:'), 'no message when the shapes disagree');
 });
 
 test('test_R4_errors_below_v0_2_downgrades_with_warning', async () => {

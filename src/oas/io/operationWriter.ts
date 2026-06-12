@@ -4,12 +4,15 @@ import { OasContext, RequestOverride } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Body, IType, Op, Param, T } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
+import { ErrorsWriter } from './errorsWriter.js';
 import { Writer } from './writer.js';
-import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
-import { warn } from '../log/trace.js';
 
 export class OperationWriter {
-  constructor(private gen: OasGen) {}
+  private errorsWriter: ErrorsWriter;
+
+  constructor(private gen: OasGen) {
+    this.errorsWriter = new ErrorsWriter(gen);
+  }
 
   public writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
     const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
@@ -69,59 +72,26 @@ export class OperationWriter {
 
     writer.write(spacing).write('"""\n');
 
-    this.writeErrors(context, writer, op, indent);
+    this.errorsWriter.write(context, writer, op, indent);
 
     spacing = ' '.repeat(indent + 4);
     writer.write(spacing).write(')\n');
   }
 
-  // R4 (opt-in): emit `errors: { extensions: """statusCode: $status""" }` to surface the HTTP status
-  // in the GraphQL error extensions, for operations that document HTTP error responses. errors is a
-  // connect v0.2+ feature; below that we skip with a logged downgrade rather than emit invalid output.
-  private writeErrors(context: OasContext, writer: Writer, op: Op, indent: number): void {
-    if (!context.generateOptions?.emitConnectorErrors || !this.hasDocumentedErrors(op)) {
-      return;
-    }
-
-    const version = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
-    if (!meetsMinimum(version, 'v0.2')) {
-      warn(
-        context,
-        '[errors]',
-        `@connect(errors:) requires connect v0.2, but target is ${version} — not emitted for ${op.verb} ${op.operation.path}`,
-      );
-      return;
-    }
-
-    const outer = ' '.repeat(indent + 6);
-    const inner = ' '.repeat(indent + 6);
-    writer
-      .write(outer)
-      .write('errors: { extensions: """\n')
-      .write(inner)
-      .write('statusCode: $status\n')
-      .write(outer)
-      .write('""" }\n');
-  }
-
-  // True when the operation documents an HTTP error response. Accepts both concrete numeric statuses
-  // (4xx/5xx) and the OAS range keys `4XX`/`5XX` (case-insensitive). The `default` key is excluded —
-  // it also covers 2xx/3xx, so it is not specifically an error indicator.
-  private hasDocumentedErrors(op: Op): boolean {
-    return op.operation.getResponseStatusCodes().some((code: string) => /^[45](\d\d|XX)$/i.test(code));
-  }
-
   private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], _indent: number): void {
     const override = context.generateOptions.overrides?.[op.id];
 
-    // write HTTP stuff first, then headers, query params and lastly headers
+    // the verb + path first, then query params, headers and lastly the body
     writer.write(`{ ${op.verb}: `).write('"' + this.templatedPath(op, override) + '"');
     this.writeQueryParams(context, writer, op, override);
     this.writeHeaders(writer, op, override);
 
-    // only fo PUT, POST, etc.
-    if (_.has(op, 'body')) {
-      this.writeBodySelection(context, writer, op.body as Body, selection);
+    // body (POST, PUT, etc.): an override (raw JSONSelection) replaces the inferred
+    // `$args.input { … }` mapping; null drops the body altogether. see ROADMAP R9
+    if (typeof override?.body === 'string') {
+      this.writeBodyOverride(writer, override.body);
+    } else if (override?.body === undefined && op.body) {
+      this.writeBodySelection(context, writer, op.body, selection);
     }
 
     writer.write('}');
@@ -236,6 +206,17 @@ export class OperationWriter {
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
     context.indent = 6;
     type.select(context, writer, selection);
+  }
+
+  // mirrors Body.select formatting, but the user's raw JSONSelection replaces the whole mapping
+  private writeBodyOverride(writer: Writer, body: string): void {
+    writer.write(',\n');
+    const spacing = ' '.repeat(6);
+    writer.write(spacing + 'body: """\n');
+    for (const line of body.split('\n')) {
+      writer.write(spacing + '  ' + line + '\n');
+    }
+    writer.write(spacing + '"""\n' + ' '.repeat(5));
   }
 
   private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: string[]): void {

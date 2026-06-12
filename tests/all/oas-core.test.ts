@@ -977,6 +977,24 @@ test('test_overrides_rewire_path_and_query_params', async () => {
   assert.ok(/\{ name: "X-Api-Key", value: "\{\$config\.apiKey\}" \}/.test(schema!), 'unknown header appended');
 });
 
+test('test_overrides_replace_or_drop_body', async () => {
+  // R9: an override body (raw JSONSelection) replaces the inferred `$args.input { … }`
+  // mapping — literals and renamed keys included; null drops the body altogether
+  const replaced = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, false, true, undefined, false, false, {
+    overrides: { 'post:/things': { body: 'name: $args.input.name\nsource: $("web")' } },
+  });
+  assert.ok(replaced !== undefined);
+  assert.ok(/name: \$args\.input\.name/.test(replaced!), 'computed body emitted');
+  assert.ok(/source: \$\("web"\)/.test(replaced!), 'literal body field emitted');
+  assert.ok(!/\$args\.input \{/.test(replaced!), 'inferred mapping replaced');
+
+  const dropped = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, false, true, undefined, false, false, {
+    overrides: { 'post:/things': { body: null } },
+  });
+  assert.ok(dropped !== undefined);
+  assert.ok(!/body:/.test(dropped!), 'null drops the body');
+});
+
 test('test_base_url_overrides_servers', async () => {
   // a spec's servers[0] can be stale or wrong (petstore) — an explicit baseURL replaces it
   const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true, undefined, false, false, {

@@ -9,12 +9,13 @@ import { IType } from './nodes/internal.js';
 import { Mapper } from './mapper/index.js';
 
 // per-operation request rewiring, keyed by op id (`get:/pets/{id}`): replace the HTTP path,
-// query params (raw JSONSelection values, e.g. `$('2024-01')`) and/or headers (string
-// templates, e.g. `{$config.key}`); null drops one, an unknown key is appended
+// query params (raw JSONSelection values, e.g. `$('2024-01')`), headers (string templates,
+// e.g. `{$config.key}`) and/or the whole body mapping; null drops one, unknown keys append
 export type RequestOverride = {
   path?: string;
   queryParams?: Record<string, string | null>;
   headers?: Record<string, string | null>;
+  body?: string | null;
 };
 
 export type GenerateOptions = {
