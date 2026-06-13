@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.13.0]
+
+### Added
+- **Per-operation auth on `@connect`** (R5 slice 2): when an op declares its own OAS `security`,
+  each `@connect` carries its effective auth (own / inherited global / none for `security: []`)
+  and the shared `@source` header is suppressed. Shared scheme→header logic in `src/oas/io/security.ts`.
+
+### Changed
+- Per-op header de-dup is case-insensitive (an explicit override wins, else the resolved auth
+  replaces an inferred header of the same name).
+- Tidied the generated `@connect` `http`/`errors` block indentation.
+
 ## [0.12.0]
 
 ### Added
