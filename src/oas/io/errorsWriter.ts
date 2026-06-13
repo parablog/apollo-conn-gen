@@ -67,7 +67,9 @@ export class ErrorsWriter {
       }
       const resolved = this.deref(context, response) as ResponseObject | null;
       const mediaKey = Object.keys(resolved?.content ?? {}).find((k) => /^application\/(?:.*\+)?json/i.test(k));
-      const schema = mediaKey ? (this.deref(context, resolved!.content![mediaKey].schema) as SchemaObject | null) : null;
+      const schema = mediaKey
+        ? (this.deref(context, resolved!.content![mediaKey].schema) as SchemaObject | null)
+        : null;
       if (schema?.properties) {
         errorShapes.push(schema.properties);
       }

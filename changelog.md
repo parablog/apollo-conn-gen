@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.12.0]
+
+### Added
+- **Per-operation request overrides** (R8/R9): `--overrides <file>` (or API object), keyed by
+  op id, replaces the HTTP `path`, adds/replaces/drops `queryParams` (raw JSONSelection) and
+  `headers` (string templates, incl. `{$config.*}`), and replaces or drops the request `body`
+  (`null` drops it). The explicit-intent channel for what OAS cannot express; unmatched override
+  keys warn (typo guard).
+- **`--base-url`**: overrides the `@source` base URL inferred from OAS `servers[0]`.
+- **R4 `errors.message` heuristic** (opt-in `emitConnectorErrors`, connect v0.2+): the error
+  body's string message field becomes `errors: { message: "$.message" }`, with corpus-ranked
+  field priority (`message`/`error`/`detail`); emitted only when that field is a string on every
+  documented JSON error shape of the op.
+- **R7 coalesced defaults**: OAS `default:` values now coalesce (`tag: tag ?? $("latest")`)
+  instead of replacing, in both response and body directions (gated to connect v0.4 +
+  federation v2.14).
+- **R8 array-param serialization joins**: non-exploded array params emit the matching join
+  (`ids->joinNotNull(",")`; `spaceDelimited` → `" "`, `pipeDelimited` → `"|"`).
+
+### Fixed
+Details per id in `docs/issues.md`:
+- #20 `anyOf: [$ref, empty-closed-object]` collapses to its single real member instead of
+  producing zero types.
+- #21 typeless/empty `{}` schemas are treated as a JSON scalar instead of throwing.
+- #35 same-named objects across multiple documents no longer diverge on their fields.
+
+### Changed
+- Internal: dropped `as unknown as` casts across the oas/json paths (no output change).
+
 ## [0.11.0]
 
 ### Changed
