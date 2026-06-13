@@ -96,7 +96,7 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `ConnectHTTP` | path templating `{$args.x}` | Done | — |
 | `ConnectHTTP` | `path` as full JSONSelection | Done (templated + per-op override) | R8 |
 | `ConnectHTTP` | `queryParams` block / JSONSelection | Done (`$args{…}` + serialization joins + per-op override) | R8 |
-| `ConnectHTTP` | `headers` (per-op) | Partial (static examples + per-op override w/ `$config` templates) | R5 |
+| `ConnectHTTP` | `headers` (per-op) | Partial (static examples + per-op override w/ `$config` templates + per-op auth from `security`) | R5 |
 | `ConnectHTTP` | `body` (full JSONSelection) | Done (`$args.input` inferred + per-op override) | R9 |
 | `@connect` | `entity: true` (Query-field resolver) | Deliberately not emitted (type-level `$this` favoured — R1 note) | R1 (1a) |
 | `@connect` | type-level on OBJECT + `$this` | Done (`--infer-entity-resolvers`) | R1 (1b) |
@@ -104,8 +104,8 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `@connect` | `batch` (ConnectBatch) | Missing | R6 |
 | `ConnectorErrors` | `message`, `extensions` | Done (opt-in; `message` heuristic + `extensions`) | R4 |
 | `ConnectBatch` | `maxSize` | Missing | R6 |
-| `HTTPHeaderMapping` | `name` | Partial | R5 |
-| `HTTPHeaderMapping` | `value` (StringTemplate `{$config}`/`{$env}`/`{$context}`) | Partial (`{$config.*}` on global `@source` auth; `$env`/`$context` pending) | R5 |
+| `HTTPHeaderMapping` | `name` | Partial (global `@source` + per-op `@connect` auth) | R5 |
+| `HTTPHeaderMapping` | `value` (StringTemplate `{$config}`/`{$env}`/`{$context}`) | Partial (`{$config.*}` on global `@source` + per-op `@connect` auth; `$env`/`$context` pending) | R5 |
 | `HTTPHeaderMapping` | `from` (response-header extract) | Missing | R5 |
 | `@key` (federation) | key-field emission | Done (entity inference, R1) | R1 (1c) |
 | JSONSelection | field selection + nesting + `->entries` | Done | — |
@@ -146,7 +146,7 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 | R2. Unions & interfaces | ✅ Done (one deferral) | real `union`/`->match`/interface promotion (v0.4), consolidate downgrade (< v0.4), discriminator-less merged-object degrade (#25), allOf-member unions (#34), version-derived form (`resolveConsolidateUnions`); broader `allOf`→interface deferred to its own slice |
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
 | R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status` (v0.2+); only `@source`-level errors pending |
-| R5. Dynamic headers / auth | 🟡 Partial | slice 1 done (global `@source` `$config` header); per-op, `$env`, `from:`, `$request.headers` remain |
+| R5. Dynamic headers / auth | 🟡 Partial | slices 1-2 done (global `@source` + per-op `@connect` auth via per-source mode switch); `$env`, `from:`, `$request.headers`, apiKey query/cookie remain |
 | R6. Batch entity resolution | ⬜ Not started | depends on R1 |
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
 | R8. `path`/`queryParams` JSONSelection | ✅ Done | serialization joins (inferred) + per-op `overrides` for path/queryParams (user intent) |
@@ -346,23 +346,29 @@ it lands in the SDL.
 **Why:** Headers are emitted as static example values. OAS `securitySchemes` (apiKey,
 bearer, oauth2) should become templated `HTTPHeaderMapping`s.
 
-**Status:** Slice 1 done — the spec's **global** `security` scheme is mapped to a
-templated `@source` header (`src/oas/io/schemaWriter.ts`); deferred cases are warned, not
-dropped. Tested (`test_R5_*`).
+**Status:** Slices 1-2 done. Slice 1 maps the spec's **global** `security` scheme to a templated
+`@source` header. Slice 2 adds **per-operation** auth on `@connect` via a **per-source mode
+switch**: when any operation declares its own `security`, the shared `@source` header is suppressed
+and every `@connect` carries its *effective* auth (own requirement, the inherited global, or nothing
+for a `security: []` public op). This is the OAS-correct model — a `@connect` header cannot remove a
+`@source` one, so a shared header would leak on public ops and double up on different-named overrides.
+Shared logic lives in `src/oas/io/security.ts` (`mapSchemeToAuthHeader`/`resolveAuthHeader`/`anyOperationDeclaresSecurity`),
+reused by both writers. Deferred cases still warn, never drop. Tested (`test_R5_*`, default v0.4/fed-2.14, rover-composed).
 
 **Scope:**
 - ✅ apiKey/header → `{ name: "N", value: "{$config.apiKey}" }` (slice 1).
 - ✅ http bearer / oauth2 / openIdConnect → `Authorization: Bearer {$config.token}`;
   http basic → `Authorization: Basic {$config.token}` (slice 1).
-- ⬜ Per-operation auth on `@connect` (specs whose security is per-op emit only warnings
-  today).
+- ✅ Per-operation auth on `@connect` — own/inherited/public resolved per op; per-source mode
+  switch suppresses the `@source` header when any op declares its own `security` (slice 2).
 - ⬜ apiKey in **query** / **cookie** (warned + deferred today).
 - ⬜ `$env`-backed secrets; `from:` response-header extraction; `$request.headers`
   passthrough.
 
 **Requires:** `$config` (done), `$env`, `$request.headers` (see variable table).
 
-**Files:** `src/oas/io/schemaWriter.ts`, `src/oas/io/operationWriter.ts`. (gate: v0.1+)
+**Files:** `src/oas/io/security.ts` (shared), `src/oas/io/schemaWriter.ts`,
+`src/oas/io/operationWriter.ts`. (gate: v0.1+)
 
 ### Lower value / advanced
 

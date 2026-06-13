@@ -94,32 +94,109 @@ test('test_R5_security_apikey_in_query_is_deferred_with_warning', async () => {
   );
 });
 
-test('test_R5_security_per_op_only_emits_no_global_header_and_warns', async () => {
-  // petstore declares per-op security on every operation, no global -> no @source header,
-  // a per-operation warning each (concern-2 guard).
+// --- R5 (slice 2): per-operation auth on @connect -----------------------------
+//
+// When ANY operation declares its own `security`, the spec is in *per-op mode*: the shared
+// @source auth header is suppressed and each @connect carries its own *effective* auth (own
+// requirement, or the inherited global, or nothing for a public op). This is OAS-correct and
+// never leaks a credential a public op did not ask for.
+
+// The single @source line of a generated schema (to assert it carries no auth header).
+function sourceLine(schema: string): string {
+  return schema.split('\n').find((l) => l.includes('@source(')) ?? '';
+}
+
+test('test_R5_security_per_op_apikey_emits_on_connect', async () => {
+  // petstore: no global, every op declares its own security. GET /pet/{petId} lists
+  // `api_key` (apiKey/header) then `petstore_auth` (oauth2) -> api_key wins on the @connect,
+  // oauth2 is the dropped alternative, and @source stays headerless.
   let schema: string | undefined;
   const warnings = await captureWarnings(async () => {
     schema = await runOasTest('petstore.yaml', ['get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id'], 19, 1);
   });
   assert.ok(schema !== undefined);
-  assert.ok(!schema!.includes('headers:'), 'per-op security must not emit a global @source header');
   assert.ok(
-    warnings.some((w) => /declares its own `security`/.test(w)),
-    `expected per-operation override warnings, got: ${warnings.join(' | ')}`,
+    schema!.includes('{ name: "api_key", value: "{$config.apiKey}" }'),
+    'expected the per-op apiKey header on @connect',
+  );
+  assert.ok(!sourceLine(schema!).includes('headers:'), '@source must carry no auth header in per-op mode');
+  assert.ok(
+    warnings.some((w) => /petstore_auth/.test(w) && /not emitted/.test(w)),
+    `expected a dropped-alternative warning naming petstore_auth, got: ${warnings.join(' | ')}`,
   );
 });
 
-test('test_R5_security_global_plus_op_override_emits_no_global_header_and_warns', async () => {
-  // time-series-1.0.28 has a global requirement AND an op-level override -> guard fires:
-  // no @source header, a per-operation warning.
-  let schema: string | undefined;
-  const warnings = await captureWarnings(async () => {
-    schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 9);
+test('test_R5_security_per_op_bearer_emits_on_connect', async () => {
+  // time-series-1.0.28 has a global bearer requirement AND the op declares the same -> per-op
+  // mode: @source headerless, the op's @connect carries Authorization: Bearer.
+  const schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 9);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    schema!.includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),
+    'expected the per-op Bearer header on @connect',
+  );
+  assert.ok(!sourceLine(schema!).includes('headers:'), '@source must carry no auth header in per-op mode');
+});
+
+test('test_R5_security_per_op_inherits_global_on_connect', async () => {
+  // An op with NO own security inherits the global (X-API-Key) on its own @connect, since
+  // @source no longer carries it (per-op mode, triggered by the sibling /admin & /public ops).
+  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/inherits>**'], 3, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    schema!.includes('{ name: "X-API-Key", value: "{$config.apiKey}" }'),
+    'expected the inherited global apiKey header on @connect',
+  );
+  assert.ok(!sourceLine(schema!).includes('headers:'), '@source must carry no auth header in per-op mode');
+});
+
+test('test_R5_security_per_op_override_different_name_no_global_leak', async () => {
+  // Leak (2): global is X-API-Key, the op overrides with Authorization. The op must send ONLY
+  // Authorization — never also the global X-API-Key (a @connect header cannot remove a @source
+  // one, so the global is suppressed entirely in per-op mode).
+  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/admin>**'], 3, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    schema!.includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),
+    'expected the op-own Bearer header on @connect',
+  );
+  assert.ok(!schema!.includes('X-API-Key'), 'the op must NOT also carry the global X-API-Key header');
+});
+
+test('test_R5_security_per_op_public_emits_no_auth', async () => {
+  // Leak (1): `security: []` is a public op. It must carry no auth header at all, even though a
+  // global default exists (the global is not emitted on @source in per-op mode).
+  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/public>**'], 3, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('Authorization'), 'public op must carry no Authorization header');
+  assert.ok(!schema!.includes('X-API-Key'), 'public op must carry no inherited global header');
+  assert.ok(!sourceLine(schema!).includes('headers:'), '@source must carry no auth header in per-op mode');
+});
+
+test('test_R5_security_per_op_override_header_wins_over_auth', async () => {
+  // The user-intent overrides channel stays authoritative: an override of the same header name
+  // replaces the inferred auth value.
+  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/admin>**'], 3, 1, false, false, undefined, false, false, {
+    overrides: { 'get:/admin': { headers: { Authorization: '{$config.adminToken}' } } },
   });
   assert.ok(schema !== undefined);
-  assert.ok(!schema!.includes('headers:'), 'op override must suppress the global @source header');
   assert.ok(
-    warnings.some((w) => /declares its own `security`/.test(w)),
-    `expected a per-operation override warning, got: ${warnings.join(' | ')}`,
+    schema!.includes('{ name: "Authorization", value: "{$config.adminToken}" }'),
+    'expected the override header value to win',
   );
+  assert.ok(!schema!.includes('Bearer {$config.token}'), 'the inferred auth value must be replaced by the override');
+});
+
+test('test_R5_security_per_op_override_header_is_case_insensitive', async () => {
+  // HTTP header names are case-insensitive: a lowercase `authorization` override must replace the
+  // resolved `Authorization` auth, not emit a second header that differs only in case.
+  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/admin>**'], 3, 1, false, false, undefined, false, false, {
+    overrides: { 'get:/admin': { headers: { authorization: '{$config.adminToken}' } } },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(
+    schema!.includes('{ name: "authorization", value: "{$config.adminToken}" }'),
+    'the lowercase override header is emitted',
+  );
+  assert.ok(!schema!.includes('Bearer {$config.token}'), 'the resolved auth must be suppressed by the case-insensitive override');
 });

@@ -6,6 +6,7 @@ import { Body, IType, Op, Param, T } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
 import { ErrorsWriter } from './errorsWriter.js';
 import { Writer } from './writer.js';
+import { anyOperationDeclaresSecurity, globalSecurity, securitySchemes, resolveAuthHeader } from './security.js';
 
 export class OperationWriter {
   private errorsWriter: ErrorsWriter;
@@ -83,18 +84,27 @@ export class OperationWriter {
 
     // the verb + path first, then query params, headers and lastly the body
     writer.write(`{ ${op.verb}: `).write('"' + this.templatedPath(op, override) + '"');
-    this.writeQueryParams(context, writer, op, override);
-    this.writeHeaders(writer, op, override);
+    // each block starts on its own line and ends without a trailing newline
+    const wroteQueryParams = this.writeQueryParams(context, writer, op, override);
+    const wroteHeaders = this.writeHeaders(writer, op, override);
 
     // body (POST, PUT, etc.): an override (raw JSONSelection) replaces the inferred
     // `$args.input { … }` mapping; null drops the body altogether. see ROADMAP R9
     if (typeof override?.body === 'string') {
+      // body emits its own trailing indent, so close the object right after it
       this.writeBodyOverride(writer, override.body);
+      writer.write('}');
     } else if (override?.body === undefined && op.body) {
+      // body emits its own trailing indent, so close the object right after it
       this.writeBodySelection(context, writer, op.body, selection);
+      writer.write('}');
+    } else if (wroteQueryParams || wroteHeaders) {
+      // no body: close on its own line, aligned under `http:` (avoids a column-0 brace)
+      writer.write('\n' + ' '.repeat(6) + '}');
+    } else {
+      // nothing but the path: keep the compact single-line form `{ GET: "/x"}`
+      writer.write('}');
     }
-
-    writer.write('}');
   }
 
   // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
@@ -105,7 +115,8 @@ export class OperationWriter {
     );
   }
 
-  private writeQueryParams(context: OasContext, writer: Writer, op: Op, override?: RequestOverride): void {
+  // returns true when a queryParams block was written (so the caller can place the closing brace)
+  private writeQueryParams(context: OasContext, writer: Writer, op: Op, override?: RequestOverride): boolean {
     // we now include all query params, not just required ones. if they are not set,
     // then the connectors will not include them in the request.
     let queryParams = op.params.filter((p: Param) => {
@@ -124,7 +135,7 @@ export class OperationWriter {
       (p) => `${Naming.genParamName(p.name)}${this.arrayJoin(p)}`,
     );
     if (entries.length === 0) {
-      return;
+      return false;
     }
 
     writer.write('\n');
@@ -140,18 +151,37 @@ export class OperationWriter {
     spacing = ' '.repeat(8);
     writer.write(spacing).write('}\n');
     spacing = ' '.repeat(6);
-    writer.write(spacing).write('"""\n');
+    // no trailing newline — the caller adds the separator/brace
+    writer.write(spacing).write('"""');
+    return true;
   }
 
-  private writeHeaders(writer: Writer, op: Op, override?: RequestOverride): void {
+  // returns true when a headers block was written (so the caller can place the closing brace)
+  private writeHeaders(writer: Writer, op: Op, override?: RequestOverride): boolean {
+    // OAS `header` params, with user overrides merged in (string replaces, null drops)
     const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
-    const entries = this.mergeOverrides(headers, override?.headers ?? {}, (p) => this.headerExample(p));
+    let entries = this.mergeOverrides(headers, override?.headers ?? {}, (p) => this.headerExample(p));
+
+    // R5 slice 2: add this operation's effective auth header (only when the spec is in per-op mode).
+    // HTTP header names are case-insensitive: an explicit user override of the same name wins;
+    // otherwise the resolved auth replaces any inferred OAS header of that name (so we never emit
+    // a real credential alongside a placeholder that differs only in case).
+    const auth = this.authHeaderEntry(op);
+    if (auth) {
+      const sameName = (name: string) => name.toLowerCase() === auth[0].toLowerCase();
+      const overridden = Object.keys(override?.headers ?? {}).some(sameName);
+      if (!overridden) {
+        entries = [auth, ...entries.filter(([name]) => !sameName(name))];
+      }
+    }
+
     if (entries.length === 0) {
-      return;
+      return false;
     }
 
     let spacing = ' '.repeat(6);
-    writer.write(spacing + 'headers: [\n');
+    // leading newline so the block starts on its own line (after the path or a queryParams block)
+    writer.write('\n' + spacing + 'headers: [\n');
     spacing = ' '.repeat(8);
 
     for (const [key, value] of entries) {
@@ -159,7 +189,40 @@ export class OperationWriter {
     }
 
     spacing = ' '.repeat(6);
+    // no trailing newline — the caller adds the separator/brace
     writer.write(spacing + ']');
+    return true;
+  }
+
+  // R5 slice 2: this operation's effective auth header as a [name, value] entry, or null.
+  //
+  // Emits only in *per-op mode* — when some operation in the spec declares its own `security`,
+  // the shared @source auth header is suppressed, so each @connect must carry its own. The
+  // effective requirement is the op's own `security` when present, else the global default:
+  //   security: [{ AdminBearer: [] }]  (own)     -> that scheme's header (e.g. Authorization: Bearer)
+  //   security: []                     (public)  -> no header (the op correctly sends nothing)
+  //   no own `security`                           -> the inherited global header
+  private authHeaderEntry(op: Op): [string, string] | null {
+    const api = this.gen.parser;
+    // uniform mode: @source already carries the shared auth, nothing to add per operation
+    if (!anyOperationDeclaresSecurity(api)) {
+      return null;
+    }
+
+    // the op's own requirement; `undefined` = inherit the global, `[]` = public
+    const own = op.operation.schema.security;
+    // `??` not `||`: an explicit `[]` (public) must NOT fall back to the global
+    const effective = own ?? globalSecurity(api);
+
+    // read the scheme definitions the requirement refers to
+    const schemes = securitySchemes(api);
+    // resolve the effective requirement to one header, collecting per-scheme drop warnings
+    const { header, warnings } = resolveAuthHeader(effective, schemes);
+    // surface dropped schemes loudly, tagged with this operation
+    for (const w of warnings) {
+      console.warn(`${w} (operation ${op.verb} ${op.operation.path})`);
+    }
+    return header ? [header.name, header.value] : null;
   }
 
   // merge user overrides over the inferred params: a string replaces the inferred value,

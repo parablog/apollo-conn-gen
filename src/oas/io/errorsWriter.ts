@@ -38,13 +38,15 @@ export class ErrorsWriter {
     // selection would build the object `{message: …}`, which errors.message rejects. R4
     const message = this.errorMessageField(context, op);
 
-    const spacing = ' '.repeat(indent + 6);
+    // label/close at the @connect arg level, the extensions body one level deeper (like queryParams)
+    const labelSpacing = ' '.repeat(indent + 6);
+    const bodySpacing = ' '.repeat(indent + 8);
     writer
-      .write(spacing)
+      .write(labelSpacing)
       .write(message ? `errors: { message: "$.${message}" extensions: """\n` : 'errors: { extensions: """\n')
-      .write(spacing)
+      .write(bodySpacing)
       .write('statusCode: $status\n')
-      .write(spacing)
+      .write(labelSpacing)
       .write('""" }\n');
   }
 
