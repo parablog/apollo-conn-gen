@@ -3,8 +3,10 @@ import {
   CircularRef,
   Composed,
   En,
+  Get,
   IType,
   Obj,
+  Op,
   Prop,
   PropArray,
   PropComp,
@@ -13,6 +15,7 @@ import {
   PropScalar,
   Scalar,
 } from './internal.js';
+
 import _ from 'lodash';
 import { Naming } from '../utils/naming.js';
 import type { OasContext } from '../oasContext.js';
@@ -34,6 +37,11 @@ export class T {
 
   public static isPropScalar(type: IType): boolean {
     return type instanceof PropScalar;
+  }
+
+  // every operation node (Get, Post, Put, Patch, Delete) derives from Get
+  public static isOp(type: IType): type is IType & Op {
+    return type instanceof Get;
   }
 
   public static traverse(node: IType, callback: (node: IType) => void): void {
@@ -65,6 +73,12 @@ export class T {
     return Array.from(node.children.values())
       .filter((child) => !(child instanceof Prop) && T.isContainer(child))
       .map((child) => child);
+  }
+
+  // emitted as its own definition in the schema (`type X` / `enum X`), unlike props, wrappers,
+  // scalars and cycle cuts which only appear inside other definitions
+  public static isEmittable(node: IType): boolean {
+    return T.isContainer(node) || node.id.startsWith('enum:');
   }
 
   public static isContainer(node: IType): boolean {

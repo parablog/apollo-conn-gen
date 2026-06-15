@@ -3,9 +3,9 @@ import fs from 'fs';
 import { Type, IType, Composed } from '../../oas/nodes/internal.js';
 import { OasGen } from '../../oas/oasGen.js';
 import { typesPrompt } from '../../oas/prompts/prompt.js';
+import { OptionValues } from 'commander';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function generateFromSelection(opts: any, gen: OasGen) {
+export function generateFromSelection(opts: OptionValues, gen: OasGen) {
   const selections = JSON.parse(fs.readFileSync(opts.loadSelections, { encoding: 'utf-8' }));
   if (!Array.isArray(selections)) {
     console.error('Invalid selections file');

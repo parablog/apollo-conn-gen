@@ -118,6 +118,22 @@ class FinalConverter extends AbstractConverter {
   }
 }
 
+class EncodeLeadingSignConverter extends AbstractConverter {
+  // a leading sign would be dropped by the generic sanitiser, colliding `+1` and `-1` (github's
+  // ReactionRollup) into one `_1` field — encode it into the name instead. see docs/issues.md #24
+  public process(input: string): string {
+    if (input.startsWith('+')) return 'plus' + input.substring(1);
+    if (input.startsWith('-')) return 'minus' + input.substring(1);
+    return input;
+  }
+}
+
+class ParamNameConverter extends AbstractConverter {
+  public process(input: string): string {
+    return Naming.genParamName(input);
+  }
+}
+
 export class Naming {
   public static genParamName(param: string): string {
     // Split on any run of non-alphanumeric characters, camelCase the parts, then
@@ -128,6 +144,17 @@ export class Naming {
       return Naming.NUMBER_PREFIX;
     }
     return /^[0-9]/.test(camel) ? Naming.NUMBER_PREFIX + camel : camel;
+  }
+
+  // Selection paths abbreviate component refs to stay readable (`#/components/schemas/Space`
+  // -> `#/c/s/Space`); expandRef is the inverse, used when matching a path segment back
+  // against node ids.
+  public static abbreviateRef(path: string): string {
+    return path.replace(/#\/components\/schemas/g, '#/c/s');
+  }
+
+  public static expandRef(path: string): string {
+    return path.replace(/#\/c\/s/g, '#/components/schemas');
   }
 
   public static genTypeName(name: string): string {
@@ -143,12 +170,12 @@ export class Naming {
 
   public static sanitiseField(name: string): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
-    return Naming.genParamName(fieldName);
+    return Naming.FIELD_CONVERTER.convert(fieldName);
   }
 
   public static sanitiseFieldForSelect(name: string, isInput: boolean = false): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
-    const sanitised = Naming.genParamName(fieldName);
+    const sanitised = Naming.FIELD_CONVERTER.convert(fieldName);
 
     // The JSON key is already a valid identifier identical to the field — no alias needed.
     if (sanitised === name) {
@@ -156,10 +183,11 @@ export class Naming {
     }
 
     if (isInput) {
-      // Request-body direction (unchanged): GraphQL field maps into the JSON key.
-      const needsQuotes = /[:_\-.]/.test(fieldName) || name.startsWith('@');
-      const value = name.startsWith('@') ? name : sanitised;
-      return fieldName + ': ' + (needsQuotes ? `"${value}"` : value);
+      // Request-body direction: original JSON key <- GraphQL input field. The KEY is quoted
+      // when it isn't a bare identifier (omni's `urn:omni:params:1.0:UserAttribute` broke the
+      // parser unquoted); the field reference is always a bare identifier. see #32
+      const key = /^[_A-Za-z][_0-9A-Za-z]*$/.test(name) ? name : `"${name}"`;
+      return key + ': ' + sanitised;
     }
 
     // Response direction: safe GraphQL field <- original JSON key, always quoted (the key
@@ -228,6 +256,10 @@ export class Naming {
   );
 
   private static readonly REF_CONVERTER: Converter = new RemoveRefConverter(new FinalConverter());
+
+  private static readonly FIELD_CONVERTER: Converter = new EncodeLeadingSignConverter(
+    new ParamNameConverter(new FinalConverter()),
+  );
 
   // internal stuff
   private static readonly NUMBER_PREFIX = '_';

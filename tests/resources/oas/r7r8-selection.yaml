@@ -1,0 +1,53 @@
+openapi: 3.0.0
+info:
+  title: coalesced defaults + array param serialization (R7, R8)
+  version: 1.0.0
+servers:
+  - url: https://example.com
+paths:
+  /things:
+    get:
+      operationId: listThings
+      parameters:
+        - name: ids
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: tags
+          in: query
+          style: pipeDelimited
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: X-Version
+          in: header
+          example: "1"
+          schema:
+            type: string
+        - name: X-Trace
+          in: header
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  tag:
+                    type: string
+                    default: latest

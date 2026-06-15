@@ -443,7 +443,7 @@ component is stored won't see the collision. Components are reached at shallower
 (`store`). Fixture `inline-vs-component-name.yaml`, test
 `test_inline_renamed_when_colliding_with_component_emitted_name`. Next Confluence blocker: #13.
 
-## 13 · Path-dependent cycle cuts make same-named instances diverge — ⬜ Open
+## 13 · Path-dependent cycle cuts make same-named instances diverge — 🟡 Mechanism fixed (working tree); ops gated behind the R2 union wall
 **Symptom:** with #10 + #12 in place, Confluence abstract fails compose with
 `SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`.
 
@@ -479,21 +479,32 @@ prefer the non-`PropCircRef` version. Then:
 
 **AST (proposed):** no new nodes — a collect-time prop merge on the kept instance.
 
-**Attempt notes (2026-06-10, implemented then reverted as too invasive — keep for the next try):**
-- Mutating `kept.props` is WRONG: the merged prop leaks into the *cut position's* selection, which
-  then genuinely re-enters the cycle → rover `CIRCULAR_REFERENCE`. The merge must be **SDL-only**;
-  each path's selection keeps its own cut comment.
-- The merge must also be **selection-guarded**: only take a prop whose own `path()` is in the final
-  selection — an unselected replacement emits an SDL field no selection resolves
-  (`CONNECTORS_UNRESOLVED_FIELD`, caught by `test_040` AdobeCommerce). Defer to after the collect
-  loop: `expanded` is still mutating during it.
-- Verified on confluence abstract: clears all 8 `SELECTED_FIELD_NOT_FOUND` ops (`history`/`Space`),
-  **but** they then hit the R2 discriminator-less-union wall (`GROUP_SELECTION_IS_NOT_OBJECT` on
-  `ContentMetadata.labels: LabelsUnion`) — net pass-rate unchanged until that R2 gap is also fixed.
-  Re-estimate the payoff jointly with R2 before re-attempting.
+**Fix (2026-06-11, working tree — incorporates the lessons of the reverted 06-10 attempt):**
+- The routes are already spelled out in the final selection, so no extra bookkeeping: for each
+  field a node lost to a cycle cut, find a selection path that carries the real field under the
+  same type id (`>obj:type:X>prop:…:name`, in the `#/c/s` short form `path()` writes) and walk
+  it to its node with the existing `collectPaths`.
+- **SDL-only:** the found node goes into `context.sdlPropOverrides`
+  (`Map<writtenInstance, Map<fieldName, node>>`), read by `Obj.generate` only — every route's
+  selection keeps its own "field removed" comment. Mutating `props` instead leaked the field
+  into the cut position's selection → rover `CIRCULAR_REFERENCE`.
+- **Selection-guarded by construction:** the replacement comes FROM the selection, so a field
+  nobody selects is never added to the SDL (`CONNECTORS_UNRESOLVED_FIELD`, caught by
+  `test_040` AdobeCommerce).
+- Runs after the collect loop, once `expanded` is final. (A first version tracked instance
+  pairs during the loop — the same pair is met once per route and confluence has thousands,
+  so it went quadratic and hung the sweep. Deriving from `expanded` avoids the whole class.)
 
-**Refs:** `src/oas/generator/typesCollector.ts` (`collect`, id-keyed `pendingTypes`),
-`src/oas/nodes/propCircRef.ts`. Until fixed the harness keeps `confluence.json::abstract` skipped.
+**Measured:** confluence abstract `SELECTED_FIELD_NOT_FOUND` 8 → 1; the unblocked ops now fail
+on the **R2 discriminator-less-union wall** (`GROUP_SELECTION_IS_NOT_OBJECT` on
+`ContentMetadata.labels: LabelsUnion`, 14 ops) — net pass-rate unchanged (69.2% both passes)
+until that R2 gap is fixed. Full corpus byte-identical otherwise (zero regressions, both
+passes). box's 9 INTERNAL_ERROR ops confirmed a *different* mechanism (referenced-but-unemitted
+`Folder--Mini`, R-collector family) — untouched by this merge.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`collect` + `findSelectedFieldNode`),
+`src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override
+lookup).
 
 ## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⬜ Open (upstream)
 **Symptom:** 26/43 Mercedes CCS ops fail the abstract pass with
@@ -797,12 +808,42 @@ routed to `Scalar(JSON)` in `fromSchema`. Fixture `shapeless-object.yaml`, test
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema`/`createScalarType`, throw at :129),
 `isEmptySchema` (#5) as the predicate's relative.
 
-## 20 · (reserved) `anyOf: [$ref, empty-closed-object]` → zero types — see ROADMAP `R-anyof-empty`
-10 github GET ops generate nothing. Fix mechanism undecided (prove-placeholder vs
-represent-as-JSON-branch); the id is reserved and this entry will be written when the mechanism is
-pinned. Tracked as **R-anyof-empty** in `ROADMAP.md`.
+## 20 · `anyOf: [$ref, empty-closed-object]` → zero types — ✅ Fixed (working tree)
+**Symptom:** github's "maybe empty" convention generates nothing — 3 `interaction-limits` GET
+ops per pass (the research estimate of 10 lumped in multi-member anyOfs, which are a different
+case — see Care).
 
-## 21 · JSON walker: empty `{}` value emits a dangling type reference — ⬜ Open
+**OAS** (github):
+```yaml
+anyOf:
+  - $ref: "#/components/schemas/interaction-limit-response"
+  - additionalProperties: false
+    properties: {}
+    type: object
+```
+
+**Example** (before → after):
+```graphql
+# before: the anyOf was dropped entirely -> zero types, op uncredited
+# after: the fieldless member adds nothing; the anyOf collapses to its one real member
+interactionLimits: InteractionLimitResponse
+```
+
+**Cause:** `createContainerType` built unions from `oneOf` only — `anyOf` members were
+dropped, leaving an empty union and no types.
+
+**Fix:** when an `anyOf` has exactly ONE member left after removing fieldless ones
+(`isShapelessObject`), build that member directly — no union.
+
+**Care (why this sat parked for two days):** the first attempt regressed DO -4 / slack -2 —
+the collapsed members surfaced types the collector then orphaned (`UNRESOLVED_FIELD`). Those
+were #26's bugs, not this fix's: retested after #26, the collapse is **+6 ops / 0 regressions**.
+Multi-member anyOfs stay dropped on purpose — building real unions from them regressed ~10
+github ops into the R2 union wall when measured.
+**AST:** shape change for the collapsing case only — the member's node replaces an empty Union.
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema` collapse + `isShapelessObject`).
+
+## 21 · JSON walker: empty `{}` value emits a dangling type reference — ✅ Fixed (working tree)
 **Symptom:** compose fails `INVALID_GRAPHQL: cannot find type MainAttributes in this document`
 (`articles/clockwatch`, fed 2.12). Under fed 2.11 the same schema bucketed as
 `SELECTED_FIELD_NOT_FOUND` instead — bucket labels are composition-version dependent (cf. the
@@ -825,15 +866,18 @@ type BodyAttributes { pinned: Boolean }          # body's type exists
 - The writer skips field-less types at generation.
 - The parent field still renders its reference → `cannot find type`.
 - Same failure family as #19's **Care** note (empty type dangles the reference), JSON-walker path.
-**Proposed fix:** route an empty-object *value* to the `JSON` scalar (the unknown-shape
-convention, cf. #19) instead of minting a field-less type. Walker-side counterpart of
-`Factory.isShapelessObject`.
+**Fix (2026-06-12):** an empty-object *value* routes to the `JSON` scalar (the unknown-shape
+convention, cf. #19) instead of minting a field-less type; the JSON writer now declares
+`scalar JSON`. Walker-side counterpart of `Factory.isShapelessObject`.
+**Care:** fixing this exposed #35 on the same fixture (same-named objects diverging on
+fields) — the clockwatch test now pins that shape instead.
+**Refs:** `src/json/walker/jsonGen.ts` (`walkElement`), `src/json/io/writer.ts`.
 **AST:** shape change (proposed) — scalar node instead of an empty object type.
 **Refs:** `src/json/walker/`, test `articles/clockwatch` (`tests/all/json.test.ts`, repinned
 `c13cfe5`). Verified: walker output byte-identical 0.8.3 → HEAD except `@link` versions — the
 bucket shift came from the R0 default bump (`72f625e`), not a walker change.
 
-## 22 · `Composed` skips the #9/#12 collision check → duplicate type definitions — ✅ Fixed (working tree)
+## 22 · `Composed` skips the #9/#12 collision check → duplicate type definitions — ✅ Fixed (`1669c6a`)
 **Symptom:** `INTERNAL_ERROR: the type Permissions is defined multiple times in the schema` —
 box `/files/{file_id}` and 8 sibling ops (9 per pass). Predates #18 (same counts before/after).
 
@@ -895,3 +939,513 @@ checks), `src/oas/nodes/comp.ts` (`visit`), `src/oas/nodes/obj.ts` (delegates). 
 `updateName` takes the one-`$ref` branch, the name comes out `undefined` and the type is emitted
 as `type _`; separate small bug), test `test_composed_collision_with_stored_object_splits_by_container`.
 Found while triaging the #18 residue.
+
+## 23 · OAS 3.1 type array (`type: [string, 'null']`) throws — ✅ Fixed (working tree)
+**Symptom:** `Cannot handle property type string,null` — generation throws, zero output.
+omni `get:/v1/connections/{connectionId}/dbt`, `get:/v1/documents`, `get:/v1/models/{modelId}/git`
+(3 ops, both passes). The R-genthrow-tail residue after #19 took sendgrid's three.
+
+**OAS** (omni — 3.1 nullable-type syntax; 3.0 would say `nullable: true`):
+```yaml
+projectRootPath:
+  type:
+  - string
+  - 'null'
+  description: Path to dbt project root
+```
+
+**Example** (before → after):
+```graphql
+# before: generation throws, the op emits nothing
+# after:
+projectRootPath: String
+```
+
+**Cause:**
+- OAS 3.1 replaced `nullable: true` with JSON Schema type arrays: `type: ["string","null"]`.
+- Every `schema.type` reader assumes a plain string.
+- The array reaches `createScalarType`; `gqlScalar("string,null")` matches nothing → throw.
+
+**Fix:** collapse the array to its first non-`"null"` entry, in place, on entry to
+`fromSchema`/`fromProp` (`lookupRef` shares schema instances, so one normalization covers every
+reader). GraphQL fields are nullable by default, so the `"null"` disjunct adds nothing.
+
+**Care:** a heterogeneous array (`type: ["string","integer"]`) coerces to its FIRST entry — the
+same single-scalar coercion as #11's `anyOf` params, not a scalar union (GraphQL has none).
+**Measured (omni):** default 45→48 ok (83.3→88.9%), abstract 44→47 (81.5→87.0%); GEN-THROW 3→0;
+all other buckets byte-identical. Suite 151/151.
+**AST:** none — normalization happens before any node is built; single-type schemas unchanged.
+**Refs:** `src/oas/nodes/factory.ts` (`normalizeTypeArray`, called from `fromSchema` + `fromProp`).
+
+## 24 · `>**` expansion silently drops every enum field — ✅ Fixed (working tree)
+**Symptom:** Slack 43/80 GETs generate ZERO types (the `ok`-only stubs); every other spec
+silently loses its enum fields from both SDL and selection (CCS alone: 5 enum types missing).
+The mechanism behind the **E-slack-ok** "enhancement" — it was a bug, not input quality.
+
+**OAS** (slack stub — `ok` is the only property, a boolean enum behind a `$ref`):
+```yaml
+schema:
+  type: object
+  additionalProperties: true
+  properties:
+    ok:
+      $ref: "#/components/schemas/defs_ok_true"   # { type: boolean, enum: [true] }
+  required: [ok]
+```
+
+**Example** (before → after):
+```graphql
+# before: zero types, op uncredited
+# after:
+type AdminAppsApprovedListResponse {
+  ok: Boolean!
+}
+```
+
+**Cause** (one dropped leaf, three latent bugs behind it):
+- `collectExpandedPaths` treats only `PropScalar`/scalar-array/`PropCircRef` as `>**` leaves —
+  `PropEn` never enters the selection, so enum fields vanish; stubs with only `ok` collapse to 0 types.
+- Once selected, three latent enum bugs surfaced (github -20/pass until fixed):
+  - boolean/number enums built an En with NO values → `enum X {}` is invalid GraphQL;
+  - En definitions emitted the raw ref leaf (`enum author-association`) while nothing sanitized it;
+  - github's ReactionRollup has literal `+1`/`-1` FIELDS — both sanitised to `_1` → duplicate field.
+
+**Fix** (four small pieces):
+- `PropEn` is a `>**` expansion leaf (typesCollector); its En lands via `dependencies()`.
+- enums whose (trimmed) values aren't all legal GraphQL enum identifiers degrade to the base
+  scalar (`ok: Boolean`, reactions `content: String`); TMF637's `'aborted '` trims, stays an enum.
+- En definition + PropEn reference both emit `genTypeName` (the #15 def/ref discipline).
+- `sanitiseField` encodes a leading sign (`+1`→`plus1`, `-1`→`minus1`); the selection alias keeps
+  the raw JSON key (`plus1: "+1"`).
+
+**Measured (corpus, both passes):** slack 46.3→96.3 (+40), github 86.5→91.7 / 84.9→90.1 (+23,
+composeFail 24→1 default), DO 93.8→94.5 (+1); github per-op matrix: 23 fail→pass, 0 pass→fail.
+Suite 152/152 (3 CCS count assertions bumped 17→22 — the 5 restored enum types).
+**Care:** slack's residual 3 GEN-EMPTY are non-JSON/file endpoints (input quality, cf. E-scalar-roots).
+**AST:** `PropScalar` replaces `PropEn` for non-identifier enums (id `prop:enum:` → `prop:scalar:`);
+explicit selection paths referencing those ids change shape.
+**Refs:** `src/oas/generator/typesCollector.ts` (leaf), `src/oas/nodes/factory.ts` (`isGqlEnum`),
+`src/oas/nodes/en.ts`/`propEn.ts` (def/ref names), `src/oas/utils/naming.ts` (`encodeLeadingSign`).
+
+## 25 · Discriminator-less `oneOf` emits a real union the selection cannot satisfy — ✅ Fixed (working tree)
+**Symptom:** abstract pass (v0.4) fails compose with `GROUP_SELECTION_IS_NOT_OBJECT` —
+confluence 14 ops, box 3, github 3 (`ContentMetadata.labels: LabelsUnion` and friends).
+
+**OAS** (confluence — a `oneOf` with no `discriminator`):
+```yaml
+labels:
+  oneOf:
+    - $ref: '#/components/schemas/LabelArray'
+    - type: object
+      properties: { … }
+```
+
+**Example** (before → after, abstract pass):
+```graphql
+# before: SDL and selection disagree
+union LabelsUnion = LabelArray | LabelsUnion2     # SDL: a union…
+selection: """ labels { limit size start } """    # …selected as a group -> rejected
+
+# after: both sides agree on the merged-object form (same shape the default pass emits)
+#### no discriminator — union degraded to a merged object: LabelsUnion = LabelArray | LabelsUnion2
+type LabelsUnion { limit: Int size: Int! start: Int }
+```
+
+**Cause:**
+- `Union.select` already falls back to the flat merged selection when there is no
+  discriminator (`selectAbstract` is guarded on it — `->match` needs a tag field to dispatch on).
+- `Union.generate` still emitted the real `union` line → SDL says union, selection selects a
+  group on it → `GROUP_SELECTION_IS_NOT_OBJECT`.
+
+**Fix:** real `union` + `->match` only when a discriminator exists; otherwise both passes share
+the merged-object downgrade (`generateMergedObject`, headline comment names the original union)
+and member refcounts are absorbed at visit. Discriminated unions and promoted interfaces (R2)
+are untouched.
+
+**Measured (abstract pass):** box 74.6→77.2 (+3), github 90.1→90.8 (+3); per-op 3+3 fail→pass,
+0 pass→fail; default pass byte-identical. confluence unchanged at 69.2: its 14 GROUP_SELECTION
+failures move down a layer to the orphan-type family (`CONNECTORS_UNRESOLVED_FIELD` 11 /
+`CIRCULAR_REFERENCE` 4) — types like `Label` are emitted with fields no selection provides.
+v0.3 emits the SAME orphans but its legacy validator doesn't check them; v0.4's shape validator
+does. That residue is the R-collector orphan slice, not a union problem.
+**AST:** none — emission-time branch only; the union node and its members are unchanged.
+**Refs:** `src/oas/nodes/union.ts` (`generate`/`generateMergedObject`/`visit` refcounts),
+fixture `oneof-no-discriminator.yaml`, test `test_R2_union_without_discriminator_degrades_to_merged_object`.
+
+## 26 · Collector keeps types the output never references, drops ones it does — ✅ Fixed (working tree)
+**Symptom:** two mirror failures, both passes, ~76 ops corpus-wide:
+- emitted-but-unreferenced: `type Label { id … }` written, but every route to it renders as a
+  cycle-cut comment → v0.4 `CONNECTORS_UNRESOLVED_FIELD` (confluence 9, github 17 abstract);
+- referenced-but-dropped: `entries: [FolderMini]` written, `Folder--Mini` deleted with its
+  consolidated parent → `cannot find type` / `INTERNAL_ERROR` (box 11-15, asana 11 per pass).
+
+**OAS** (confluence — the only route to `Label` closes a cycle, so its field is cut):
+```yaml
+LabelArray:
+  properties:
+    results:
+      items: { $ref: '#/components/schemas/Label' }   # cut: re-enters the Label cycle
+```
+
+**Example** (before → after):
+```graphql
+# before: Label written, selection only has "# results: [Label] - circular reference omitted"
+type Label { id: String! label: String! name: String! prefix: String! }   # ✗ UNRESOLVED_FIELD
+# after: Label is not written at all — nothing references it
+```
+
+**Cause:** the collect loop keeps the first node per id and the consolidation loop deletes
+absorbed ids — both decide by bookkeeping, neither asks what the written schema points at.
+
+**Fix:** after collecting, walk the types the written output actually references — each node
+answers for itself via `dependencies(context, selection)` (the hook Map/PropEn/PropMap already
+had, now on the `Type` base: a field points at its target type, a wrapper at its payload, a
+real union at its members, a merged one at its flat fields) — and make the collection exactly
+that set: drop what nothing references, restore what the deletions over-removed.
+
+**Measured (corpus, per-op matrix): 76 fail→pass, 0 pass→fail.** asana 86.1→100 (both),
+box 74.6→84.2 / 77.2→90.4, github abstract 90.8→94.6 (composeFail 25→8), confluence abstract
+69.2→83.1, omni +1/pass. Suite 154/154 (12 typesSize assertions updated — merged-union members
+and inline allOf parts are no longer collected; the polymorphic refactor verified
+verdict-identical on all 22 spec/pass dumps).
+**Care:** `dependencies()` overrides must mirror their class's `select`/`generate` — they live
+next to them on purpose. A real union also keeps a member's shared `$ref` base (the writer may
+promote it, R2); inline `[inline:…]` parts stay absorbed.
+**Care (history — a node-level `dependencies(context)` existed once and was removed in `d2e2672`,
+Feb 2025; do not reintroduce its failure modes):**
+- it called `visit()` during the walk → built nodes / stored names / triggered renames mid-collection;
+- it pushed onto the shared context stack (`enter`/`leave`) mid-walk;
+- it ignored the selection → over-collected;
+- it pulled in members that consolidation was absorbing (the reason `consolidate()` replaced it).
+The #26 version must stay read-only (no `visit()`, no context stack), selection-scoped, and run
+AFTER consolidation. The one allowed write is `Composed.consolidate` (idempotent, the same call
+`select()` makes) — guarded by `test_R2_collect_twice_is_byte_identical`.
+**AST:** none — collection-time only; node trees and emission code are unchanged.
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectReachable`), `iType.ts`/`type.ts`
+(`dependencies`), one-line overrides in `propObj/propArray/propComp/res/body/arr.ts`, container
+overrides in `obj/comp/union.ts`, `T.isEmittable`.
+
+## 27 · Mutations with params AND a body emit two argument lists — ✅ Fixed (working tree)
+**Symptom:** every mutation that has parameters (path OR query) plus a request body is invalid
+GraphQL — ~390 ops per pass corpus-wide (asana 2.3%→55.7, omni 40→87, github 48→86.5). rover
+labels the syntax error INTERNAL_ERROR or CONNECTORS_UNRESOLVED_FIELD, hiding the size.
+
+**OAS** (petstore — one path param + a JSON body):
+```yaml
+/user/{username}:
+  put:
+    parameters:
+      - name: username
+        in: path
+        required: true
+    requestBody:
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/User' }
+```
+
+**Example** (before → after):
+```graphql
+updateUserByUsername(username: String!)(input: UserInput!): …   # ✗ two argument lists
+updateUserByUsername(username: String!, input: UserInput!): …   # ✓ one
+```
+
+**Cause:** `generateParameters` wrote `(params)` and `generateBodyInput` wrote a second
+`(input: X!)` — fine when an op has only one of the two, invalid with both.
+
+**Fix:** one argument list — `Get.generateParameters` takes an optional body arg appended last;
+`Post.bodyArg()` supplies `input: <Payload>!`; all mutation verbs inherit from `Post`.
+
+**Measured (mutation sweep, 1249 ops/pass, both passes): 778 fail→pass, 0 pass→fail** —
+mutations 47% → 77.6% default. GET output byte-identical (no body arg → same list).
+**Care:** rover's error labels masked this as two different buckets (the ROADMAP histogram
+warning applies); the first mutation triage should always start from raw compose errors.
+**AST:** none — emission-only; `Body`/`Param` nodes unchanged.
+**Refs:** `src/oas/nodes/get.ts` (`generateParameters`), `src/oas/nodes/post.ts` (`bodyArg`),
+test `test_mutation_params_and_body_share_one_argument_list`.
+
+## 28 · Request-body selections use the response alias direction — ✅ Fixed (working tree)
+**Symptom:** `INVALID_BODY: FunctionsItemInput doesn't have a field named log_destinations` —
+DO `post:/v2/apps` and the whole INVALID_BODY family (~60 mutation ops with #29).
+
+**OAS** (DO — a nested object inside a request body, snake_case key):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        properties:
+          log_destinations: { type: object, properties: { … } }
+```
+
+**Example** (before → after, inside `body: """…"""`):
+```graphql
+logDestinations: "log_destinations" { … }   # ✗ response direction: field <- json key
+log_destinations: "logDestinations" { … }   # ✓ body direction: json key <- input field
+```
+
+**Cause:** `sanitiseFieldForSelect(name, isInput)` flips the mapping for bodies, but only
+`PropScalar`/`PropArray` passed `isInput` — `PropObj`/`PropComp`/`PropEn`/`PropMap` didn't, so
+every nested non-scalar field inside a body kept the response direction.
+
+**Fix:** pass `this.parent?.kind === 'input'` at the four missing sites (identical to the two
+that already did).
+
+**Measured:** with #29, mutations 77.6 → 82.7% default (+132 ops both passes, 0 pass→fail).
+**AST:** none — emission-only.
+**Refs:** `src/oas/nodes/propObj.ts`/`propComp.ts`/`propEn.ts`/`propMap.ts` (`select`), fixture
+`body-aliases-defaults.yaml`, test `test_body_alias_direction_and_default_literals`.
+
+## 29 · Default values emit as bare paths, and falsy defaults vanish — ✅ Fixed (working tree)
+**Symptom:** `INVALID_BODY: ImageInput.* doesn't have a field named latest` (DO `post:/v2/apps`);
+and `default: 0` / `default: false` silently never emitted (the #17 falsy-guard class, two more
+sites).
+
+**OAS** (DO — a string default):
+```yaml
+tag:
+  type: string
+  default: latest
+```
+
+**Example** (before → after):
+```graphql
+tag: $(latest)     # ✗ `latest` reads as a field path
+tag: $("latest")   # ✓ a string literal; numbers/booleans stay bare: retries: $(0)
+```
+
+**Cause:**
+- `Scalar.select` wrote the default raw — a bare word inside `$()` is a path, not a value.
+- Both `Scalar.select` and `PropScalar.select` gated on `if (schema.default)` — `0`/`false`
+  dropped.
+
+**Fix:** quote string defaults, `String(...)` the rest; both gates use `!= null`.
+
+**Measured:** with #28, mutations +132 ops; the quoting alone also recovered **12 GET ops**
+(string defaults appear in response selections too) — 0 pass→fail in either sweep.
+**AST:** none — emission-only.
+**Refs:** `src/oas/nodes/scalar.ts` (`select`), `src/oas/nodes/propScalar.ts` (`select`),
+fixture `body-aliases-defaults.yaml` (shared with #28).
+
+## 30 · Body arg references the raw payload name — ✅ Fixed (working tree)
+**Symptom:** `INTERNAL_ERROR: cannot find type 'ssh_keysItemInput' in this document` — DO
+`post:/v2/account/keys` and the mutation INTERNAL_ERROR family.
+
+**OAS** (DO — the body payload is named from a snake_case pointer):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        $ref: "#/paths/…/properties/ssh_keys/items"
+```
+
+**Example** (before → after):
+```graphql
+createV2AccountKeys(input: ssh_keysItemInput!): …   # ✗ definition is `input SshKeysItemInput`
+createV2AccountKeys(input: SshKeysItemInput!): …    # ✓ same name both sides
+```
+
+**Cause:** `bodyArg` used `getRefName` (raw) while the input definition emits `genTypeName` —
+the #15 def/ref divergence, on the body argument.
+
+**Fix:** the same `genTypeName` conditional the definitions use (cf. #15, obj.ts/comp.ts).
+**AST:** none — emission-only.
+**Refs:** `src/oas/nodes/post.ts` (`bodyArg`), test `test_body_input_name_matches_definition`.
+
+## 31 · Empty response schemas produce zero types — ✅ Fixed (working tree)
+**Symptom:** GEN-EMPTY — googlebooks 11 ops/pass (deleteBook, familysharing.share, …): the op
+generates nothing at all.
+
+**OAS** (googlebooks — every "no result" op returns `Empty`):
+```yaml
+responses:
+  "200":
+    content:
+      application/json:
+        schema: { $ref: "#/components/schemas/Empty" }
+# components: Empty: { description: …, type: object, properties: {} }
+```
+
+**Example** (before → after):
+```graphql
+# before: zero types, op uncredited
+# after (same as an op with no response content at all):
+type CreateBooksV1CloudloadingDeleteBookResponse { success: Boolean }
+# selection: success: $(true)
+```
+
+**Cause:**
+- the synthetic `success: Boolean` response only kicked in when a response had NO content;
+- a contentful response resolving to a fieldless schema fell through to the JSON-scalar route
+  (#19) → a scalar root collects no types (cf. E-scalar-roots).
+- `isShapelessObject` also rejected `type: object, properties: {}` (the `'type'` keyword was
+  on its no-shape list) — widened to allow an explicit object type, like #24 did for enums.
+
+**Fix:** resolve the response schema and route it to `SYN_SUCCESS_RESPONSE` when it renders no
+fields (`isEmptySchema || isShapelessObject`); the synthetic default is now a real boolean
+(`$(true)`, not `$("true")` — interacts with #29's quoting).
+**AST:** shape change for these ops only — a synthetic response Obj where there was a JSON
+scalar (or nothing).
+**Refs:** `src/oas/nodes/get.ts` (`visitResponseContent`), `src/oas/nodes/factory.ts`
+(`isShapelessObject`), `src/oas/schemas/index.ts`, test `test_empty_response_schema_synthesizes_success`.
+
+## 32 · Ops whose only content is a JSON field emit an empty type; body keys with colons break the parser — ✅ Fixed (working tree)
+**Symptom:** two related body/selection failures:
+- asana (28 ops): `type CreateGoals…Response {}` — empty braces, invalid GraphQL. The response's
+  only field is a free-form JSON object, which the `>**` expansion had no leaf rule for.
+- omni SCIM: `INVALID_BODY … ErrorKind::Eof` — a body key with colons written unquoted.
+
+**OAS** (asana — the response's only field resolves to a fieldless object):
+```yaml
+responses:
+  "200":
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            data: { $ref: "#/components/schemas/EmptyResponse" }   # { type: object } only
+```
+
+**Example** (before → after):
+```graphql
+type CreateGoalsRemoveSupportingRelationshipResponse {}      # ✗ empty braces
+type CreateGoalsRemoveSupportingRelationshipResponse { data: JSON }   # ✓ selection: data
+
+urn:omni:params:1.0:UserAttribute: urnOmniParams10UserAttribute       # ✗ body key unparseable
+"urn:omni:params:1.0:UserAttribute": urnOmniParams10UserAttribute     # ✓ quoted key
+```
+
+**Cause:**
+- free-form JSON fields (`data: JSON`, #19) were never selection leaves, so an op with nothing
+  else selected nothing and emitted its response type with no fields;
+- the body-direction alias quoted the wrong side: the field reference (always a bare
+  identifier) instead of the JSON key (which may contain `:`/spaces/etc.).
+
+**Fix:**
+- when an op's expansion finds nothing selectable, take its free-form JSON fields as the
+  leaves. **Deliberately scoped to otherwise-empty ops:** applying it everywhere diverged the
+  per-connector selections of types shared across connectors (AdobeCommerce satisfiability,
+  omni INVALID_BODY) — measured +62/-4 broad vs **+26/-0 narrowed**.
+- body aliases quote the KEY when it isn't a bare identifier: `"json:key": graphqlField`.
+
+**Measured (both passes): +26 mutation ops, 0 pass→fail; GETs byte-identical.** Mutations
+47% → **88.8%** default across the arc (#27-#32).
+**Care:** the broad leaf rule is the honest long-term form — it needs per-connector selection
+agreement for shared types first (the #13/#26 family, input side).
+**AST:** none — selection-time only.
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths` post-pass),
+`src/oas/utils/naming.ts` (`sanitiseFieldForSelect` input branch), fixture coverage via
+`corpus-mutations.test.ts` (asana) + `test_body_alias_direction_and_default_literals`.
+
+## 33 · Four generation crashes: nested component pointers, non-JSON responses, null union members, $ref'd no-content responses — ✅ Fixed (working tree)
+**Symptom:** ~19 GEN-THROW ops/pass across four small families:
+- openai (6): `Cannot read properties of undefined (reading 'type')`
+- github (4): `Cannot read properties of undefined (reading 'select')`
+- omni (6): `Cannot handle property type null`
+- DO (3): `Not yet implemented for: {"description":"The action was successful…"}`
+
+**OAS** (one snippet per family):
+```yaml
+# openai — a $ref INTO a component, not to one:
+logit_bias: { $ref: "#/components/schemas/CreateCompletionRequest/properties/logit_bias" }
+# github /markdown — the 200 has no JSON content:
+responses: { "200": { content: { "text/html": { … } } } }
+# omni — OAS 3.1 null union member (the member form of #23):
+oneOf: [ { $ref: "#/…/Query" }, { type: "null" } ]
+# DO — a shared $ref'd response with headers but no content:
+responses: { "200": { $ref: "#/components/responses/no_content" } }
+```
+
+**Cause / fix, one line each:**
+- `lookupRef`'s component branch returned undefined for pointers INTO a component instead of
+  falling through to `resolvePointer` (which handles exactly that) → falls through now.
+- non-JSON-only responses left `resultType` unset and `writeConnector` checked `_.has`
+  (true for a declared-but-unset field) → route to the synthetic success (#31's umbrella) and
+  check truthiness.
+- a `{ type: "null" }` union member adds nothing (GraphQL fields are nullable) → skipped, like
+  #23's type arrays.
+- the no-content fallback was gated on `code === '200' | 'default'`, but `$ref`'d responses
+  arrive with the REF STRING as the code → the gate is gone; no content ⇒ synthetic success.
+
+**Care:** non-JSON GET endpoints (slack/DO file downloads) now emit `success: Boolean` ops
+instead of generating nothing — composable and callable, but the response body itself is not
+representable; revisit if a raw-passthrough form ever exists.
+**Still open in this family:** DO `post:/v2/certificates`/`/v2/droplets` (2 ops) — a `oneOf` of
+`allOf`s as the request body; the collector cannot re-walk the expanded path (the known R2
+"real-union with allOf members" gap, input side).
+**AST:** shape changes only where generation previously threw (a node tree now exists).
+**Refs:** `src/oas/oasContext.ts` (`lookupRef`), `src/oas/nodes/get.ts` (`visitResponse`),
+`src/oas/nodes/union.ts` (`visit`), `src/oas/io/operationWriter.ts` (`writeConnector`).
+
+## 34 · Real unions of allOf members: empty member list, twin member ids — ✅ Fixed (working tree)
+**Symptom:** two failures of the same family (the R2 "allOf-member union" gap):
+- a discriminated `oneOf` of `allOf` members that is NOT interface-promoted (rule-3 skip)
+  emits `union ItemResponse = ` — no members, invalid GraphQL;
+- DO `post:/v2/certificates`/`/v2/droplets` (a `oneOf` of `allOf`s as the request body) crash
+  the collector: two inline members share one id, so the path walk finds the wrong twin.
+
+**OAS** (the body shape, DO):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        oneOf:
+          - allOf: [ { … }, { … } ]   # both inline members were named `[inline:Input]`
+          - allOf: [ { … }, { … } ]
+```
+
+**Example** (before → after):
+```graphql
+union ItemResponse =                       # ✗ empty
+union ItemResponse = Book | Movie          # ✓ members with selected fields
+```
+
+**Cause:**
+- the union line filtered members by prop-parent identity — an allOf member's folded props
+  keep the inner part as parent, so no member ever matched (`selectAbstract` already had the
+  correct any-selected-field filter);
+- `Composed.add` suffixes duplicate child names but `Union.add` didn't, so twin inline members
+  collapsed onto one id and broke path addressing.
+
+**Fix:** shared `Union.selectedMembers` (consolidates Composed members, filters by selected
+fields) used by both the union line and `->match`; the duplicate-name suffixing hoisted to
+`Type.withUniqueName` and used by both `Composed.add` and `Union.add`.
+
+**Also in this slice (R2 gate):** the union form is now derived from the connect version —
+v0.4+ emits real unions/interfaces, below that the consolidate downgrade; an explicit ask for
+real unions on < v0.4 downgrades with a warning (`resolveConsolidateUnions`, the R0 contract).
+The CLI no longer hardcodes consolidation: `--connector-spec-version v0.4` gets abstract types.
+**AST:** identity change for twin union members only (`[inline:Input]` → `[inline:Input]:1`).
+**Refs:** `src/oas/nodes/union.ts` (`add`/`selectedMembers`), `src/oas/nodes/type.ts`
+(`withUniqueName`), `src/oas/nodes/comp.ts` (`add` delegates), `src/versions.ts`
+(`resolveConsolidateUnions`), `src/oas/oasGen.ts` (constructor), `src/cli/oas.ts`.
+
+
+## 35 · JSON walker: same-named objects across documents diverge on fields — ✅ Fixed (working tree)
+**Symptom:** `SELECTED_FIELD_NOT_FOUND: selection contains field 'references', which does not
+exist on 'ContentTags'` (clockwatch, multi-document walk) — surfaced when #21's dangling
+reference was fixed.
+
+**JSON** (two documents, the same `tags` object with different field sets):
+```json
+{ "tags": { "name": "…" } }                       // doc A -> ContentTags { name }
+{ "tags": { "name": "…", "references": […] } }    // doc B -> selects references too
+```
+
+**Cause (measured):** two mechanisms, not one.
+- An empty `[]` leaves the array typeless: the SDL drops the field (`### NO TYPE FOUND`
+  comment) but the selection still emits it → `SELECTED_FIELD_NOT_FOUND`.
+- `store()` merged one-directionally (incoming → stored), but the written tree points at the
+  *incoming* instance — fields from earlier documents were lost, and a `[]`/`{}` twin could
+  clobber a typed field (last doc wins).
+**Fix (2026-06-12):**
+- an empty `[]` walks to `[JSON]` (the #19/#21 unknown-shape convention) — SDL and selection agree;
+- `merge()` converges *both* instances on the field union, and an unknown-shape twin
+  (`isUnknownShape`: JSON scalar, or array thereof) never replaces a typed field.
+Flipped four known-bad pins to passing: `articles/clockwatch`, `articles/blog`,
+`articles/article` and the single-article file (all the same mechanism).
+**Refs:** `src/json/walker/jsonGen.ts` (`walkArray`), `src/json/walker/jsonContext.ts`
+(`merge`/`isUnknownShape`), fixture `tests/resources/json/articles/clockwatch`.

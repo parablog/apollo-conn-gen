@@ -8,8 +8,20 @@ import { IType } from './nodes/internal.js';
 
 import { Mapper } from './mapper/index.js';
 
+// per-operation request rewiring, keyed by op id (`get:/pets/{id}`): replace the HTTP path,
+// query params (raw JSONSelection values, e.g. `$('2024-01')`), headers (string templates,
+// e.g. `{$config.key}`) and/or the whole body mapping; null drops one, unknown keys append
+export type RequestOverride = {
+  path?: string;
+  queryParams?: Record<string, string | null>;
+  headers?: Record<string, string | null>;
+  body?: string | null;
+};
+
 export type GenerateOptions = {
-  consolidateUnions: boolean;
+  baseURL?: string;
+  overrides?: Record<string, RequestOverride>;
+  consolidateUnions?: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
@@ -53,6 +65,17 @@ export class OasContext {
   public inlinedMappingEdges: Set<string> = new Set();
   public inlineFallbackDepth: number = 0;
 
+  // #13: SDL-only prop replacements, keyed by the emitted instance. When same-id instances
+  // diverge on cycle cuts, generate() emits the donor's un-cut field while every path's
+  // *selection* keeps its own cut comment (mutating props leaked the field into the cut
+  // position's selection -> rover CIRCULAR_REFERENCE). Set by TypesCollector.collect.
+  // e.g. (confluence): two `Space` instances in one op —
+  //   under Content: Space { # history — cut }   <- collected first, wins emission
+  //   under Result:  Space { history: SpaceHistory }
+  //   entry: keptSpace -> { "history" -> donor prop }  => SDL emits `history: SpaceHistory`,
+  //   the Content path's selection still reads `# history: circular reference omitted`
+  public sdlPropOverrides: Map<IType, Map<string, IType>> = new Map();
+
   public stack: IType[] = new Array<IType>();
   public types: Map<string, IType | undefined> = new Map();
   public generateOptions: GenerateOptions;
@@ -73,6 +96,7 @@ export class OasContext {
 
   public reset(): void {
     this.generatedSet?.clear();
+    this.sdlPropOverrides.clear();
   }
 
   public enter(type: IType): void {
@@ -120,13 +144,19 @@ export class OasContext {
 
   public lookupRef(ref: string | null): SchemaObject | null {
     if (ref && ref.startsWith(OasContext.COMPONENTS_SCHEMAS)) {
-      const currentCount = this.refCount.get(ref) || 0;
-      this.refCount.set(ref, currentCount + 1);
-
       const definition = this.parser.getDefinition();
       const schemas = definition.components?.schemas ?? {};
+      // the named component, when the ref points AT one (`#/components/schemas/User` -> `User`)
+      const direct = schemas[Naming.getRefName(ref)!];
 
-      return schemas ? schemas[Naming.getRefName(ref)!] : null;
+      if (direct) {
+        // count the reference only when it actually resolves to a named component
+        const currentCount = this.refCount.get(ref) || 0;
+        this.refCount.set(ref, currentCount + 1);
+        return direct;
+      }
+      // not a named component but a pointer INTO one (openai:
+      // `#/components/schemas/CreateCompletionRequest/properties/logit_bias`) — walk it below. #33
     }
 
     // generic JSON-pointer schema ref (e.g. #/paths/…); not a named component, so it skips

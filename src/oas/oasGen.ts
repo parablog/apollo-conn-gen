@@ -5,17 +5,20 @@ import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
-import { DEFAULT_VERSIONS, requireConnectVersion, validateVersionOptions } from '../versions.js';
-import { GenerateOptions, OasContext } from './oasContext.js';
+import { DEFAULT_VERSIONS, requireConnectVersion, resolveConsolidateUnions, validateVersionOptions } from '../versions.js';
+import { GenerateOptions, OasContext, RequestOverride } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
 import { TypesCollector } from './generator/typesCollector.js';
 import { Mapper } from './mapper/types.js';
+import { Naming } from './utils/naming.js';
 
 interface IGenOptions {
-  skipValidation: boolean;
-  consolidateUnions: boolean;
+  skipValidation?: boolean;
+  baseURL?: string;
+  overrides?: Record<string, RequestOverride>;
+  consolidateUnions?: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
@@ -136,7 +139,15 @@ export class OasGen {
 
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
-    this.options = options;
+    // real unions/interfaces only exist from connect v0.4 — derive the union form from the
+    // version unless explicitly chosen (an invalid explicit choice downgrades loudly). R2
+    this.options = {
+      ...options,
+      consolidateUnions: resolveConsolidateUnions(
+        options.connectorSpecVersion ?? DEFAULT_VERSIONS.connectorSpecVersion,
+        options.consolidateUnions,
+      ),
+    };
     this.collector = new TypesCollector(this);
   }
 
@@ -164,6 +175,13 @@ export class OasGen {
   }
 
   public generateSchema(paths: string[]): string {
+    // typo guard: an override key that matches no operation would silently do nothing
+    for (const key of Object.keys(this.options.overrides ?? {})) {
+      if (!this.paths.has(key)) {
+        console.warn(`[overrides] no operation matches "${key}" — override ignored.`);
+      }
+    }
+
     // make sure we pass the latest options to our context for the generation
     const context = this.getContext();
     context.reset();
@@ -261,7 +279,7 @@ export class OasGen {
     let i = 0;
     const parts = path.split('>');
     do {
-      const part = parts[i].replace(/#\/c\/s/g, '#/components/schemas');
+      const part = Naming.expandRef(parts[i]);
       current = collection.find((t) => t.id === part);
       if (!current) {
         throw new Error('Could not find type: ' + part + ' from ' + path + ', last: ' + last?.pathToRoot());

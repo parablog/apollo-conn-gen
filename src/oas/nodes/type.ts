@@ -3,6 +3,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Factory } from './factory.js';
+import { Naming } from '../utils/naming.js';
 
 // Build (once per selection array, cached by identity) the set of all `>`-boundary prefixes of every
 // selection entry. `someEntry.startsWith(path)` for a `>`-joined `path` is then exactly
@@ -47,6 +48,24 @@ export abstract class Type implements IType {
   public abstract forPrompt(context: OasContext): string;
 
   public abstract select(context: OasContext, writer: Writer, selection: string[]): void;
+
+  // The nodes this node's written output needs (a field's target type, a wrapper's payload, a
+  // map's value …). Leaves return nothing. Overridden per class, next to the code it mirrors.
+  public dependencies(_context: OasContext, _selection: string[]): IType[] {
+    return [];
+  }
+
+  // children are addressed by id (name-derived): two same-named siblings would collapse into
+  // one path — suffix the duplicate (`[inline:Input]`, `[inline:Input]:1`). see #34
+  protected withUniqueName(child: IType): IType {
+    let name = child.name;
+    let idx = 0;
+    while (this.children.some((c) => c.name === name)) {
+      name = `${child.name}:${++idx}`;
+    }
+    child.name = name;
+    return child;
+  }
 
   public find(path: string, collection: IType[]): IType | boolean {
     const parts = path.split('>');
@@ -103,10 +122,7 @@ export abstract class Type implements IType {
 
   public path(): string {
     const ancestors = this.ancestors();
-    return ancestors
-      .map((t) => t.id)
-      .join('>')
-      .replace(/#\/components\/schemas/g, '#/c/s');
+    return Naming.abbreviateRef(ancestors.map((t) => t.id).join('>'));
   }
 
   public pathToRoot(): string {

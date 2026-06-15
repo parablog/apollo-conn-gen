@@ -76,8 +76,7 @@ export class Post extends Get {
 
     this.writeOpName(context, writer);
 
-    this.generateParameters(context, writer, selection);
-    this.generateBodyInput(context, writer);
+    this.generateParameters(context, writer, selection, this.bodyArg());
 
     if (this.resultType) {
       writer.write(': ');
@@ -125,16 +124,15 @@ export class Post extends Get {
     trace(context, '<- [post::visitBody]', `out: ${this.name}`);
   }
 
-  private generateBodyInput(context: OasContext, writer: Writer) {
-    if (!this.body || !this.body.payload) return;
+  // `input: <Payload>!`, or undefined when the op has no JSON body. Definition and reference
+  // must agree (the #15 discipline): the input type definition emits genTypeName, so this does
+  // too (`ssh_keysItemInput` vs the definition's `SshKeysItemInput`). see docs/issues.md #30
+  private bodyArg(): string | undefined {
+    if (!this.body || !this.body.payload) return undefined;
 
     const payload = this.body.payload as Type;
-
-    writer.write('(');
-
-    const name = Naming.getRefName(payload.name!) + payload.nameSuffix();
-    writer.write('input').write(': ').write(name).write('!');
-
-    writer.write(')');
+    const sanitised = Naming.genTypeName(payload.name!);
+    const refName = Naming.getRefName(payload.name!);
+    return 'input: ' + (sanitised === refName ? refName : sanitised) + payload.nameSuffix() + '!';
   }
 }

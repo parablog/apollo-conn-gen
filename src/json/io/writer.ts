@@ -48,7 +48,9 @@ export class ConnectorWriter {
     import: ["@connect", "@source"]
   )
   @source(name: "api", http: { baseURL: "${options?.baseURL || 'http://localhost:4010'}" })
-  
+
+scalar JSON
+
 `);
   }
 

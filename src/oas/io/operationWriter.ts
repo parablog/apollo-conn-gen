@@ -1,14 +1,21 @@
 import _ from 'lodash';
-import { OasContext } from '../oasContext.js';
+import { ParameterObject } from 'oas/types';
+import { OasContext, RequestOverride } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Body, IType, Op, Param, Res, T, Type } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
+import { ErrorsWriter } from './errorsWriter.js';
 import { Writer } from './writer.js';
 import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
 import { warn } from '../log/trace.js';
+import { anyOperationDeclaresSecurity, globalSecurity, securitySchemes, resolveAuthHeader } from './security.js';
 
 export class OperationWriter {
-  constructor(private gen: OasGen) {}
+  private errorsWriter: ErrorsWriter;
+
+  constructor(private gen: OasGen) {
+    this.errorsWriter = new ErrorsWriter(gen);
+  }
 
   public writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
     const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
@@ -45,8 +52,12 @@ export class OperationWriter {
   }
 
   public writeConnector(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
+    if (!T.isOp(type)) {
+      throw new Error(`expected an operation node, got ${type.id}`);
+    }
+
+    const op = type;
     const indent = 0;
-    const op = type as unknown as Op; // assume type is GetOp
     let spacing = ' '.repeat(indent + 4);
     writer.write(spacing).write('@connect(\n');
 
@@ -57,129 +68,215 @@ export class OperationWriter {
 
     writer.write('\n').write(spacing).write('selection: """\n');
 
-    if (_.has(op, 'resultType')) {
-      // scalar types don't need to be generated?
-      this.writeSelection(context, writer, _.get(op, 'resultType') as Type, selection);
+    // truthiness, not _.has — the declared-but-unset field is still an own property. #33
+    if (op.resultType) {
+      this.writeSelection(context, writer, op.resultType, selection);
     }
 
     writer.write(spacing).write('"""\n');
 
-    this.writeErrors(context, writer, op, indent);
+    this.errorsWriter.write(context, writer, op, indent);
 
     spacing = ' '.repeat(indent + 4);
     writer.write(spacing).write(')\n');
   }
 
-  // R4 (opt-in): emit `errors: { extensions: """statusCode: $status""" }` to surface the HTTP status
-  // in the GraphQL error extensions, for operations that document HTTP error responses. errors is a
-  // connect v0.2+ feature; below that we skip with a logged downgrade rather than emit invalid output.
-  private writeErrors(context: OasContext, writer: Writer, op: Op, indent: number): void {
-    if (!context.generateOptions?.emitConnectorErrors || !this.hasDocumentedErrors(op)) {
-      return;
-    }
+  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], _indent: number): void {
+    const override = context.generateOptions.overrides?.[op.id];
 
-    const version = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
-    if (!meetsMinimum(version, 'v0.2')) {
-      warn(
-        context,
-        '[errors]',
-        `@connect(errors:) requires connect v0.2, but target is ${version} — not emitted for ${op.verb} ${op.operation.path}`,
-      );
-      return;
-    }
+    // the verb + path first, then query params, headers and lastly the body
+    writer.write(`{ ${op.verb}: `).write('"' + this.templatedPath(op, override) + '"');
+    // each block starts on its own line and ends without a trailing newline
+    const wroteQueryParams = this.writeQueryParams(context, writer, op, override);
+    const wroteHeaders = this.writeHeaders(writer, op, override);
 
-    const outer = ' '.repeat(indent + 6);
-    const inner = ' '.repeat(indent + 6);
-    writer
-      .write(outer)
-      .write('errors: { extensions: """\n')
-      .write(inner)
-      .write('statusCode: $status\n')
-      .write(outer)
-      .write('""" }\n');
+    // body (POST, PUT, etc.): an override (raw JSONSelection) replaces the inferred
+    // `$args.input { … }` mapping; null drops the body altogether. see ROADMAP R9
+    if (typeof override?.body === 'string') {
+      // body emits its own trailing indent, so close the object right after it
+      this.writeBodyOverride(writer, override.body);
+      writer.write('}');
+    } else if (override?.body === undefined && op.body) {
+      // body emits its own trailing indent, so close the object right after it
+      this.writeBodySelection(context, writer, op.body, selection);
+      writer.write('}');
+    } else if (wroteQueryParams || wroteHeaders) {
+      // no body: close on its own line, aligned under `http:` (avoids a column-0 brace)
+      writer.write('\n' + ' '.repeat(6) + '}');
+    } else {
+      // nothing but the path: keep the compact single-line form `{ GET: "/x"}`
+      writer.write('}');
+    }
   }
 
-  // True when the operation documents an HTTP error response. Accepts both concrete numeric statuses
-  // (4xx/5xx) and the OAS range keys `4XX`/`5XX` (case-insensitive). The `default` key is excluded —
-  // it also covers 2xx/3xx, so it is not specifically an error indicator.
-  private hasDocumentedErrors(op: Op): boolean {
-    return op.operation.getResponseStatusCodes().some((code: string) => /^[45](\d\d|XX)$/i.test(code));
-  }
-
-  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], indent: number): void {
-    // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
-    const verb = op.verb;
-    const templatedPath = op.operation.path.replace(
-      /\{([^}]+)\}/g,
-      (_m, name) => `{$args.${Naming.genParamName(name)}}`,
+  // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
+  // an override path may already template (`{$args.id}`, `{$config.v}`) — leave `$` segments alone
+  private templatedPath(op: Op, override?: RequestOverride): string {
+    return (override?.path ?? op.operation.path).replace(/\{([^}]+)\}/g, (m, name) =>
+      name.startsWith('$') ? m : `{$args.${Naming.genParamName(name)}}`,
     );
-    writer.write(`{ ${verb}: `).write('"' + templatedPath + '"');
+  }
 
-    if (op.params.length > 0) {
-      // we now include all query params, not just required ones. if they are not set,
-      // then the connectors will not include them in the request.
-      let queryParams = op.params.filter((p: Param) => {
-        return p.parameter.in && p.parameter.in.toLowerCase() === 'query';
-      });
+  // returns true when a queryParams block was written (so the caller can place the closing brace)
+  private writeQueryParams(context: OasContext, writer: Writer, op: Op, override?: RequestOverride): boolean {
+    // we now include all query params, not just required ones. if they are not set,
+    // then the connectors will not include them in the request.
+    let queryParams = op.params.filter((p: Param) => {
+      return p.parameter.in && p.parameter.in.toLowerCase() === 'query';
+    });
 
-      // Skip optional params if skipOptionalArgs is true
-      if (context.generateOptions?.skipOptionalArgs) {
-        queryParams = queryParams.filter((p: Param) => p.required);
-      }
+    // Skip optional params if skipOptionalArgs is true
+    if (context.generateOptions?.skipOptionalArgs) {
+      queryParams = queryParams.filter((p: Param) => p.required);
+    }
 
-      if (queryParams.length > 0) {
-        writer.write('\n');
-        let spacing = ' '.repeat(6);
+    // e.g. `"api-version": $('2024-01')` appended, `"ids": ids->joinNotNull(";")` replaced
+    const entries = this.mergeOverrides(
+      queryParams,
+      override?.queryParams ?? {},
+      (p) => `${Naming.genParamName(p.name)}${this.arrayJoin(p)}`,
+    );
+    if (entries.length === 0) {
+      return false;
+    }
 
-        writer.write(spacing).write(`queryParams: """\n`);
-        spacing = ' '.repeat(8);
-        writer.write(spacing).write(`$args {\n`);
-        spacing = ' '.repeat(10);
-        for (const p of queryParams) {
-          writer.write(spacing).write(`"${p.name}": ${Naming.genParamName(p.name)}\n`);
-        }
-        spacing = ' '.repeat(8);
-        writer.write(spacing).write('}\n');
-        spacing = ' '.repeat(6);
-        writer.write(spacing).write('"""\n');
-      }
+    writer.write('\n');
+    let spacing = ' '.repeat(6);
 
-      const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
+    writer.write(spacing).write(`queryParams: """\n`);
+    spacing = ' '.repeat(8);
+    writer.write(spacing).write(`$args {\n`);
+    spacing = ' '.repeat(10);
+    for (const [key, value] of entries) {
+      writer.write(spacing).write(`"${key}": ${value}\n`);
+    }
+    spacing = ' '.repeat(8);
+    writer.write(spacing).write('}\n');
+    spacing = ' '.repeat(6);
+    // no trailing newline — the caller adds the separator/brace
+    writer.write(spacing).write('"""');
+    return true;
+  }
 
-      if (headers.length > 0) {
-        let spacing = ' '.repeat(6);
-        writer.write(spacing + 'headers: [\n');
-        spacing = ' '.repeat(8);
+  // returns true when a headers block was written (so the caller can place the closing brace)
+  private writeHeaders(writer: Writer, op: Op, override?: RequestOverride): boolean {
+    // OAS `header` params, with user overrides merged in (string replaces, null drops)
+    const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
+    let entries = this.mergeOverrides(headers, override?.headers ?? {}, (p) => this.headerExample(p));
 
-        for (const p of headers) {
-          let value: string | null = null;
-
-          if (p.example != null) {
-            value = p.example.toString();
-          }
-
-          if (p.examples && Object.keys(p.examples).length > 0) {
-            value = Object.keys(p.examples).join(',');
-          }
-
-          if (value == null) {
-            value = '<placeholder>';
-          }
-
-          writer.write(spacing + `{ name: "${p.name}", value: "${value}" }\n`);
-        }
-
-        spacing = ' '.repeat(6);
-        writer.write(spacing + ']');
+    // R5 slice 2: add this operation's effective auth header (only when the spec is in per-op mode).
+    // HTTP header names are case-insensitive: an explicit user override of the same name wins;
+    // otherwise the resolved auth replaces any inferred OAS header of that name (so we never emit
+    // a real credential alongside a placeholder that differs only in case).
+    const auth = this.authHeaderEntry(op);
+    if (auth) {
+      const sameName = (name: string) => name.toLowerCase() === auth[0].toLowerCase();
+      const overridden = Object.keys(override?.headers ?? {}).some(sameName);
+      if (!overridden) {
+        entries = [auth, ...entries.filter(([name]) => !sameName(name))];
       }
     }
 
-    if (_.has(op, 'body')) {
-      const body = op.body as Body;
-      this.writeBodySelection(context, writer, body, selection);
+    if (entries.length === 0) {
+      return false;
     }
 
-    writer.write('}');
+    let spacing = ' '.repeat(6);
+    // leading newline so the block starts on its own line (after the path or a queryParams block)
+    writer.write('\n' + spacing + 'headers: [\n');
+    spacing = ' '.repeat(8);
+
+    for (const [key, value] of entries) {
+      writer.write(spacing + `{ name: "${key}", value: "${value}" }\n`);
+    }
+
+    spacing = ' '.repeat(6);
+    // no trailing newline — the caller adds the separator/brace
+    writer.write(spacing + ']');
+    return true;
+  }
+
+  // R5 slice 2: this operation's effective auth header as a [name, value] entry, or null.
+  //
+  // Emits only in *per-op mode* — when some operation in the spec declares its own `security`,
+  // the shared @source auth header is suppressed, so each @connect must carry its own. The
+  // effective requirement is the op's own `security` when present, else the global default:
+  //   security: [{ AdminBearer: [] }]  (own)     -> that scheme's header (e.g. Authorization: Bearer)
+  //   security: []                     (public)  -> no header (the op correctly sends nothing)
+  //   no own `security`                           -> the inherited global header
+  private authHeaderEntry(op: Op): [string, string] | null {
+    const api = this.gen.parser;
+    // uniform mode: @source already carries the shared auth, nothing to add per operation
+    if (!anyOperationDeclaresSecurity(api)) {
+      return null;
+    }
+
+    // the op's own requirement; `undefined` = inherit the global, `[]` = public
+    const own = op.operation.schema.security;
+    // `??` not `||`: an explicit `[]` (public) must NOT fall back to the global
+    const effective = own ?? globalSecurity(api);
+
+    // read the scheme definitions the requirement refers to
+    const schemes = securitySchemes(api);
+    // resolve the effective requirement to one header, collecting per-scheme drop warnings
+    const { header, warnings } = resolveAuthHeader(effective, schemes);
+    // surface dropped schemes loudly, tagged with this operation
+    for (const w of warnings) {
+      console.warn(`${w} (operation ${op.verb} ${op.operation.path})`);
+    }
+    return header ? [header.name, header.value] : null;
+  }
+
+  // merge user overrides over the inferred params: a string replaces the inferred value,
+  // null drops the entry, an unknown key is appended. see ROADMAP R8
+  private mergeOverrides<T extends { name: string }>(
+    inferred: T[],
+    overrides: Record<string, string | null>,
+    inferredValue: (item: T) => string,
+  ): Array<[string, string]> {
+    const kept = inferred
+      .filter((item) => overrides[item.name] !== null)
+      .map((item): [string, string] => [item.name, overrides[item.name] ?? inferredValue(item)]);
+
+    const known = new Set(inferred.map((item) => item.name));
+    const appended = Object.entries(overrides).filter(
+      (entry): entry is [string, string] => !known.has(entry[0]) && entry[1] != null,
+    );
+
+    return [...kept, ...appended];
+  }
+
+  // inferred header value: the example, the example keys, or a placeholder for the user to fill
+  private headerExample(p: ParameterObject): string {
+    if (p.example != null) {
+      return p.example.toString();
+    }
+    if (p.examples && Object.keys(p.examples).length > 0) {
+      return Object.keys(p.examples).join(',');
+    }
+    return '<placeholder>';
+  }
+
+  // a non-exploded array param (`?ids=1,2,3`) needs its values joined: `ids->joinNotNull(",")`. see ROADMAP R8
+  // exploded arrays (the OAS default) already work as a plain array value
+  private arrayJoin(p: Param): string {
+    const parameter = p.parameter;
+    if (_.get(parameter, 'schema.type') !== 'array' || parameter.explode !== false) {
+      return '';
+    }
+    const delimiter = parameter.style === 'spaceDelimited' ? ' ' : parameter.style === 'pipeDelimited' ? '|' : ',';
+    return `->joinNotNull("${delimiter}")`;
+  }
+
+  // mirrors Body.select formatting, but the user's raw JSONSelection replaces the whole mapping
+  private writeBodyOverride(writer: Writer, body: string): void {
+    writer.write(',\n');
+    const spacing = ' '.repeat(6);
+    writer.write(spacing + 'body: """\n');
+    for (const line of body.split('\n')) {
+      writer.write(spacing + '  ' + line + '\n');
+    }
+    writer.write(spacing + '"""\n' + ' '.repeat(5));
   }
 
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {

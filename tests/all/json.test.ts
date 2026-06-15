@@ -127,35 +127,32 @@ test('articles/search.json', async () => {
 });
 
 test('articles/clockwatch', async () => {
-  // known-bad: empty {} value emits a dangling type reference — see docs/issues.md #21
-  const output = await runJsonTest('articles/clockwatch', { shouldFail: true });
-  assert.ok(output !== undefined);
-  assert.ok(output!.includes('MainAttributes'));
+  // composes since #35: empty [] fields walk to [JSON] (so SDL and selection agree) and
+  // same-named objects merge on the field union instead of last-doc-wins
+  await runJsonTest('articles/clockwatch', {
+    shouldFail: false,
+    connectorSpecVersion: 'v0.3',
+    federationVersion: 'v2.12',
+    composeFederationVersion: '2.12.0',
+  });
 });
 
 test('test/merge', async () => {
   await runJsonTest('test/merge');
 });
 
+// the three SELECTED_FIELD_NOT_FOUND pins below compose since #35 (empty [] -> [JSON],
+// field-union merge)
 test('articles/blog', async () => {
-  await runJsonTest('articles/blog', {
-    shouldFail: true,
-    outputContains: 'SELECTED_FIELD_NOT_FOUND',
-  });
+  await runJsonTest('articles/blog');
 });
 
 test('articles/article', async () => {
-  await runJsonTest('articles/article', {
-    shouldFail: true,
-    outputContains: 'SELECTED_FIELD_NOT_FOUND',
-  });
+  await runJsonTest('articles/article');
 });
 
 test('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend', async () => {
-  await runJsonTest('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend.json', {
-    shouldFail: true,
-    outputContains: 'SELECTED_FIELD_NOT_FOUND',
-  });
+  await runJsonTest('articles/article/2023_dec_01_premier-league-10-things-to-look-out-for-this-weekend.json');
 });
 
 test('live-scores/all/2023-12-23_15_00.json', async () => {

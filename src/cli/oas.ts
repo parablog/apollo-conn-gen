@@ -1,7 +1,9 @@
-import { Command } from 'commander';
+import fs from 'fs';
+import { Command, OptionValues } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
+import { RequestOverride } from '../oas/oasContext.js';
 import { RulesLoader, OpNameMapper, MapRules, Mapper } from '../oas/mapper/index.js';
 
 const originalConsole = Object.assign(
@@ -11,8 +13,7 @@ const originalConsole = Object.assign(
   console,
 );
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function loadRules(opts: any): Mapper | undefined {
+function loadRules(opts: OptionValues): Mapper | undefined {
   let mapper;
   if (opts.transformRules) {
     try {
@@ -22,27 +23,36 @@ function loadRules(opts: any): Mapper | undefined {
       console.error(`Error loading transform rules: ${error}`);
       return undefined;
     }
-  } else if (opts.postName) {
-    // Backward compatibility with legacy --post-name
-    mapper = OpNameMapper.fromPattern(opts.postName);
   }
 
   return mapper;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
-async function main(sourceFile: string, opts: any): Promise<void> {
+function loadOverrides(opts: OptionValues): Record<string, RequestOverride> | undefined {
+  if (!opts.overrides) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(opts.overrides, 'utf-8'));
+  } catch (error) {
+    console.error(`Error loading overrides: ${error}`);
+    return undefined;
+  }
+}
+
+async function main(sourceFile: string, opts: OptionValues): Promise<void> {
   console.log = () => {};
 
   const mapper = loadRules(opts);
+  const overrides = loadOverrides(opts);
 
   const gen = await OasGen.fromFile(sourceFile, {
     ...opts,
-    consolidateUnions: true,
+    baseURL: opts.baseUrl,
+    overrides,
     showParentInSelections: false,
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
-    postName: opts.postName,
     mapper: mapper,
     skipOptionalArgs: opts.skipOptionalArgs,
     inferEntityResolvers: opts.inferEntityResolvers,
@@ -101,10 +111,13 @@ program
   .option('-t --transform-rules <file>', 'Load transform rules from a JSON file to apply multiple name transformations')
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
+  .option('--base-url <url>', 'Override the @source base URL (default: servers[0] from the spec)')
+  .option('--overrides <file>', 'Load per-operation path/queryParams overrides from a JSON file')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
   .option('--reusable-mappings', 'Emit reusable @mapping directives (requires connect v0.5)', false)
   .parse(process.argv);
 
 const source = program.args[0];
-main(source, program.opts()).then(() => console.log('done'));
+main(source, program.opts())
+  .then(() => console.log('done'));

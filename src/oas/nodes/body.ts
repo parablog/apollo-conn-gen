@@ -41,6 +41,10 @@ export class Body extends Type {
     // do nothing for body, it will be added automatically
   }
 
+  dependencies(): IType[] {
+    return this.payload ? [this.payload] : [];
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '-> [body:select]', `-> in: ${this.parent!.name}`);
 

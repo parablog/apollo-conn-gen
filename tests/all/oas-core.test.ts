@@ -255,13 +255,13 @@ test('test_019_oas_test_010_TMF633_IntentOrValue_to_Union', async () => {
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:description',
   ];
-  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 4);
+  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 2);
 });
 
 test('test_020_oas_test_010_TMF633_IntentOrValue_to_Union_Full', async () => {
   const paths = ['get:/product/{id}>**'];
 
-  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 4);
+  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 2);
 });
 test('test_021_oas_test_011_TMF637_001_ComposedTest', async () => {
   const paths = ['get:/product/{id}>**'];
@@ -321,7 +321,7 @@ test('test_024_oas_test_014_testTMF637_TestRecursion', async () => {
   ];
 
   // expect.assertions(6);
-  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 4);
+  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 3);
   // expect(error).toContain("Circular reference detected in `@connect(selection:)` on `Query.productById`");
 });
 
@@ -612,7 +612,7 @@ test('test_047_oas_test_030_post-body-allOf', async () => {
 test('test_048_oas_test_031_post-body-oneOf', async () => {
   const paths = ['post:/event>**'];
 
-  await runOasTest(`post-sample.yaml`, paths, 3, 4);
+  await runOasTest(`post-sample.yaml`, paths, 3, 2);
 });
 
 test('test_049_oas_test_032_mindbody-JSON', async () => {
@@ -640,7 +640,7 @@ test('test_052_oas_test_035_adobe-commerce-delete-address', async () => {
 
 test('test_053_oas_test_036_time-series', async () => {
   const paths = ['post:/market-data-services/time-series/search>**'];
-  await runOasTest('time-series-1.0.28.yaml', paths, 1, 12);
+  await runOasTest('time-series-1.0.28.yaml', paths, 1, 9);
 });
 
 test('test_054_oas_test-better-naming', async () => {
@@ -650,14 +650,19 @@ test('test_054_oas_test-better-naming', async () => {
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name'
   ]
 
-  await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 5);
+  await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 3);
 });
 test('test_060_oas_test_additionalProperties_support', async () => {
   // Test additionalProperties support with VehicleComponentTree
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 17);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22, false, false, undefined, false, false, {
+    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
+    connectorSpecVersion: 'v0.3',
+    federationVersion: 'v2.12',
+    composeFederationVersion: '2.12.0',
+  });
 });
 
 test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
@@ -665,7 +670,12 @@ test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 17);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22, false, false, undefined, false, false, {
+    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
+    connectorSpecVersion: 'v0.3',
+    federationVersion: 'v2.12',
+    composeFederationVersion: '2.12.0',
+  });
 });
 
 test('test_062_oas_test_images_additionalProperties', async () => {
@@ -673,7 +683,12 @@ test('test_062_oas_test_images_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>prop:map:images>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5, false, false, undefined, false, false, {
+    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
+    connectorSpecVersion: 'v0.3',
+    federationVersion: 'v2.12',
+    composeFederationVersion: '2.12.0',
+  });
 });
 
 test('test_ref_into_paths_pointer_resolves_and_composes', async () => {
@@ -871,4 +886,132 @@ test('test_anyof_param_coerced_to_string_arg', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/\bid: String!/.test(schema!), 'anyOf param coerced to a String arg');
   assert.ok(!/\bid: !/.test(schema!), 'no empty arg type');
+});
+
+test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
+  // OAS 3.1 nullable syntax `type: [string, 'null']` (no more `nullable: true`) reached
+  // createScalarType as the literal "string,null" and threw. The array collapses to its first
+  // non-null entry — GraphQL fields are nullable by default. see docs/issues.md #23
+  const schema = await runOasTest('type-array-null.yaml', ['get:/settings>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/projectRootPath: String\b/.test(schema!), 'string-or-null prop becomes String');
+  assert.ok(/retries: Int\b/.test(schema!), 'integer-or-null prop becomes Int');
+  assert.ok(/name: String\b/.test(schema!), 'plain single-type prop unchanged');
+});
+
+test('test_enum_fields_selected_and_degraded', async () => {
+  // `>**` expansion must include enum props (slack's ok-only stubs collapsed to zero types), and
+  // enums without a GraphQL form degrade honestly. see docs/issues.md #24
+  const schema = await runOasTest('enum-fields.yaml', ['get:/status>**'], 1, 2, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/ok: Boolean!/.test(schema!), 'boolean enum degrades to Boolean');
+  assert.ok(/state: State\b/.test(schema!), 'valid string enum keeps its enum type');
+  assert.ok(/enum State \{/.test(schema!), 'enum definition emitted (sanitised name)');
+  assert.ok(/\bsuspended\b/.test(schema!) && !/suspended /.test(schema!), 'sloppy value trimmed');
+  assert.ok(/reaction: String\b/.test(schema!), 'non-identifier enum values degrade to String');
+  assert.ok(/plus1: Int/.test(schema!) && /minus1: Int/.test(schema!), 'signed fields disambiguated');
+  assert.ok(/plus1: "\+1"/.test(schema!) && /minus1: "-1"/.test(schema!), 'selection aliases keep raw keys');
+});
+
+test('test_mutation_params_and_body_share_one_argument_list', async () => {
+  // an op with params AND a body emitted two parenthesised lists — `(username: String!)(input:
+  // UserInput!)` — which is not valid GraphQL. One list, body last. see docs/issues.md #27
+  const schema = await runOasTest('petstore.yaml', ['put:/user/{username}>**'], 19, 2, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /updateUserByUsername\(username: String!, input: UserInput!\)/.test(schema!),
+    'params and body in one argument list',
+  );
+  assert.ok(!/\)\(/.test(schema!), 'no adjacent argument lists anywhere');
+});
+
+test('test_body_alias_direction_and_default_literals', async () => {
+  // request-body selections map jsonKey <- graphqlField (the reverse of responses), string
+  // defaults are quoted literals, and 0/false are real defaults. see docs/issues.md #28, #29
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/things>**'], 3, 3, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/log_destinations: logDestinations \{/.test(schema!), 'body alias maps key <- field');
+  assert.ok(!/logDestinations: "log_destinations"/.test(schema!), 'no response-direction alias in the body');
+  // R7: body defaults coalesce too — the caller's value wins, the default only fills gaps
+  assert.ok(/tag: tag \?\? \$\("latest"\)/.test(schema!), 'string default quoted, coalesced');
+  assert.ok(/retries: retries \?\? \$\(0\)/.test(schema!), 'zero default emitted, coalesced');
+});
+
+test('test_body_input_name_matches_definition', async () => {
+  // the body arg referenced the raw payload name (`input: ssh_keysItemInput!`) while the input
+  // definition emits the sanitised one — the #15 def/ref discipline applies. see #30
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/keys>**'], 3, 2, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/createKeys\(input: SshKeyInput!\)/.test(schema!), 'body arg uses the sanitised input name');
+  assert.ok(/input SshKeyInput \{/.test(schema!), 'definition matches the reference');
+});
+
+test('test_empty_response_schema_synthesizes_success', async () => {
+  // a response with no fields to select (googlebooks `Empty`: `type: object, properties: {}`)
+  // produced zero types; it now gets the synthetic success response. see #31
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/flush>**'], 3, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/success: Boolean/.test(schema!), 'synthetic success field emitted');
+  assert.ok(/success: \$\(true\)/.test(schema!), 'selection sets the boolean literal');
+});
+
+test('test_overrides_rewire_path_and_query_params', async () => {
+  // user-intent request rewiring (R8): replace the path (`$` templates left alone), and
+  // per query param: a string replaces the value, null drops it, an unknown key is appended
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true, undefined, false, false, {
+    overrides: {
+      'get:/things': {
+        path: '/v2/things/{$config.tenant}',
+        queryParams: { ids: 'ids->joinNotNull(";")', page: null, 'api-version': '$("2024-01")' },
+        headers: { 'X-Version': '{$config.version}', 'X-Trace': null, 'X-Api-Key': '{$config.apiKey}' },
+      },
+    },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/GET: "\/v2\/things\/\{\$config\.tenant\}"/.test(schema!), 'path replaced, $ template untouched');
+  assert.ok(/"ids": ids->joinNotNull\(";"\)/.test(schema!), 'param value replaced');
+  assert.ok(!/"page"/.test(schema!), 'null drops the param');
+  assert.ok(/"api-version": \$\("2024-01"\)/.test(schema!), 'unknown key appended');
+  assert.ok(/\{ name: "X-Version", value: "\{\$config\.version\}" \}/.test(schema!), 'header value replaced');
+  assert.ok(!/X-Trace/.test(schema!), 'null drops the header');
+  assert.ok(/\{ name: "X-Api-Key", value: "\{\$config\.apiKey\}" \}/.test(schema!), 'unknown header appended');
+});
+
+test('test_overrides_replace_or_drop_body', async () => {
+  // R9: an override body (raw JSONSelection) replaces the inferred `$args.input { … }`
+  // mapping — literals and renamed keys included; null drops the body altogether
+  const replaced = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, false, true, undefined, false, false, {
+    overrides: { 'post:/things': { body: 'name: $args.input.name\nsource: $("web")' } },
+  });
+  assert.ok(replaced !== undefined);
+  assert.ok(/name: \$args\.input\.name/.test(replaced!), 'computed body emitted');
+  assert.ok(/source: \$\("web"\)/.test(replaced!), 'literal body field emitted');
+  assert.ok(!/\$args\.input \{/.test(replaced!), 'inferred mapping replaced');
+
+  const dropped = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, false, true, undefined, false, false, {
+    overrides: { 'post:/things': { body: null } },
+  });
+  assert.ok(dropped !== undefined);
+  assert.ok(!/body:/.test(dropped!), 'null drops the body');
+});
+
+test('test_base_url_overrides_servers', async () => {
+  // a spec's servers[0] can be stale or wrong (petstore) — an explicit baseURL replaces it
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true, undefined, false, false, {
+    baseURL: 'https://api.example.test/v2',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/baseURL: "https:\/\/api\.example\.test\/v2"/.test(schema!), 'override wins');
+  assert.ok(!/https:\/\/example\.com/.test(schema!), 'spec server URL gone');
+});
+
+test('test_R7_default_coalesces_R8_array_params_join', async () => {
+  // R7: defaults coalesce (`tag: tag ?? $("latest")`); R8: non-exploded array params join
+  // (`ids->joinNotNull(",")`). Both on the default versions (connect v0.4, fed v2.14).
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/tag: tag \?\? \$\("latest"\)/.test(schema!), 'default coalesces instead of replacing');
+  assert.ok(/"ids": ids->joinNotNull\(","\)/.test(schema!), 'form/explode:false joins with comma');
+  assert.ok(/"tags": tags->joinNotNull\("\|"\)/.test(schema!), 'pipeDelimited joins with |');
+  assert.ok(/"page": page\n/.test(schema!), 'plain params unchanged');
 });

@@ -54,6 +54,11 @@ export class Union extends Type {
     }
 
     for (const refSchema of this.schemas) {
+      // OAS 3.1 writes nullability as a `{ type: "null" }` member — GraphQL fields are
+      // nullable by default, so it adds nothing (the member form of #23's type arrays). #33
+      if (refSchema && refSchema.type === 'null') {
+        continue;
+      }
       const type = Factory.fromSchema(context, this, refSchema);
       this.add(type);
 
@@ -67,7 +72,10 @@ export class Union extends Type {
 
     if (this.name != null) {
       context.store(this.name, this);
-      if (context.generateOptions.consolidateUnions) {
+      // members are absorbed into the merged object whenever we downgrade — in consolidate
+      // mode, and in v0.4 mode when there is no discriminator (no tag field for ->match, so
+      // generate() emits the merged object there too). see docs/issues.md #25
+      if (context.generateOptions.consolidateUnions || !this.discriminator) {
         this.children.forEach((child) => context.decRefCount(child.name));
       }
     }
@@ -102,47 +110,27 @@ export class Union extends Type {
       const name = sanitised === refName ? refName : sanitised;
 
       if (context.generateOptions.consolidateUnions) {
-        if (!this.consolidated) {
-          this.consolidate(selection).forEach((type) => context.decRefCount(type.name));
-        }
-
-        // When generating this union in GQL it might look like:
-        // union MyUnion = Type1 | Type2 | Type3
-        writer.write('#### NOT SUPPORTED YET BY CONNECTORS!!! union ').write(name).write(' = ');
-
-        const childrenTypes = this.children.map((child) => Naming.getRefName(child.name));
-        const childrenNames = childrenTypes.join(' | ');
-        writer.write(childrenNames).write('\n\n');
-
-        trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
-
-        writer
-          .write(this.kind + ' ')
-          .write(name)
-          .write(this.nameSuffix())
-          .write(' { #### replacement for Union ')
-          .write(name)
-          .write('\n');
-
-        const selected = this.selectedProps(selection);
-        const generated = new Set<string>();
-        for (const prop of selected) {
-          trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-          if (!generated.has(prop.id)) prop.generate(context, writer, selection);
-          generated.add(prop.id);
-        }
-
-        writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
+        this.generateMergedObject(context, writer, selection, name, '#### NOT SUPPORTED YET BY CONNECTORS!!! union ');
+      } else if (!this.discriminator) {
+        // No tag field for `->match` to dispatch on, so a real union cannot be selected — the
+        // selection already falls back to the flat merged form (see select); emit the matching
+        // merged object here, or SDL says `union` while the selection selects a group on it
+        // (GROUP_SELECTION_IS_NOT_OBJECT). see docs/issues.md #25
+        this.generateMergedObject(
+          context,
+          writer,
+          selection,
+          name,
+          '#### no discriminator — union degraded to a merged object: ',
+        );
       } else if (this.interfaceBaseRef) {
         // R2: promoted to an interface — the base (emitted as `interface`) and the members
         // (each `... implements Base`) carry the type system; emit no `union X = A | B` line.
         trace(context, '   [union::generate]', `[interface] suppressing union line for ${this.name}`);
       } else {
-        // add the prop parent paths to a set so we can only include those parents that have been selected
-        const propParentsPathSet = new Set(this.selectedProps(selection).map((p) => p.parent!.path()));
-
-        // we should only include the names of those properties that have been selected
-        const filtered = this.children.filter((c) => propParentsPathSet.has(c.path()));
+        // list the members with selected fields. Filtering by prop-parent identity broke for
+        // allOf members (their folded props keep the inner part as parent -> `union X = `). #34
+        const filtered = this.selectedMembers(selection);
 
         writer
           .write('union ')
@@ -156,6 +144,71 @@ export class Union extends Type {
 
     trace(context, '<- [union::generate]', 'out: ' + schemas);
     context.leave(this);
+  }
+
+  // The downgrade shape both passes share: an info comment naming the original union, then one
+  // object type carrying every member's selected fields (the selection selects the same flat set).
+  private generateMergedObject(
+    context: OasContext,
+    writer: Writer,
+    selection: string[],
+    name: string,
+    headline: string,
+  ): void {
+    if (!this.consolidated) {
+      this.consolidate(selection).forEach((type) => context.decRefCount(type.name));
+    }
+
+    const childrenTypes = this.children.map((child) => Naming.getRefName(child.name));
+    writer.write(headline).write(name).write(' = ').write(childrenTypes.join(' | ')).write('\n\n');
+
+    trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
+
+    writer
+      .write(this.kind + ' ')
+      .write(name)
+      .write(this.nameSuffix())
+      .write(' { #### replacement for Union ')
+      .write(name)
+      .write('\n');
+
+    const selected = this.selectedProps(selection);
+    const generated = new Set<string>();
+    for (const prop of selected) {
+      trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
+      if (!generated.has(prop.id)) prop.generate(context, writer, selection);
+      generated.add(prop.id);
+    }
+
+    writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
+  }
+
+  // two inline members easily share a name (`[inline:Input]` twice) — same suffixing as Composed
+  add(child: IType): IType {
+    return super.add(this.withUniqueName(child));
+  }
+
+  // the members that carry at least one selected field — what the `union X = …` line lists and
+  // what `->match` branches over. Composed members fold their allOf parts in first. see #34
+  private selectedMembers(selection: string[]): IType[] {
+    return this.children.filter((child) => {
+      if (child instanceof Composed && child.schema.allOf != null && !child.consolidated) {
+        child.consolidate(selection);
+      }
+      return Array.from(child.props.values()).some((p) => selection.find((s) => s.startsWith(p.path())));
+    });
+  }
+
+  // a real `union X = Book | Movie` needs its members (and a member's shared $ref base, which
+  // the writer may promote to an interface — R2); a merged one needs its flat fields instead
+  dependencies(context: OasContext, selection: string[]): IType[] {
+    if (context.generateOptions.consolidateUnions || !this.discriminator) {
+      return this.selectedProps(selection);
+    }
+    return this.children.flatMap((member) => [
+      member,
+      ...(member instanceof Composed ? T.containers(member).filter((c) => T.isRef(c.name)) : []),
+    ]);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {
@@ -247,9 +300,7 @@ export class Union extends Type {
       : `"${this.discriminator!}"`;
 
     // Only members with at least one selected prop participate.
-    const members = this.children.filter((child) =>
-      Array.from(child.props.values()).some((p) => selection.find((s) => s.startsWith(p.path()))),
-    );
+    const members = this.selectedMembers(selection);
 
     writer.write(pad(base)).write(`... ${field}->match(\n`);
 

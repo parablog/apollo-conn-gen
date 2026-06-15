@@ -1,4 +1,4 @@
-import { Composed, IType, Obj, Op, Res, Union } from './internal.js';
+import { Composed, IType, Obj, Res, T, Union } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
@@ -95,8 +95,8 @@ export function promoteInterfaces(
 /** Union instances reachable as a GET/op response (the ones whose return type the writer emits). */
 function candidateUnions(gen: OasGen): Union[] {
   const out: Union[] = [];
-  for (const type of gen.paths.values()) {
-    const op = type as unknown as Op;
+  for (const op of gen.paths.values()) {
+    if (!T.isOp(op)) continue;
     let node: IType | undefined = op.resultType;
     if (node instanceof Res) node = node.response;
     if (node instanceof Union) out.push(node);
@@ -129,13 +129,13 @@ function baseUsedExternally(
   let reason = '';
 
   // (a) any op whose result type unwraps directly to the base.
-  for (const type of gen.paths.values()) {
-    const op = type as unknown as Op;
+  for (const op of gen.paths.values()) {
+    if (!T.isOp(op)) continue;
     let node: IType | undefined = op.resultType;
     if (node instanceof Res) node = node.response;
     if (node && (node instanceof Obj || node instanceof Composed) && node.name === baseRef) {
       structural = true;
-      reason = `returned directly by ${type.id}`;
+      reason = `returned directly by ${op.id}`;
       break;
     }
   }

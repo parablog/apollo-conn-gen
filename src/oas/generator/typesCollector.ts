@@ -1,7 +1,8 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
-import { IType, Prop, PropArray, PropCircRef, Scalar, T } from '../nodes/internal.js';
+import { IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Scalar, T } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
+import { Naming } from '../utils/naming.js';
 
 export class TypesCollector {
   types: Map<string, IType> = new Map();
@@ -21,7 +22,7 @@ export class TypesCollector {
       let i = 0;
       const parts = path.split('>');
       do {
-        const part = parts[i].replace(/#\/c\/s/g, '#/components/schemas');
+        const part = Naming.expandRef(parts[i]);
         if (part === '*') {
           // remove the current path from the expanded array
           expanded = expanded.filter((s) => s !== path);
@@ -57,16 +58,6 @@ export class TypesCollector {
         i++;
       } while (i < parts.length);
 
-      // optional hook -- if the type in question has deps, add them here
-      const deps: IType[] = _.invoke(current, 'dependencies', [this.gen.context]);
-      if (deps) {
-        deps
-          .filter((i) => !pendingTypes.has(i.id))
-          .forEach((i) => {
-            pendingTypes.set(i.id, i);
-          });
-      }
-
       if (current && !(current instanceof Scalar)) {
         const parentType = T.findNonPropParent(current as IType);
         if (!pendingTypes.has(parentType.id)) {
@@ -83,19 +74,129 @@ export class TypesCollector {
       }
     }
 
+    // One operation can reach the same schema through several routes, and each route builds its
+    // own node for it. Cycle detection (#10) removes a field from a node when that field would
+    // loop back to an ancestor of ITS route — so two nodes for the same schema can end up with
+    // different fields. Only one of them is written to the output schema (the first one found),
+    // but the connector selection is assembled from ALL routes: it can ask for a field the
+    // written node doesn't have, and composition fails (SELECTED_FIELD_NOT_FOUND).
+    //
+    // e.g. (confluence, one op): `Space` is reached twice —
+    //   via Content: its `history` field was removed (history loops back to Content)
+    //   via Results: `history` kept — and that route's selection asks for it
+    //
+    // The routes are already spelled out in `expanded`, so for each removed field we look for a
+    // selection path carrying the real field under the same type id, walk that path to its node,
+    // and tell the writer to emit that version of the field (context.sdlPropOverrides — the TYPE
+    // DEFINITION only; selections are left alone, each route keeps its own "field removed"
+    // comment. Putting the field back into props re-created the loop cycle detection had just
+    // broken: rover CIRCULAR_REFERENCE). Because the replacement comes FROM the selection, a
+    // field nobody selects is never added (CONNECTORS_UNRESOLVED_FIELD, test_040 AdobeCommerce).
+    // see docs/issues.md #13
+    const context = this.gen.context!;
+    for (const kept of pendingTypes.values()) {
+      kept.props.forEach((prop, name) => {
+        if (!(prop instanceof PropCircRef)) {
+          return;
+        }
+        const donor = this.findSelectedFieldNode(kept, name, expanded);
+        if (donor) {
+          let overrides = context.sdlPropOverrides.get(kept);
+          if (!overrides) {
+            overrides = new Map();
+            context.sdlPropOverrides.set(kept, overrides);
+          }
+          overrides.set(name, donor);
+        }
+      });
+    }
+
     // first pass is to consolidate all Composed & Union nodes
     const composed: Array<Composed> = Array.from(pendingTypes.values())
       .filter((t) => t instanceof Composed)
       .map((t) => t as Composed);
 
-    const context = this.gen.context!;
     for (const comp of composed) {
       if (!comp.visited) comp.visit(context);
       comp.consolidate(expanded).forEach((id) => pendingTypes.delete(id));
     }
 
+    // keep exactly the types the written schema references: confluence emitted `Label` with
+    // nothing selecting it, box dropped `Folder--Mini` while still referencing it. see #26
+    const reachable = this.collectReachable(expanded);
+    for (const [id, type] of Array.from(pendingTypes.entries())) {
+      if (!reachable.has(type)) {
+        pendingTypes.delete(id);
+      }
+    }
+    for (const type of reachable) {
+      if (!pendingTypes.has(type.id)) {
+        pendingTypes.set(type.id, type);
+      }
+    }
+
     this.types = pendingTypes;
     this.expanded = expanded;
+  }
+
+  // Every type the written schema will point at, walked over each node's own dependencies()
+  // from the selected operations' result/body. e.g. `getUser: User` + `User.address: Address`
+  // reaches { User, Address }. see #26
+  private collectReachable(expanded: string[]): Set<IType> {
+    const context = this.gen.context!;
+    const opIds = new Set(expanded.map((p) => p.split('>')[0]));
+
+    const queue: IType[] = [];
+    for (const op of this.gen.paths.values()) {
+      if (opIds.has(op.id)) {
+        const roots = [_.get(op, 'resultType'), _.get(op, 'body')] as Array<IType | undefined>;
+        queue.push(...roots.filter((n): n is IType => !!n));
+      }
+    }
+
+    const visited = new Set<IType>();
+    while (queue.length > 0) {
+      const node = queue.pop()!;
+      if (visited.has(node)) {
+        continue;
+      }
+      // every container was expanded by the collect loop before this walk — an unvisited one
+      // means a missed reference, and writing it would silently truncate the schema. Enums are
+      // exempt: they are complete at construction and their visit() only registers the name.
+      // dependencies() implementations must stay read-only: no visit(), no context stack. #26
+      if (!node.visited && T.isContainer(node)) {
+        throw new Error(`collectReachable: unvisited type ${node.id} — the collect walk missed a reference`);
+      }
+      visited.add(node);
+      queue.push(...node.dependencies(context, expanded));
+    }
+
+    return new Set(Array.from(visited).filter(T.isEmittable));
+  }
+
+  // A selection path that carries the real `name` field under this type id (`>obj:type:X>prop:…:name>`),
+  // walked to its node — the un-removed version of a field this node lost to a cycle cut. see #13
+  private findSelectedFieldNode(kept: IType, name: string, expanded: string[]): IType | undefined {
+    // selection paths abbreviate component refs (`path()` writes `#/c/s`); match that form
+    const marker = `>${Naming.abbreviateRef(kept.id)}>`;
+    for (const sel of expanded) {
+      const at = sel.indexOf(marker);
+      if (at < 0) {
+        continue;
+      }
+      const segment = sel.slice(at + marker.length).split('>')[0];
+      const isRealProp = segment.startsWith('prop:') && !segment.startsWith('prop:circular-ref');
+      if (!isRealProp || !(segment.endsWith(':' + name) || segment.endsWith(':#' + name))) {
+        continue;
+      }
+      const donorPath = sel.slice(0, at + marker.length + segment.length);
+      const stack = new PathsCollector(this.gen).collectPaths(donorPath, Array.from(this.gen.paths.values()));
+      const donor = stack[stack.length - 1];
+      if (donor && !(donor instanceof PropCircRef)) {
+        return donor;
+      }
+    }
+    return undefined;
   }
 }
 
@@ -127,7 +228,7 @@ class PathsCollector {
     let i = 0;
     const parts = path.split('>');
     do {
-      const part = parts[i].replace(/#\/c\/s/g, '#/components/schemas');
+      const part = Naming.expandRef(parts[i]);
 
       current = collection.find((t) => t.id === part);
       if (!current) {
@@ -160,6 +261,10 @@ class PathsCollector {
       T.traverse(root, (child) => {
         if (T.isPropScalar(child) || (child instanceof PropArray && child.items instanceof Scalar)) {
           newSelection.add(child.path());
+        } else if (child instanceof PropEn) {
+          // enum props are leaves too — without this, `>**` silently drops every enum field
+          // (slack's `ok`-only stubs collapsed to zero types). see docs/issues.md #24
+          newSelection.add(child.path());
         } else if (child instanceof PropCircRef) {
           // a cut cycle is a leaf: include its path so the commented field is emitted (in both the
           // SDL and the selection) instead of silently dropped. see docs/issues.md #10
@@ -168,6 +273,19 @@ class PathsCollector {
           this.gen.expand(child);
         }
       });
+
+      // an op whose expansion found nothing selectable still has fields to write when its only
+      // content is a free-form JSON object (asana: `data: $ref EmptyResponse` -> `data: JSON`,
+      // emitted as an EMPTY invalid type before) — take those fields as the leaves. Scoped to
+      // otherwise-empty ops on purpose: doing it everywhere diverged the selections of types
+      // shared across connectors. see docs/issues.md #32
+      if (!Array.from(newSelection).some((p) => p.startsWith(root.path()))) {
+        T.traverse(root, (child) => {
+          if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
+            newSelection.add(child.path());
+          }
+        });
+      }
     });
 
     // finally remove the expanded paths from the selection

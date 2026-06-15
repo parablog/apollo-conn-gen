@@ -100,7 +100,7 @@ export class Get extends Type implements Op {
   protected writeOpName(context: OasContext, writer: Writer): void {
     let name = this.getGqlOpName();
 
-    // Use the new name mapper if available, otherwise fall back to legacy postName
+    // Use the new name mapper if available
     if (context.generateOptions.mapper) {
       name = context.generateOptions.mapper.operationName(name);
     }
@@ -165,24 +165,33 @@ export class Get extends Type implements Op {
       const json = keys ? response.content![keys] : undefined;
       if (!json) {
         warn(context, `  [${code}]`, 'No JSON content found!');
+        // non-JSON content (github /markdown returns text/html): nothing a connector can
+        // select — fall back to the synthetic success response, like a missing body. #33
+        this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
       } else {
         this.visitResponseContent(context, code, json);
       }
-    } else if ((code === 'default' || code === '200') && !content) {
-      // there is no response for this operation
-      // TODO: should we synthesize one?
-      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
     } else {
-      throw new Error('Not yet implemented for: ' + JSON.stringify(response));
+      // the response declares no content — nothing to select, so answer with the synthetic
+      // success. Don't gate this on `code`: a $ref'd shared response (DO's `no_content`)
+      // arrives with the ref string as `code`, not "200". #33
+      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
     }
   }
 
   private visitResponseContent(context: OasContext, _code: string, media: MediaTypeObject): void {
     trace(context, '-> [get::responses::content]', 'in ' + this.name);
-    const schema = media!.schema as SchemaObject;
+    let schema = media!.schema as SchemaObject;
 
     if (!schema) {
       throw new Error('No schema content found!');
+    }
+
+    // a response schema with no fields to select (googlebooks `Empty`: description +
+    // `properties: {}`) — synthesize the same `success: Boolean` response as a missing body. #31
+    const resolved = '$ref' in schema ? (context.lookupRef((schema as ReferenceObject).$ref!) as SchemaObject) : schema;
+    if (resolved && (Factory.isEmptySchema(resolved) || Factory.isShapelessObject(resolved))) {
+      schema = SYN_SUCCESS_RESPONSE.content!['application/json'].schema as SchemaObject;
     }
 
     this.resultType = Factory.fromResponse(context, this, schema);
@@ -214,10 +223,12 @@ export class Get extends Type implements Op {
     trace(context, '<- [get::responses::ref]', `out: ${this.name}, ref: ${ref.$ref}`);
   }
 
-  protected generateParameters(context: OasContext, writer: Writer, selection: string[]): void {
+  // one argument list for the whole operation; mutations pass their body as the last arg
+  // (`(id: ID!, input: PetInput!)`) — a second parenthesised list is not valid GraphQL. #27
+  protected generateParameters(context: OasContext, writer: Writer, selection: string[], bodyArg?: string): void {
     const sorted = this.params.sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0));
 
-    if (sorted.length === 0) {
+    if (sorted.length === 0 && !bodyArg) {
       return;
     }
 
@@ -229,6 +240,13 @@ export class Get extends Type implements Op {
       }
       parameter.generate(context, writer, selection);
     });
+
+    if (bodyArg) {
+      if (sorted.length > 0) {
+        writer.write(', ');
+      }
+      writer.write(bodyArg);
+    }
 
     writer.write(')');
   }

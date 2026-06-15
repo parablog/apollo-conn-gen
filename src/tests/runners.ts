@@ -1,4 +1,4 @@
-import { JsonGen, OasGen } from '../index.js';
+import { JsonGen, OasGen, RequestOverride } from '../index.js';
 import { JsonContext, JsonType } from '../json/index.js';
 import assert from 'node:assert';
 import path from 'path';
@@ -23,9 +23,11 @@ export async function runOasTest(
   skipOptionalArgs: boolean = false,
   inferEntityResolvers: boolean = false,
   // R2: optional version/union overrides. Defaults reproduce the historic behaviour
-  // (consolidate unions, compose at fed 2.12) so existing callers are unaffected. Real
+  // (consolidate unions, compose at fed 2.14) so existing callers are unaffected. Real
   // unions/interfaces (`consolidateUnions: false`) need connect v0.4 + fed 2.13.
   opts: {
+    baseURL?: string;
+    overrides?: Record<string, RequestOverride>;
     consolidateUnions?: boolean;
     connectorSpecVersion?: string;
     federationVersion?: string;
@@ -36,6 +38,8 @@ export async function runOasTest(
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
     skipValidation,
+    baseURL: opts.baseURL,
+    overrides: opts.overrides,
     consolidateUnions: opts.consolidateUnions ?? true,
     showParentInSelections: false,
     mapper,
@@ -108,6 +112,9 @@ export async function runOasTest(
 interface IJsonTestOptions {
   shouldFail: boolean;
   outputContains?: string;
+  connectorSpecVersion?: string;
+  federationVersion?: string;
+  composeFederationVersion?: string;
 }
 
 export async function runJsonTest(
@@ -122,9 +129,12 @@ export async function runJsonTest(
 
   const stats = fs.statSync(fileOrFolderPath);
   if (stats.isDirectory()) {
-    walker = JsonGen.new();
+    walker = JsonGen.new({
+      connectorSpecVersion: options.connectorSpecVersion,
+      federationVersion: options.federationVersion,
+    });
 
-    const sources = fs.readdirSync(fileOrFolderPath).filter((name) => name.toLowerCase().endsWith('.json'));
+    const sources = fs.readdirSync(fileOrFolderPath).filter((name: string) => name.toLowerCase().endsWith('.json'));
 
     for (const source of sources) {
       const fullPath = path.join(fileOrFolderPath, source);
@@ -137,7 +147,10 @@ export async function runJsonTest(
     const json = fs.readFileSync(fileOrFolderPath, 'utf-8');
     assert.ok(json !== undefined);
 
-    walker = JsonGen.fromReader(json);
+    walker = JsonGen.fromReader(json, {
+      connectorSpecVersion: options.connectorSpecVersion,
+      federationVersion: options.federationVersion,
+    });
   }
 
   const context: JsonContext = walker.getContext();
@@ -163,7 +176,7 @@ export async function runJsonTest(
 
   fs.writeFileSync(schemaFile, schema, { encoding: 'utf-8', flag: 'w' });
 
-  const [result, output] = compose(schemaFile);
+  const [result, output] = compose(schemaFile, undefined, options.composeFederationVersion);
 
   if (options.shouldFail) {
     assert.ok(result === false);
@@ -196,7 +209,7 @@ function localComposer(): string | undefined {
 function compose(
   schemaPath: string,
   samplePath?: string,
-  federationVersion: string = '2.12.0',
+  federationVersion: string = '2.14.1',
   connectorSpecVersion?: string,
 ) {
   console.info('schemaPath', schemaPath);

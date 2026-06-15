@@ -1,0 +1,64 @@
+openapi: 3.0.3
+info:
+  title: R5 per-op auth
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# global default: an apiKey carried in the X-API-Key header
+security:
+  - GlobalKey: []
+paths:
+  # no own security -> inherits the global (X-API-Key) on its @connect (per-op mode)
+  /inherits:
+    get:
+      operationId: getInherits
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+  # own security with a DIFFERENT header name -> only Authorization, never the global X-API-Key
+  /admin:
+    get:
+      operationId: getAdmin
+      security:
+        - AdminBearer: []
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+  # explicit `security: []` -> public op -> no auth header at all
+  /public:
+    get:
+      operationId: getPublic
+      security: []
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ref:
+                    type: string
+components:
+  securitySchemes:
+    GlobalKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    AdminBearer:
+      type: http
+      scheme: bearer

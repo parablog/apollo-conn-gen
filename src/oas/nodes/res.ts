@@ -54,6 +54,10 @@ export class Res extends Type {
     context.leave(this);
   }
 
+  dependencies(): IType[] {
+    return this.response ? [this.response] : [];
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '-> [res:select]', `-> in: ${this.parent!.name}`);
 

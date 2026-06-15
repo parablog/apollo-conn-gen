@@ -15,7 +15,7 @@ import './_setup.js';
 
 test('test_063_versions_defaults_locked', () => {
   // Lock the paired bump so a future edit cannot desync connect/federation.
-  assert.deepStrictEqual(DEFAULT_VERSIONS, { federationVersion: 'v2.12', connectorSpecVersion: 'v0.3' });
+  assert.deepStrictEqual(DEFAULT_VERSIONS, { federationVersion: 'v2.14', connectorSpecVersion: 'v0.4' });
 });
 
 test('test_064_versions_parse', () => {

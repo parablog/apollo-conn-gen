@@ -47,8 +47,16 @@ export class En extends Type {
     trace(context, '-> [enum::generate]', `-> in: ${this.name}`);
 
     if (!context.inContextOf('Param', this)) {
+      // Definition and reference must agree (the #15 discipline): PropEn references emit
+      // genTypeName(name), so the definition does too (`author-association` -> `AuthorAssociation`).
+      const sanitised = Naming.genTypeName(this.name);
+      const refName = Naming.getRefName(this.name);
       const builder =
-        'enum ' + Naming.getRefName(this.name) + ' {\n' + this.items.map((s) => ' ' + s).join(',\n') + '\n}\n\n';
+        'enum ' +
+        (sanitised === refName ? refName : sanitised) +
+        ' {\n' +
+        this.items.map((s) => ' ' + s).join(',\n') +
+        '\n}\n\n';
       writer.write(builder);
     }
     // this covers the case where a union combines a scalar with an enum.

@@ -444,6 +444,27 @@ type Query {
 - `--federation-version <version>`: Federation version to use (default: `v2.11`).
 - `--connector-spec-version <version>`: Connector spec version to use (default: `v0.2`).
 - `--skip-optional-args`: Skip optional arguments in queries (default: `false`).
+- `--base-url <url>`: Override the `@source` base URL (default: `servers[0]` from the spec).
+- `--overrides <file>`: Load per-operation request overrides from a JSON file, keyed by op id.
+  `path` replaces the HTTP path; `queryParams` values are raw JSONSelection, `headers` values
+  are string templates — in both, a string replaces the inferred value, `null` drops the
+  entry, an unknown key is appended:
+
+  ```json
+  {
+    "get:/pets/{id}": {
+      "path": "/v2/pets/{id}",
+      "queryParams": { "page": null, "api-version": "$(\"2024-01\")" },
+      "headers": { "X-Api-Key": "{$config.apiKey}" }
+    },
+    "post:/pets": {
+      "body": "name: $args.input.name\nsource: $(\"web\")"
+    }
+  }
+  ```
+
+  `body` is one raw JSONSelection string replacing the whole inferred `$args.input { … }`
+  mapping (`null` drops the body).
 
 For a complete list of options, run:
 

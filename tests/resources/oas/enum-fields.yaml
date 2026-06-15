@@ -1,0 +1,49 @@
+openapi: 3.0.0
+info:
+  title: enum field selection and degradation (issue 24)
+  version: 1.0.0
+servers:
+  - url: https://example.com
+paths:
+  /status:
+    get:
+      operationId: getStatus
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  ok:
+                    $ref: "#/components/schemas/defs_ok_true"
+                  state:
+                    $ref: "#/components/schemas/State"
+                  reaction:
+                    $ref: "#/components/schemas/Reaction"
+                  "+1":
+                    type: integer
+                  "-1":
+                    type: integer
+                required:
+                  - ok
+components:
+  schemas:
+    defs_ok_true:
+      type: boolean
+      enum:
+        - true
+    State:
+      type: string
+      enum:
+        - active
+        - "suspended "
+        - terminated
+    Reaction:
+      type: string
+      enum:
+        - "+1"
+        - "-1"
+        - laugh

@@ -1,0 +1,38 @@
+openapi: 3.0.0
+info:
+  title: oneOf without discriminator (issue 25)
+  version: 1.0.0
+servers:
+  - url: https://example.com
+paths:
+  /search:
+    get:
+      operationId: search
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    oneOf:
+                      - $ref: "#/components/schemas/Book"
+                      - $ref: "#/components/schemas/Movie"
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        title:
+          type: string
+        pages:
+          type: integer
+    Movie:
+      type: object
+      properties:
+        title:
+          type: string
+        minutes:
+          type: integer

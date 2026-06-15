@@ -50,12 +50,16 @@ export class PropComp extends Prop {
     return Naming.genTypeName(this.comp!.name!) + (this.comp as Composed).nameSuffix();
   }
 
+  dependencies(): IType[] {
+    return this.comp ? [this.comp] : [];
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]) {
     const comp = this.comp!;
     trace(context, '-> [prop-comp:select]', 'in ' + this.name + ', obj: ' + comp.name);
 
     const fieldName = this.name;
-    const sanitised = Naming.sanitiseFieldForSelect(fieldName);
+    const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 

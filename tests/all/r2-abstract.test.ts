@@ -32,7 +32,7 @@ test('test_R2_union_consolidate_downgrade_unchanged', async () => {
   // Default path (consolidateUnions ON): the same fixture must still emit the consolidate
   // downgrade (a replacement object + the NOT-SUPPORTED marker), composing at fed 2.12 —
   // i.e. the new abstract-type path does not perturb the default behaviour.
-  const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 3);
+  const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('NOT SUPPORTED YET'), 'default path still emits the consolidate downgrade');
   assert.ok(!schema!.includes('->match('), 'default path must not emit the v0.4 match form');
@@ -45,7 +45,7 @@ test('test_R2_interface_oneof_promotes_and_composes', async () => {
   // connect v0.4, the shared base Product is promoted to an interface, members implement it, the
   // field returns Product, and the connector selection uses the abstract-type ->match. Composes at
   // fed 2.13.
-  const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 3, false, false, undefined, false, false, {
+  const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 4, false, false, undefined, false, false, {
     consolidateUnions: false,
     connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.13',
@@ -81,6 +81,7 @@ test('test_R2_interface_skips_when_base_used_concretely', async () => {
   });
   assert.ok(schema !== undefined);
   assert.ok(!/interface Product/.test(schema!), 'base used concretely must NOT be promoted');
+  assert.ok(/union ItemResponse = Book \| Movie/.test(schema!), 'the un-promoted union lists its members (#34)');
   assert.ok(
     warnings.some((w) => /not promoting .*Product.* concrete/.test(w)),
     `expected a rule-3 skip warning, got: ${warnings.join(' | ')}`,
@@ -90,9 +91,76 @@ test('test_R2_interface_skips_when_base_used_concretely', async () => {
 test('test_R2_interface_default_consolidate_unchanged', async () => {
   // Default path (consolidateUnions ON) on the same fixture: consolidate downgrade, no interface,
   // no ->match. Confirms interface promotion does not perturb the default. Composes at fed 2.12.
-  const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 3);
+  const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('NOT SUPPORTED YET'), 'default path emits the consolidate downgrade');
   assert.ok(!schema!.includes('interface '), 'default path must not emit an interface');
   assert.ok(!schema!.includes('->match('), 'default path must not emit the v0.4 match form');
+});
+
+test('test_R2_union_without_discriminator_degrades_to_merged_object', async () => {
+  // No tag field means `->match` has nothing to dispatch on, so a real union cannot be selected.
+  // The abstract pass degrades to the same merged-object form the default pass emits — SDL and
+  // selection agree, and composition passes. see docs/issues.md #25
+  // typesSize 2: response + union — the merged members are no longer collected at all (#26)
+  const schema = await runOasTest('oneof-no-discriminator.yaml', ['get:/search>**'], 1, 2, false, false, undefined, false, false, {
+    consolidateUnions: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+    composeFederationVersion: '2.13.0',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union line without a discriminator');
+  assert.ok(/no discriminator — union degraded/.test(schema!), 'the degrade is announced');
+  assert.ok(/type ResultUnion \{/.test(schema!), 'merged object replaces the union');
+  assert.ok(/minutes: Int/.test(schema!) && /pages: Int/.test(schema!), 'fields from both members merged');
+  assert.ok(!/->match\(/.test(schema!), 'no ->match without a discriminator');
+});
+
+test('test_R2_collect_twice_is_byte_identical', async () => {
+  // Composed.dependencies consolidates while the reachability walk reads (#26) — the same call
+  // select() makes later. Generating twice from one instance must give the same output, or the
+  // walk mutated something it shouldn't have.
+  const gen = await OasGen.fromFile(`${oasBasePath}/r2-interface-oneof.yaml`, {
+    skipValidation: false,
+    consolidateUnions: false,
+    showParentInSelections: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+  });
+  await gen.visit();
+  const first = gen.generateSchema(['get:/item>**']);
+  const second = gen.generateSchema(['get:/item>**']);
+  assert.strictEqual(second, first, 'second generation must be byte-identical');
+});
+
+test('test_R2_union_form_derived_from_connect_version', async () => {
+  // not asked explicitly: connect >= v0.4 emits real unions, below it the consolidate
+  // downgrade — and an explicit ask for real unions on v0.3 downgrades loudly. see ROADMAP R2
+  const real = await OasGen.fromFile(`${oasBasePath}/simple-oneOf-example.yaml`, {
+    skipValidation: false,
+    showParentInSelections: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+  });
+  await real.visit();
+  assert.ok(/union ItemResponse = Book \| Movie/.test(real.generateSchema(['get:/item>**'])), 'v0.4 derives real unions');
+
+  const warnings = await captureWarnings(async () => {
+    const downgraded = await OasGen.fromFile(`${oasBasePath}/simple-oneOf-example.yaml`, {
+      skipValidation: false,
+      consolidateUnions: false,
+      showParentInSelections: false,
+      connectorSpecVersion: 'v0.3',
+      federationVersion: 'v2.12',
+    });
+    await downgraded.visit();
+    const schema = downgraded.generateSchema(['get:/item>**']);
+    assert.ok(schema.includes('NOT SUPPORTED YET'), 'v0.3 downgrades to consolidate');
+    assert.ok(!/^union \w+ =/m.test(schema), 'no real union on v0.3');
+  });
+  assert.ok(
+    warnings.some((w) => /require connect v0\.4/.test(w)),
+    `expected the downgrade warning, got: ${warnings.join(' | ')}`,
+  );
 });

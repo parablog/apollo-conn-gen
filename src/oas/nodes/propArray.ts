@@ -67,6 +67,10 @@ export class PropArray extends Prop {
     return `[prop] ${this.name}: [${this.items!.name}] (Array)`;
   }
 
+  dependencies(): IType[] {
+    return this.items ? [this.items] : [];
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [prop-array:select]', 'in: ' + this.name);
 

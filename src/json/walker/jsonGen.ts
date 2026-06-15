@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import _ from 'lodash';
 import { DEFAULT_VERSIONS, validateVersionOptions } from '../../versions.js';
 import { ConnectorWriter, JsonArray, JsonContext, JsonObj, JsonScalar, JsonType, StringWriter } from '../index.js';
@@ -81,24 +80,23 @@ export class JsonGen {
     const types = this.context.getTypes();
     const root = types.find((t: JsonType) => t.getParent() === null);
     if (root) {
-      const orderedSet = new Set<JsonType>();
+      // only Obj nodes are collected — arrays recurse into their item type, scalars are skipped
+      const orderedSet = new Set<JsonObj>();
       this.writeType(root, orderedSet);
 
       const generatedSet = new Map<string, JsonType>();
-      orderedSet.forEach((t) => {
-        // Assumes t is an Obj
-        const obj = t as unknown as JsonObj;
+      orderedSet.forEach((obj) => {
         let typeName = obj.getType();
         if (generatedSet.has(typeName)) {
           // If same type, skip generation
           if (_.isEqual(obj, generatedSet.get(typeName))) {
             return;
           }
-          obj.setType(JsonGen.generateNewObjType(generatedSet, t, typeName));
+          obj.setType(JsonGen.generateNewObjType(generatedSet, obj, typeName));
           typeName = obj.getType();
         }
-        t.write(this.context, writer);
-        generatedSet.set(typeName, t);
+        obj.write(this.context, writer);
+        generatedSet.set(typeName, obj);
       });
     }
 
@@ -106,15 +104,15 @@ export class JsonGen {
   }
 
   // Recursive helper to order types
-  private writeType(type: JsonType, orderedSet: Set<JsonType>): void {
+  private writeType(type: JsonType, orderedSet: Set<JsonObj>): void {
     if (type instanceof JsonObj) {
       // Traverse children first
-      for (const child of Array.from((type as JsonObj).getFields().values())) {
+      for (const child of Array.from(type.getFields().values())) {
         this.writeType(child, orderedSet);
       }
       orderedSet.add(type);
     } else if (type instanceof JsonArray) {
-      const arrayType = (type as JsonArray).getArrayType();
+      const arrayType = type.getArrayType();
       if (arrayType) {
         this.writeType(arrayType, orderedSet);
       }
@@ -130,14 +128,19 @@ export class JsonGen {
   }
 
   // Walk an element in the JSON tree
-  private walkElement(context: JsonContext, parent: JsonType | null, name: string, element: any): JsonType {
+  private walkElement(context: JsonContext, parent: JsonType | null, name: string, element: unknown): JsonType {
     trace(context, '-> [walkElement]', 'in: ' + name);
     let result: JsonType;
 
     if (typeof element === 'object' && !Array.isArray(element) && element !== null) {
-      // JSON object
-      result = this.walkObject(context, parent, name, element);
-      context.store(result);
+      // an empty {} value declares no fields — a field-less type would be skipped at write
+      // time, dangling its reference; use the JSON scalar instead (the #19 convention). #21
+      if (Object.keys(element).length === 0) {
+        result = new JsonScalar(name, parent, 'JSON');
+      } else {
+        result = this.walkObject(context, parent, name, element);
+        context.store(result);
+      }
     } else if (Array.isArray(element)) {
       result = this.walkArray(context, parent, name, element);
     } else if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
@@ -154,15 +157,19 @@ export class JsonGen {
   }
 
   // Walk a JSON object
-  private walkObject(context: JsonContext, parent: JsonType | null, name: string, object: any): JsonObj {
+  private walkObject(context: JsonContext, parent: JsonType | null, name: string, object: unknown): JsonObj {
     trace(context, '-> [walkObject]', 'in: ' + name);
     const result = new JsonObj(name, parent);
-    const fieldSet = Object.keys(object);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fieldSet = Object.keys(object as any);
     trace(context, '  [walkObject]', 'fieldSet: ' + fieldSet);
 
     for (const field of fieldSet) {
       trace(context, '  [walkObject]', 'field: ' + field);
-      const childElement = object[field];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const childElement = (object as any)[field];
+
       const type = this.walkElement(context, result, field, childElement);
       result.add(field, type);
     }
@@ -180,7 +187,10 @@ export class JsonGen {
       const arrayType = this.walkElement(context, parent, name, firstElement);
       result.setArrayType(arrayType);
     } else {
-      warn(context, '   [walkArray]', "Array is empty -- cannot derive type for field '" + name + "'");
+      // an empty [] gives no item shape — a typeless array is dropped from the SDL but still
+      // selected, breaking compose; `[JSON]` keeps both artifacts consistent (#19/#21 convention). #35
+      warn(context, '   [walkArray]', "Array is empty -- using JSON for field '" + name + "'");
+      result.setArrayType(new JsonScalar(name, result, 'JSON'));
     }
     trace(context, '-> [walkArray]', 'in: ' + name);
     return result;

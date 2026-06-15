@@ -4,6 +4,96 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.13.0]
+
+### Added
+- **Per-operation auth on `@connect`** (R5 slice 2): when an op declares its own OAS `security`,
+  each `@connect` carries its effective auth (own / inherited global / none for `security: []`)
+  and the shared `@source` header is suppressed. Shared scheme→header logic in `src/oas/io/security.ts`.
+
+### Changed
+- Per-op header de-dup is case-insensitive (an explicit override wins, else the resolved auth
+  replaces an inferred header of the same name).
+- Tidied the generated `@connect` `http`/`errors` block indentation.
+
+## [0.12.0]
+
+### Added
+- **Per-operation request overrides** (R8/R9): `--overrides <file>` (or API object), keyed by
+  op id, replaces the HTTP `path`, adds/replaces/drops `queryParams` (raw JSONSelection) and
+  `headers` (string templates, incl. `{$config.*}`), and replaces or drops the request `body`
+  (`null` drops it). The explicit-intent channel for what OAS cannot express; unmatched override
+  keys warn (typo guard).
+- **`--base-url`**: overrides the `@source` base URL inferred from OAS `servers[0]`.
+- **R4 `errors.message` heuristic** (opt-in `emitConnectorErrors`, connect v0.2+): the error
+  body's string message field becomes `errors: { message: "$.message" }`, with corpus-ranked
+  field priority (`message`/`error`/`detail`); emitted only when that field is a string on every
+  documented JSON error shape of the op.
+- **R7 coalesced defaults**: OAS `default:` values now coalesce (`tag: tag ?? $("latest")`)
+  instead of replacing, in both response and body directions (gated to connect v0.4 +
+  federation v2.14).
+- **R8 array-param serialization joins**: non-exploded array params emit the matching join
+  (`ids->joinNotNull(",")`; `spaceDelimited` → `" "`, `pipeDelimited` → `"|"`).
+
+### Fixed
+Details per id in `docs/issues.md`:
+- #20 `anyOf: [$ref, empty-closed-object]` collapses to its single real member instead of
+  producing zero types.
+- #21 typeless/empty `{}` schemas are treated as a JSON scalar instead of throwing.
+- #35 same-named objects across multiple documents no longer diverge on their fields.
+
+### Changed
+- Internal: dropped `as unknown as` casts across the oas/json paths (no output change).
+
+## [0.11.0]
+
+### Changed
+- **Defaults follow LATEST**: no version asked for now means connect **v0.4** + federation
+  **v2.14** (was v0.3/v2.12). Real unions, `->match` `__typename` selections and interface
+  promotion are the default output; pass `--connector-spec-version v0.3` for the previous
+  consolidate-downgrade behaviour. The union form is derived from the connect version
+  (`resolveConsolidateUnions`) — an explicit ask for real unions below v0.4 downgrades with
+  a warning.
+- Heads-up: on stock (released) tooling, v0.4 schemas with `additionalProperties` maps hit an
+  upstream composition bug (`->entries` sub-selections, issue #14 — fix awaiting release).
+- Mutations corpus first measured and overhauled: **47% → 90.2%** pass-rate (1249 ops);
+  GETs 93.2%. Fast guards: `tests/all/corpus-mutations.test.ts`.
+
+### Fixed
+Details per id in `docs/issues.md`:
+- #27 mutations with params AND a body emitted two argument lists (invalid GraphQL)
+- #28 request-body selections used the response alias direction
+- #29 default values emitted as bare paths (`$(latest)`); `0`/`false` defaults dropped
+- #30 the body argument referenced the raw payload name, not the sanitised definition
+- #31 fieldless response schemas (googlebooks `Empty`) produced zero types
+- #32 ops whose only content is a JSON field emitted an empty type; body keys with colons
+  broke the parser
+- #33 four generation crashes: pointers INTO components, non-JSON responses, OAS 3.1 null
+  union members, `$ref`'d no-content responses
+- #34 real unions of `allOf` members emitted an empty member list; twin inline members
+  collapsed onto one id
+
+## [0.10.0]
+
+### Changed
+- Generated schemas change visibly on regeneration: enum fields now appear in selections and
+  SDL (#24), types nothing references are no longer emitted (#26), and discriminator-less
+  `oneOf`s degrade to the merged-object form in connect v0.4 too (#25).
+- Corpus pass-rate (per-op generate + compose, 1218 GET ops): default 84.2% → 91.5%,
+  abstract 81.4% → 91.7%.
+
+### Fixed
+Details per id in `docs/issues.md`:
+- #18 identical inline schemas dedup instead of renaming; renamed twins converge on one name
+- #22 inline `allOf` comps colliding with a stored type of another class are renamed
+- #23 OAS 3.1 type arrays (`type: [string, 'null']`) collapse to their first non-null entry
+- #24 enum fields were silently dropped from `>**` expansion; non-identifier enum values
+  degrade to scalars, `+1`/`-1` fields disambiguate to `plus1`/`minus1`
+- #13 fields cut by cycle detection on one route are emitted from a sibling route's version
+- #25 discriminator-less `oneOf` no longer emits a `union` its selection cannot satisfy (v0.4)
+- #26 the collector keeps exactly the types the written schema references — orphaned
+  definitions dropped, over-deleted ones restored (driven by per-node `dependencies()`)
+
 ## [0.9.1]
 
 ### Added

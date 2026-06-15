@@ -7,8 +7,8 @@ import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 
 const V05 = {
   connectorSpecVersion: 'v0.5',
-  federationVersion: 'v2.13',
-  composeFederationVersion: '2.13.0',
+  federationVersion: 'v2.14',
+  composeFederationVersion: '2.14.1',
   reusableMappings: true,
 };
 

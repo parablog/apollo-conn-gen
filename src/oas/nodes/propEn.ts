@@ -30,7 +30,10 @@ export class PropEn extends Prop {
   }
 
   public getValue(_context: OasContext): string {
-    return Naming.getRefName(this.type);
+    // same name derivation as the En definition (def/ref agreement, see #15 / en.ts)
+    const sanitised = Naming.genTypeName(this.type);
+    const refName = Naming.getRefName(this.type);
+    return sanitised === refName ? refName : sanitised;
   }
 
   dependencies(): IType[] {
@@ -39,7 +42,7 @@ export class PropEn extends Prop {
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '   [prop:select]', this.name);
-    const sanitised = Naming.sanitiseFieldForSelect(this.name);
+    const sanitised = Naming.sanitiseFieldForSelect(this.name, this.parent?.kind === 'input');
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
     if (context.generateOptions.showParentInSelections) {

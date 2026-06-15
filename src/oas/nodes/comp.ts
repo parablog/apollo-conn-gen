@@ -110,6 +110,14 @@ export class Composed extends Type {
     context.leave(this);
   }
 
+  // the selected props, once the allOf members are folded in (same shape select writes)
+  dependencies(_context: OasContext, selection: string[]): IType[] {
+    if (this.schema.allOf != null && !this.consolidated) {
+      this.consolidate(selection);
+    }
+    return this.selectedProps(selection);
+  }
+
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [comp::select]', `-> in: ${this.name}`);
     if (!this.consolidated) {
@@ -202,16 +210,7 @@ export class Composed extends Type {
   }
 
   add(child: IType): IType {
-    let name = child.name;
-    let idx = 0;
-
-    // TODO: this should not be applicable to Refs
-    while (this.children.some((c) => c.name === name)) {
-      name = `${child.name}:${++idx}`;
-    }
-
-    child.name = name;
-    return super.add(child);
+    return super.add(this.withUniqueName(child));
   }
 
   private updateName(): void {
