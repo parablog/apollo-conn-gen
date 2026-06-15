@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { Command } from 'commander';
+import { Command, OptionValues } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
@@ -13,8 +13,7 @@ const originalConsole = Object.assign(
   console,
 );
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function loadRules(opts: any): Mapper | undefined {
+function loadRules(opts: OptionValues): Mapper | undefined {
   let mapper;
   if (opts.transformRules) {
     try {
@@ -24,16 +23,12 @@ function loadRules(opts: any): Mapper | undefined {
       console.error(`Error loading transform rules: ${error}`);
       return undefined;
     }
-  } else if (opts.postName) {
-    // Backward compatibility with legacy --post-name
-    mapper = OpNameMapper.fromPattern(opts.postName);
   }
 
   return mapper;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function loadOverrides(opts: any): Record<string, RequestOverride> | undefined {
+function loadOverrides(opts: OptionValues): Record<string, RequestOverride> | undefined {
   if (!opts.overrides) {
     return undefined;
   }
@@ -45,8 +40,7 @@ function loadOverrides(opts: any): Record<string, RequestOverride> | undefined {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
-async function main(sourceFile: string, opts: any): Promise<void> {
+async function main(sourceFile: string, opts: OptionValues): Promise<void> {
   console.log = () => {};
 
   const mapper = loadRules(opts);
@@ -59,7 +53,6 @@ async function main(sourceFile: string, opts: any): Promise<void> {
     showParentInSelections: false,
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
-    postName: opts.postName,
     mapper: mapper,
     skipOptionalArgs: opts.skipOptionalArgs,
     inferEntityResolvers: opts.inferEntityResolvers,
@@ -124,4 +117,5 @@ program
   .parse(process.argv);
 
 const source = program.args[0];
-main(source, program.opts()).then(() => console.log('done'));
+main(source, program.opts())
+  .then(() => console.log('done'));

@@ -15,7 +15,7 @@ import { Mapper } from './mapper/types.js';
 import { Naming } from './utils/naming.js';
 
 interface IGenOptions {
-  skipValidation: boolean;
+  skipValidation?: boolean;
   baseURL?: string;
   overrides?: Record<string, RequestOverride>;
   consolidateUnions?: boolean;

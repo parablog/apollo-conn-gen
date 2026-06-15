@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import _ from 'lodash';
 import { DEFAULT_VERSIONS, validateVersionOptions } from '../../versions.js';
 import { ConnectorWriter, JsonArray, JsonContext, JsonObj, JsonScalar, JsonType, StringWriter } from '../index.js';
@@ -129,7 +128,7 @@ export class JsonGen {
   }
 
   // Walk an element in the JSON tree
-  private walkElement(context: JsonContext, parent: JsonType | null, name: string, element: any): JsonType {
+  private walkElement(context: JsonContext, parent: JsonType | null, name: string, element: unknown): JsonType {
     trace(context, '-> [walkElement]', 'in: ' + name);
     let result: JsonType;
 
@@ -158,15 +157,19 @@ export class JsonGen {
   }
 
   // Walk a JSON object
-  private walkObject(context: JsonContext, parent: JsonType | null, name: string, object: any): JsonObj {
+  private walkObject(context: JsonContext, parent: JsonType | null, name: string, object: unknown): JsonObj {
     trace(context, '-> [walkObject]', 'in: ' + name);
     const result = new JsonObj(name, parent);
-    const fieldSet = Object.keys(object);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fieldSet = Object.keys(object as any);
     trace(context, '  [walkObject]', 'fieldSet: ' + fieldSet);
 
     for (const field of fieldSet) {
       trace(context, '  [walkObject]', 'field: ' + field);
-      const childElement = object[field];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const childElement = (object as any)[field];
+
       const type = this.walkElement(context, result, field, childElement);
       result.add(field, type);
     }

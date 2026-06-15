@@ -2,10 +2,9 @@ import fs from 'fs';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { JsonGen } from '../json/index.js';
 
-import { Command } from 'commander';
+import { Command, OptionValues } from 'commander';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- for options
-async function main(fileOrFolder: string, opts: any): Promise<void> {
+async function main(fileOrFolder: string, opts: OptionValues): Promise<void> {
   console.log = () => {};
 
   if (!fs.existsSync(fileOrFolder)) {
@@ -34,7 +33,8 @@ async function main(fileOrFolder: string, opts: any): Promise<void> {
   } else {
     // iterate through the files found in the target folder and load all the contents
     gen = JsonGen.new(jsonOptions);
-    fs.readdirSync(fileOrFolder).forEach((file) => {
+   
+    fs.readdirSync(fileOrFolder).forEach((file: string) => {
       const contents = fs.readFileSync(fileOrFolder + '/' + file, 'utf-8');
       gen.walkJson(contents);
     });

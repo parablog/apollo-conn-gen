@@ -100,7 +100,7 @@ export class Get extends Type implements Op {
   protected writeOpName(context: OasContext, writer: Writer): void {
     let name = this.getGqlOpName();
 
-    // Use the new name mapper if available, otherwise fall back to legacy postName
+    // Use the new name mapper if available
     if (context.generateOptions.mapper) {
       name = context.generateOptions.mapper.operationName(name);
     }
