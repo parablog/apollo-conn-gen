@@ -147,7 +147,8 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
 | R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status` (v0.2+); only `@source`-level errors pending |
 | R5. Dynamic headers / auth | 🟡 Partial | slices 1-2 done (global `@source` + per-op `@connect` auth via per-source mode switch); `$env`, `from:`, `$request.headers`, apiKey query/cookie remain |
-| R6. Batch entity resolution | ⬜ Not started | depends on R1 |
+| R6. Batch entity resolution | 🟡 Redesign (draft `feat/r6-batch` rejected) | infer from OAS, not a config file; depends on R1 + R8 |
+| R10. Reusable `@mapping` | 🟡 In progress (branch `feat/r10-reusable-mappings`) | `--reusable-mappings`, connect v0.5 |
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
 | R8. `path`/`queryParams` JSONSelection | ✅ Done | serialization joins (inferred) + per-op `overrides` for path/queryParams (user intent) |
 | R9. Computed / literal bodies | ✅ Done | inferred `$args.input { … }` + `overrides[opId].body` raw JSONSelection (replace/drop) |
@@ -372,18 +373,47 @@ reused by both writers. Deferred cases still warn, never drop. Tested (`test_R5_
 
 ### Lower value / advanced
 
-### R6. Batch entity resolution — `batch: { maxSize }` + `$batch` — ⬜ Not started
+### R6. Batch entity resolution — `$batch` + `batch: { maxSize }` — 🟡 In progress (redesign)
 
-**Why:** Reduces N+1 entity lookups. Depends on R1 (reuses the `@key` from 1c; R1 is
-done). (Verified: no `batch`/`$batch`/`maxSize` emitted today.)
+**Status:** First-draft branch `feat/r6-batch` is **rejected — wrong design.** It was
+config-driven: the user had to name the batch endpoint per entity in a `generateOptions.batch`
+file (`{ Thing: { http, body, keyFields, maxSize } }`), pasting raw JSONSelection by hand. That
+re-asks for facts the spec already carries — if the API has a batch endpoint, OAS already
+describes its path, how it accepts the IDs, and that it returns a list. The branch keeps the
+tests/fixtures as a reference for the emitted shape, but the input model gets replaced.
 
-**Scope:** For bulk endpoints (e.g. `POST /things/batch`), emit a type-level `@connect`
-with `batch: { maxSize }` and a `$batch`-based selection.
+**New design — infer from OAS, like R1 (no config file):** a batch `@connect` is the R1
+type-level resolver with **`$batch` substituted for `$this`**. Both halves the config file asked
+for are derivable: the key comes from R1's `@key`, and the request serialization from the OAS
+param `style`/`explode` — **which R8 already emits** (`arrayJoin` → `joinNotNull(',')` / space /
+pipe). So R6 ≈ R1 resolver shape + R8 joins + `$batch`.
+
+**Why:** Reduces N+1 entity lookups. Depends on R1 (reuses `@key` from 1c) and R8 (array-param
+joins). (Verified: no `batch`/`$batch` emitted on `main` today.)
+
+**Detection (which op is the batch endpoint for entity `E`):** `E` is already an entity (has
+`@key`). Find an operation that **takes an array of `E`'s key field(s) in** AND **returns an array
+of `E` out** (possibly wrapped → `$.results`). This is the one genuinely heuristic part — the
+batch analogue of R1's "path params match `@key`". Ambiguous/multi-candidate matches warn + skip,
+never guess.
+
+**Emission — paste how the endpoint does it** (the four spec patterns, GraphOS batching guide):
+- array **query param**, `explode: true` (OAS default) → `queryParams: "id: $batch.id"` (`?id=1&id=2`).
+- array **query param**, `explode: false` → `GET: "?ids={$batch.id->joinNotNull(',')}"` (style →
+  separator: form `,`, space, pipe — **R8's `arrayJoin` reused**).
+- array in **request body**, scalar items → `body: "ids: $batch.id"`.
+- array in **request body**, object items (composite key) → `body: "items: $batch { id store_id: store.id }"`.
+- selection reuses the entity's own R1 selection; must contain the `$batch` key field(s) so the
+  planner can re-associate results (spec rule).
+
+**Residual with no OAS signal:** `batch: { maxSize }` — there is no spec field for a server-side
+batch cap. Omit it by default (the `$batch` mapping is what triggers batching); if a cap is ever
+needed, that single value is an override knob (R8-style), **not** a config file.
 
 **Requires:** `$batch`.
 
-**Files:** `src/oas/io/operationWriter.ts`, entity detection (shared with R1).
-(gate: v0.2+)
+**Files:** entity/batch detection in `src/oas/nodes/entity.ts` (shared with R1),
+`src/oas/io/operationWriter.ts` (emit, reusing `arrayJoin`). (gate: v0.2+)
 
 ### R7. Richer JSONSelection — methods, literals, spreads, coalescing, optional chaining — 🟡 Partial
 
@@ -436,6 +466,16 @@ values, renamed keys); `null` drops the body. No OAS signal expresses computed b
 this is user intent by design, like the rest of the overrides.
 
 **Files:** `src/oas/io/operationWriter.ts` (`writeBodyOverride`). (gate: v0.2+)
+
+### R10. Reusable `@mapping` emission (connect v0.5) — 🟡 In progress
+
+**Status:** Branch `feat/r10-reusable-mappings` (commits `b7dfff6`, `fe3277d`). Emits reusable
+`@mapping` selections under `--reusable-mappings`, gated to connect v0.5; tests compose against a
+local composer build (`tests/all/r10-mappings.test.ts`). Not yet in the coverage matrix above —
+add the spec-surface row when it merges.
+
+**Files:** `src/oas/nodes/typeUtils.ts`, `propArray.ts`/`propComp.ts`/`propObj.ts`,
+`src/oas/io/writer.ts`, `src/versions.ts`. (gate: v0.5)
 
 ---
 
