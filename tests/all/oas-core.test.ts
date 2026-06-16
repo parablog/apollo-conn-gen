@@ -3,6 +3,7 @@ import fs from 'fs';
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
+import { OasGen } from '../../src/index.js';
 import './_setup.js';
 
 /// OAS TESTS
@@ -780,6 +781,26 @@ test('test_composed_collision_with_stored_object_splits_by_container', async () 
   assert.ok(/type MediaPermissions \{[^}]*canAnnotate[^}]*canDelete/s.test(schema!), 'colliding Composed qualified by container');
   assert.ok(/\bpermissions: MediaPermissions\b/.test(schema!), 'media references the split type');
   assert.ok(!/type Permissions \{[^}]*canDelete/s.test(schema!), 'no redefinition of Permissions');
+});
+
+test('test_no_duplicate_type_definitions_launch_library', async () => {
+  // A $ref reached two ways builds two nodes with the same name but different ids — `AgencyMini`
+  // as an array item (`obj:type:…`) and as a single-member allOf (`comp:type:…`). The emit gate
+  // keyed on the id missed the repeat and printed `type AgencyMini` twice (invalid SDL; rover
+  // connector list is lenient, so it slipped the suite). see docs/issues.md #26.
+  const gen = await OasGen.fromFile(`${oasBasePath}/launch_Library_2-docs-v2.3.0.json`, {
+    skipValidation: true,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const root = [...gen.paths.keys()].find((k) => k.includes('/agencies/'))!;
+  const sdl = gen.generateSchema([`${root}>**`]);
+
+  const typeNames = [...sdl.matchAll(/^type (\w+)/gm)].map((m) => m[1]);
+  const duplicates = [...new Set(typeNames.filter((n, i, a) => a.indexOf(n) !== i))];
+  assert.deepStrictEqual(duplicates, [], `every named type must be emitted once; duplicated: ${duplicates.join(', ')}`);
+  // the surviving node must be complete (guard against keeping a cycle-cut twin)
+  assert.match(sdl, /type AgencyMini \{[^}]*type: AgencyType!/s);
 });
 
 test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {

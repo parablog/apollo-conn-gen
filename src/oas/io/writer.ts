@@ -5,6 +5,7 @@ import { promoteInterfaces } from '../nodes/interfacePromotion.js';
 import { OperationWriter } from './operationWriter.js';
 import { SchemaWriter } from './schemaWriter.js';
 import { TypesCollector } from '../generator/typesCollector.js';
+import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
 
 export class Writer {
@@ -61,9 +62,21 @@ export class Writer {
     types.forEach((type: IType) => {
       const count = refCount.get(type.name) !== undefined ? refCount.get(type.name)! : Infinity;
 
-      if (!generatedSet.has(type.id) && count > 0) {
+      // a `$ref` is one shared type but can reach here under two ids — `obj:type:X` (an array item)
+      // and `comp:type:X` (a single-member `allOf`). e.g. `AgencyMini`, splitting at `ProgramNormal`:
+      //   …>prop:array:#program>obj:type:#/c/s/ProgramNormal>prop:array:#agencies>obj:type:#/c/s/AgencyMini
+      //   …>prop:array:#program>obj:type:#/c/s/ProgramNormal>prop:array:#mission_patches>obj:type:#/c/s/MissionPatch>prop:comp:agency>comp:type:#/c/s/AgencyMini
+      // the two ids differ, so the check above doesn't catch the repeat — also check the name it
+      // will print. use the printed name (`Pet`), not the `$ref`: an output `Pet` and its request
+      // `PetInput` come from the same `$ref` but are different types, so keying on the `$ref` would
+      // drop one. see #26
+      const nameKey = T.isRef(type.name)
+        ? 'name:' + Naming.genTypeName(type.name) + (type.kind === 'input' ? 'Input' : '')
+        : null;
+      if (!generatedSet.has(type.id) && !(nameKey && generatedSet.has(nameKey)) && count > 0) {
         type.generate(context, this, selection);
         generatedSet.add(type.id);
+        if (nameKey) generatedSet.add(nameKey);
         refCount.set(type.name, count - 1);
       }
     });
