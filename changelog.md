@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.13.1]
+
+### Fixed
+- A `$ref` reached two ways — as an array item (`obj:type`) and as a single-member `allOf`
+  (`comp:type`) — emitted `type X` twice (invalid SDL). The emit-once gate now keys on the
+  emitted type name, not the node id, so output `X` and request `XInput` stay distinct
+  (regression from #26).
+
+### Changed
+- Internal: removed `any` casts across the CLI and JSON walker (no output change).
+
 ## [0.13.0]
 
 ### Added
