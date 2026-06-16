@@ -28,23 +28,36 @@ export const DEFAULT_VERSIONS = {
 
 export type Versions = typeof DEFAULT_VERSIONS;
 
-const VERSION_RE = /^v(\d+)\.(\d+)$/;
+// vMAJOR.MINOR with an optional .PATCH (federation ships patches, e.g. "v2.14.1").
+const VERSION_RE = /^v(\d+)\.(\d+)(?:\.(\d+))?$/;
 
-/** Parse a `vMAJOR.MINOR` string. Throws (actionable) on anything else. */
-export function parseVersion(v: string): { major: number; minor: number } {
+/**
+ * Parse a `vMAJOR.MINOR` string, with an optional `.PATCH` (e.g. "v0.3", "v2.14.1"). Throws
+ * (actionable) on anything else. `patch` is omitted when absent, so a patchless version stays
+ * `{ major, minor }`.
+ */
+export function parseVersion(v: string): { major: number; minor: number; patch?: number } {
   const m = VERSION_RE.exec(v);
   if (!m) {
-    throw new Error(`Invalid version "${v}": expected format vMAJOR.MINOR (e.g. "v0.3").`);
+    throw new Error(`Invalid version "${v}": expected format vMAJOR.MINOR or vMAJOR.MINOR.PATCH (e.g. "v0.3", "v2.14.1").`);
   }
-  return { major: Number(m[1]), minor: Number(m[2]) };
+  const parsed: { major: number; minor: number; patch?: number } = { major: Number(m[1]), minor: Number(m[2]) };
+  // only attach patch when present — keeps patchless versions equal-by-shape to `{ major, minor }`
+  if (m[3] !== undefined) {
+    parsed.patch = Number(m[3]);
+  }
+  return parsed;
 }
 
-/** Order two versions by (major, minor). -1 if a<b, 0 if equal, 1 if a>b. */
+/** Order two versions by (major, minor, patch); a missing patch counts as 0. -1 a<b, 0 equal, 1 a>b. */
 export function compareVersions(a: string, b: string): -1 | 0 | 1 {
   const pa = parseVersion(a);
   const pb = parseVersion(b);
   if (pa.major !== pb.major) return pa.major < pb.major ? -1 : 1;
   if (pa.minor !== pb.minor) return pa.minor < pb.minor ? -1 : 1;
+  const patchA = pa.patch ?? 0;
+  const patchB = pb.patch ?? 0;
+  if (patchA !== patchB) return patchA < patchB ? -1 : 1;
   return 0;
 }
 
