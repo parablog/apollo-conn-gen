@@ -179,7 +179,7 @@ export class JsonGen {
   }
 
   // Walk a JSON array
-  private walkArray(context: JsonContext, parent: JsonType | null, name: string, array: any[]): JsonArray {
+  private walkArray(context: JsonContext, parent: JsonType | null, name: string, array: unknown[]): JsonArray {
     trace(context, '-> [walkArray]', 'in: ' + name);
     const result = new JsonArray(name, parent);
     if (array.length > 0) {
@@ -197,7 +197,7 @@ export class JsonGen {
   }
 
   // Walk a primitive JSON value
-  private walkPrimitive(_context: JsonContext, parent: JsonType | null, name: string, primitive: any): JsonScalar {
+  private walkPrimitive(_context: JsonContext, parent: JsonType | null, name: string, primitive: unknown): JsonScalar {
     let result: JsonScalar;
     if (typeof primitive === 'string') {
       result = new JsonScalar(name, parent, 'String');
@@ -206,7 +206,7 @@ export class JsonGen {
     } else if (typeof primitive === 'number') {
       result = new JsonScalar(name, parent, 'Int');
     } else {
-      throw new Error('Cannot yet handle primitive: ' + primitive);
+      throw new Error('Cannot yet handle primitive: ' + String(primitive));
     }
     return result;
   }
