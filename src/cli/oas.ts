@@ -117,5 +117,4 @@ program
   .parse(process.argv);
 
 const source = program.args[0];
-main(source, program.opts())
-  .then(() => console.log('done'));
+main(source, program.opts()).then(() => console.log('done'));

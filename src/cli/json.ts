@@ -33,7 +33,7 @@ async function main(fileOrFolder: string, opts: OptionValues): Promise<void> {
   } else {
     // iterate through the files found in the target folder and load all the contents
     gen = JsonGen.new(jsonOptions);
-   
+
     fs.readdirSync(fileOrFolder).forEach((file: string) => {
       const contents = fs.readFileSync(fileOrFolder + '/' + file, 'utf-8');
       gen.walkJson(contents);
