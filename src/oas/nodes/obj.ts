@@ -95,7 +95,11 @@ export class Obj extends Type {
         writer.write(` @key(fields: "${key}")`);
       }
       for (const resolver of resolvers) {
-        this.writeEntityConnector(context, writer, resolver, selection);
+        if (resolver.batch) {
+          this.writeBatchConnector(context, writer, resolver, selection);
+        } else {
+          this.writeEntityConnector(context, writer, resolver, selection);
+        }
       }
       writer.write('\n{\n');
     } else {
@@ -173,6 +177,43 @@ export class Obj extends Type {
     this.select(context, writer, selection);
 
     writer.write(i6).write('"""\n').write(i4).write(')');
+  }
+
+  // R6: a batch @connect — like writeEntityConnector, but $batch replaces $this, the keys ride in
+  // the request (queryParams or body), and a `batch: { maxSize }` cap is added.
+  private writeBatchConnector(context: OasContext, writer: Writer, resolver: EntityResolver, selection: string[]): void {
+    const i4 = ' '.repeat(4);
+    const i6 = ' '.repeat(6);
+    const i8 = ' '.repeat(8);
+    const batchSpec = resolver.batch!;
+
+    writer
+      .write('\n')
+      .write(i4)
+      .write('@connect(\n')
+      .write(i6)
+      .write(`source: "${resolver.source}"\n`)
+      .write(i6)
+      .write(`http: { ${resolver.verb}: "${resolver.path}"\n`);
+
+    // the keys: a query param (`id: $batch.id`) or a request body (`ids: $batch.id`)
+    const label = batchSpec.queryParams ? 'queryParams' : 'body';
+    const value = batchSpec.queryParams ?? batchSpec.body!;
+    writer.write(i8).write(`${label}: """\n`).write(i8).write(value + '\n').write(i8).write('"""\n').write(i6).write('}\n');
+
+    // selection reuses the entity's own fields; wrap as `$.results { … }` for a wrapped response
+    writer.write(i6).write('selection: """\n');
+    if (batchSpec.wrapperKey) {
+      writer.write(i6).write(`$.${batchSpec.wrapperKey} {\n`);
+    }
+    context.indent = (batchSpec.wrapperKey ? 8 : 6) - context.stack.length;
+    this.select(context, writer, selection);
+    if (batchSpec.wrapperKey) {
+      writer.write(i6).write('}\n');
+    }
+    writer.write(i6).write('"""\n');
+
+    writer.write(i6).write(`batch: { maxSize: ${batchSpec.maxSize} }\n`).write(i4).write(')');
   }
 
   private visitProperties(context: OasContext): void {

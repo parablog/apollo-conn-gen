@@ -1,4 +1,4 @@
-import { JsonGen, OasGen, RequestOverride } from '../index.js';
+import { BatchConfig, JsonGen, OasGen, RequestOverride } from '../index.js';
 import { JsonContext, JsonType } from '../json/index.js';
 import assert from 'node:assert';
 import path from 'path';
@@ -28,6 +28,7 @@ export async function runOasTest(
   opts: {
     baseURL?: string;
     overrides?: Record<string, RequestOverride>;
+    batch?: BatchConfig;
     consolidateUnions?: boolean;
     connectorSpecVersion?: string;
     federationVersion?: string;
@@ -39,6 +40,7 @@ export async function runOasTest(
     skipValidation,
     baseURL: opts.baseURL,
     overrides: opts.overrides,
+    batch: opts.batch,
     consolidateUnions: opts.consolidateUnions ?? true,
     showParentInSelections: false,
     mapper,

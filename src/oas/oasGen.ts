@@ -6,7 +6,7 @@ import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
 import { DEFAULT_VERSIONS, resolveConsolidateUnions, validateVersionOptions } from '../versions.js';
-import { GenerateOptions, OasContext, RequestOverride } from './oasContext.js';
+import { BatchConfig, GenerateOptions, OasContext, RequestOverride } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
@@ -18,6 +18,7 @@ interface IGenOptions {
   skipValidation?: boolean;
   baseURL?: string;
   overrides?: Record<string, RequestOverride>;
+  batch?: BatchConfig;
   consolidateUnions?: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;

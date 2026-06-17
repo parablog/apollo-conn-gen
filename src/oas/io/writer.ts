@@ -1,6 +1,7 @@
 import { OasGen } from '../oasGen.js';
 import { IType, T } from '../nodes/internal.js';
 import { inferEntityResolvers } from '../nodes/entity.js';
+import { applyBatchResolvers } from '../nodes/batch.js';
 import { promoteInterfaces } from '../nodes/interfacePromotion.js';
 import { OperationWriter } from './operationWriter.js';
 import { SchemaWriter } from './schemaWriter.js';
@@ -51,6 +52,9 @@ export class Writer {
     // loop below generates, so each entity type can emit @key + its type-level
     // @connect/$this resolver. Resets first, so it's a no-op when the flag is off.
     inferEntityResolvers(context, this.gen, types, selection);
+
+    // R6: add batch resolvers (needs the R1 @key above) when a --batch file was given.
+    applyBatchResolvers(context, this.gen, types);
 
     // R2: promote discriminated oneOf-with-shared-allOf-base to a GraphQL interface (id-neutral;
     // no-op unless consolidateUnions is off and a qualifying union exists). Same `types` map.

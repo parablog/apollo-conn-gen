@@ -4,6 +4,7 @@ import { OasContext, RequestOverride } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Body, IType, Op, Param, T } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
+import { Params } from '../utils/params.js';
 import { ErrorsWriter } from './errorsWriter.js';
 import { Writer } from './writer.js';
 import { anyOperationDeclaresSecurity, globalSecurity, securitySchemes, resolveAuthHeader } from './security.js';
@@ -255,15 +256,9 @@ export class OperationWriter {
     return '<placeholder>';
   }
 
-  // a non-exploded array param (`?ids=1,2,3`) needs its values joined: `ids->joinNotNull(",")`. see ROADMAP R8
-  // exploded arrays (the OAS default) already work as a plain array value
+  // see Params.arrayJoin (shared with the R6 batch path)
   private arrayJoin(p: Param): string {
-    const parameter = p.parameter;
-    if (_.get(parameter, 'schema.type') !== 'array' || parameter.explode !== false) {
-      return '';
-    }
-    const delimiter = parameter.style === 'spaceDelimited' ? ' ' : parameter.style === 'pipeDelimited' ? '|' : ',';
-    return `->joinNotNull("${delimiter}")`;
+    return Params.arrayJoin(p.parameter);
   }
 
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {

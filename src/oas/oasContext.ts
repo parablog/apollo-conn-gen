@@ -18,9 +18,17 @@ export type RequestOverride = {
   body?: string | null;
 };
 
+// R6: per-batch-endpoint settings. The only knob is the size cap; everything else
+// (entity, key, request, selection) is inferred. `{}`/`null` = defaults.
+export type BatchEntry = { maxSize?: number };
+
+// R6: batch endpoints, keyed by op id. e.g. { "post:/products/batch": { maxSize: 50 } }
+export type BatchConfig = Record<string, BatchEntry | null>;
+
 export type GenerateOptions = {
   baseURL?: string;
   overrides?: Record<string, RequestOverride>;
+  batch?: BatchConfig;
   consolidateUnions?: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;

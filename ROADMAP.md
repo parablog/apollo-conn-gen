@@ -101,9 +101,9 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `@connect` | `entity: true` (Query-field resolver) | Deliberately not emitted (type-level `$this` favoured — R1 note) | R1 (1a) |
 | `@connect` | type-level on OBJECT + `$this` | Done (`--infer-entity-resolvers`) | R1 (1b) |
 | `@connect` | `errors` | Done opt-in (`message: "$.message"` heuristic + `extensions`/`$status`; `isSuccess` not in the spec SDL) | R4 |
-| `@connect` | `batch` (ConnectBatch) | Missing | R6 |
+| `@connect` | `batch` (ConnectBatch) | Done opt-in (`--batch`; single key + one scalar-array input; composite/object-array deferred) | R6 |
 | `ConnectorErrors` | `message`, `extensions` | Done (opt-in; `message` heuristic + `extensions`) | R4 |
-| `ConnectBatch` | `maxSize` | Missing | R6 |
+| `ConnectBatch` | `maxSize` | Done (default `100`, file-overridable) | R6 |
 | `HTTPHeaderMapping` | `name` | Partial (global `@source` + per-op `@connect` auth) | R5 |
 | `HTTPHeaderMapping` | `value` (StringTemplate `{$config}`/`{$env}`/`{$context}`) | Partial (`{$config.*}` on global `@source` + per-op `@connect` auth; `$env`/`$context` pending) | R5 |
 | `HTTPHeaderMapping` | `from` (response-header extract) | Missing | R5 |
@@ -113,8 +113,8 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | JSONSelection | methods, literals, spreads, `??`/`?!`, optional chaining | Partial (`->entries`, `->match`, `->joinNotNull`, `??` coalesced defaults, `$(literal)`/`__typename` done; spreads/`?!`/chaining pending) | R7 |
 | OAS `oneOf`/`anyOf` + discriminator | unions/interfaces | Done (real `union` + `->match` `__typename` + interface promotion on v0.4; consolidate/merged-object downgrades below; version-derived) | R2 |
 | Variables | `$args` | Done | — |
-| Variables | `$this` (R1), `$config` (R5), `$status` (R4) | Done | — |
-| Variables | `$env`, `$batch`, `$request.*`, `$response.*`, `@` | Missing | Cross-cutting (lands with R4/R5/R6/R7/R9) |
+| Variables | `$this` (R1), `$config` (R5), `$status` (R4), `$batch` (R6) | Done | — |
+| Variables | `$env`, `$request.*`, `$response.*`, `@` | Missing | Cross-cutting (lands with R4/R5/R7/R9) |
 | Variables | `$context` | Missing | Non-goal |
 | Version enum / `@link` | v0.1–v0.4 selection + gating | Done (R0 plumbing; union form version-derived, #34) | R0 |
 
@@ -147,7 +147,7 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
 | R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status` (v0.2+); only `@source`-level errors pending |
 | R5. Dynamic headers / auth | 🟡 Partial | slices 1-2 done (global `@source` + per-op `@connect` auth via per-source mode switch); `$env`, `from:`, `$request.headers`, apiKey query/cookie remain |
-| R6. Batch entity resolution | 🟡 Redesign (draft `feat/r6-batch` rejected) | infer from OAS, not a config file; depends on R1 + R8 |
+| R6. Batch entity resolution | 🟡 Common case done | infer from OAS (`--batch` op-id file); single key + one scalar-array input; composite/object-array deferred |
 | R10. Reusable `@mapping` | 🟡 In progress (branch `feat/r10-reusable-mappings`) | `--reusable-mappings`, connect v0.5 |
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
 | R8. `path`/`queryParams` JSONSelection | ✅ Done | serialization joins (inferred) + per-op `overrides` for path/queryParams (user intent) |
@@ -373,47 +373,50 @@ reused by both writers. Deferred cases still warn, never drop. Tested (`test_R5_
 
 ### Lower value / advanced
 
-### R6. Batch entity resolution — `$batch` + `batch: { maxSize }` — 🟡 In progress (redesign)
+### R6. Batch entity resolution — `$batch` + `batch: { maxSize }` — 🟡 Common case done
 
-**Status:** First-draft branch `feat/r6-batch` is **rejected — wrong design.** It was
-config-driven: the user had to name the batch endpoint per entity in a `generateOptions.batch`
-file (`{ Thing: { http, body, keyFields, maxSize } }`), pasting raw JSONSelection by hand. That
-re-asks for facts the spec already carries — if the API has a batch endpoint, OAS already
-describes its path, how it accepts the IDs, and that it returns a list. The branch keeps the
-tests/fixtures as a reference for the emitted shape, but the input model gets replaced.
+**Status:** Done for the single-key common case (branch `feat/r6-batch-infer`); the config-driven
+first draft (`feat/r6-batch`, deleted) is gone. A batch `@connect` is the R1 type-level resolver
+with **`$batch` in place of `$this`** — same `@key`, same selection, but the keys come from the
+batch endpoint's array input. Everything is inferred from a thin op-id file plus the entity's R1
+`@key`; only `maxSize` is a knob.
 
-**New design — infer from OAS, like R1 (no config file):** a batch `@connect` is the R1
-type-level resolver with **`$batch` substituted for `$this`**. Both halves the config file asked
-for are derivable: the key comes from R1's `@key`, and the request serialization from the OAS
-param `style`/`explode` — **which R8 already emits** (`arrayJoin` → `joinNotNull(',')` / space /
-pipe). So R6 ≈ R1 resolver shape + R8 joins + `$batch`.
+**Why:** Reduces N+1 entity lookups. Builds on R1 (reuses its `@key`) and R8 (`arrayJoin`).
 
-**Why:** Reduces N+1 entity lookups. Depends on R1 (reuses `@key` from 1c) and R8 (array-param
-joins). (Verified: no `batch`/`$batch` emitted on `main` today.)
+**Input — `--batch <file>`, keyed by op id** (the one thing OAS can't give: *which* op is the
+batch endpoint). The endpoint must also be in the selection — like R1's by-id endpoint, it's
+emitted as a normal field AND wired as the entity's batch resolver. Reuses the `--overrides`
+JSON-load pattern. `{}`/`null` = defaults:
+```json
+{ "post:/products/batch": {}, "get:/products": { "maxSize": 50 } }
+```
 
-**Detection (which op is the batch endpoint for entity `E`):** `E` is already an entity (has
-`@key`). Find an operation that **takes an array of `E`'s key field(s) in** AND **returns an array
-of `E` out** (possibly wrapped → `$.results`). This is the one genuinely heuristic part — the
-batch analogue of R1's "path params match `@key`". Ambiguous/multi-candidate matches warn + skip,
-never guess.
+**How it works** (`applyBatchResolvers` in `src/oas/nodes/batch.ts`, a post-collect pass after
+`inferEntityResolvers`, reading the selected op's node graph — like `inferEntityResolvers` /
+`promoteInterfaces`, never re-parsing OAS):
+- entity = the op's response array item (`[Product]` or `{ results: [Product] }`), resolved via
+  `op.resultType` → `Res`/`Arr`/`Obj` and matched by `types.get(item.id)` — so its R1 `@key` is
+  reused, never invented.
+- request = the single scalar-array input (`op.params` / `op.body.payload`), `$batch`-rooted:
+  - exploded query array → `queryParams: "id: $batch.id"`;
+  - comma/space/pipe-packed query array → `+ ->joinNotNull(",")` (R8's `arrayJoin`, shared);
+  - named body array → `body: "ids: $batch.id"`.
+- selection reuses the entity's R1 selection (wrapped as `$.results { … }` for a wrapped response).
+- always emits `batch: { maxSize: 100 }` (no OAS signal; file-overridable).
 
-**Emission — paste how the endpoint does it** (the four spec patterns, GraphOS batching guide):
-- array **query param**, `explode: true` (OAS default) → `queryParams: "id: $batch.id"` (`?id=1&id=2`).
-- array **query param**, `explode: false` → `GET: "?ids={$batch.id->joinNotNull(',')}"` (style →
-  separator: form `,`, space, pipe — **R8's `arrayJoin` reused**).
-- array in **request body**, scalar items → `body: "ids: $batch.id"`.
-- array in **request body**, object items (composite key) → `body: "items: $batch { id store_id: store.id }"`.
-- selection reuses the entity's own R1 selection; must contain the `$batch` key field(s) so the
-  planner can re-associate results (spec rule).
+**Skipped (warns via the project logger, never guesses):** an unselected endpoint, composite keys,
+object-array request bodies, top-level array bodies, endpoints with path params, more than one array
+input, an unknown op, or an entity with no R1 `@key`.
 
-**Residual with no OAS signal:** `batch: { maxSize }` — there is no spec field for a server-side
-batch cap. Omit it by default (the `$batch` mapping is what triggers batching); if a cap is ever
-needed, that single value is an override knob (R8-style), **not** a config file.
+**Deferred to a follow-up slice:** composite keys + object-array bodies (`body: "items: $batch { … }"`
+with renames) and the full required-input gate. The single-key path covers the common batch
+endpoint; these add real complexity for the long tail.
 
-**Requires:** `$batch`.
+**Requires:** `$batch`. **Gate:** connect v0.2+ (below → logged downgrade, skip).
 
-**Files:** entity/batch detection in `src/oas/nodes/entity.ts` (shared with R1),
-`src/oas/io/operationWriter.ts` (emit, reusing `arrayJoin`). (gate: v0.2+)
+**Files:** `src/oas/nodes/batch.ts` (derivation), `src/oas/nodes/obj.ts` (`writeBatchConnector`),
+`src/oas/utils/params.ts` (shared `arrayJoin`), `src/cli/oas.ts` (`--batch`), threaded via
+`oasContext.ts`/`oasGen.ts`/`writer.ts`. Tested (`tests/all/r6-batch.test.ts`, rover-composed).
 
 ### R7. Richer JSONSelection — methods, literals, spreads, coalescing, optional chaining — 🟡 Partial
 

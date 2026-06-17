@@ -1,0 +1,143 @@
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { BatchConfig, OasGen } from '../../src/index.js';
+import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
+import { captureErrors } from './_setup.js';
+
+// R6: a batch @connect is the R1 resolver with $batch in place of $this. Like R1, the batch
+// endpoint is part of the selection (so it's expanded); the --batch file marks it as the batch
+// endpoint, and applyBatchResolvers reads its node graph to wire the entity's batch resolver.
+// Default v0.4 / fed 2.14, rover-composed. Product gets its R1 @key("id") from /products/{id}.
+
+const PRODUCT = 'get:/products/{id}>**';
+
+const run = (paths: string[], batch: BatchConfig, typesSize: number) =>
+  runOasTest('r6-batch.yaml', paths, 9, typesSize, false, false, undefined, false, true, { batch });
+
+test('test_R6_batch_query_array_emits_queryParams', async () => {
+  // ?id=1&id=2 (exploded) -> queryParams: "id: $batch.id", no join
+  const schema = await run([PRODUCT, 'get:/products>**'], { 'get:/products': {} }, 1);
+  assert.ok(schema!.includes('id: $batch.id'), 'maps the query param to $batch');
+  assert.ok(!schema!.includes('joinNotNull'), 'exploded array needs no join');
+  assert.ok(schema!.includes('batch: { maxSize: 100 }'), 'default maxSize emitted');
+});
+
+test('test_R6_batch_comma_packed_query_array_joins', async () => {
+  // explode:false -> "id: $batch.id->joinNotNull(",")"
+  const schema = await run([PRODUCT, 'get:/products/search>**'], { 'get:/products/search': {} }, 1);
+  assert.ok(schema!.includes('id: $batch.id->joinNotNull(",")'), 'non-exploded array is joined');
+});
+
+test('test_R6_batch_body_array_emits_body', async () => {
+  // { "ids": [...] } -> body: "ids: $batch.id" (the batch op also emits its own input type)
+  const schema = await run([PRODUCT, 'post:/products/batch>**'], { 'post:/products/batch': {} }, 2);
+  assert.ok(schema!.includes('ids: $batch.id'), 'maps the body array to $batch');
+});
+
+test('test_R6_batch_wrapped_response_unwraps_selection', async () => {
+  // { results: [...] } -> selection wraps as `$.results { … }`
+  const schema = await run([PRODUCT, 'post:/products/lookup>**'], { 'post:/products/lookup': {} }, 3);
+  assert.ok(schema!.includes('$.results {'), 'selection unwraps the results array');
+});
+
+test('test_R6_batch_maxSize_override', async () => {
+  const schema = await run([PRODUCT, 'get:/products>**'], { 'get:/products': { maxSize: 50 } }, 1);
+  assert.ok(schema!.includes('batch: { maxSize: 50 }'), 'file overrides maxSize');
+});
+
+test('test_R6_batch_coexists_with_single_this_resolver', async () => {
+  const schema = await run([PRODUCT, 'post:/products/batch>**'], { 'post:/products/batch': {} }, 2);
+  // one @key, the single $this resolver, and the batch resolver all on Product
+  assert.ok((schema!.match(/@key\(fields: "id"\)/g) ?? []).length === 1, 'exactly one @key');
+  assert.ok(schema!.includes('{$this.id}'), 'R1 single resolver still there');
+  assert.ok(schema!.includes('$batch.id'), 'batch resolver added alongside');
+});
+
+test('test_R6_batch_petstore_findByNames', async () => {
+  // the petstore, extended with GET /user/findByNames?username=a&username=b -> [User].
+  // User already has R1 @key("username") from /user/{username}, so it batch-resolves by username.
+  const schema = await runOasTest(
+    'petstore-batch.yaml',
+    ['get:/user/{username}>**', 'get:/user/findByNames>**'],
+    20,
+    1,
+    false,
+    true,
+    undefined,
+    false,
+    true,
+    { batch: { 'get:/user/findByNames': {} } },
+  );
+  assert.ok(schema!.includes('@key(fields: "username")'), 'User keeps its R1 @key');
+  assert.ok(schema!.includes('http: { GET: "/user/findByNames"'), 'batch connector targets the batch endpoint');
+  assert.ok(schema!.includes('username: $batch.username'), 'maps the query array to $batch.username');
+  assert.ok(schema!.includes('batch: { maxSize: 100 }'), 'default maxSize emitted');
+});
+
+// --- skips: every ambiguity warns and emits nothing, never guesses ---
+
+async function expectSkip(paths: string[], batch: BatchConfig, why: RegExp, typesSize: number) {
+  let schema: string | undefined;
+  const warnings = await captureErrors(async () => {
+    schema = await runOasTest('r6-batch.yaml', paths, 9, typesSize, false, false, undefined, false, true, { batch });
+  });
+  assert.ok(!schema!.includes('$batch'), 'no batch resolver emitted');
+  assert.ok(warnings.some((w) => why.test(w)), `expected a "${why}" warning, got: ${warnings.join(' | ')}`);
+}
+
+test('test_R6_batch_skips_unselected_endpoint', async () => {
+  // listed in --batch but not selected -> can't read it, skip with a clear message
+  await expectSkip([PRODUCT], { 'get:/products': {} }, /selected paths/, 1);
+});
+
+test('test_R6_batch_skips_path_param_endpoint', async () => {
+  await expectSkip([PRODUCT, 'post:/stores/{storeId}/products/batch>**'], { 'post:/stores/{storeId}/products/batch': {} }, /path params/, 2);
+});
+
+test('test_R6_batch_skips_ambiguous_inputs', async () => {
+  await expectSkip([PRODUCT, 'post:/products/ambiguous>**'], { 'post:/products/ambiguous': {} }, /exactly one scalar-array input/, 2);
+});
+
+test('test_R6_batch_skips_composite_key', async () => {
+  await expectSkip(
+    ['get:/stores/{storeId}/items/{sku}>**', 'post:/store-items/batch>**'],
+    { 'post:/store-items/batch': {} },
+    /composite keys/,
+    2,
+  );
+});
+
+test('test_R6_batch_skips_unknown_op', async () => {
+  await expectSkip([PRODUCT], { 'post:/nope': {} }, /no matching operation/, 1);
+});
+
+test('test_R6_batch_skips_when_no_r1_key', async () => {
+  // infer off -> Product has no @key, so a batch resolver can't reuse one
+  let schema: string | undefined;
+  const warnings = await captureErrors(async () => {
+    schema = await runOasTest('r6-batch.yaml', [PRODUCT, 'post:/products/batch>**'], 9, 2, false, false, undefined, false, false, {
+      batch: { 'post:/products/batch': {} },
+    });
+  });
+  assert.ok(!schema!.includes('$batch'), 'no batch resolver without an R1 key');
+  assert.ok(warnings.some((w) => /no @key/.test(w)), `expected a "no @key" warning, got: ${warnings.join(' | ')}`);
+});
+
+test('test_R6_batch_below_v0_2_downgrades', async () => {
+  // batch is connect v0.2+. Targeting v0.1 -> skip + a logged downgrade, never invalid output.
+  // Driven directly (not rover-composed) since v0.1 output isn't the point here. see R4's twin test.
+  let schema: string | undefined;
+  const warnings = await captureErrors(async () => {
+    const gen = await OasGen.fromFile(`${oasBasePath}/r6-batch.yaml`, {
+      skipValidation: false,
+      showParentInSelections: false,
+      connectorSpecVersion: 'v0.1',
+      inferEntityResolvers: true,
+      batch: { 'post:/products/batch': {} },
+    });
+    await gen.visit();
+    schema = gen.generateSchema([PRODUCT, 'post:/products/batch>**']);
+  });
+  assert.ok(!schema!.includes('$batch'), 'must not emit batch below connect v0.2');
+  assert.ok(warnings.some((w) => /connect v0\.2/.test(w)), `expected a v0.2 warning, got: ${warnings.join(' | ')}`);
+});
