@@ -828,7 +828,8 @@ test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
   assert.ok(entitySelIdx > userIdx && entitySelIdx < queryIdx, 'entity selection inside the User block');
   assert.ok(userFieldsIdx > userIdx && userFieldsIdx < queryIdx, 'User fields contiguous with the type');
   assert.ok(/@key\(fields: "username"\)/.test(schema!), 'entity key emitted');
-  assert.ok(/errors: \{ extensions/.test(schema!), 'connector errors emitted on the Query connector');
+  // errors is now emitted fully expanded: `errors {` then `extensions: """…"""` on its own lines
+  assert.ok(/errors: \{[\s\S]*?extensions: """/.test(schema!), 'connector errors emitted on the Query connector');
 });
 
 test('test_param_default_boolean_emits_literal', async () => {

@@ -16,8 +16,8 @@ export class ErrorsWriter {
 
   constructor(private gen: OasGen) {}
 
-  // emit `errors: { message: "$.message" extensions: """statusCode: $status""" }` for operations
-  // that document HTTP error responses. errors is a connect v0.2+ feature; below that we skip
+  // emit an `errors { message extensions { statusCode: $status } }` block for operations that
+  // document HTTP error responses. errors is a connect v0.2+ feature; below that we skip
   // with a logged downgrade rather than emit invalid output.
   public write(context: OasContext, writer: Writer, op: Op, indent: number): void {
     if (!context.generateOptions?.emitConnectorErrors || !this.hasDocumentedErrors(op)) {
@@ -38,16 +38,23 @@ export class ErrorsWriter {
     // selection would build the object `{message: …}`, which errors.message rejects. R4
     const message = this.errorMessageField(context, op);
 
-    // label/close at the @connect arg level, the extensions body one level deeper (like queryParams)
+    // fully expanded: `errors {` and `}` at the @connect arg level, message/extensions/body/closing
+    // one level deeper (8 spaces) so the body and the closing `"""` line up.
     const labelSpacing = ' '.repeat(indent + 6);
-    const bodySpacing = ' '.repeat(indent + 8);
+    const innerSpacing = ' '.repeat(indent + 8);
+    writer.write(labelSpacing).write('errors: {\n');
+    if (message) {
+      writer.write(innerSpacing).write(`message: "$.${message}"\n`);
+    }
     writer
-      .write(labelSpacing)
-      .write(message ? `errors: { message: "$.${message}" extensions: """\n` : 'errors: { extensions: """\n')
-      .write(bodySpacing)
+      .write(innerSpacing)
+      .write('extensions: """\n')
+      .write(innerSpacing)
       .write('statusCode: $status\n')
+      .write(innerSpacing)
+      .write('"""\n')
       .write(labelSpacing)
-      .write('""" }\n');
+      .write('}\n');
   }
 
   // True when the operation documents an HTTP error response. Accepts both concrete numeric statuses

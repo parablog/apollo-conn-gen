@@ -13,9 +13,19 @@ test('test_R4_errors_emitted_for_numeric_codes_and_composes', async () => {
     emitConnectorErrors: true,
   });
   assert.ok(schema !== undefined);
-  // the Error schema documents `message: string` -> it becomes the GraphQL error message
-  assert.ok(schema!.includes('errors: { message: "$.message" extensions: """'), 'expected message + extensions');
-  assert.ok(schema!.includes('statusCode: $status'), 'expected statusCode: $status in extensions');
+  // the Error schema documents `message: string` -> it becomes the GraphQL error message.
+  // pin the exact (indented) block so the layout can't silently regress again.
+  assert.ok(
+    schema!.includes(
+      '      errors: {\n' +
+        '        message: "$.message"\n' +
+        '        extensions: """\n' +
+        '        statusCode: $status\n' +
+        '        """\n' +
+        '      }\n',
+    ),
+    'expected the fully-expanded errors block with message',
+  );
 });
 
 test('test_R4_errors_emitted_for_range_keys', async () => {
@@ -24,7 +34,8 @@ test('test_R4_errors_emitted_for_range_keys', async () => {
     emitConnectorErrors: true,
   });
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('errors: { message: "$.message" extensions: """'), 'range-key errors must opt in too');
+  assert.ok(schema!.includes('errors: {'), 'range-key errors must opt in too');
+  assert.ok(schema!.includes('message: "$.message"'), 'range-key errors carry the message field');
 });
 
 test('test_R4_errors_off_by_default_is_unchanged', async () => {
@@ -49,7 +60,7 @@ test('test_R4_errors_message_falls_back_to_error_field', async () => {
     emitConnectorErrors: true,
   });
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('errors: { message: "$.error" extensions: """'), 'falls back to the error field');
+  assert.ok(schema!.includes('message: "$.error"'), 'falls back to the error field');
 });
 
 test('test_R4_errors_message_omitted_when_shapes_disagree', async () => {
@@ -58,7 +69,12 @@ test('test_R4_errors_message_omitted_when_shapes_disagree', async () => {
     emitConnectorErrors: true,
   });
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('errors: { extensions: """'), 'extensions still emitted');
+  assert.ok(
+    schema!.includes(
+      '      errors: {\n' + '        extensions: """\n' + '        statusCode: $status\n' + '        """\n' + '      }\n',
+    ),
+    'extensions still emitted, without a message line',
+  );
   assert.ok(!schema!.includes('message:'), 'no message when the shapes disagree');
 });
 
