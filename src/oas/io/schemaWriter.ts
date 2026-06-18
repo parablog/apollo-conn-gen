@@ -3,7 +3,7 @@ import { ServerObject } from 'oas/types';
 import { DEFAULT_VERSIONS } from '../../versions.js';
 import { OasGen } from '../oasGen.js';
 import { Writer } from './writer.js';
-import { anyOperationDeclaresSecurity, globalSecurity, securitySchemes, resolveAuthHeader } from './security.js';
+import { anyOperationDeclaresSecurity, globalSecurity, securitySchemes, resolveAuth } from './security.js';
 
 export class SchemaWriter {
   constructor(private gen: OasGen) {}
@@ -59,14 +59,20 @@ export class SchemaWriter {
 
     // read the scheme definitions (apiKey/http/oauth2/...) the requirement refers to
     const schemes = securitySchemes(api);
-    // resolve the global requirement to one header, collecting per-scheme drop warnings
-    const { header, warnings } = resolveAuthHeader(global, schemes);
+    // resolve the global requirement to one auth entry, collecting per-scheme drop warnings
+    const { auth, warnings } = resolveAuth(global, schemes);
     // surface every dropped scheme loudly (never silently)
     for (const w of warnings) {
       console.warn(w);
     }
 
-    if (!header) {
+    // @source carries only header auth; query auth lives on each @connect's queryParams
+    // (SourceHTTP has no queryParams field) and is handled in operationWriter — emit nothing here.
+    if (auth?.kind === 'query') {
+      return null;
+    }
+
+    if (!auth) {
       // flatten the referenced scheme names for the summary message
       const names = global.flatMap((req) => Object.keys(req));
       console.warn(
@@ -76,7 +82,7 @@ export class SchemaWriter {
     }
 
     // format the resolved header into the @source literal
-    return `{ name: "${header.name}", value: "${header.value}" }`;
+    return `{ name: "${auth.name}", value: "${auth.value}" }`;
   }
 
   private getServerUrl(server: ServerObject | undefined): string {

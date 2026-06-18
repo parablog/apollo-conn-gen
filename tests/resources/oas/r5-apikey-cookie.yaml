@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info:
+  title: R5 cookie auth
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# global default: an apiKey carried in a cookie -> deferred (no spec field), warned, never emitted
+security:
+  - CookieKey: []
+paths:
+  /things:
+    get:
+      operationId: getThings
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+components:
+  securitySchemes:
+    CookieKey:
+      type: apiKey
+      in: cookie
+      name: session

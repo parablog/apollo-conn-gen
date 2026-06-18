@@ -80,18 +80,18 @@ test('test_R5_security_none_is_byte_identical', async () => {
   assert.ok(!schema!.includes('headers:'), 'no security -> no headers on @source');
 });
 
-test('test_R5_security_apikey_in_query_is_deferred_with_warning', async () => {
-  // Global apiKey in query (Swagger 2.0 most-popular-product) -> no header, loud warning.
-  let schema: string | undefined;
-  const warnings = await captureWarnings(async () => {
-    schema = await runOasTest('most-popular-product.yaml', ['get:/emailed/{period}.json>**'], 4, 4);
-  });
+test('test_R5_security_apikey_in_query_emits_on_connect', async () => {
+  // Global apiKey in query (Swagger 2.0 most-popular-product, name `api-key`). SourceHTTP has no
+  // queryParams, so query auth can't live on @source: it is emitted on the @connect instead. The op
+  // has no real query params, so this is the auth-only queryParams block (no `$args {}`).
+  const schema = await runOasTest('most-popular-product.yaml', ['get:/emailed/{period}.json>**'], 4, 4);
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('headers:'), 'apiKey-in-query must not emit an @source header');
   assert.ok(
-    warnings.some((w) => /query/.test(w)),
-    `expected an apiKey-in-query deferral warning, got: ${warnings.join(' | ')}`,
+    schema!.includes('"api-key": $config.apiKey'),
+    'expected the apiKey-in-query auth on the @connect queryParams',
   );
+  assert.ok(!schema!.includes('$args {'), 'auth-only queryParams must not emit an $args block');
 });
 
 // --- R5 (slice 2): per-operation auth on @connect -----------------------------
@@ -199,4 +199,64 @@ test('test_R5_security_per_op_override_header_is_case_insensitive', async () => 
     'the lowercase override header is emitted',
   );
   assert.ok(!schema!.includes('Bearer {$config.token}'), 'the resolved auth must be suppressed by the case-insensitive override');
+});
+
+// --- R5 (slice 3): apiKey-in-query auth on @connect queryParams ----------------
+//
+// SourceHTTP has no queryParams field, so query auth can never live on @source — it is ALWAYS
+// emitted per-@connect (no mode gate), as a JSONSelection sibling of the `$args { … }` block.
+
+test('test_R5_security_per_op_inherits_global_query_auth_on_connect', async () => {
+  // /inherits has no own security -> it inherits the global query auth (api_key) on its @connect.
+  const schema = await runOasTest('r5-query-auth.yaml', ['get:/inherits>**'], 4, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    schema!.includes('"api_key": $config.apiKey'),
+    'expected the inherited global apiKey-in-query auth on @connect',
+  );
+  assert.ok(!sourceLine(schema!).includes('headers:'), '@source must carry no auth header');
+});
+
+test('test_R5_security_per_op_own_query_auth_on_connect', async () => {
+  // /own declares its own query scheme with a DIFFERENT key name (token) -> that key wins.
+  const schema = await runOasTest('r5-query-auth.yaml', ['get:/own>**'], 4, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('"token": $config.apiKey'), 'expected the op-own apiKey-in-query auth on @connect');
+  assert.ok(!schema!.includes('"api_key"'), 'the op must NOT also carry the global api_key');
+});
+
+test('test_R5_security_per_op_public_emits_no_query_auth', async () => {
+  // /public is `security: []` -> no query auth at all, even though a global default exists.
+  const schema = await runOasTest('r5-query-auth.yaml', ['get:/public>**'], 4, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('$config.apiKey'), 'public op must carry no query auth');
+  assert.ok(!schema!.includes('queryParams:'), 'public op with no real params emits no queryParams block');
+});
+
+test('test_R5_security_query_auth_merges_with_real_query_params', async () => {
+  // /search has a real `status` query param AND inherits the global query auth: both merge into one
+  // queryParams block, with the auth as a sibling OUTSIDE the `$args { … }` block.
+  const schema = await runOasTest('r5-query-auth.yaml', ['get:/search>**'], 4, 1);
+  assert.ok(schema !== undefined);
+  const block = schema!.slice(schema!.indexOf('queryParams:'), schema!.indexOf('"""', schema!.indexOf('queryParams:') + 20));
+  assert.ok(/\$args \{[^}]*"status": status[^}]*\}/s.test(block), 'expected the real param inside the $args block');
+  assert.ok(
+    /\}\s*"api_key": \$config\.apiKey/s.test(block),
+    'expected the apiKey-in-query auth as a sibling after the $args block',
+  );
+});
+
+test('test_R5_security_apikey_in_cookie_is_deferred_with_warning', async () => {
+  // apiKey in cookie has no spec field (only a Cookie: header hack) -> still deferred and warned.
+  let schema: string | undefined;
+  const warnings = await captureWarnings(async () => {
+    schema = await runOasTest('r5-apikey-cookie.yaml', ['get:/things>**'], 1, 1);
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('$config.apiKey'), 'apiKey-in-cookie must not emit any auth');
+  assert.ok(!schema!.includes('headers:'), 'apiKey-in-cookie must not emit an @source header');
+  assert.ok(
+    warnings.some((w) => /cookie/.test(w)),
+    `expected an apiKey-in-cookie deferral warning, got: ${warnings.join(' | ')}`,
+  );
 });

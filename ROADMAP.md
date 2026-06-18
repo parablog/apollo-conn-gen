@@ -146,7 +146,7 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 | R2. Unions & interfaces | ✅ Done (one deferral) | real `union`/`->match`/interface promotion (v0.4), consolidate downgrade (< v0.4), discriminator-less merged-object degrade (#25), allOf-member unions (#34), version-derived form (`resolveConsolidateUnions`); broader `allOf`→interface deferred to its own slice |
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
 | R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status` (v0.2+); only `@source`-level errors pending |
-| R5. Dynamic headers / auth | 🟡 Partial | slices 1-2 done (global `@source` + per-op `@connect` auth via per-source mode switch); `$env`, `from:`, `$request.headers`, apiKey query/cookie remain |
+| R5. Dynamic headers / auth | 🟡 Partial | slices 1-3 done (global `@source` + per-op `@connect` header auth via per-source mode switch + apiKey-in-query on `@connect` queryParams); `$env`, `from:`, `$request.headers`, apiKey cookie remain |
 | R6. Batch entity resolution | 🟡 Common case done | infer from OAS (`--batch` op-id file); single key + one scalar-array input; composite/object-array deferred |
 | R10. Reusable `@mapping` | 🟡 In progress (branch `feat/r10-reusable-mappings`) | `--reusable-mappings`, connect v0.5 |
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
@@ -353,8 +353,12 @@ switch**: when any operation declares its own `security`, the shared `@source` h
 and every `@connect` carries its *effective* auth (own requirement, the inherited global, or nothing
 for a `security: []` public op). This is the OAS-correct model — a `@connect` header cannot remove a
 `@source` one, so a shared header would leak on public ops and double up on different-named overrides.
-Shared logic lives in `src/oas/io/security.ts` (`mapSchemeToAuthHeader`/`resolveAuthHeader`/`anyOperationDeclaresSecurity`),
-reused by both writers. Deferred cases still warn, never drop. Tested (`test_R5_*`, default v0.4/fed-2.14, rover-composed).
+Slice 3 adds **apiKey in query** on each `@connect`'s `queryParams` (a JSONSelection sibling of the
+`$args { … }` block, e.g. `"api_key": $config.apiKey`) — no mode gate, since `SourceHTTP` has no
+`queryParams` field so query auth can never live on `@source`. Shared logic lives in
+`src/oas/io/security.ts` (`mapSchemeToAuth`/`resolveAuth`/`anyOperationDeclaresSecurity`), reused by
+both writers. Deferred cases (cookie only) still warn, never drop. Tested (`test_R5_*`, default
+v0.4/fed-2.14, rover-composed).
 
 **Scope:**
 - ✅ apiKey/header → `{ name: "N", value: "{$config.apiKey}" }` (slice 1).
@@ -362,7 +366,8 @@ reused by both writers. Deferred cases still warn, never drop. Tested (`test_R5_
   http basic → `Authorization: Basic {$config.token}` (slice 1).
 - ✅ Per-operation auth on `@connect` — own/inherited/public resolved per op; per-source mode
   switch suppresses the `@source` header when any op declares its own `security` (slice 2).
-- ⬜ apiKey in **query** / **cookie** (warned + deferred today).
+- ✅ apiKey in **query** → `"N": $config.apiKey` on each `@connect`'s `queryParams` (slice 3).
+- ⬜ apiKey in **cookie** (warned + deferred — no spec field, only a `Cookie:` header hack).
 - ⬜ `$env`-backed secrets; `from:` response-header extraction; `$request.headers`
   passthrough.
 
