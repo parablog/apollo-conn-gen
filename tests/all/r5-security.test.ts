@@ -47,9 +47,10 @@ test('test_R5_security_apikey_header_emits_named_header', async () => {
   );
 });
 
-test('test_R5_security_oauth2_first_scheme_emits_and_warns_dropped_alternative', async () => {
+test('test_R5_security_oauth2_first_scheme_emits_alternative_silent', async () => {
   // Global requirement lists `main_auth` (oauth2) then `bearerAuth` (http/bearer). The
-  // first header-producing scheme (oauth2 -> Bearer) is emitted; the alternative is warned.
+  // first header-producing scheme (oauth2 -> Bearer) is emitted; the alternative is a
+  // legitimate OR choice, so it is NOT warned (only unresolvable schemes warn).
   const paths = [
     'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:scalar:activationDate',
   ];
@@ -63,8 +64,8 @@ test('test_R5_security_oauth2_first_scheme_emits_and_warns_dropped_alternative',
     'expected oauth2 mapped to a Bearer Authorization header',
   );
   assert.ok(
-    warnings.some((w) => /bearerAuth/.test(w) && /not emitted/.test(w)),
-    `expected a dropped-alternative warning naming bearerAuth, got: ${warnings.join(' | ')}`,
+    !warnings.some((w) => /bearerAuth/.test(w)),
+    `a legitimate OR alternative must not warn, got: ${warnings.join(' | ')}`,
   );
 });
 
@@ -109,7 +110,7 @@ function sourceLine(schema: string): string {
 test('test_R5_security_per_op_apikey_emits_on_connect', async () => {
   // petstore: no global, every op declares its own security. GET /pet/{petId} lists
   // `api_key` (apiKey/header) then `petstore_auth` (oauth2) -> api_key wins on the @connect,
-  // oauth2 is the dropped alternative, and @source stays headerless.
+  // oauth2 is a legitimate OR alternative (not warned), and @source stays headerless.
   let schema: string | undefined;
   const warnings = await captureWarnings(async () => {
     schema = await runOasTest('petstore.yaml', ['get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id'], 19, 1);
@@ -121,8 +122,8 @@ test('test_R5_security_per_op_apikey_emits_on_connect', async () => {
   );
   assert.ok(!sourceLine(schema!).includes('headers:'), '@source must carry no auth header in per-op mode');
   assert.ok(
-    warnings.some((w) => /petstore_auth/.test(w) && /not emitted/.test(w)),
-    `expected a dropped-alternative warning naming petstore_auth, got: ${warnings.join(' | ')}`,
+    !warnings.some((w) => /petstore_auth/.test(w)),
+    `a legitimate OR alternative must not warn, got: ${warnings.join(' | ')}`,
   );
 });
 

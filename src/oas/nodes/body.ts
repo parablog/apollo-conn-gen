@@ -49,14 +49,14 @@ export class Body extends Type {
     trace(context, '-> [body:select]', `-> in: ${this.parent!.name}`);
 
     if (this.payload) {
-      const spacing = ' '.repeat(6);
+      const spacing = ' '.repeat(8);
       writer.write(spacing + 'body: """\n').write(spacing + '$args.input {\n');
 
       context.indent += 2;
       this.payload.select(context, writer, selection);
       context.indent -= 2;
 
-      writer.write(spacing + '} \n').write(spacing + '"""\n' + ' '.repeat(5));
+      writer.write(spacing + '}\n').write(spacing + '"""\n');
     }
 
     trace(context, '<- [body:select]', `-> out: ${this.parent!.name}`);

@@ -5,6 +5,7 @@ import { applyBatchResolvers } from '../nodes/batch.js';
 import { promoteInterfaces } from '../nodes/interfacePromotion.js';
 import { OperationWriter } from './operationWriter.js';
 import { SchemaWriter } from './schemaWriter.js';
+import { SecurityPlan } from './security.js';
 import { TypesCollector } from '../generator/typesCollector.js';
 import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
@@ -16,8 +17,12 @@ export class Writer {
 
   constructor(public gen: OasGen) {
     this.buffer = [];
-    this.schemaWriter = new SchemaWriter(gen);
-    this.operationWriter = new OperationWriter(gen);
+    // resolve the spec's security once (schemes, global requirement, per-op mode) and share it —
+    // schemaWriter (@source) and operationWriter (per-@connect) both query it instead of re-walking
+    // the whole spec per operation.
+    const security = SecurityPlan.from(gen.parser);
+    this.schemaWriter = new SchemaWriter(gen, security);
+    this.operationWriter = new OperationWriter(gen, security);
   }
 
   public write(input: string): Writer {

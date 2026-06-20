@@ -7,19 +7,12 @@ import { Naming } from '../utils/naming.js';
 import { Params } from '../utils/params.js';
 import { ErrorsWriter } from './errorsWriter.js';
 import { Writer } from './writer.js';
-import {
-  AuthEntry,
-  NameValue,
-  anyOperationDeclaresSecurity,
-  globalSecurity,
-  securitySchemes,
-  resolveAuth,
-} from './security.js';
+import { NameValue, SecurityPlan } from './security.js';
 
 export class OperationWriter {
   private errorsWriter: ErrorsWriter;
 
-  constructor(private gen: OasGen) {
+  constructor(private gen: OasGen, private security: SecurityPlan) {
     this.errorsWriter = new ErrorsWriter(gen);
   }
 
@@ -90,40 +83,40 @@ export class OperationWriter {
   private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], _indent: number): void {
     const override = context.generateOptions.overrides?.[op.id];
 
-    // R5: resolve this op's effective auth ONCE, then place it by kind. A header lives on @source in
-    // uniform mode (so it's only added here in per-op mode); a query param can't live on @source at
-    // all (SourceHTTP has no queryParams), so it's always added here. See resolveOpAuth for warnings.
-    const auth = this.resolveOpAuth(op);
-    const perOpMode = anyOperationDeclaresSecurity(this.gen.parser);
-    // an AuthEntry is a NameValue, so it flows straight into the writers — no tuple, no cast
-    // the auth header to add to this @connect's headers block (per-op mode only), else null
-    const headerAuth: NameValue | null = perOpMode && auth?.kind === 'header' ? auth : null;
-    // the apiKey-in-query auth to add to this @connect's queryParams (always, since @source can't), else null
-    const queryAuth: NameValue | null = auth?.kind === 'query' ? auth : null;
+    // R5: this op's resolved auth, split by placement. A header lives on @connect only in per-op
+    // mode (uniform mode puts it on @source); query auth always lives here (@source has no
+    // queryParams). Warnings are owned by the plan — see security.ts.
+    const { header: headerAuth, query: queryAuth } = this.security.forOp(op);
 
-    // the verb + path first, then query params, headers and lastly the body
-    writer.write(`{ ${op.verb}: `).write('"' + this.templatedPath(op, override) + '"');
-    // each block starts on its own line and ends without a trailing newline
-    const wroteQueryParams = this.writeQueryParams(context, writer, op, override, queryAuth);
-    const wroteHeaders = this.writeHeaders(writer, op, override, headerAuth);
+    const path = this.templatedPath(op, override);
 
-    // body (POST, PUT, etc.): an override (raw JSONSelection) replaces the inferred
-    // `$args.input { … }` mapping; null drops the body altogether. see ROADMAP R9
-    if (typeof override?.body === 'string') {
-      // body emits its own trailing indent, so close the object right after it
-      this.writeBodyOverride(writer, override.body);
-      writer.write('}');
-    } else if (override?.body === undefined && op.body) {
-      // body emits its own trailing indent, so close the object right after it
-      this.writeBodySelection(context, writer, op.body, selection);
-      writer.write('}');
-    } else if (wroteQueryParams || wroteHeaders) {
-      // no body: close on its own line, aligned under `http:` (avoids a column-0 brace)
-      writer.write('\n' + ' '.repeat(6) + '}');
-    } else {
+    // body is emitted last; its presence is cheap to compute up front. the body block streams
+    // through the node tree (Body.select), so unlike query/headers it writes to `writer` directly
+    // instead of returning a string. `null` drops the body; a string overrides it; see ROADMAP R9.
+    const hasBody = typeof override?.body === 'string' || (override?.body === undefined && !!op.body);
+
+    // query & header blocks are pure string-building — they return the block, or null when empty
+    const queryBlock = this.queryParamsBlock(context, op, override, queryAuth);
+    const headerBlock = this.headersBlock(op, override, headerAuth);
+
+    if (!queryBlock && !headerBlock && !hasBody) {
       // nothing but the path: keep the compact single-line form `{ GET: "/x"}`
-      writer.write('}');
+      writer.write(`{ ${op.verb}: "${path}"}`);
+      return;
     }
+
+    // expanded: `http: {` on its own line, the verb and each member at indent 8, the closing `}`
+    // aligned under `http:` (indent 6). members are comma-less (GraphQL multiline object style).
+    writer.write('{\n');
+    writer.write(' '.repeat(8) + `${op.verb}: "${path}"\n`);
+    if (queryBlock) writer.write(queryBlock);
+    if (headerBlock) writer.write(headerBlock);
+    if (typeof override?.body === 'string') {
+      this.writeBodyOverride(writer, override.body);
+    } else if (override?.body === undefined && op.body) {
+      this.writeBodySelection(context, writer, op.body, selection);
+    }
+    writer.write(' '.repeat(6) + '}');
   }
 
   // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
@@ -134,15 +127,15 @@ export class OperationWriter {
     );
   }
 
-  // returns true when a queryParams block was written (so the caller can place the closing brace).
-  // `auth` is the op's resolved apiKey-in-query entry (or null) — see requestMethod / resolveOpAuth.
-  private writeQueryParams(
+  // the op's queryParams block (a self-contained string ending in a newline), or null when the op
+  // has no query params and no apiKey-in-query auth. `auth` is the op's resolved apiKey-in-query
+  // entry (or null) — see requestMethod / security.forOp.
+  private queryParamsBlock(
     context: OasContext,
-    writer: Writer,
     op: Op,
     override: RequestOverride | undefined,
     auth: NameValue | null,
-  ): boolean {
+  ): string | null {
     // we now include all query params, not just required ones. if they are not set,
     // then the connectors will not include them in the request.
     let queryParams = op.params.filter((p: Param) => {
@@ -164,43 +157,29 @@ export class OperationWriter {
     // R5 slice 3: apiKey-in-query auth merges into the same query-param object as a JSONSelection
     // sibling outside the `$args { … }` block, so an auth-only op still emits a queryParams block.
     if (entries.length === 0 && !auth) {
-      return false;
+      return null;
     }
 
-    writer.write('\n');
-    let spacing = ' '.repeat(6);
-
-    writer.write(spacing).write(`queryParams: """\n`);
+    const lines: string[] = ['        queryParams: """'];
     // the `$args { … }` block only when there are arg-derived params (skipped for auth-only ops)
     if (entries.length > 0) {
-      spacing = ' '.repeat(8);
-      writer.write(spacing).write(`$args {\n`);
-      spacing = ' '.repeat(10);
+      lines.push('          $args {');
       for (const { name, value } of entries) {
-        writer.write(spacing).write(`"${name}": ${value}\n`);
+        lines.push(`            "${name}": ${value}`);
       }
-      spacing = ' '.repeat(8);
-      writer.write(spacing).write('}\n');
+      lines.push('          }');
     }
     // e.g. `"api_key": $config.apiKey` — key quoted so non-identifier names like `api-key` are safe
     if (auth) {
-      spacing = ' '.repeat(8);
-      writer.write(spacing).write(`"${auth.name}": ${auth.value}\n`);
+      lines.push(`          "${auth.name}": ${auth.value}`);
     }
-    spacing = ' '.repeat(6);
-    // no trailing newline — the caller adds the separator/brace
-    writer.write(spacing).write('"""');
-    return true;
+    lines.push('        """');
+    return lines.join('\n') + '\n';
   }
 
-  // returns true when a headers block was written (so the caller can place the closing brace).
-  // `auth` is the op's resolved auth header (or null) — see requestMethod / resolveOpAuth.
-  private writeHeaders(
-    writer: Writer,
-    op: Op,
-    override: RequestOverride | undefined,
-    auth: NameValue | null,
-  ): boolean {
+  // the op's headers block (a self-contained string ending in a newline), or null when there are
+  // no headers to send. `auth` is the op's resolved auth header (or null) — see requestMethod.
+  private headersBlock(op: Op, override: RequestOverride | undefined, auth: NameValue | null): string | null {
     // OAS `header` params, with user overrides merged in (string replaces, null drops)
     const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
     let entries = this.mergeOverrides(headers, override?.headers ?? {}, (p) => this.headerExample(p));
@@ -217,46 +196,15 @@ export class OperationWriter {
     }
 
     if (entries.length === 0) {
-      return false;
+      return null;
     }
 
-    let spacing = ' '.repeat(6);
-    // leading newline so the block starts on its own line (after the path or a queryParams block)
-    writer.write('\n' + spacing + 'headers: [\n');
-    spacing = ' '.repeat(8);
-
+    const lines: string[] = ['        headers: ['];
     for (const { name, value } of entries) {
-      writer.write(spacing + `{ name: "${name}", value: "${value}" }\n`);
+      lines.push(`          { name: "${name}", value: "${value}" }`);
     }
-
-    spacing = ' '.repeat(6);
-    // no trailing newline — the caller adds the separator/brace
-    writer.write(spacing + ']');
-    return true;
-  }
-
-  // R5: this operation's effective auth, as a single AuthEntry (or null). requestMethod decides where
-  // each kind goes; this only resolves and reports. The effective requirement is the op's own
-  // `security` when present, else the global default — `??` not `||`, so an explicit `security: []`
-  // (public) does NOT fall back to the global:
-  //   security: [{ AdminBearer: [] }]  (own)     -> that scheme's entry (e.g. Authorization: Bearer)
-  //   security: []                     (public)  -> null (the op correctly sends nothing)
-  //   no own `security`                           -> the inherited global entry
-  //
-  // Warning ownership: in per-op mode (some op declares its own `security`) schemaWriter stays silent,
-  // so each op reports its own dropped schemes here. In uniform mode schemaWriter reports the global
-  // once, so we stay silent to avoid duplicating it.
-  private resolveOpAuth(op: Op): AuthEntry | null {
-    const api = this.gen.parser;
-    const effective = op.operation.schema.security ?? globalSecurity(api);
-    const { auth, warnings } = resolveAuth(effective, securitySchemes(api));
-
-    if (anyOperationDeclaresSecurity(api)) {
-      for (const w of warnings) {
-        console.warn(`${w} (operation ${op.verb} ${op.operation.path})`);
-      }
-    }
-    return auth;
+    lines.push('        ]');
+    return lines.join('\n') + '\n';
   }
 
   // merge user overrides over the inferred params: a string replaces the inferred value,
@@ -303,22 +251,20 @@ export class OperationWriter {
     type.select(context, writer, selection);
   }
 
-  // mirrors Body.select formatting, but the user's raw JSONSelection replaces the whole mapping
+  // mirrors Body.select formatting, but the user's raw JSONSelection replaces the whole mapping.
+  // emits the block at indent 8 (an http-object member), ending with a newline; the caller places
+  // the http object's closing brace.
   private writeBodyOverride(writer: Writer, body: string): void {
-    writer.write(',\n');
-    const spacing = ' '.repeat(6);
+    const spacing = ' '.repeat(8);
     writer.write(spacing + 'body: """\n');
     for (const line of body.split('\n')) {
       writer.write(spacing + '  ' + line + '\n');
     }
-    writer.write(spacing + '"""\n' + ' '.repeat(5));
+    writer.write(spacing + '"""\n');
   }
 
   private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: string[]): void {
-    writer.write(',\n');
-    context.indent = 6;
-    if (body) {
-      body.select(context, writer, selection);
-    }
+    context.indent = 8;
+    body.select(context, writer, selection);
   }
 }
