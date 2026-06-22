@@ -261,3 +261,34 @@ test('test_R5_security_apikey_in_cookie_is_deferred_with_warning', async () => {
     `expected an apiKey-in-cookie deferral warning, got: ${warnings.join(' | ')}`,
   );
 });
+
+// --- unmappable schemes & the per-op-mode scan ------------------------------
+
+test('test_R5_security_http_digest_unmappable_warns_no_header', async () => {
+  // http/digest is neither bearer nor basic -> mapSchemeToAuth returns null -> resolveAuth warns
+  // "has no supported connector mapping" and emits no auth header anywhere.
+  let schema: string | undefined;
+  const warnings = await captureWarnings(async () => {
+    schema = await runOasTest('r5-digest-auth.yaml', ['get:/things>**'], 1, 1);
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('Authorization'), 'digest must not emit an Authorization header');
+  assert.ok(!schema!.includes('headers:'), 'digest must not emit any auth header on @source');
+  assert.ok(
+    warnings.some((w) => /digestAuth/.test(w) && /no supported connector mapping/.test(w)),
+    `expected an unmappable-scheme warning naming digestAuth, got: ${warnings.join(' | ')}`,
+  );
+});
+
+test('test_R5_security_on_unemitted_method_keeps_uniform_mode', async () => {
+  // Only the HEAD op (which the generator doesn't emit) declares its own security.
+  // hasPerOperationSecurity scans only get/post/put/patch/delete, so HEAD is ignored and the spec
+  // stays in uniform mode: the global bearer header lives on @source (per-op mode would leave
+  // @source headerless).
+  const schema = await runOasTest('r5-head-security.yaml', ['get:/things>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    sourceLine(schema!).includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),
+    '@source must carry the global bearer header — HEAD-only security must not trigger per-op mode',
+  );
+});

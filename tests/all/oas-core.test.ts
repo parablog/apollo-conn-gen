@@ -1037,3 +1037,18 @@ test('test_R7_default_coalesces_R8_array_params_join', async () => {
   assert.ok(/"tags": tags->joinNotNull\("\|"\)/.test(schema!), 'pipeDelimited joins with |');
   assert.ok(/"page": page\n/.test(schema!), 'plain params unchanged');
 });
+
+test('test_http_block_layout_with_all_members', async () => {
+  // A POST carrying all three http-object member types (queryParams + headers + body) renders
+  // the expanded form: `http: {` on its own line, the verb and each member at indent 8, the
+  // closing `}` aligned under `http:` (indent 6), and no commas between members.
+  const schema = await runOasTest('r5-http-layout.yaml', ['post:/things>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  const http = schema!.slice(schema!.indexOf('http: {'), schema!.indexOf('selection: """'));
+  assert.ok(/http: \{\n {8}POST: "\/things"\n/.test(http), `expected http: { then POST at indent 8:\n${http}`);
+  assert.ok(/\n {8}queryParams: """/.test(http), 'queryParams block at indent 8');
+  assert.ok(/\n {8}headers: \[/.test(http), 'headers block at indent 8');
+  assert.ok(/\n {8}body: """/.test(http), 'body block at indent 8');
+  assert.ok(/\n {6}\}\n/.test(http), 'http closing brace at indent 6 (aligned under http:)');
+  assert.ok(!/,\n/.test(http), 'no commas between http members');
+});

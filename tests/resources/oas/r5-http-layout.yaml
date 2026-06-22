@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: HTTP Layout Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# No security — this fixture is about the @connect http-block layout when an op has all three
+# member types (queryParams + headers + body) at once. The headers come from OAS header params.
+paths:
+  /things:
+    post:
+      operationId: createThing
+      summary: Create a thing
+      parameters:
+        - name: dryRun
+          in: query
+          required: true
+          schema:
+            type: boolean
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+            example: abc-123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThingInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    ThingInput:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+    Thing:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
