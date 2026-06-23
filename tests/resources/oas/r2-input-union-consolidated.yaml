@@ -1,0 +1,45 @@
+openapi: 3.0.3
+info:
+  title: C6 reachability probe (oneOf request body)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /create:
+    post:
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/BookInput'
+                - $ref: '#/components/schemas/MovieInput'
+              discriminator:
+                propertyName: type
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+components:
+  schemas:
+    BookInput:
+      type: object
+      properties:
+        type: { type: string, enum: ["book"] }
+        title: { type: string }
+        author: { type: string }
+      required: [type, title, author]
+    MovieInput:
+      type: object
+      properties:
+        type: { type: string, enum: ["movie"] }
+        title: { type: string }
+        director: { type: string }
+      required: [type, title, director]

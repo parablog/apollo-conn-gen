@@ -1,0 +1,65 @@
+openapi: "3.0.1"
+info:
+  title: Media Item API (discriminator without mapping)
+  version: "1.0.0"
+paths:
+  /item:
+    get:
+      summary: Retrieve a media item.
+      responses:
+        '200':
+          description: A media item, which can be either a Book or a Movie.
+          content:
+            application/json:
+              schema:
+                # Discriminator with NO mapping — per OAS 3.x the implicit tag value is the
+                # bare schema name from the $ref (e.g. "Book", NOT "book"). The emitter's
+                # `->match` branches must be keyed on the bare name or they never fire.
+                discriminator:
+                  propertyName: type
+                oneOf:
+                  - $ref: '#/components/schemas/Book'
+                  - $ref: '#/components/schemas/Movie'
+              examples:
+                bookExample:
+                  summary: An example Book item
+                  value:
+                    id: 101
+                    type: "Book"
+                    title: "Example Book Title"
+                    author: "Jane Doe"
+                movieExample:
+                  summary: An example Movie item
+                  value:
+                    id: 202
+                    type: "Movie"
+                    title: "Example Movie Title"
+                    director: "John Smith"
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: ["Book"]
+        title:
+          type: string
+        author:
+          type: string
+      required: [id, type, title, author]
+    Movie:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: ["Movie"]
+        title:
+          type: string
+        director:
+          type: string
+      required: [id, type, title, director]

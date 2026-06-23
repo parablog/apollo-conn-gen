@@ -164,6 +164,13 @@ export class Union extends Type {
 
     trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
 
+    // The merged object's keyword follows the node's `kind`, which is inherited from the parent
+    // context: a response-rooted Union is `kind='type'`; a request-body-rooted Union is
+    // `kind='input'` (Body sets it on construction — see body.ts). Both are correct: the merged
+    // object is referenced exactly as its context dictates (response -> output field, body ->
+    // Mutation argument), and `nameSuffix()` (`'Input'` when kind=input) keeps the names
+    // distinct when the same schema is reached both ways. Do NOT hard-code `'type '` here —
+    // it would emit an input-position merge as an output type and break the body case. See C6.
     writer
       .write(this.kind + ' ')
       .write(name)
@@ -306,7 +313,10 @@ export class Union extends Type {
 
     members.forEach((child, idx) => {
       const typeName = Naming.getRefName(child.name)!;
-      const value = this.discriminatorValue(child) ?? typeName.toLowerCase();
+      // OAS 3.x: when no explicit discriminator `mapping` is present, the implicit tag value
+      // is the bare (un-prefixed) ref name — e.g. "Book", NOT "book". Lowercasing it produced a
+      // `->match` branch that never fired against spec-compliant payloads. See C1.
+      const value = this.discriminatorValue(child) ?? typeName;
 
       writer.write(pad(base + 2)).write(`["${value}", $ {\n`);
       writer.write(pad(base + 4)).write(`__typename: $("${typeName}")\n`);

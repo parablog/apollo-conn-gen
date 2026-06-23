@@ -134,6 +134,84 @@ test('test_R2_collect_twice_is_byte_identical', async () => {
   assert.strictEqual(second, first, 'second generation must be byte-identical');
 });
 
+test('test_R2_union_discriminator_no_mapping_uses_bare_refname', async () => {
+  // C1: a discriminator with `propertyName` but NO `mapping` must fall back to the bare schema
+  // name from the $ref (e.g. "Book"), per OAS 3.x. The pre-fix code lowercased the name
+  // (`typeName.toLowerCase()`), producing `["book", $ { … }]` — a branch that never matches a
+  // spec-compliant payload tagged `type: "Book"`. With consolidateUnions OFF + connect v0.4,
+  // the emitted `->match` must key on the bare name. Composes at fed 2.13.
+  const schema = await runOasTest(
+    'r2-discriminator-no-mapping.yaml',
+    ['get:/item>**'],
+    1,
+    3,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    {
+      consolidateUnions: false,
+      connectorSpecVersion: 'v0.4',
+      federationVersion: 'v2.13',
+      composeFederationVersion: '2.13.0',
+    },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('union ItemResponse = Book | Movie'), 'expected a real union type');
+  assert.ok(
+    schema!.includes('["Book", $ {'),
+    'no-mapping discriminator must key on the bare ref name "Book" (OAS 3.x implicit value)',
+  );
+  assert.ok(
+    schema!.includes('["Movie", $ {'),
+    'no-mapping discriminator must key on the bare ref name "Movie"',
+  );
+  // Negative: the pre-fix lowercase form must NOT appear.
+  assert.ok(!/\["book"/.test(schema!), 'the buggy lowercase form ["book"] must not appear');
+  assert.ok(!/\["movie"/.test(schema!), 'the buggy lowercase form ["movie"] must not appear');
+});
+
+test('test_R2_input_union_consolidated_kind_is_intentional (C6 investigation)', async () => {
+  // C6: the review claimed a Body-rooted Union emitting `input ResultUnion { … }` was invalid SDL,
+  // but the investigation proved otherwise. When `oneOf` is a *request body*, the merged object
+  // IS an input — referenced as `input InputInput!` from the Mutation field — so `kind='input'`
+  // (inherited from Body) is correct, not a bug. Hard-coding `'type '` here would break this case.
+  // This test locks the correct behavior: the merged object is emitted with the `input` keyword,
+  // the Mutation references it as `input InputInput!`, and the SDL composes cleanly at fed 2.12.
+  const schema = await runOasTest(
+    'r2-input-union-consolidated.yaml',
+    ['post:/create>**'],
+    1,
+    2,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    {
+      connectorSpecVersion: 'v0.3',
+      federationVersion: 'v2.12',
+      composeFederationVersion: '2.12.0',
+    },
+  );
+  assert.ok(schema !== undefined);
+  // The merged object is emitted with the `input` keyword (not `type`), since it lives in input
+  // position. `nameSuffix()` adds `Input` so the name is `InputInput` — distinct from any output
+  // sibling reached by the same schema.
+  assert.ok(
+    /input InputInput \{ #### replacement for Union Input/.test(schema!),
+    'merged input-position union must use the `input` keyword and the Input-suffixed name',
+  );
+  // The Mutation references it as an input type — a valid GraphQL input-field reference.
+  assert.ok(
+    schema!.includes('createCreate(input: InputInput!)'),
+    'the Mutation must reference the merged input type by its Input-suffixed name',
+  );
+  // runOasTest already asserted composition passed (it returns the schema only on compose success),
+  // so the SDL is provably valid — the C6 "invalid SDL" claim is closed.
+});
+
 test('test_R2_union_form_derived_from_connect_version', async () => {
   // not asked explicitly: connect >= v0.4 emits real unions, below it the consolidate
   // downgrade — and an explicit ask for real unions on v0.3 downgrades loudly. see ROADMAP R2
