@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.14.0]
 
 ### Added
 - **apiKey-in-query auth on `@connect`** (R5 slice 3): a global or per-op `apiKey` security scheme
