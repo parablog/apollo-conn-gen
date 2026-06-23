@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.15.0]
+
+### Added
+- **`--skip-auth` CLI flag**: omit all auth from the generated connector — no `headers` on
+  `@source`, no auth header or `queryParams` entry on any `@connect` — even when the spec
+  declares security schemes. Useful when auth is handled upstream, or for local/mock generation.
+
+### Fixed
+- A `oneOf` discriminator without an explicit `mapping` now emits the OAS-spec-correct tag — the
+  bare ref name (e.g. `"Book"`, not the lowercased `"book"`) — so the emitted `->match` branch
+  matches real payloads (C1).
+- `@connect`'s `http.body` is now emitted only when targeting connect ≥ v0.2; below v0.2 it is
+  skipped with a logged downgrade instead of violating the contract (C2).
+- The global-security dropped-scheme warning is emitted once per generation, not once per
+  inheriting operation (C3).
+- Removed a stray debug `console.log` (fired for every map-typed property) and an unused `esbuild`
+  import from a runtime module (C4+C5).
+
 ## [0.14.0]
 
 ### Added
