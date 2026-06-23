@@ -292,3 +292,30 @@ test('test_R5_security_on_unemitted_method_keeps_uniform_mode', async () => {
     '@source must carry the global bearer header — HEAD-only security must not trigger per-op mode',
   );
 });
+
+test('test_R5_security_per_op_global_warning_fires_once_across_inheriting_ops (C3)', async () => {
+  // C3: in per-op mode, every op that inherits the global re-runs resolveAuth on the same global
+  // requirement — so a dropped global scheme would re-fire its warning N times for N inheriting
+  // ops. The fix pre-resolves the global once and dedupes: the cookie-deferred warning fires
+  // exactly once total, no matter how many ops inherit it. (Genuinely op-specific warnings would
+  // still carry the `(operation …)` suffix — this fixture has none of those.)
+  let schema: string | undefined;
+  const warnings = await captureWarnings(async () => {
+    // 4 paths: /inherits1, /inherits2, /inherits3 (all inherit the cookie global), and /admin
+    // (which triggers per-op mode via its own AdminBearer security). Without C3 the cookie
+    // warning would print 3 times — once per inheriting op.
+    schema = await runOasTest(
+      'r5-per-op-global-warning-dedup.yaml',
+      ['get:/inherits1>**', 'get:/inherits2>**', 'get:/inherits3>**', 'get:/admin>**'],
+      4,
+      4,
+    );
+  });
+  assert.ok(schema !== undefined);
+  const cookieWarnings = warnings.filter((w) => /CookieAuth.*cookie.*deferred/.test(w));
+  assert.strictEqual(
+    cookieWarnings.length,
+    1,
+    `the global cookie warning must fire exactly once across 3 inheriting ops, got ${cookieWarnings.length}: ${cookieWarnings.join(' | ')}`,
+  );
+});

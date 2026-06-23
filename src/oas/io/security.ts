@@ -127,6 +127,11 @@ export class SecurityPlan {
   private readonly schemes: SecuritySchemesObject;
   private readonly globalReq: SecurityRequirementObject[] | undefined;
   private readonly perOpMode: boolean;
+  // C3: the global requirement's dropped-scheme warnings, pre-resolved once. In per-op mode every
+  // inheriting op would re-fire them otherwise; this set identifies them so forOp can skip what's
+  // already been emitted (once) and only surface genuinely op-specific warnings with op context.
+  private readonly globalWarningBodies: Set<string>;
+  private globalWarningsEmitted = false;
 
   private constructor(
     schemes: SecuritySchemesObject,
@@ -136,6 +141,9 @@ export class SecurityPlan {
     this.schemes = schemes;
     this.globalReq = globalReq;
     this.perOpMode = perOpMode;
+    this.globalWarningBodies = new Set(
+      globalReq ? resolveAuth(globalReq, schemes).warnings : [],
+    );
   }
 
   static from(api: Oas): SecurityPlan {
@@ -147,6 +155,15 @@ export class SecurityPlan {
     return new SecurityPlan(schemes, def.security, hasPerOperationSecurity(def));
   }
 
+  // C3: emit the global's dropped-scheme warnings exactly once per generation. Called from
+  // sourceHeader (uniform mode) and the first forOp (per-op mode) — both run before the warnings
+  // would otherwise leak per-op. Idempotent via `globalWarningsEmitted`.
+  private emitGlobalWarningsOnce(): void {
+    if (this.globalWarningsEmitted) return;
+    this.globalWarningsEmitted = true;
+    for (const body of this.globalWarningBodies) console.warn(body);
+  }
+
   /** The `@source`-level auth header literal (uniform mode + header kind), or null. */
   sourceHeader(): string | null {
     // per-op mode: each @connect carries its own auth — nothing on @source
@@ -155,8 +172,10 @@ export class SecurityPlan {
     if (!this.globalReq || this.globalReq.length === 0) return null;
 
     const { auth, warnings } = resolveAuth(this.globalReq, this.schemes);
-    // surface every dropped scheme loudly, exactly once
-    for (const w of warnings) console.warn(w);
+    // C3: surface the global's dropped-scheme warnings exactly once (uniform mode; per-op mode
+    // emits them from the first forOp).
+    this.emitGlobalWarningsOnce();
+    void warnings; // already accounted for via globalWarningBodies
 
     // @source carries only header auth; query auth lives on each @connect (SourceHTTP has no
     // queryParams) and is returned by forOp — emit nothing here.
@@ -179,7 +198,9 @@ export class SecurityPlan {
    *  - `query`:  the query entry, always (SourceHTTP has no queryParams), else null
    *
    * Per-op warnings are emitted here with op context; in uniform mode the global warnings were
-   * already emitted once by sourceHeader.
+   * already emitted once by sourceHeader. C3: in per-op mode, the global's dropped-scheme
+   * warnings are emitted exactly once (via emitGlobalWarningsOnce) — only genuinely op-specific
+   * warnings carry the `(operation …)` suffix.
    */
   forOp(op: Op): { header: NameValue | null; query: NameValue | null } {
     // `??` not `||`: an explicit `security: []` (public) must NOT fall back to the global.
@@ -187,8 +208,15 @@ export class SecurityPlan {
     const { auth, warnings } = resolveAuth(effective, this.schemes);
 
     if (this.perOpMode) {
+      // surface the global's dropped-scheme warnings exactly once (idempotent), then warn only
+      // about op-specific drops with the op's location attached.
+      this.emitGlobalWarningsOnce();
       const where = `${op.verb} ${op.operation.path}`;
-      for (const w of warnings) console.warn(`${w} (operation ${where})`);
+      for (const w of warnings) {
+        if (!this.globalWarningBodies.has(w)) {
+          console.warn(`${w} (operation ${where})`);
+        }
+      }
     }
 
     return {
