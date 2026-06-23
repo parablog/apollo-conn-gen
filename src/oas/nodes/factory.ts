@@ -335,7 +335,6 @@ export class Factory {
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
           prop = propComp;
         } else if (this.isMapSchema(schemaObj)) {
-          console.log('isMapSchema', schemaObj);
           // Map property: object with only additionalProperties
           const mapType: Map = new Map(parent, ref || propName, schemaObj);
           prop = new PropMap(parent, propName, schemaObj, mapType);
