@@ -27,6 +27,7 @@ interface IGenOptions {
   skipOptionalArgs?: boolean;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  skipAuth?: boolean;
 }
 
 export class OasGen {

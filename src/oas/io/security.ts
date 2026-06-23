@@ -137,6 +137,7 @@ export class SecurityPlan {
     schemes: SecuritySchemesObject,
     globalReq: SecurityRequirementObject[] | undefined,
     perOpMode: boolean,
+    private readonly skipAuth: boolean = false,
   ) {
     this.schemes = schemes;
     this.globalReq = globalReq;
@@ -146,13 +147,13 @@ export class SecurityPlan {
     );
   }
 
-  static from(api: Oas): SecurityPlan {
+  static from(api: Oas, opts?: { skipAuth?: boolean }): SecurityPlan {
     const def = api.getDefinition();
     // oas-normalize usually up-converts Swagger 2.0 → components.securitySchemes; the
     // securityDefinitions fallback (same shape) is a safety net. refs are dereferenced by oas,
     // so the shape is a plain SecuritySchemesObject.
     const schemes = (def.components?.securitySchemes ?? def.securityDefinitions ?? {}) as SecuritySchemesObject;
-    return new SecurityPlan(schemes, def.security, hasPerOperationSecurity(def));
+    return new SecurityPlan(schemes, def.security, hasPerOperationSecurity(def), opts?.skipAuth ?? false);
   }
 
   // C3: emit the global's dropped-scheme warnings exactly once per generation. Called from
@@ -166,6 +167,8 @@ export class SecurityPlan {
 
   /** The `@source`-level auth header literal (uniform mode + header kind), or null. */
   sourceHeader(): string | null {
+    // --skip-auth: emit no auth anywhere — no header on @source (and forOp returns nothing too)
+    if (this.skipAuth) return null;
     // per-op mode: each @connect carries its own auth — nothing on @source
     if (this.perOpMode) return null;
     // no global requirement -> keep the headerless @source byte-for-byte
@@ -203,6 +206,8 @@ export class SecurityPlan {
    * warnings carry the `(operation …)` suffix.
    */
   forOp(op: Op): { header: NameValue | null; query: NameValue | null } {
+    // --skip-auth: no per-@connect auth either (companion to sourceHeader's skip)
+    if (this.skipAuth) return { header: null, query: null };
     // `??` not `||`: an explicit `security: []` (public) must NOT fall back to the global.
     const effective = op.operation.schema.security ?? this.globalReq;
     const { auth, warnings } = resolveAuth(effective, this.schemes);

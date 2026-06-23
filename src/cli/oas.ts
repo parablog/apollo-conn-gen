@@ -70,6 +70,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     mapper: mapper,
     skipOptionalArgs: opts.skipOptionalArgs,
     inferEntityResolvers: opts.inferEntityResolvers,
+    skipAuth: opts.skipAuth,
   });
 
   await gen.visit();
@@ -129,6 +130,7 @@ program
   .option('--batch <file>', 'Load batch endpoints (op id -> { maxSize? }) from a JSON file')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
+  .option('--skip-auth', 'Omit all auth (no headers on @source, no auth on @connect)', false)
   .parse(process.argv);
 
 const source = program.args[0];

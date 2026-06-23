@@ -37,6 +37,7 @@ export type GenerateOptions = {
   skipOptionalArgs?: boolean;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  skipAuth?: boolean;
 };
 
 // Max nested $ref hops resolvePointer will follow before giving up (guards against ref cycles).

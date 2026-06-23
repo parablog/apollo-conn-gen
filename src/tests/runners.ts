@@ -34,6 +34,7 @@ export async function runOasTest(
     federationVersion?: string;
     composeFederationVersion?: string;
     emitConnectorErrors?: boolean;
+    skipAuth?: boolean;
   } = {},
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
@@ -47,6 +48,7 @@ export async function runOasTest(
     skipOptionalArgs,
     inferEntityResolvers,
     emitConnectorErrors: opts.emitConnectorErrors,
+    skipAuth: opts.skipAuth,
     connectorSpecVersion: opts.connectorSpecVersion,
     federationVersion: opts.federationVersion,
   });

@@ -18,6 +18,16 @@ test('test_R5_security_bearer_emits_authorization_header', async () => {
   );
 });
 
+test('test_R5_security_skip_auth_omits_all_auth', async () => {
+  // Same spec as the bearer test (global bearerAuth), but with --skip-auth: no Authorization
+  // header on @source and no auth value anywhere — the scheme is fully ignored.
+  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 6, false, false, undefined, false, false, { skipAuth: true });
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('Authorization'), 'no Authorization header anywhere with --skip-auth');
+  assert.ok(!schema!.includes('{$config.token'), 'no {$config.token} auth value with --skip-auth');
+  assert.ok(!schema!.includes('Bearer '), 'no Bearer prefix with --skip-auth');
+});
+
 test('test_R5_security_basic_emits_authorization_header', async () => {
   // Global http/basic, no per-op overrides -> Authorization: Basic. (No corpus spec uses
   // global basic auth, so this slice ships a minimal fixture.)
