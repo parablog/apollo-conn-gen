@@ -8,6 +8,8 @@ import { Params } from '../utils/params.js';
 import { ErrorsWriter } from './errorsWriter.js';
 import { Writer } from './writer.js';
 import { NameValue, SecurityPlan } from './security.js';
+import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
+import { warn } from '../log/trace.js';
 
 export class OperationWriter {
   private errorsWriter: ErrorsWriter;
@@ -96,7 +98,19 @@ export class OperationWriter {
     // body is emitted last; its presence is cheap to compute up front. the body block streams
     // through the node tree (Body.select), so unlike query/headers it writes to `writer` directly
     // instead of returning a string. `null` drops the body; a string overrides it; see ROADMAP R9.
-    const hasBody = typeof override?.body === 'string' || (override?.body === undefined && !!op.body);
+    // C2: `body:` is a connect v0.2+ feature — gate it like errors (R4) and batch (R6). Below the
+    // floor, drop the body and warn once per op (do not emit invalid output for an ancient target).
+    const wouldEmitBody = typeof override?.body === 'string' || (override?.body === undefined && !!op.body);
+    const version = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
+    const bodyAllowed = meetsMinimum(version, 'v0.2');
+    if (!bodyAllowed && wouldEmitBody) {
+      warn(
+        context,
+        '[body]',
+        `@connect(http.body) requires connect v0.2, but target is ${version} — body not emitted for ${op.verb} ${op.operation.path}`,
+      );
+    }
+    const hasBody = bodyAllowed && wouldEmitBody;
 
     // query & header blocks are pure string-building — they return the block, or null when empty
     const queryBlock = this.queryParamsBlock(context, op, override, queryAuth);
@@ -114,10 +128,12 @@ export class OperationWriter {
     writer.write(' '.repeat(8) + `${op.verb}: "${path}"\n`);
     if (queryBlock) writer.write(queryBlock);
     if (headerBlock) writer.write(headerBlock);
-    if (typeof override?.body === 'string') {
-      this.writeBodyOverride(writer, override.body);
-    } else if (override?.body === undefined && op.body) {
-      this.writeBodySelection(context, writer, op.body, selection);
+    if (hasBody) {
+      if (typeof override?.body === 'string') {
+        this.writeBodyOverride(writer, override.body);
+      } else if (op.body) {
+        this.writeBodySelection(context, writer, op.body, selection);
+      }
     }
     writer.write(' '.repeat(6) + '}');
   }
