@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **apiKey-in-query auth on `@connect`** (R5 slice 3): a global or per-op `apiKey` security scheme
+  with `in: query` is emitted on the op's `queryParams` (a JSONSelection sibling of the
+  `$args { … }` block), since `SourceHTTP` has no `queryParams` and can't carry it on `@source`.
+  An auth-only op still emits a `queryParams` block (no `$args {}`).
+
+### Changed
+- Improved `@connect` http-block indentation: `queryParams`/`headers`/`body` sit one level under
+  `http:` (was flush with it); the request `body` no longer carries a stray comma. Compact
+  `{ GET: "/x"}` form unchanged.
+- Internal: `@connect` auth resolution is consolidated into a single `SecurityPlan` (computed once
+  per generation, then queried by `@source` and per-`@connect`) instead of re-scanning the spec per
+  operation. No output change.
+
+### Fixed
+- Security resolution only warns for genuinely unresolvable schemes (undefined, apiKey-in-cookie,
+  or an unmappable type such as http/digest); a legitimate OR alternative — a non-winning
+  `security` option — is now silent instead of noisy.
+- The per-op auth mode switch scans only the emitted methods (get/post/put/patch/delete), so a
+  `security` declared solely on an un-emitted HEAD/OPTIONS op no longer suppresses the shared
+  `@source` header.
+
 ## [0.13.1]
 
 ### Fixed
