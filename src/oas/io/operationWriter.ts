@@ -12,7 +12,10 @@ import { NameValue, SecurityPlan } from './security.js';
 export class OperationWriter {
   private errorsWriter: ErrorsWriter;
 
-  constructor(private gen: OasGen, private security: SecurityPlan) {
+  constructor(
+    private gen: OasGen,
+    private security: SecurityPlan,
+  ) {
     this.errorsWriter = new ErrorsWriter(gen);
   }
 

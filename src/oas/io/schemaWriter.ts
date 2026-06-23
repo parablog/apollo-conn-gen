@@ -6,7 +6,10 @@ import { Writer } from './writer.js';
 import { SecurityPlan } from './security.js';
 
 export class SchemaWriter {
-  constructor(private gen: OasGen, private security: SecurityPlan) {}
+  constructor(
+    private gen: OasGen,
+    private security: SecurityPlan,
+  ) {}
 
   public writeJSONScalar(writer: Writer): void {
     writer.write('\nscalar JSON\n\n');

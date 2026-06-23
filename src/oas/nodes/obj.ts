@@ -181,7 +181,12 @@ export class Obj extends Type {
 
   // R6: a batch @connect — like writeEntityConnector, but $batch replaces $this, the keys ride in
   // the request (queryParams or body), and a `batch: { maxSize }` cap is added.
-  private writeBatchConnector(context: OasContext, writer: Writer, resolver: EntityResolver, selection: string[]): void {
+  private writeBatchConnector(
+    context: OasContext,
+    writer: Writer,
+    resolver: EntityResolver,
+    selection: string[],
+  ): void {
     const i4 = ' '.repeat(4);
     const i6 = ' '.repeat(6);
     const i8 = ' '.repeat(8);
@@ -199,7 +204,15 @@ export class Obj extends Type {
     // the keys: a query param (`id: $batch.id`) or a request body (`ids: $batch.id`)
     const label = batchSpec.queryParams ? 'queryParams' : 'body';
     const value = batchSpec.queryParams ?? batchSpec.body!;
-    writer.write(i8).write(`${label}: """\n`).write(i8).write(value + '\n').write(i8).write('"""\n').write(i6).write('}\n');
+    writer
+      .write(i8)
+      .write(`${label}: """\n`)
+      .write(i8)
+      .write(value + '\n')
+      .write(i8)
+      .write('"""\n')
+      .write(i6)
+      .write('}\n');
 
     // selection reuses the entity's own fields; wrap as `$.results { … }` for a wrapped response
     writer.write(i6).write('selection: """\n');
