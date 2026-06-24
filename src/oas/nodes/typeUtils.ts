@@ -92,8 +92,9 @@ export class T {
     return result;
   }
 
-  public static isRef(name: string) {
-    return name.startsWith('#/components/');
+  // A missing name is not a component reference.
+  public static isRef(name: string | undefined) {
+    return !!name && name.startsWith('#/components/');
   }
 
   public static findNonPropParent(type: IType) {

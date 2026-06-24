@@ -69,19 +69,26 @@ export class Writer {
     this.schemaWriter.writeJSONScalar(writer);
 
     types.forEach((type: IType) => {
+      if (!type.name) {
+        // Box `metadata_query_indices` has `MetadataQueryIndex.fields.items` as an inline allOf.
+        // That node must be named `Fields` before the writer can emit `type Fields { ... }`.
+        throw new Error(
+          `[writer] cannot emit a GraphQL definition without a name: id=${type.id}. ` +
+            `Name the type where it is created.`,
+        );
+      }
+
       const count = refCount.get(type.name) !== undefined ? refCount.get(type.name)! : Infinity;
 
-      // a `$ref` is one shared type but can reach here under two ids — `obj:type:X` (an array item)
-      // and `comp:type:X` (a single-member `allOf`). e.g. `AgencyMini`, splitting at `ProgramNormal`:
-      //   …>prop:array:#program>obj:type:#/c/s/ProgramNormal>prop:array:#agencies>obj:type:#/c/s/AgencyMini
-      //   …>prop:array:#program>obj:type:#/c/s/ProgramNormal>prop:array:#mission_patches>obj:type:#/c/s/MissionPatch>prop:comp:agency>comp:type:#/c/s/AgencyMini
-      // the two ids differ, so the check above doesn't catch the repeat — also check the name it
-      // will print. use the printed name (`Pet`), not the `$ref`: an output `Pet` and its request
-      // `PetInput` come from the same `$ref` but are different types, so keying on the `$ref` would
-      // drop one. see #26
+      // `generatedSet` is keyed by internal id, but two ids can print the same GraphQL type.
+      // Launch Library reaches `AgencyMini` as both `obj:type:...AgencyMini` (`program.agencies`)
+      // and `comp:type:...AgencyMini` (`mission_patches.agency`). Track the printed name too, so
+      // `type AgencyMini` is emitted once. Keep the kind suffix because output `Pet` and input
+      // `PetInput` can both come from the same $ref.
       const nameKey = T.isRef(type.name)
         ? 'name:' + Naming.genTypeName(type.name) + (type.kind === 'input' ? 'Input' : '')
         : null;
+
       if (!generatedSet.has(type.id) && !(nameKey && generatedSet.has(nameKey)) && count > 0) {
         type.generate(context, this, selection);
         generatedSet.add(type.id);

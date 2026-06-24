@@ -213,24 +213,34 @@ export class Composed extends Type {
   }
 
   private updateName(): void {
-    let name = this.name;
+    if (this.name) {
+      return;
+    }
 
-    if (!name) {
-      if (this.parent instanceof Res) {
-        const op = this.parent!.parent as Get;
-        name = op.getGqlOpName() + 'Response';
-      } else if (this.schema?.allOf?.length === 1) {
-        // single member: adopt its ref name (avoids an unusable '[inline:…]' name). see docs/issues.md #7
-        name = _.get(this.schema?.allOf[0], '$ref') as string;
-      } else if (this.parent instanceof Prop) {
-        // emitted inline allOf-property type needs a real name, not '[inline:…]'. see docs/issues.md #7
-        name = Naming.genTypeName(Naming.getRefName(this.parent.name));
-      } else {
-        // consolidated allOf member: keep the '[inline:…]' id that selection paths reference. issue #7
-        name = `[inline:${this.parent!.name}]`;
+    if (this.parent instanceof Res) {
+      const op = this.parent.parent as Get;
+      this.name = op.getGqlOpName() + 'Response';
+      return;
+    }
+
+    if (this.schema?.allOf?.length === 1) {
+      // A single-member allOf with a $ref is just a wrapper around that component:
+      // `allOf: [{ $ref: "#/components/schemas/Field" }]` emits `Field`.
+      // A single inline member has no component name, so `fields.items.allOf: [{ type: object }]`
+      // falls through and is named from the parent field as `Fields`.
+      const ref = _.get(this.schema.allOf[0], '$ref') as string | undefined;
+      if (ref) {
+        this.name = ref;
+        return;
       }
     }
 
-    this.name = name;
+    if (this.parent instanceof Prop) {
+      this.name = Naming.genTypeName(Naming.getRefName(this.parent.name));
+      return;
+    }
+
+    // Consolidated allOf members keep the internal id that selection paths reference.
+    this.name = `[inline:${this.parent!.name}]`;
   }
 }

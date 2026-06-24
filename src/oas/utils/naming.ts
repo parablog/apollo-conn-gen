@@ -227,7 +227,11 @@ export class Naming {
     // Step 1: Remove parameters enclosed in {}.
     const paramsJoined = parameters.join('');
     let cleanedPath = path.replace(/\{[^}]*\}/g, paramsJoined);
-    cleanedPath = Naming.capitaliseParts(cleanedPath, /[:\-.+]+/); // using regex similar to "[:\-\.]+"
+
+    // Split `#` for GraphQL field names because SDL treats `#` as a comment marker. Box's
+    // `/shared_items#web_links` becomes `shared_itemsWeb_links`; the connector HTTP path still
+    // comes from operation.path as `GET: "/shared_items#web_links"`.
+    cleanedPath = Naming.capitaliseParts(cleanedPath, /[:\-.+#]+/);
 
     // Step 2: Split the path by "/" and capitalize each part.
     const capitalisedParts = Naming.capitaliseParts(cleanedPath, '/');
