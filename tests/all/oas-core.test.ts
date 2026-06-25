@@ -658,7 +658,7 @@ test('test_060_oas_test_additionalProperties_support', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22, false, false, undefined, false, false, {
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false, {
     // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
     connectorSpecVersion: 'v0.3',
     federationVersion: 'v2.12',
@@ -671,7 +671,7 @@ test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22, false, false, undefined, false, false, {
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false, {
     // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
     connectorSpecVersion: 'v0.3',
     federationVersion: 'v2.12',
@@ -899,6 +899,30 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   // shared non-recursive type expands fully under BOTH referencing fields (no over-cutting)
   assert.ok(/\bmeta: Shared\b/.test(schema!) && /\bextra: Shared\b/.test(schema!), 'both Shared refs kept');
   assert.ok((schema!.match(/label/g) || []).length >= 3, 'Shared.label selected under both fields');
+});
+
+test('test_same_name_fields_not_cut_as_circular', async () => {
+  // docs/issues.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
+  // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing
+  // composition); now it is kept. Exercises BOTH fromProp and Type.add. Composes via rover.
+  const schema = await runOasTest('same-name-fields.yaml', ['get:/thing>**'], 1, 4, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bextension: InnerExtension\b/.test(schema!), 'inner same-named field kept (not cut)');
+  assert.ok(/^type InnerExtension /m.test(schema!), 'InnerExtension emitted');
+  assert.ok(/^type Inner /m.test(schema!), 'Inner emitted, not empty');
+});
+
+test('test_genuine_cycles_cut_by_route', async () => {
+  // docs/issues.md #36 companion: a genuine Node self-cycle reached via each route must STILL be cut by
+  // object identity, while the shared non-recursive Shared stays expanded under both referencing fields.
+  // Composes via rover (default v0.4 / fed 2.14).
+  const schema = await runOasTest('cycles-by-route.yaml', ['get:/nodes>**'], 1, 3, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/# parent: Node - circular reference omitted/.test(schema!), 'direct $ref cycle cut');
+  assert.ok(/# children: \[Node\] - circular reference omitted/.test(schema!), 'array-items cycle cut');
+  assert.ok(/# back: Node - circular reference omitted/.test(schema!), 'inline deep $ref cycle cut');
+  assert.ok(/\bwrapper: Wrapper\b/.test(schema!) && /\blabel: String\b/.test(schema!), 'Wrapper kept non-empty');
+  assert.ok(/\bmeta: Shared\b/.test(schema!) && /\bextra: Shared\b/.test(schema!), 'shared non-recursive kept under both');
 });
 
 test('test_anyof_param_coerced_to_string_arg', async () => {

@@ -397,11 +397,10 @@ export class Factory {
       prop = new PropScalar(parent, propName, 'JSON', schemaObj);
     }
 
-    // Cut a recursive direct-`$ref` property: the legacy id/name check, plus a schema-identity check
-    // (the resolved component schema already on the path) that catches cycles the name check misses
-    // because the recursion mints distinct per-depth names. see docs/issues.md #10
-    const cyclic = ref ? this.cyclicAncestor(parent, schema as SchemaObject) : undefined;
-    if (cyclic || parent.ancestors().find((a) => a.id === prop.id)) {
+    // Cut only a real loop: a field pointing back to a type we already passed through. Compare the schema,
+    // not the field name — different types reuse field names (e.g. Adobe `extension_attributes`). docs/issues.md #36
+    const cyclic = this.cyclicAncestor(parent, schemaObj);
+    if (cyclic) {
       prop = new PropCircRef(parent, prop);
     }
 

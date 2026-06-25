@@ -1449,3 +1449,92 @@ Flipped four known-bad pins to passing: `articles/clockwatch`, `articles/blog`,
 `articles/article` and the single-article file (all the same mechanism).
 **Refs:** `src/json/walker/jsonGen.ts` (`walkArray`), `src/json/walker/jsonContext.ts`
 (`merge`/`isUnknownShape`), fixture `tests/resources/json/articles/clockwatch`.
+
+## 36 · Fields that share a name are wrongly treated as circular, leaving an empty type — ✅ Fixed (working tree)
+**What happened:** generating the connector for `get:/V1/carts/mine` (adobe-commerce-swagger.json) failed
+to compose:
+`INTERNAL_ERROR: Type QuoteDataProductOptionInterface must define one or more fields.`
+GraphQL does not allow a type with no fields, and this one came out empty.
+
+**The spec that triggers it** (condensed from adobe-commerce-swagger.json; every `$ref` points into
+`#/components/schemas/`, irrelevant fields removed):
+```yaml
+quote-data-cart-interface:
+  properties:
+    items:                { type: array, items: { $ref: quote-data-cart-item-interface } }
+    extension_attributes: { $ref: quote-data-cart-extension-interface }        # (1) the cart's
+
+quote-data-cart-extension-interface:
+  properties:
+    shipping_assignments: { type: array, items: { $ref: quote-data-shipping-assignment-interface } }
+
+quote-data-shipping-assignment-interface:
+  properties:
+    items: { type: array, items: { $ref: quote-data-cart-item-interface } }    # cart items reached again, deeper
+
+quote-data-cart-item-interface:
+  properties:
+    product_option:       { $ref: quote-data-product-option-interface }
+    extension_attributes: { $ref: quote-data-cart-item-extension-interface }
+
+quote-data-product-option-interface:                                            # has ONLY one field:
+  properties:
+    extension_attributes: { $ref: quote-data-product-option-extension-interface }   # (2) the product option's
+```
+Fields (1) and (2) are both called `extension_attributes` but are completely different types.
+
+**Why the type was empty:** the generator decided a field was circular (repeating) by checking whether a
+field with the *same name* already appeared higher up the path. In Adobe Commerce many unrelated types
+have an `extension_attributes` field. So on the path below, the product option's `extension_attributes`
+(2) sits under the cart's `extension_attributes` (1); the generator mistook the inner one for a repeat
+of the outer one and dropped it. `quote-data-product-option-interface` has no other field, so it was left
+empty.
+```
+get:/V1/carts/mine
+  cart
+    > extension_attributes          (1) the cart's
+      > shipping_assignments > items > product_option
+        > extension_attributes      (2) the product option's   <- dropped here
+```
+
+**What the output looks like:**
+```graphql
+# the type's one field was removed, so the type is empty:
+type QuoteDataProductOptionInterface {
+  # extensionAttributes: QuoteDataProductOptionExtensionInterface - circular reference omitted
+}
+# and the selection asks for product_option but picks nothing inside it:
+productOption: "product_option" { }
+```
+
+**The fix — compare the object, not the name, in TWO places.** A field is part of a cycle only when it
+points back to the *same object* (same `$ref`, same resolved definition) already on the path — never
+because of a shared name. The generator already had that check by object identity (`cyclicAncestor`, from
+#10); the bug was two *legacy name-based* checks sitting beside it, both comparing node ids, and every id
+is `<kind>:<name>` — the field name only, blind to the type:
+- `src/oas/nodes/factory.ts` (`fromProp`) — where a property is built.
+- `src/oas/nodes/type.ts` (`Type.add`) — where a built node is attached to its parent.
+
+Both now cut only when the matched ancestor is the *same schema instance*. Fixing only `fromProp` is not
+enough: the inner `extension_attributes` is then re-cut by `Type.add` on the same id collision — and a
+`Type.add` cut renders nothing in the SDL, so the field just vanishes (that is what produced the
+`SELECTED_FIELD_NOT_FOUND ... on QuoteDataCartItemInterface` seen mid-fix; it was the false cut moving,
+not a real divergence). With both sites on object identity, `get:/V1/carts/mine` expands fully (32 types)
+and composes. (Schema-less structural nodes — arrays, unions — keep the name behaviour in `Type.add`;
+they cannot be the same-name/different-type case this targets.)
+
+**Aliases:** a YAML anchor reused in two *sibling* places survives loading as one shared `SchemaObject`
+(so identity is the right comparison there too), but a *self*-nested anchor is rejected at load (stack
+overflow in `OASNormalize.convert()`). So no inline self-cycle ever reaches the generator: inline fields
+never falsely cut, and identity still guards the (unreachable-in-practice) self-alias.
+
+**Separate, still open:** a type whose *only* field is a *genuine* cycle still degrades to an empty type
+(e.g. an inline `{ back: $ref Self }`). That is the "never emit a fieldless type" concern, not this fix.
+
+**Tests:** `tests/resources/oas/same-name-fields.yaml` (false positive, exercises both sites — fails
+before, composes after) and `cycles-by-route.yaml` (a genuine cycle per route, each still cut), both
+wired in `tests/all/oas-core.test.ts`. The CCS `additionalProperties` tests gained one legitimately
+un-cut type (`Ingredient`, 22→23).
+
+**Files:** `src/oas/nodes/factory.ts` (`fromProp`), `src/oas/nodes/type.ts` (`Type.add`); ids are
+name-based (`src/oas/nodes/propObj.ts` etc.). Related: #10, #13.

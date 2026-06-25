@@ -138,14 +138,16 @@ export abstract class Type implements IType {
   }
 
   public add(child: IType): IType {
-    const paths: IType[] = this.ancestors();
-    const contains: boolean = paths.map((p) => p.id).includes(child.id);
+    const ancestors: IType[] = this.ancestors();
+    const sameId = ancestors.find((p) => p.id === child.id);
+    // Same fix as factory.ts (fromProp), here when attaching a field to its parent: a shared field name is
+    // not a loop — compare the schema. docs/issues.md #36
+    const isCycle = sameId !== undefined && sameId.schema === child.schema;
     let pushed = child;
 
-    if (contains) {
-      trace(null, '-> [type:add]', 'already contains child: ' + child.id);
-      const ancestor: IType = paths[paths.map((p) => p.id).indexOf(child.id)];
-      const wrapper = Factory.fromCircularRef(this, ancestor);
+    if (isCycle) {
+      trace(null, '-> [type:add]', 'cycle (same schema instance): ' + child.id);
+      const wrapper = Factory.fromCircularRef(this, sameId!);
       this.children.push(wrapper);
       pushed = wrapper;
     } else {
