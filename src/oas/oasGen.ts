@@ -5,7 +5,7 @@ import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
-import { DEFAULT_VERSIONS, resolveConsolidateUnions, validateVersionOptions } from '../versions.js';
+import { DEFAULT_VERSIONS, validateVersionOptions } from '../versions.js';
 import { BatchConfig, GenerateOptions, OasContext, RequestOverride } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
@@ -19,7 +19,6 @@ interface IGenOptions {
   baseURL?: string;
   overrides?: Record<string, RequestOverride>;
   batch?: BatchConfig;
-  consolidateUnions?: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
@@ -38,7 +37,6 @@ export class OasGen {
     data: ArrayBuffer,
     options: IGenOptions = {
       skipValidation: false,
-      consolidateUnions: true,
       showParentInSelections: false,
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
@@ -77,7 +75,6 @@ export class OasGen {
     sourceFile: string,
     options: IGenOptions = {
       skipValidation: false,
-      consolidateUnions: true,
       showParentInSelections: false,
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
@@ -126,15 +123,7 @@ export class OasGen {
 
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
-    // real unions/interfaces only exist from connect v0.4 — derive the union form from the
-    // version unless explicitly chosen (an invalid explicit choice downgrades loudly). R2
-    this.options = {
-      ...options,
-      consolidateUnions: resolveConsolidateUnions(
-        options.connectorSpecVersion ?? DEFAULT_VERSIONS.connectorSpecVersion,
-        options.consolidateUnions,
-      ),
-    };
+    this.options = options;
     this.collector = new TypesCollector(this);
   }
 

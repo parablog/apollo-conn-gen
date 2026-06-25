@@ -78,25 +78,6 @@ test('test_R4_errors_message_omitted_when_shapes_disagree', async () => {
   assert.ok(!schema!.includes('message:'), 'no message when the shapes disagree');
 });
 
-test('test_R4_errors_below_v0_2_downgrades_with_warning', async () => {
-  // errors is connect v0.2+. Opted-in but targeting v0.1 -> skip + a loud (logged) downgrade,
-  // never silent-invalid output. The notice is routed through the project logger (console.error).
-  let schema: string | undefined;
-  const errors = await captureErrors(async () => {
-    const gen = await OasGen.fromFile(`${oasBasePath}/r4-errors.yaml`, {
-      skipValidation: false,
-      consolidateUnions: true,
-      showParentInSelections: false,
-      connectorSpecVersion: 'v0.1',
-      emitConnectorErrors: true,
-    });
-    await gen.visit();
-    schema = gen.generateSchema(['get:/widgets/{id}>**']);
-  });
-  assert.ok(schema !== undefined);
-  assert.ok(!schema!.includes('errors: {'), 'must not emit errors below connect v0.2');
-  assert.ok(
-    errors.some((w) => /requires connect v0\.2/.test(w)),
-    `expected a v0.2 downgrade warning, got: ${errors.join(' | ')}`,
-  );
-});
+// (removed test_R4_errors_below_v0_2_downgrades_with_warning: the v0.2 errors gate is unreachable now
+// that the connector spec is floored at v0.4 — connect < v0.4 is rejected at the entrypoint, covered by
+// versions.test.ts test_066/069.)

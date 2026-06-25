@@ -72,10 +72,9 @@ export class Union extends Type {
 
     if (this.name != null) {
       context.store(this.name, this);
-      // members are absorbed into the merged object whenever we downgrade — in consolidate
-      // mode, and in v0.4 mode when there is no discriminator (no tag field for ->match, so
-      // generate() emits the merged object there too). see docs/issues.md #25
-      if (context.generateOptions.consolidateUnions || !this.discriminator) {
+      // members are absorbed into the merged object whenever we degrade to one — input position
+      // (no input unions) or no discriminator (no tag for ->match). see docs/issues.md #25, #36
+      if (this.rendersAsMergedObject()) {
         this.children.forEach((child) => context.decRefCount(child.name));
       }
     }
@@ -83,6 +82,13 @@ export class Union extends Type {
     this.visited = true;
     trace(context, '<- [union:visit]', 'out: ' + schemas);
     context.leave(this);
+  }
+
+  // A union renders as a merged object — never a real `union`/interface — when it sits in input
+  // position (GraphQL has no input unions, any connect version) or has no discriminator for `->match`
+  // to dispatch on (#25). Output + discriminator is the only case that becomes a real abstract type.
+  private rendersAsMergedObject(): boolean {
+    return this.kind === 'input' || !this.discriminator;
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
@@ -109,27 +115,18 @@ export class Union extends Type {
       const refName = Naming.getRefName(this.name);
       const name = sanitised === refName ? refName : sanitised;
 
-      if (context.generateOptions.consolidateUnions) {
-        this.generateMergedObject(context, writer, selection, name, '#### NOT SUPPORTED YET BY CONNECTORS!!! union ');
-      } else if (!this.discriminator) {
-        // No tag field for `->match` to dispatch on, so a real union cannot be selected — the
-        // selection already falls back to the flat merged form (see select); emit the matching
-        // merged object here, or SDL says `union` while the selection selects a group on it
-        // (GROUP_SELECTION_IS_NOT_OBJECT). see docs/issues.md #25
-        this.generateMergedObject(
-          context,
-          writer,
-          selection,
-          name,
-          '#### no discriminator — union degraded to a merged object: ',
-        );
+      if (this.rendersAsMergedObject()) {
+        // No real union here: an input-position oneOf (GraphQL has no input unions) or no
+        // discriminator (no tag for `->match`). Emit the merged object — the selection falls back to
+        // the same flat form (see select), so SDL and selection agree. see docs/issues.md #25, #36
+        this.generateMergedObject(context, writer, selection, name, '#### union degraded to a merged object: ');
       } else if (this.interfaceBaseRef) {
         // R2: promoted to an interface — the base (emitted as `interface`) and the members
         // (each `... implements Base`) carry the type system; emit no `union X = A | B` line.
         trace(context, '   [union::generate]', `[interface] suppressing union line for ${this.name}`);
       } else {
-        // list the members with selected fields. Filtering by prop-parent identity broke for
-        // allOf members (their folded props keep the inner part as parent -> `union X = `). #34
+        // output + discriminator: a real `union X = A | B`. Filtering by prop-parent identity broke
+        // for allOf members (their folded props keep the inner part as parent -> `union X = `). #34
         const filtered = this.selectedMembers(selection);
 
         writer
@@ -209,7 +206,7 @@ export class Union extends Type {
   // a real `union X = Book | Movie` needs its members (and a member's shared $ref base, which
   // the writer may promote to an interface — R2); a merged one needs its flat fields instead
   dependencies(context: OasContext, selection: string[]): IType[] {
-    if (context.generateOptions.consolidateUnions || !this.discriminator) {
+    if (this.rendersAsMergedObject()) {
       return this.selectedProps(selection);
     }
     // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
@@ -228,12 +225,11 @@ export class Union extends Type {
       this.consolidate(selection);
     }
 
-    // R2: when we emit a *real* `union X = A | B` (not the consolidate downgrade) and the
-    // spec gives us a discriminator, produce the composable abstract-type selection
-    // (connect v0.4): a spread `->match` whose branches set a string-literal __typename per
-    // concrete member. Without a discriminator, or when consolidating, fall back to the flat
-    // merged selection (the consolidate-downgrade shape).
-    if (!context.generateOptions.consolidateUnions && this.discriminator) {
+    // R2: for a real output `union X = A | B` (output position + discriminator) produce the
+    // composable abstract-type selection (connect v0.4): a spread `->match` whose branches set a
+    // string-literal __typename per member. Merged-object unions (input position or no discriminator)
+    // fall back to the flat selection below. see docs/issues.md #25, #36
+    if (!this.rendersAsMergedObject()) {
       this.selectAbstract(context, writer, selection);
       trace(context, '<- [union::select]', `-> out: ${this.name}`);
       return;
@@ -245,30 +241,6 @@ export class Union extends Type {
       if (!generated.has(prop.id)) prop.select(context, writer, selection);
       generated.add(prop.id);
     }
-
-    /*if (context.generateOptions.consolidateUnions) {
-      if (!this.consolidated) {
-        this.consolidate(selection);
-      }
-
-      const selected = this.selectedProps(selection);
-      const generated = new Set<string>();
-      for (const prop of selected) {
-        if (!generated.has(prop.id))
-          prop.select(context, writer, selection);
-        generated.add(prop.id);
-      }
-    } else {
-      // add the prop parent paths to a set so we can only include those parents that have been selected
-      const propParentsPathSet = new Set(this.selectedProps(selection).map(p => p.parent!.path()));
-
-      // we should only include the names of those properties that have been selected
-      this.children
-        .filter(c => propParentsPathSet.has(c.path()))
-        .forEach((child) => {
-          child.select(context, writer, selection);
-        });
-    }*/
 
     /* TODO: better selection for Unions
     dataPoints: dataFormat->match(

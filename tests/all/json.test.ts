@@ -129,12 +129,7 @@ test('articles/search.json', async () => {
 test('articles/clockwatch', async () => {
   // composes since #35: empty [] fields walk to [JSON] (so SDL and selection agree) and
   // same-named objects merge on the field union instead of last-doc-wins
-  await runJsonTest('articles/clockwatch', {
-    shouldFail: false,
-    connectorSpecVersion: 'v0.3',
-    federationVersion: 'v2.12',
-    composeFederationVersion: '2.12.0',
-  });
+  await runJsonTest('articles/clockwatch');
 });
 
 test('test/merge', async () => {

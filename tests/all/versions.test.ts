@@ -40,8 +40,8 @@ test('test_065_versions_compare_and_minimum', () => {
 });
 
 test('test_066_versions_assert_supported', () => {
-  assert.doesNotThrow(() => assertSupportedConnectVersion('v0.3'));
   assert.doesNotThrow(() => assertSupportedConnectVersion('v0.4'));
+  assert.throws(() => assertSupportedConnectVersion('v0.3'), /Unsupported connector spec version.*v0\.3/);
   assert.throws(() => assertSupportedConnectVersion('v9.9'), /Unsupported connector spec version/);
   // a -preview suffix is not a valid identifier; message steers to v0.4
   assert.throws(() => assertSupportedConnectVersion('v0.4-preview'), /v0\.4/);
@@ -63,7 +63,6 @@ test('test_068_entrypoints_reject_bad_version', async () => {
   await assert.rejects(
     OasGen.fromData(new ArrayBuffer(0), {
       skipValidation: true,
-      consolidateUnions: true,
       showParentInSelections: false,
       connectorSpecVersion: 'v9.9',
     }),
@@ -71,27 +70,25 @@ test('test_068_entrypoints_reject_bad_version', async () => {
   );
 });
 
-test('test_069_body_skipped_below_connect_v02_with_warning (C2)', async () => {
-  // C2: `@connect(http.body)` is a connect v0.2+ feature — the same gate errors (R4) and batch
-  // (R6) use. Targeting v0.1 with a POST that has a request body must (1) emit no `body:` block
-  // and (2) log a single downgrade notice via the project logger (warn → console.error). Uses
-  // direct OasGen (no compose), since v0.1 itself wouldn't compose on a released supergraph.
-  let schema: string | undefined;
-  const errors = await captureErrors(async () => {
-    const gen = await OasGen.fromFile(`${oasBasePath}/body-aliases-defaults.yaml`, {
+test('test_069_floor_rejects_below_v0_4_and_fed_below_2_13', async () => {
+  // The connector spec is floored at v0.4 (the pre-v0.4 consolidate/feature downgrades were removed);
+  // v0.4 also requires federation >= v2.13. Both fail fast at the entrypoint (validateVersionOptions).
+  await assert.rejects(
+    OasGen.fromData(new ArrayBuffer(0), {
       skipValidation: true,
-      consolidateUnions: true,
       showParentInSelections: false,
-      connectorSpecVersion: 'v0.1',
-      federationVersion: 'v2.11',
-    });
-    await gen.visit();
-    schema = gen.generateSchema(['post:/things>**']);
-  });
-  assert.ok(schema !== undefined);
-  assert.ok(!/\bbody:/.test(schema!), 'a v0.1 target must not emit a `body:` block');
-  assert.ok(
-    errors.some((e) => /@connect\(http\.body\) requires connect v0\.2/.test(e)),
-    `expected the body downgrade warning, got: ${errors.join(' | ')}`,
+      connectorSpecVersion: 'v0.3',
+    }),
+    /Unsupported connector spec version .*v0\.3/,
+    'connect < v0.4 is rejected',
+  );
+  await assert.rejects(
+    OasGen.fromData(new ArrayBuffer(0), {
+      skipValidation: true,
+      showParentInSelections: false,
+      federationVersion: 'v2.9',
+    }),
+    /requires federation >= v2\.13/,
+    'fed < v2.13 with connect v0.4 is rejected (order-aware, not lexicographic)',
   );
 });

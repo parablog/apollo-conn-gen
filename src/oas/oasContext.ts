@@ -29,7 +29,6 @@ export type GenerateOptions = {
   baseURL?: string;
   overrides?: Record<string, RequestOverride>;
   batch?: BatchConfig;
-  consolidateUnions?: boolean;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
@@ -89,7 +88,6 @@ export class OasContext {
     this.parser = parser;
     this.indent = 0;
     this.generateOptions = options || {
-      consolidateUnions: true, // by default, we consolidate fields until unions are supported
       showParentInSelections: true, // by default, we don't show where the fields are coming from
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,

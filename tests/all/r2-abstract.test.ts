@@ -8,14 +8,13 @@ import { captureWarnings } from './_setup.js';
 
 test('test_R2_union_discriminator_emits_typename_match_and_composes', async () => {
   // simple-oneOf-example: a oneOf [Book, Movie] with discriminator { propertyName: type,
-  // mapping: { book: Book, movie: Movie } }. With consolidateUnions OFF + connect v0.4, the
+  // mapping: { book: Book, movie: Movie } }. With real unions + connect v0.4, the
   // connector must emit a real `union` and a `...->match` selection that sets a string-literal
-  // __typename per member. Composes only at fed 2.13.
+  // __typename per member. Composes only at fed 2.14.
   const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 3, false, false, undefined, false, false, {
-    consolidateUnions: false,
     connectorSpecVersion: 'v0.4',
-    federationVersion: 'v2.13',
-    composeFederationVersion: '2.13.0',
+    federationVersion: 'v2.14',
+    composeFederationVersion: '2.14.1',
   });
   assert.ok(schema !== undefined);
   // real union, not the consolidate downgrade
@@ -40,38 +39,26 @@ test('test_R2_union_partial_selection_omits_unselected_member', async () => {
     'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:author',
   ];
   const schema = await runOasTest('simple-oneOf-example.yaml', paths, 1, 2, false, false, undefined, false, false, {
-    consolidateUnions: false,
     connectorSpecVersion: 'v0.4',
-    federationVersion: 'v2.13',
-    composeFederationVersion: '2.13.0',
+    federationVersion: 'v2.14',
+    composeFederationVersion: '2.14.1',
   });
   assert.ok(schema !== undefined);
   assert.ok(/union ItemResponse = Book\b/.test(schema!), 'union lists only the selected member');
   assert.ok(!/\bMovie\b/.test(schema!), 'unselected member Movie must not appear (no fieldless type, no union member)');
 });
 
-test('test_R2_union_consolidate_downgrade_unchanged', async () => {
-  // Default path (consolidateUnions ON): the same fixture must still emit the consolidate
-  // downgrade (a replacement object + the NOT-SUPPORTED marker), composing at fed 2.12 —
-  // i.e. the new abstract-type path does not perturb the default behaviour.
-  const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 1);
-  assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('NOT SUPPORTED YET'), 'default path still emits the consolidate downgrade');
-  assert.ok(!schema!.includes('->match('), 'default path must not emit the v0.4 match form');
-});
-
 // --- R2 (Scenario B): oneOf members sharing an allOf base -> GraphQL interface (connect v0.4) ---
 
 test('test_R2_interface_oneof_promotes_and_composes', async () => {
-  // oneOf [Book, Movie], both allOf [Product, {…}] + a discriminator. With consolidateUnions OFF +
+  // oneOf [Book, Movie], both allOf [Product, {…}] + a discriminator. With real unions +
   // connect v0.4, the shared base Product is promoted to an interface, members implement it, the
   // field returns Product, and the connector selection uses the abstract-type ->match. Composes at
   // fed 2.13.
   const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 4, false, false, undefined, false, false, {
-    consolidateUnions: false,
     connectorSpecVersion: 'v0.4',
-    federationVersion: 'v2.13',
-    composeFederationVersion: '2.13.0',
+    federationVersion: 'v2.14',
+    composeFederationVersion: '2.14.1',
   });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('interface Product'), 'shared base promoted to an interface');
@@ -93,10 +80,9 @@ test('test_R2_interface_skips_when_base_used_concretely', async () => {
   const warnings = await captureWarnings(async () => {
     const gen = await OasGen.fromFile(`${oasBasePath}/r2-interface-shared-base.yaml`, {
       skipValidation: false,
-      consolidateUnions: false,
       showParentInSelections: false,
       connectorSpecVersion: 'v0.4',
-      federationVersion: 'v2.13',
+      federationVersion: 'v2.14',
     });
     await gen.visit();
     schema = gen.generateSchema(['get:/item>**', 'get:/product>**']);
@@ -110,30 +96,19 @@ test('test_R2_interface_skips_when_base_used_concretely', async () => {
   );
 });
 
-test('test_R2_interface_default_consolidate_unchanged', async () => {
-  // Default path (consolidateUnions ON) on the same fixture: consolidate downgrade, no interface,
-  // no ->match. Confirms interface promotion does not perturb the default. Composes at fed 2.12.
-  const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 1);
-  assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('NOT SUPPORTED YET'), 'default path emits the consolidate downgrade');
-  assert.ok(!schema!.includes('interface '), 'default path must not emit an interface');
-  assert.ok(!schema!.includes('->match('), 'default path must not emit the v0.4 match form');
-});
-
 test('test_R2_union_without_discriminator_degrades_to_merged_object', async () => {
   // No tag field means `->match` has nothing to dispatch on, so a real union cannot be selected.
   // The abstract pass degrades to the same merged-object form the default pass emits — SDL and
   // selection agree, and composition passes. see docs/issues.md #25
   // typesSize 2: response + union — the merged members are no longer collected at all (#26)
   const schema = await runOasTest('oneof-no-discriminator.yaml', ['get:/search>**'], 1, 2, false, false, undefined, false, false, {
-    consolidateUnions: false,
     connectorSpecVersion: 'v0.4',
-    federationVersion: 'v2.13',
-    composeFederationVersion: '2.13.0',
+    federationVersion: 'v2.14',
+    composeFederationVersion: '2.14.1',
   });
   assert.ok(schema !== undefined);
   assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union line without a discriminator');
-  assert.ok(/no discriminator — union degraded/.test(schema!), 'the degrade is announced');
+  assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
   assert.ok(/type ResultUnion \{/.test(schema!), 'merged object replaces the union');
   assert.ok(/minutes: Int/.test(schema!) && /pages: Int/.test(schema!), 'fields from both members merged');
   assert.ok(!/->match\(/.test(schema!), 'no ->match without a discriminator');
@@ -145,10 +120,9 @@ test('test_R2_collect_twice_is_byte_identical', async () => {
   // walk mutated something it shouldn't have.
   const gen = await OasGen.fromFile(`${oasBasePath}/r2-interface-oneof.yaml`, {
     skipValidation: false,
-    consolidateUnions: false,
     showParentInSelections: false,
     connectorSpecVersion: 'v0.4',
-    federationVersion: 'v2.13',
+    federationVersion: 'v2.14',
   });
   await gen.visit();
   const first = gen.generateSchema(['get:/item>**']);
@@ -160,8 +134,8 @@ test('test_R2_union_discriminator_no_mapping_uses_bare_refname', async () => {
   // C1: a discriminator with `propertyName` but NO `mapping` must fall back to the bare schema
   // name from the $ref (e.g. "Book"), per OAS 3.x. The pre-fix code lowercased the name
   // (`typeName.toLowerCase()`), producing `["book", $ { … }]` — a branch that never matches a
-  // spec-compliant payload tagged `type: "Book"`. With consolidateUnions OFF + connect v0.4,
-  // the emitted `->match` must key on the bare name. Composes at fed 2.13.
+  // spec-compliant payload tagged `type: "Book"`. With real unions + connect v0.4,
+  // the emitted `->match` must key on the bare name. Composes at fed 2.14.
   const schema = await runOasTest(
     'r2-discriminator-no-mapping.yaml',
     ['get:/item>**'],
@@ -173,10 +147,9 @@ test('test_R2_union_discriminator_no_mapping_uses_bare_refname', async () => {
     false,
     false,
     {
-      consolidateUnions: false,
       connectorSpecVersion: 'v0.4',
-      federationVersion: 'v2.13',
-      composeFederationVersion: '2.13.0',
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.14.1',
     },
   );
   assert.ok(schema !== undefined);
@@ -212,12 +185,16 @@ test('test_R2_input_union_consolidated_kind_is_intentional (C6 investigation)', 
     false,
     false,
     {
-      connectorSpecVersion: 'v0.3',
-      federationVersion: 'v2.12',
-      composeFederationVersion: '2.12.0',
+      connectorSpecVersion: 'v0.4',
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.14.1',
     },
   );
   assert.ok(schema !== undefined);
+  // A discriminated input `oneOf` must STILL degrade to the input object — never a union / ->match
+  // (GraphQL has no input unions, any version). This is the guard for the position-first predicate. #36
+  assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union for an input-position oneOf');
+  assert.ok(!/->match\(/.test(schema!), 'no ->match for an input-position oneOf');
   // The merged object is emitted with the `input` keyword (not `type`), since it lives in input
   // position. `nameSuffix()` adds `Input` so the name is `InputInput` — distinct from any output
   // sibling reached by the same schema.
@@ -235,32 +212,25 @@ test('test_R2_input_union_consolidated_kind_is_intentional (C6 investigation)', 
 });
 
 test('test_R2_union_form_derived_from_connect_version', async () => {
-  // not asked explicitly: connect >= v0.4 emits real unions, below it the consolidate
-  // downgrade — and an explicit ask for real unions on v0.3 downgrades loudly. see ROADMAP R2
+  // connect v0.4 emits real unions; connect < v0.4 is now rejected at the floor (the pre-v0.4
+  // consolidate downgrade was removed). see ROADMAP R2
   const real = await OasGen.fromFile(`${oasBasePath}/simple-oneOf-example.yaml`, {
     skipValidation: false,
     showParentInSelections: false,
     connectorSpecVersion: 'v0.4',
-    federationVersion: 'v2.13',
+    federationVersion: 'v2.14',
   });
   await real.visit();
-  assert.ok(/union ItemResponse = Book \| Movie/.test(real.generateSchema(['get:/item>**'])), 'v0.4 derives real unions');
+  assert.ok(/union ItemResponse = Book \| Movie/.test(real.generateSchema(['get:/item>**'])), 'v0.4 emits real unions');
 
-  const warnings = await captureWarnings(async () => {
-    const downgraded = await OasGen.fromFile(`${oasBasePath}/simple-oneOf-example.yaml`, {
+  await assert.rejects(
+    OasGen.fromFile(`${oasBasePath}/simple-oneOf-example.yaml`, {
       skipValidation: false,
-      consolidateUnions: false,
       showParentInSelections: false,
       connectorSpecVersion: 'v0.3',
-      federationVersion: 'v2.12',
-    });
-    await downgraded.visit();
-    const schema = downgraded.generateSchema(['get:/item>**']);
-    assert.ok(schema.includes('NOT SUPPORTED YET'), 'v0.3 downgrades to consolidate');
-    assert.ok(!/^union \w+ =/m.test(schema), 'no real union on v0.3');
-  });
-  assert.ok(
-    warnings.some((w) => /require connect v0\.4/.test(w)),
-    `expected the downgrade warning, got: ${warnings.join(' | ')}`,
+      federationVersion: 'v2.14',
+    }),
+    /Unsupported connector spec version .*v0\.3/,
+    'connect < v0.4 is rejected at the floor',
   );
 });

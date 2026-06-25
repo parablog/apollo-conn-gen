@@ -24,9 +24,7 @@ import { Naming } from '../utils/naming.js';
  * Promotion is id-neutral: it sets flags (`Obj.emitAsInterface`, `Composed.implementsInterface`,
  * `Union.interfaceBaseRef`) and never mutates `kind` (which is embedded in node ids).
  *
- * Gating mirrors the committed union slice: `consolidateUnions === false` + a discriminator. (Wiring
- * this to the spec version — connect >= v0.4 — is a separate roadmap follow-up.) A candidate union is
- * promoted only when ALL hold:
+ * A candidate union (a discriminated output union) is promoted only when ALL hold:
  *  1. every member is an allOf {@link Composed};
  *  2. exactly one `$ref` is common to every member's `allOf` (empty or >1 -> stay a union);
  *  3. the base is not used as a concrete type anywhere else (else promoting it would turn an
@@ -38,10 +36,6 @@ export function promoteInterfaces(
   types: Map<string, IType>,
   _selection: string[],
 ): void {
-  if (context.generateOptions.consolidateUnions) {
-    return; // interfaces only on the real-abstract-types path
-  }
-
   for (const union of candidateUnions(gen)) {
     if (!union.discriminator) continue;
 

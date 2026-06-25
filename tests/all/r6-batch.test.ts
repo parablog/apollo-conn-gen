@@ -123,21 +123,5 @@ test('test_R6_batch_skips_when_no_r1_key', async () => {
   assert.ok(warnings.some((w) => /no @key/.test(w)), `expected a "no @key" warning, got: ${warnings.join(' | ')}`);
 });
 
-test('test_R6_batch_below_v0_2_downgrades', async () => {
-  // batch is connect v0.2+. Targeting v0.1 -> skip + a logged downgrade, never invalid output.
-  // Driven directly (not rover-composed) since v0.1 output isn't the point here. see R4's twin test.
-  let schema: string | undefined;
-  const warnings = await captureErrors(async () => {
-    const gen = await OasGen.fromFile(`${oasBasePath}/r6-batch.yaml`, {
-      skipValidation: false,
-      showParentInSelections: false,
-      connectorSpecVersion: 'v0.1',
-      inferEntityResolvers: true,
-      batch: { 'post:/products/batch': {} },
-    });
-    await gen.visit();
-    schema = gen.generateSchema([PRODUCT, 'post:/products/batch>**']);
-  });
-  assert.ok(!schema!.includes('$batch'), 'must not emit batch below connect v0.2');
-  assert.ok(warnings.some((w) => /connect v0\.2/.test(w)), `expected a v0.2 warning, got: ${warnings.join(' | ')}`);
-});
+// (removed test_R6_batch_below_v0_2_downgrades: the v0.2 batch gate is unreachable now that the connector
+// spec is floored at v0.4 — connect < v0.4 is rejected at the entrypoint, covered by versions.test.ts.)

@@ -62,7 +62,7 @@ export class Writer {
     applyBatchResolvers(context, this.gen, types);
 
     // R2: promote discriminated oneOf-with-shared-allOf-base to a GraphQL interface (id-neutral;
-    // no-op unless consolidateUnions is off and a qualifying union exists). Same `types` map.
+    // no-op unless a qualifying discriminated output union exists). Same `types` map.
     promoteInterfaces(context, this.gen, types, selection);
 
     this.schemaWriter.writeDirectives(writer);

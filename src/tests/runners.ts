@@ -22,14 +22,12 @@ export async function runOasTest(
   mapper?: Mapper,
   skipOptionalArgs: boolean = false,
   inferEntityResolvers: boolean = false,
-  // R2: optional version/union overrides. Defaults reproduce the historic behaviour
-  // (consolidate unions, compose at fed 2.12) so existing callers are unaffected. Real
-  // unions/interfaces (`consolidateUnions: false`) need connect v0.4 + fed 2.13.
+  // R2: optional version/compose overrides. Defaults to the shipping versions (connect v0.4 / fed
+  // 2.14, real unions); pass connectorSpecVersion/federationVersion/composeFederationVersion to vary.
   opts: {
     baseURL?: string;
     overrides?: Record<string, RequestOverride>;
     batch?: BatchConfig;
-    consolidateUnions?: boolean;
     connectorSpecVersion?: string;
     federationVersion?: string;
     composeFederationVersion?: string;
@@ -42,7 +40,6 @@ export async function runOasTest(
     baseURL: opts.baseURL,
     overrides: opts.overrides,
     batch: opts.batch,
-    consolidateUnions: opts.consolidateUnions ?? true,
     showParentInSelections: false,
     mapper,
     skipOptionalArgs,
@@ -186,6 +183,18 @@ function isRoverAvailable(command: string): [boolean, string?] {
   return [result.status === 0, result.stdout.toString().trim()];
 }
 
+// connect v0.4 `->entries` (maps) don't compose on stock rover yet — the #14 fix is unreleased (v0.5
+// `@mapping` likewise). When the local patched build is present (gitignored), compose through it.
+// `OAS_TEST_COMPOSER` overrides the resolved path. Ported from the feat/r10-reusable-mappings branch.
+function localComposer(): string | undefined {
+  const override = process.env.OAS_TEST_COMPOSER;
+  if (override) {
+    return override;
+  }
+  const cli = path.join(process.cwd(), 'tools', 'local', 'apollo-federation-cli');
+  return fs.existsSync(cli) ? cli : undefined;
+}
+
 function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.14.1'): [boolean, string?] {
   console.info('schemaPath', schemaPath);
 
@@ -214,7 +223,11 @@ subgraphs:
 
   fs.writeFileSync(supergraphFile, content, { encoding: 'utf-8', flag: 'w' });
 
-  const cmd = `${rover[1]} supergraph compose --config ${supergraphFile} --elv2-license accept`;
+  // Prefer the local patched composer (has the unreleased #14 ->entries fix) when present; else rover.
+  const local = localComposer();
+  const cmd = local
+    ? `${local} compose --config ${supergraphFile}`
+    : `${rover[1]} supergraph compose --config ${supergraphFile} --elv2-license accept`;
 
   // Write the rover command to a bash script for easy re-execution
   const scriptFile = path.join(os.tmpdir(), 'oas-test', 'run-rover.sh');

@@ -256,13 +256,13 @@ test('test_019_oas_test_010_TMF633_IntentOrValue_to_Union', async () => {
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:description',
   ];
-  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 2);
+  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 6);
 });
 
 test('test_020_oas_test_010_TMF633_IntentOrValue_to_Union_Full', async () => {
   const paths = ['get:/product/{id}>**'];
 
-  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 2);
+  await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 6);
 });
 test('test_021_oas_test_011_TMF637_001_ComposedTest', async () => {
   const paths = ['get:/product/{id}>**'];
@@ -322,7 +322,7 @@ test('test_024_oas_test_014_testTMF637_TestRecursion', async () => {
   ];
 
   // expect.assertions(6);
-  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 3);
+  const error = await runOasTest('TMF637-002-RecursionTest.yaml', paths, 1, 5);
   // expect(error).toContain("Circular reference detected in `@connect(selection:)` on `Query.productById`");
 });
 
@@ -648,22 +648,21 @@ test('test_054_oas_test-better-naming', async () => {
   const paths = [
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:scalar:count',
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
-    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name'
+    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
+    // real unions emit EVERY member type, so the 3rd member must also carry a selected field or it
+    // emits empty (invalid SDL). Consolidate used to mask this by merging members. Pruning unselected
+    // members is the deferred "never emit a fieldless type" follow-up; here we just select it too.
+    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name'
   ]
 
-  await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 3);
+  await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 6);
 });
 test('test_060_oas_test_additionalProperties_support', async () => {
   // Test additionalProperties support with VehicleComponentTree
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false, {
-    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
-    connectorSpecVersion: 'v0.3',
-    federationVersion: 'v2.12',
-    composeFederationVersion: '2.12.0',
-  });
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false);
 });
 
 test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
@@ -671,12 +670,7 @@ test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false, {
-    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
-    connectorSpecVersion: 'v0.3',
-    federationVersion: 'v2.12',
-    composeFederationVersion: '2.12.0',
-  });
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false);
 });
 
 test('test_062_oas_test_images_additionalProperties', async () => {
@@ -684,12 +678,7 @@ test('test_062_oas_test_images_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>prop:map:images>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5, false, false, undefined, false, false, {
-    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
-    connectorSpecVersion: 'v0.3',
-    federationVersion: 'v2.12',
-    composeFederationVersion: '2.12.0',
-  });
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5, false, false, undefined, false, false);
 });
 
 test('test_ref_into_paths_pointer_resolves_and_composes', async () => {
@@ -812,10 +801,9 @@ test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
     'petstore.yaml', ['get:/user/{username}>**'], 19, 1, false, true, undefined, false,
     true, // inferEntityResolvers
     {
-      consolidateUnions: false,
       connectorSpecVersion: 'v0.4',
-      federationVersion: 'v2.13',
-      composeFederationVersion: '2.13.0',
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.14.1',
       emitConnectorErrors: true,
     },
   );
@@ -924,10 +912,9 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   // A shared non-recursive component (Shared, referenced twice from sibling fields) must NOT be cut.
   // see docs/issues.md #10. runOasTest composes via rover.
   const schema = await runOasTest('recursive-cycle.yaml', ['get:/nodes>**'], 1, 2, false, true, undefined, false, false, {
-    consolidateUnions: false,
     connectorSpecVersion: 'v0.4',
-    federationVersion: 'v2.13',
-    composeFederationVersion: '2.13.0',
+    federationVersion: 'v2.14',
+    composeFederationVersion: '2.14.1',
   });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('# children: [Node] - circular reference omitted'), 'array-items cycle cut in SDL');

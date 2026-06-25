@@ -44,12 +44,7 @@ test('test_R5_security_apikey_header_emits_named_header', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  const schema = await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false, {
-    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
-    connectorSpecVersion: 'v0.3',
-    federationVersion: 'v2.12',
-    composeFederationVersion: '2.12.0',
-  });
+  const schema = await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false);
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "x-api-key", value: "{$config.apiKey}" }'),

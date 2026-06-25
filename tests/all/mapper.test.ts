@@ -18,7 +18,6 @@ test('test_055_test-parser-reset', async () => {
   // @ts-expect-error - Buffer to ArrayBuffer conversion
   const gen = await OasGen.fromData(content as ArrayBuffer, {
     skipValidation: false,
-    consolidateUnions: true,
     showParentInSelections: false,
   });
 
