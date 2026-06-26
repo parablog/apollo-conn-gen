@@ -142,9 +142,7 @@ export class SecurityPlan {
     this.schemes = schemes;
     this.globalReq = globalReq;
     this.perOpMode = perOpMode;
-    this.globalWarningBodies = new Set(
-      globalReq ? resolveAuth(globalReq, schemes).warnings : [],
-    );
+    this.globalWarningBodies = new Set(globalReq ? resolveAuth(globalReq, schemes).warnings : []);
   }
 
   static from(api: Oas, opts?: { skipAuth?: boolean }): SecurityPlan {

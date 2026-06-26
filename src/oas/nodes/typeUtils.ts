@@ -1,4 +1,18 @@
-import { Arr, CircularRef, En, Get, IType, Obj, Op, Prop, PropArray, PropEn, PropScalar, ReferenceObject, Scalar } from './internal.js';
+import {
+  Arr,
+  CircularRef,
+  En,
+  Get,
+  IType,
+  Obj,
+  Op,
+  Prop,
+  PropArray,
+  PropEn,
+  PropScalar,
+  ReferenceObject,
+  Scalar,
+} from './internal.js';
 import _ from 'lodash';
 import { Naming } from '../utils/naming.js';
 import type { OasContext } from '../oasContext.js';
@@ -158,7 +172,7 @@ export class T {
     let ref: string | undefined;
     if ('$ref' in schema) {
       ref = schema.$ref;
-    } 
+    }
     // array (explicit, or implied via `items`) — take the items' ref
     else if (schema.type === 'array' || schema.type == null) {
       const itemsRef = _.get(schema, 'items.$ref');
