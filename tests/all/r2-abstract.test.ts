@@ -28,6 +28,28 @@ test('test_R2_union_discriminator_emits_typename_match_and_composes', async () =
   assert.ok(schema!.includes('__typename: $("Movie")'), 'expected string-literal __typename for Movie');
 });
 
+test('test_R2_union_partial_selection_omits_unselected_member', async () => {
+  // A real union emits every *referenced* member type. A partial selection that picks fields from only
+  // SOME members must NOT emit the unselected ones as fieldless `type X {}` (INVALID_GRAPHQL: expected
+  // Field Definition). Here only Book's fields are selected — Movie must not appear at all, and the union
+  // lists only Book. Union.dependencies() must mirror generate()/->match (selectedMembers). see #36
+  const paths = [
+    'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:id',
+    'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:type',
+    'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:title',
+    'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:author',
+  ];
+  const schema = await runOasTest('simple-oneOf-example.yaml', paths, 1, 2, false, false, undefined, false, false, {
+    consolidateUnions: false,
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.13',
+    composeFederationVersion: '2.13.0',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/union ItemResponse = Book\b/.test(schema!), 'union lists only the selected member');
+  assert.ok(!/\bMovie\b/.test(schema!), 'unselected member Movie must not appear (no fieldless type, no union member)');
+});
+
 test('test_R2_union_consolidate_downgrade_unchanged', async () => {
   // Default path (consolidateUnions ON): the same fixture must still emit the consolidate
   // downgrade (a replacement object + the NOT-SUPPORTED marker), composing at fed 2.12 —

@@ -46,8 +46,9 @@ export class Obj extends Type {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
-    // a different shape already owns this name — rename, or the two would merge into one type. see #9
-    if (T.collidesWithStoredType(this, context)) {
+    // rename this inline if another shape already owns its name (#9), or it is a wrapper named after the
+    // component it lists (`group` over [Group]) — otherwise the two emit one clashing type. see #12, #37
+    if (T.collidesWithStoredType(this, context) || T.collidesWithContainedComponent(this)) {
       T.resolveNameConflict(this, context);
     }
 

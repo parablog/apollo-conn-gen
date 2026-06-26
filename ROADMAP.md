@@ -495,29 +495,69 @@ input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs ar
 — gitignored — because the published specs embed example secrets that block pushes; this section is the
 committed summary of what they showed.)
 
-**Corpus status (measured 2026-06-12 post-#33, stock rover 0.40 / composition 2.13):**
+**Corpus status (expanded tracked-real-fixture sweep; both passes at the shipping versions connect
+v0.4 / fed 2.14.1, stock rover 0.40):**
 
-| Spec | GET ops | default (v0.3) | abstract (v0.4) |
+| Spec | GET ops | consolidate (v0.4) | real unions (v0.4) |
 |---|--:|--:|--:|
 | googlebooks | 30 | 100% | 100% |
 | asana | 79 | 100% | 100% |
-| mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
-| digitalocean | 145 | 97.9% | 97.9% (#33 file endpoints) |
+| digitalocean | 145 | 97.9% | 97.9% |
 | slack | 80 | 96.3% | 96.3% |
 | sendgrid | 154 | 95.5% | 95.5% |
-| github | 444 | 92.1% | 95.0% |
-| omni | 54 | 92.6% | 90.7% |
+| github | 444 | 91.2% | 95.7% |
+| adobe commerce | 242 | 88.0% | 88.0% |
+| launch library | 116 | 69.0% (27 DEGRADED) | 69.0% |
+| common room core † | 9 | 100% | 100% |
+| mindbody † | 8 | 100% | 100% |
+| TMF632 party | 4 | 0.0% (4 DEGRADED) | 0.0% |
+| TMF637 inventory | 2 | 0.0% (2 DEGRADED) | 0.0% |
+| TMF666 account | 14 | 42.9% (8 DEGRADED) | 42.9% |
+| TMF680 recommendation | 2 | 100% | 100% |
+| TMF717 customer360 | 3 | 33.3% (2 DEGRADED) | 33.3% |
+| js-mva consumer/product-selector | 4 | 100% | 100% |
+| most popular product | 4 | 100% | 100% |
+| omni † | 54 | 90.7% | 90.7% |
 | openai | 10 | 90.0% | 90.0% |
-| box | 114 | 87.7% (#33) | 93.9% |
-| confluence | 65 | 75.4% (16 DEGRADED) | 89.2% (#33) |
+| box | 114 | 90.4% | 98.2% (2 B3 ops open) |
+| confluence † | 65 | 75.4% (16 DEGRADED) | 89.2% |
+| mercedes CCS | 43 | **39.5%** (#14) | **39.5%** (#14) |
 
-Overall GET: **default 93.2% (1135/1218) · abstract 93.3% (1137/1218)**, abstract ~96%+ once
-the #14 patch ships. Increments: #23+#24 +67/pass, #25 +6 abstract, #26 +76 (76 fail→pass /
-0 pass→fail), #33 +26 GETs (file endpoints → synthetic success).
+Overall GET: **consolidate 88.2% OK (1434/1626), 93.8% including degraded output
+(1525/1626) · real unions 90.5% OK (1472/1626)**. The expanded sweep adds 408 GET ops:
+Adobe Commerce (+242) plus tracked real fixtures (+166). It is intentionally not comparable
+one-to-one with the older 1218-op vendor-only snapshot.
+
+> **Box fix (B1+B2):** `#` in an OAS path leaked into the GraphQL field name (an SDL line comment,
+> breaking `@connect` binding) and an inline single-member `allOf` array item reached the emit loop
+> nameless (`startsWith` of undefined). B1 adds `#` to the field-name split class (HTTP path
+> untouched); B2 names the inline-allOf `Composed` at its construction site + a writer-level
+> name/emittability invariant + null-safe `isRef`. Box **86.8→90.4% consolidate (99→103 OK)** and
+> **93.0→98.2% real unions (106→112 OK)** — exactly the 5 `#` ops + the 1 GEN-throw, verified by
+> per-op dump. **2 real-unions ops remain** (`get:/search`, `get:/files/{file_id}/metadata/global/boxSkillsCards`,
+> both `CONNECTORS_UNRESOLVED_FIELD`, neither has a `#`) = **B3**, a separate union-member-field
+> coverage follow-up (see `docs/box-fix-plan.md`). No other corpus spec has a `#` path, so B1/B2 move
+> only box; overall totals updated by box's delta (+4 consolidate, +6 real unions).
+
+> **Realignment finding:** the `default` pass moved v0.3 → v0.4 to match the shipping default
+> (`9ca5ce7`). Headline: at v0.4 **real unions now beats consolidate** (93.5% vs 90.6%) — the
+> consolidate pass dropped ~32 ops vs the prior v0.3 snapshot (1135 → 1103). **Mercedes CCS went
+> 100% → 39.5% on the consolidate pass**: the v0.3 composer accepted its consolidated-union shapes,
+> but v0.4's stricter shape validator (#14) rejects them — so the old 100% was a v0.3 artifact that
+> hid the #14 block. Mercedes is now 39.5% on **both** passes (`CONNECTORS_UNRESOLVED_FIELD`, 26 ops).
+> In the expanded corpus, the gap histogram's #1 bucket is still `CONNECTORS_UNRESOLVED_FIELD`
+> (119 across both passes), now including the new low-scoring Launch Library and TMF cases.
+> Historical increments — #23/#24 +67/pass, #26 +76, #33 +26 GETs — were measured against the
+> pre-realignment v0.3 baseline; see git history.
 
 
 **Mutations corpus (post:/put:/patch:/del:, 1249 ops/pass — first measured 2026-06-12, sweep via
 `--verbs mutations`; fast guard: `tests/all/corpus-mutations.test.ts`):**
+
+> ⚠️ **Pre-realignment snapshot** — measured with the `default` pass at v0.3. Not yet re-run at v0.4
+> (the GET sweep above was re-run; mutations were not). Re-run with
+> `node --import tsx/esm ./tools/coverage-spec.mts --verbs mutations` to refresh. Treat the
+> `default (v0.3)` column as stale; the `abstract (v0.4)` column is still valid.
 
 | Spec | mutation ops | default (v0.3) | abstract (v0.4) |
 |---|--:|--:|--:|

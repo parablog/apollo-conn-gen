@@ -879,6 +879,44 @@ test('test_inline_renamed_when_colliding_with_component_emitted_name', async () 
   assert.ok((schema!.match(/^type User /gm) || []).length === 1, 'exactly one type User emitted');
 });
 
+test('test_wrapper_named_after_contained_component_renames_both_owners', async () => {
+  // A wrapper named after the component it lists (`group` containing [Group]) used to emit a second
+  // `type Group` and fail to compose. Two `group` wrappers under different parents must each get their
+  // own name (`SubjectsGroup`, `MembersGroup`); before the fix both stayed `Group` and clashed.
+  // see docs/issues.md #12, #37. composes via rover.
+  const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['get:/permission>**'], 3, 6);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type SubjectsGroup'), 'subjects.group qualified by its container');
+  assert.ok(schema!.includes('type MembersGroup'), 'members.group qualified by its container');
+  assert.ok((schema!.match(/^type Group /gm) || []).length === 1, 'exactly one type Group (the component)');
+  assert.ok(/\bgroup: SubjectsGroup\b/.test(schema!), 'subjects selection follows its own rename');
+  assert.ok(/\bgroup: MembersGroup\b/.test(schema!), 'members selection follows its own rename');
+});
+
+test('test_inline_not_renamed_without_contained_same_named_ref', async () => {
+  // The check is on the wrapper's own contents, not just a matching name: `status` matches a scalar
+  // component (which emits no type) and `label` matches a component this op never reaches — neither
+  // contains a ref to itself, so neither is renamed. see docs/issues.md #37.
+  const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['get:/widget>**'], 3, 3);
+  assert.ok(schema !== undefined);
+  assert.ok((schema!.match(/^type Status /gm) || []).length === 1, 'inline status keeps its name (scalar is not an occupant)');
+  assert.ok((schema!.match(/^type Label /gm) || []).length === 1, 'inline label keeps its name (component unreached)');
+  assert.ok(/\bstatus: Status\b/.test(schema!) && /\blabel: Label\b/.test(schema!), 'references keep the bare names');
+});
+
+test('test_same_key_wrapper_co_emits_safely_across_input_output', async () => {
+  // The same `subjects.user` wrapper appears on the request body and the response, with different fields.
+  // Both would take the same name; they stay distinct because the input one becomes `SubjectsUserInput`
+  // and the output one is pushed to a longer name (`SpaceLikeSubjectsUser`). No duplicate, so it composes.
+  // see docs/issues.md #37.
+  const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['post:/space>**'], 3, 8);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('input SubjectsUserInput'), 'input-side user wrapper qualified + Input-suffixed');
+  assert.ok(schema!.includes('type SpaceLikeSubjectsUser'), 'output-side user wrapper gets its own distinct name');
+  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate type/input definitions: ' + defs.join(', '));
+});
+
 test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   // A recursive schema (Node.parent -> Node, Node.children -> [Node]) must terminate on the
   // non-consolidating v0.4 path and compose: the re-entering field is cut at the first repeat of a

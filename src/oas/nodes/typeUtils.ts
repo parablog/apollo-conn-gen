@@ -1,7 +1,8 @@
-import { Arr, CircularRef, En, Get, IType, Obj, Op, Prop, PropArray, PropEn, PropScalar, Scalar } from './internal.js';
+import { Arr, CircularRef, En, Get, IType, Obj, Op, Prop, PropArray, PropEn, PropScalar, ReferenceObject, Scalar } from './internal.js';
 import _ from 'lodash';
 import { Naming } from '../utils/naming.js';
 import type { OasContext } from '../oasContext.js';
+import type { SchemaObject } from 'oas/types';
 
 export class T {
   public static isLeaf(type: IType): boolean {
@@ -111,7 +112,7 @@ export class T {
 
   // The occupant is the type already stored under our name: a different shape collides (rename,
   // see #9/#12); a same-schema occupant dedups instead — renaming it would orphan it (see #18).
-  // Shared by Obj and by PropComp-named Composed (see docs/issues.md #22). e.g. (googlebooks):
+  // e.g. (googlebooks):
   //   saleInfo:   { listPrice: { amount } }          <- visited first, stored as `listPrice`
   //   offersItem: { listPrice: { amountInMicros } }  <- same name, different shape -> collides
   public static collidesWithStoredType(node: IType, context: OasContext): boolean {
@@ -123,6 +124,53 @@ export class T {
       return false;
     }
     return !T.isSameInlineDefinition(node, occupant);
+  }
+
+  // Detects an inline object that shares its name with a component it holds — the wrapper `group`
+  // holding `results: [#/components/schemas/Group]`. Renaming it avoids a duplicate `type Group`. We
+  // read the object's own schema (rather than the built tree) because the `Group` component is reached
+  // through `results`, which the parser expands only after this object is built. see #12, #37.
+  //   group:
+  //     type: object
+  //     properties:
+  //       results: { type: array, items: { $ref: '#/components/schemas/Group' } }
+  //       size: { type: integer }
+  public static collidesWithContainedComponent(node: IType): boolean {
+    if (!(node instanceof Obj) || T.isExemptFromRename(node)) {
+      return false;
+    }
+    const ownName = Naming.genTypeName(node.name);
+    return Object.values(node.schema?.properties ?? {}).some((prop) => {
+      const ref = T.componentSchemaRef(prop);
+      return ref != null && Naming.genTypeName(Naming.getRefName(ref)) === ownName;
+    });
+  }
+
+  // The schema component ref a property targets — directly, or as the items of an array — or null.
+  // An "array" includes the implied form (`items` with no `type`, per factory.ts:83). Schema refs are
+  // the ones that become a `type X`.
+  //   group:   { $ref: '#/components/schemas/Group' }                          -> #/components/schemas/Group
+  //   results: { type: array, items: { $ref: '#/components/schemas/Group' } }  -> #/components/schemas/Group
+  //   results: { items: { $ref: '#/components/schemas/Group' } }               -> #/components/schemas/Group
+  private static componentSchemaRef(schema: SchemaObject | ReferenceObject | undefined): string | null {
+    if (schema == null) return null;
+
+    let ref: string | undefined;
+    if ('$ref' in schema) {
+      ref = schema.$ref;
+    } 
+    // array (explicit, or implied via `items`) — take the items' ref
+    else if (schema.type === 'array' || schema.type == null) {
+      const itemsRef = _.get(schema, 'items.$ref');
+      ref = typeof itemsRef === 'string' ? itemsRef : undefined;
+    }
+
+    // keep only schema-component refs (the ones that emit a clashing type)
+    if (ref == null || !ref.startsWith('#/components/schemas/')) {
+      return null;
+    }
+
+    return ref;
   }
 
   // an occupant of a DIFFERENT class always emits a second definition of the name — ids start

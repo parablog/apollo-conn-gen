@@ -436,7 +436,8 @@ users: [User]                          # component #/c/s/User
   (same instance, name-derived id) so the reference follows. `$ref`-named types (`T.isRef`) never rename.
 
 **Limitation** (pre-existing, same as #9): occupancy is point-in-time — an inline visiting *before* the
-component is stored won't see the collision. Components are reached at shallower depths first in practice.
+component is stored won't see the collision. Components are reached at shallower depths first in practice
+— but #36's visit-order change broke that for array-reached wrappers; re-fixed structurally in #37.
 
 **AST:** identity-only, like #9 — `obj:type:user` → `obj:type:SubjectsUser`; no shape change.
 **Refs:** `src/oas/nodes/obj.ts` (`collidesWithStoredType`/`resolveNameConflict`), `oasContext.ts`
@@ -1538,3 +1539,70 @@ un-cut type (`Ingredient`, 22→23).
 
 **Files:** `src/oas/nodes/factory.ts` (`fromProp`), `src/oas/nodes/type.ts` (`Type.add`); ids are
 name-based (`src/oas/nodes/propObj.ts` etc.). Related: #10, #13.
+
+## 37 · Inline wrapper named after the component it lists re-collides after #36 — ✅ Fixed (working tree)
+**What happened:** the Confluence abstract pass regressed (89.2% → 81.5%): 8 ops failed to compose with
+`CIRCULAR_REFERENCE: type Group appears more than once in …subjects.group.results`, and the subgraph
+carried two `type Group` definitions. This is #12 returning — its fix stopped firing under #36's new
+visit order.
+
+**The spec that triggers it** (real Confluence — an *inline* pagination wrapper whose key is the same as
+the component it lists):
+```yaml
+SpacePermission:
+  properties:
+    subjects:
+      type: object
+      properties:
+        group:                        # inline wrapper, key `group`
+          type: object
+          properties:
+            results: { type: array, items: { $ref: '#/components/schemas/Group' } }
+            size:    { type: integer }
+```
+The same shape exists for `subjects.user`. (The `space`/`version`/`container` inline objects do NOT
+contain their own component, so they are a different, non-cyclic collision class — out of scope here.)
+
+**Why #12's fix stopped firing:** #12 renames an inline collider only when the colliding component is
+*already* stored (`collidesWithStoredType` reads point-in-time occupancy — #12's own stated Limitation).
+Here the component `Group` is reached *only* through the wrapper's own `results`, and arrays expand
+**lazily** — so `Group` is not stored when the wrapper is checked. #36 changed visit/cut order and removed
+the incidental sibling ordering that used to store such a component early. So the wrapper keeps `group` →
+emits a second `type Group` → rover reads `group.results` as `Group → Group` → circular.
+
+**What the output looks like:**
+```graphql
+# before: the wrapper and the component both emit `type Group`
+type Group { limit, results: [Group], size, start }   # the inline wrapper (paginated)
+type Group { id, name }                                # the component
+# after: the wrapper is qualified by its container; one `type Group` remains
+type SubjectsGroup { limit, results: [Group], size, start }
+type Group { id, name }
+…  subjects { group: SubjectsGroup }
+```
+
+**The fix — detect the wrapper from its OWN raw schema, not from occupancy.** A new
+`T.wrapsSameNamedComponent` runs at the existing `obj.ts` rename check (before `visitProperties`): an
+inline object named `X` whose schema has a property that is (an array of) `#/components/schemas/X` is a
+self-referential wrapper → rename via the existing `resolveNameConflict` (`group` → `SubjectsGroup`). The
+ref name is in the raw schema, so this needs no expansion, no occupancy, no ordering — it cannot regress
+on visit order again. Two deliberate constraints: only `#/components/schemas/*` refs (the single ref class
+that emits a colliding `type X`), and the array test mirrors the generator's own rule (`items` present,
+`type === 'array' || type == null`, `factory.ts:83`). The component keeps its `$ref` name
+(`isExemptFromRename`); only inline objects rename.
+
+**Input/output co-emit is safe:** the two real `subjects.user` wrappers (request body + response, with
+*different* bodies) both qualify to base `SubjectsUser`. They stay distinct because the input one carries
+`kind='input'` — which appends `Input` and embeds the kind in the node id (`SubjectsUserInput`) — and the
+two `subjects` themselves also collide and cascade-qualify the output. No duplicate; it composes. (A
+same-namespace twin — two different-bodied output wrappers — would still hit the writer `nameKey` gap; not
+a Confluence case, see #22-adjacent.)
+
+**Tests:** `tests/resources/oas/inline-wrapper-vs-component.yaml` — two same-key owners → distinct names,
+the scalar/unreached negatives (not renamed), and the real input+output `subjects.user` co-emit — wired in
+`tests/all/oas-core.test.ts`. The real Confluence descendant op now emits one `type Group`/`type User` and
+composes on stock rover.
+
+**Files:** `src/oas/nodes/obj.ts` (`visit`), `src/oas/nodes/typeUtils.ts` (`containsNamesakeComponent`,
+`componentSchemaRef`). Related: #12 (the limitation this realizes), #9, #36. Not covered: `allOf`-encoded
+collection wrappers.

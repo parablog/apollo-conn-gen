@@ -212,8 +212,11 @@ export class Union extends Type {
     if (context.generateOptions.consolidateUnions || !this.discriminator) {
       return this.selectedProps(selection);
     }
-    return this.children.flatMap((member) => [
+    // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
+    // $ref base it extends — `Book: allOf [$ref Product, …]` -> Product (r2-interface-shared-base.yaml).
+    return this.selectedMembers(selection).flatMap((member) => [
       member,
+      // expand the list with all those that are referenced by this type, so we can filter them too
       ...(member instanceof Composed ? T.containers(member).filter((c) => T.isRef(c.name)) : []),
     ]);
   }
@@ -337,7 +340,9 @@ export class Union extends Type {
     writer.write(pad(base)).write(')\n');
   }
 
-  /** Reverse-lookup an OAS discriminator value (e.g. "book") for a concrete member type. */
+  /** Reverse-lookup the explicit discriminator `mapping` value for a member — e.g. given
+   * `mapping: { book: '#/components/schemas/Book' }`, returns "book" for the Book member.
+   * Null when there's no explicit mapping (the caller then uses the bare ref name). */
   private discriminatorValue(child: IType): string | null {
     const mapping = this.discriminatorMapping;
     if (!mapping) return null;
@@ -380,7 +385,7 @@ export class Union extends Type {
     // and finally sort the props and copy them to our original
     props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
 
-    // and return the types.ts we've used
+    // and return the set of types we've used
     this.consolidated = true;
 
     // now remove every added ID
