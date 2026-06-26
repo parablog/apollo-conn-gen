@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.15.1]
+
+### Fixed
+- A `#` in an OAS path (a sub-resource convention like `/shared_items#web_links`) no longer leaks
+  into the GraphQL field name, where it started an SDL line comment and broke `@connect` selection
+  binding. `#` is now a field-name separator; the runtime HTTP path is untouched (B1).
+- An inline single-member `allOf` used as an array's `items` (no `$ref`, e.g. box
+  `MetadataQueryIndices.…fields`) no longer reaches the emit loop nameless and crashes generation.
+  The `Composed` type is now named at its construction site; the writer fails fast on any nameless
+  type that still slips through, and `isRef` is null-safe (B2).
+- Cycle detection now compares the resolved schema, not the field name: a field was wrongly cut as
+  circular when a same-named field sat above it on the path, even for unrelated types (Adobe
+  `extension_attributes`), emptying the type and failing compose. Both legacy name-based cut sites
+  are now schema-identity (#36).
+- An inline wrapper whose key matches the component it lists (Confluence `subjects.group` listing
+  `Group`) no longer emits a second `type Group` that rover reads as circular. The wrapper is
+  renamed after its container (`group` → `SubjectsGroup`); the component keeps its name (#37).
+
 ## [0.15.0]
 
 ### Added
