@@ -1,13 +1,8 @@
-// Connector / federation spec versions and the version-gating primitives that
-// later roadmap items (R1+) build on.
-//
-// Gating contract: an emitter whose output requires a minimum connect spec
-// version MUST either
-//   - downgrade explicitly  -> branch on `meetsMinimum(target, min)` and emit a
-//     documented fallback, or
-//   - reject explicitly     -> call `requireConnectVersion(feature, target, min)`
-//     which throws an actionable error.
-// It must never silently emit a construct the target version cannot parse.
+// Connector / federation spec versions and the version-gating primitives later roadmap
+// items build on. The connect spec version itself is floored at v0.4 and rejected below
+// that at the entrypoint (validateVersionOptions) — there is no per-feature downgrade or
+// reject path anymore. A feature that needs MORE than the v0.4 floor (e.g. R7's `??`
+// needing federation v2.14) still gates its own output with `meetsMinimum(target, min)`.
 //
 // Connect spec identifiers are plain `vMAJOR.MINOR` (e.g. "v0.4"). Ordering is fully
 // defined by `(major, minor)` as integers.
@@ -65,13 +60,6 @@ export function assertSupportedConnectVersion(v: string): void {
     throw new Error(
       `Unsupported connector spec version "${v}". ` + `Supported versions: ${SUPPORTED_CONNECT_VERSIONS.join(', ')}.`,
     );
-  }
-}
-
-/** Reject primitive: throw if `target` is below the `min` a feature needs. */
-export function requireConnectVersion(feature: string, target: string, min: string): void {
-  if (!meetsMinimum(target, min)) {
-    throw new Error(`${feature} requires connect ${min}, but target is ${target}`);
   }
 }
 
