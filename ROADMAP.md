@@ -11,7 +11,7 @@ Source of truth for the spec surface:
 
 | | Router `main` | apollo-conn-gen today |
 |---|---|---|
-| Connect spec | v0.1–v0.3 stable, **v0.4 preview** | **LATEST** default (v0.4 today — `LATEST_CONNECT_VERSION`, 2026-06-12) |
+| Connect spec | v0.1–v0.3 stable, **v0.4 preview** | **v0.4 only** — floor, not a default (`SUPPORTED_CONNECT_VERSIONS = ['v0.4']`; below is rejected at the entrypoint, `d39095a`) |
 | Federation | current | **v2.14** default (latest released; v0.4 floor is v2.13) |
 
 What `gen` already emits well:
@@ -40,22 +40,16 @@ What `gen` already emits well:
 
 ---
 
-## Major requirement: per-feature version gating (cross-cutting)
+## Connect spec version floor (cross-cutting)
 
-The features below span v0.1 → v0.4-preview. The generator MUST treat the selected
-connector spec version as a hard constraint on output, not just a `@link` URL string:
-
-- Every emitter records the **minimum spec version** its output requires (e.g.
-  unions/interfaces ⇒ v0.4; `errors`/`isSuccess` ⇒ v0.2; aliasing ⇒ v0.1).
-- Before emission, the generator compares each feature's minimum against the selected
-  target version. If the target is lower, the generator MUST either:
-  - **downgrade explicitly** — emit a documented fallback (e.g. the consolidate-unions
-    workaround instead of real unions) and record the downgrade in output/log, or
-  - **reject explicitly** — fail with an actionable error naming the feature and the
-    version it needs.
-- The generator MUST NOT silently emit a construct the target version cannot parse.
-- The version table/gate plumbing (**R0**) is a prerequisite for ALL version-sensitive
-  items; the requirement is then satisfied incrementally as each item lands.
+Connect is floored at v0.4 program-wide (`feat/drop-consolidate-unions`, commit `d39095a`):
+`SUPPORTED_CONNECT_VERSIONS = ['v0.4']` in `src/versions.ts`, and `validateVersionOptions`
+(called from `OasGen.fromData`/`fromFile` and `JsonGen`) rejects anything below v0.4 — or
+federation below v2.13 — at the entrypoint, before generation starts. There is no
+per-feature downgrade-or-reject path anymore; the tool has no real users to carry v0.1–v0.3
+backwards-compat for. A feature that needs *more* than the v0.4 floor (e.g. R7's `??`,
+which also needs federation v2.14) still self-gates its own output with
+`meetsMinimum(target, min)`.
 
 ## Cross-cutting requirement: variable support
 
@@ -111,12 +105,12 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | JSONSelection | field selection + nesting + `->entries` | Done | — |
 | JSONSelection | aliasing / quoted keys / camelCase | Done (responses R3; request bodies #28/#32) | R3 |
 | JSONSelection | methods, literals, spreads, `??`/`?!`, optional chaining | Partial (`->entries`, `->match`, `->joinNotNull`, `??` coalesced defaults, `$(literal)`/`__typename` done; spreads/`?!`/chaining pending) | R7 |
-| OAS `oneOf`/`anyOf` + discriminator | unions/interfaces | Done (real `union` + `->match` `__typename` + interface promotion on v0.4; consolidate/merged-object downgrades below; version-derived) | R2 |
+| OAS `oneOf`/`anyOf` + discriminator | unions/interfaces | Done (real `union` + `->match` `__typename` + interface promotion; merged-object degrade for input-position or discriminator-less `oneOf`, shape-derived not version-derived) | R2 |
 | Variables | `$args` | Done | — |
 | Variables | `$this` (R1), `$config` (R5), `$status` (R4), `$batch` (R6) | Done | — |
 | Variables | `$env`, `$request.*`, `$response.*`, `@` | Missing | Cross-cutting (lands with R4/R5/R7/R9) |
 | Variables | `$context` | Missing | Non-goal |
-| Version enum / `@link` | v0.1–v0.4 selection + gating | Done (R0 plumbing; union form version-derived, #34) | R0 |
+| Version enum / `@link` | v0.4 fixed, rejected below | Done (R0 plumbing; floor enforced at the entrypoint, `d39095a`) | R0 |
 
 **Explicit non-goals (named so they are not mistaken for missed work):**
 
@@ -134,18 +128,19 @@ must be extended before the roadmap is re-approved.
 ## Roadmap items (priority order == execution order)
 
 Items are numbered R0–R9 in execution order. **R0 (version gating) is first because
-every v0.2+/v0.4 item depends on it.** Variable support is cross-cutting (see above),
-not a numbered item — its rows are acceptance criteria inside the consuming items.
+every item inherits the v0.4 floor it establishes at the entrypoint.** Variable support
+is cross-cutting (see above), not a numbered item — its rows are acceptance criteria
+inside the consuming items.
 
 **Status legend:** ✅ Done · 🟡 Partial · ⬜ Not started
 
 | Item | Status | Summary |
 |---|---|---|
-| R0. Version gating | ✅ Done | defaults v0.3/v2.12, version table + gate plumbing |
+| R0. Version gating | ✅ Done | connect floored at v0.4 / federation floored at v2.13 (`SUPPORTED_CONNECT_VERSIONS = ['v0.4']`, `d39095a`); below-floor targets rejected at the entrypoint, no per-feature gate |
 | R1. Entity resolution | ✅ Done | `entity`/`@key`/`$this` (`--infer-entity-resolvers`) |
-| R2. Unions & interfaces | ✅ Done (one deferral) | real `union`/`->match`/interface promotion (v0.4), consolidate downgrade (< v0.4), discriminator-less merged-object degrade (#25), allOf-member unions (#34), version-derived form (`resolveConsolidateUnions`); broader `allOf`→interface deferred to its own slice |
+| R2. Unions & interfaces | ✅ Done (one deferral) | real `union`/`->match`/interface promotion, unconditional at the v0.4 floor; shape-derived merged-object degrade for input-position or discriminator-less `oneOf` (#25); allOf-member unions (#34); broader `allOf`→interface deferred to its own slice |
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
-| R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status` (v0.2+); only `@source`-level errors pending |
+| R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status`; only `@source`-level errors pending |
 | R5. Dynamic headers / auth | 🟡 Partial | slices 1-3 done (global `@source` + per-op `@connect` header auth via per-source mode switch + apiKey-in-query on `@connect` queryParams); `$env`, `from:`, `$request.headers`, apiKey cookie remain |
 | R6. Batch entity resolution | 🟡 Common case done | infer from OAS (`--batch` op-id file); single key + one scalar-array input; composite/object-array deferred |
 | R10. Reusable `@mapping` | 🟡 In progress (branch `feat/r10-reusable-mappings`) | `--reusable-mappings`, connect v0.5 |
@@ -157,20 +152,22 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 
 ### R0. Spec version gating — ✅ Done
 
-**Why:** v0.4-dependent items (unions) and v0.2-dependent items (errors, batch) can't be
-emitted safely without a version gate.
+**Why:** unions/interfaces, errors, batch, and computed bodies all need real spec support
+under them; the version gate is what made it safe to build those without emitting
+constructs older connect versions can't parse.
 
-**Status:** Done (commit `72f625e`; defaults re-bumped 2026-06-12: no version asked for
-means LATEST — connect v0.4 / federation v2.14, via `LATEST_CONNECT_VERSION`). Originally:
-version table, `parseVersion`/`compareVersions`/`meetsMinimum`, and the
-reject-or-downgrade gate plumbing live in `src/versions.ts` and are consumed by later
-items (e.g. R1).
+**Status:** Done. Originally a per-feature reject-or-downgrade gate (commit `72f625e`);
+superseded by a hard floor (`feat/drop-consolidate-unions`, commit `d39095a`, 2026-06-25):
+connect is floored at v0.4, federation at v2.13, both rejected at the entrypoint before
+generation starts. `parseVersion`/`compareVersions`/`meetsMinimum` and the version
+constants live in `src/versions.ts` and are consumed by later items (e.g. R1, R7).
 
 **Scope:**
-- Version table + per-feature minimum-version gate (the "Major requirement" above).
-- Default `connectorSpecVersion` → **v0.3**; allow **v0.4** opt-in.
-- Emit matching `@link(url: ".../connect/vX.Y", import: ["@connect", "@source"])`.
-- Provide the reject-or-downgrade plumbing every later item plugs into.
+- Version table + hard floor enforced at the entrypoint (the "Connect spec version
+  floor" section above).
+- `connectorSpecVersion` is v0.4 only; anything below is rejected before generation starts.
+- Emit matching `@link(url: ".../connect/v0.4", import: ["@connect", "@source"])`.
+- A feature needing more than the floor still self-gates with `meetsMinimum` (see R7).
 
 **Files:** `src/versions.ts`, `@link` emission in `src/oas/io/schemaWriter.ts`.
 (gate: foundational)
@@ -222,32 +219,40 @@ into three separately-emittable cases; conflating them produces invalid schemas.
   resolver args (1a) or `$this` references (1b).
 
 **Files:** `src/oas/io/operationWriter.ts`, `src/oas/io/schemaWriter.ts`,
-`src/oas/nodes/obj.ts`, `src/oas/nodes/get.ts`. (gate: v0.2+)
+`src/oas/nodes/obj.ts`, `src/oas/nodes/get.ts`.
 
 > Do 1c alongside 1a/1b — never standalone.
 
 ### R2. Unions & interfaces (OAS `oneOf` / `anyOf` + discriminators) — ✅ Done (one deferral)
 
 **Why:** Router v0.4 adds interface/union support. `gen` already has substantial union
-machinery; this item finishes the gaps and ties the fallback to the version gate.
+machinery; this item finishes the gaps. Connect v0.4 is now the floor for the whole
+generator (`feat/drop-consolidate-unions`, commit `d39095a`), so union form no longer
+needs a fallback tied to a version gate — it is derived purely from the shape of the OAS
+input.
 
 **Verified state of the emitter (read `src/oas/nodes/union.ts`):**
-- ✅ **Real `union X = A | B`** (`Union.generate`, `consolidateUnions: false` branch),
-  filtered to selected members. `Factory` builds `Union` nodes from `oneOf`/`anyOf`.
-- ✅ **Discriminator → `__typename`** (DONE this slice): `Union` now stores the OAS
-  `discriminator` (`propertyName` + `mapping`), wired through `Factory`. `Union.select`
-  emits the composable connect-v0.4 abstract-type form —
+- ✅ **Real `union X = A | B`** (`Union.generate`), filtered to selected members. `Factory`
+  builds `Union` nodes from `oneOf`/`anyOf`.
+- ✅ **Discriminator → `__typename`**: `Union` stores the OAS `discriminator`
+  (`propertyName` + `mapping`), wired through `Factory`. `Union.select` emits the
+  composable connect-v0.4 abstract-type form —
   `... <discr>->match(["book", $ { __typename: $("Book") … }], …)` — with a string-literal
   `__typename` per member, value resolved from the discriminator `mapping`. Verified to
-  compose at fed 2.13 / connect v0.4 (`test_R2_union_discriminator_*`). See
+  compose at fed 2.13+ / connect v0.4 (`test_R2_union_discriminator_*`). See
   [[connectors-abstract-type-selection]].
-- ✅ **Consolidate-unions downgrade** unchanged and still the **default**
-  (`consolidateUnions: true`): merges members into one replacement OBJECT with the
-  `#### NOT SUPPORTED YET BY CONNECTORS!!! union …` marker. The new abstract path only
-  triggers when `consolidateUnions: false` AND a discriminator exists, so default output
-  is byte-identical (`test_R2_union_consolidate_downgrade_unchanged`).
-- (the earlier gaps here — version-gate wiring, discriminator-less fallback, allOf-member
-  unions — are closed below; broader `allOf` → interface remains the one deferral)
+- ✅ **Union form is unconditional, derived from shape, not version** — `Union.rendersAsMergedObject()`
+  decides it: an input-position `oneOf` (GraphQL has no input unions, any version) or a
+  discriminator-less `oneOf` (no tag for `->match` to dispatch on) always emits the merged
+  object (`#### union degraded to a merged object: …`); an output-position `oneOf` with a
+  discriminator always emits a real `union`/interface. There is no `consolidateUnions`
+  toggle anymore — connect is floored at v0.4 program-wide (rejected below that at the
+  entrypoint), so the only question is the shape of the input, never the target version.
+  (`test_R2_union_without_discriminator_degrades_to_merged_object`,
+  `test_R2_input_union_consolidated_kind_is_intentional`,
+  `test_R2_union_form_derived_from_connect_version`.)
+- (the earlier gaps here — discriminator-less fallback, allOf-member unions — are closed
+  below; broader `allOf` → interface remains the one deferral)
 
 **Done this slice — `oneOf` + shared `allOf` base → `interface`:** when a discriminated `oneOf`'s
 members are all `allOf` compositions sharing **exactly one** common base ref, the base is promoted to
@@ -263,24 +268,26 @@ promotion (loudly) when the base is used concretely elsewhere among the selected
 - ✅ real-union path for `allOf` members: shared `selectedMembers` filter + unique twin-member
   ids (`Type.withUniqueName`); the rule-3-skip case now lists its members and DO's
   `oneOf`-of-`allOf` bodies generate.
-- ✅ version-gate wiring: `resolveConsolidateUnions` derives the union form from the connect
-  version (v0.4+ → abstract types; below → consolidate downgrade); an explicit ask for real
-  unions on < v0.4 downgrades with a warning. The CLI no longer hardcodes consolidation.
-- ✅ discriminator-less unions: superseded by #25 — they degrade to the merged object on v0.4
-  too (a tag cannot be inferred reliably; `->match` needs one).
+- ✅ union form derived from OAS shape, not the connect version: `Union.rendersAsMergedObject()`
+  replaced the version-derived `resolveConsolidateUnions` helper and the `consolidateUnions`
+  option (both removed by `d39095a`) — real unions/interfaces are now unconditional at connect
+  v0.4, the only supported version. The CLI never hardcoded consolidation to begin with.
+- ✅ discriminator-less unions: superseded by #25 — they degrade to the merged object (a tag
+  cannot be inferred reliably; `->match` needs one).
 
 **Remaining scope (own slice):**
 - **Broader `allOf` → interface** beyond the discriminated-`oneOf` case (e.g. promote shared bases
   like `Extensible`/`Entity` used across many TMF types). Large blast radius.
 
 **Test infra:** `runOasTest` gained an `opts` arg
-(`{ consolidateUnions, connectorSpecVersion, federationVersion, composeFederationVersion }`)
-so v0.4/fed-2.13 paths can be generated and composed; existing callers default to the old
-behaviour (consolidate + fed 2.12).
+(`{ connectorSpecVersion, federationVersion, composeFederationVersion }`) so different
+compose targets can be generated and composed; the `consolidateUnions` knob was removed
+along with the option itself (`d39095a`) — existing callers default to connect v0.4 / fed
+2.14 (real unions).
 
 **Files:** `src/oas/nodes/union.ts`, `src/oas/nodes/factory.ts` (done);
 `src/oas/nodes/comp.ts`, `src/oas/io/schemaWriter.ts` (interfaces + version gate, pending).
-(gate: v0.4; else explicit downgrade)
+(connect floored at v0.4 program-wide; no per-feature gate)
 
 ### R3. Selection aliasing / renaming (non-GraphQL-safe keys, snake↔camel) — ✅ Done
 
@@ -298,7 +305,7 @@ leading digit, reserved words) or snake_case keys produce invalid/awkward schema
 - Apply in both the OAS path and the JSON-walker path.
 
 **Files:** `src/oas/nodes/prop*.ts` (`select()`), `src/oas/utils/` naming helpers,
-`src/json/walker/naming.ts`. (gate: v0.1+)
+`src/json/walker/naming.ts`.
 
 ### Medium value
 
@@ -311,12 +318,12 @@ to a **string**; `$status`/`$response.headers`/`$`/`@` are available in both. `i
 `@connect`/`@source` (maps chosen status codes to success) — the spec tool's directive SDL omits it, so
 its compose-version is unverified.
 
-**Done — baseline slice (opt-in `emitConnectorErrors`, connect v0.2+):** for operations that document
+**Done — baseline slice (opt-in `emitConnectorErrors`):** for operations that document
 HTTP error responses, the connector emits `errors: { extensions: """ statusCode: $status """ }` (surfaces
-the HTTP status in the GraphQL error extensions). Opt-in (default output byte-identical, like R1) and
-version-gated — below v0.2 it skips with a logged downgrade. The error-response predicate matches numeric
-`4xx/5xx` and the OAS range keys `4XX`/`5XX` (case-insensitive), excluding `default`. Verified to compose
-(rover, fed 2.12 / connect v0.3). Files: `src/oas/io/operationWriter.ts` (`writeConnector` +
+the HTTP status in the GraphQL error extensions). Opt-in (default output byte-identical, like R1); connect
+is floored at v0.4 program-wide, so no per-feature gate is needed here. The error-response predicate matches
+numeric `4xx/5xx` and the OAS range keys `4XX`/`5XX` (case-insensitive), excluding `default`. Verified to compose
+(rover). Files: `src/oas/io/operationWriter.ts` (`writeConnector` +
 `hasDocumentedErrors`), options threaded in `oasGen.ts`/`oasContext.ts`/`runners.ts`. Tested
 (`tests/all/r4-errors.test.ts`).
 
@@ -340,7 +347,7 @@ it lands in the SDL.
 **Requires:** `$status` (done), `$response.headers`, `@` (see variable table).
 
 **Files:** `src/oas/io/errorsWriter.ts` (all errors emission);
-`src/oas/io/schemaWriter.ts` (source-level, pending). (gate: v0.2+)
+`src/oas/io/schemaWriter.ts` (source-level, pending).
 
 ### R5. Dynamic headers / auth from OAS security schemes — 🟡 Partial
 
@@ -374,7 +381,7 @@ v0.4/fed-2.14, rover-composed).
 **Requires:** `$config` (done), `$env`, `$request.headers` (see variable table).
 
 **Files:** `src/oas/io/security.ts` (shared), `src/oas/io/schemaWriter.ts`,
-`src/oas/io/operationWriter.ts`. (gate: v0.1+)
+`src/oas/io/operationWriter.ts`.
 
 ### Lower value / advanced
 
@@ -417,7 +424,7 @@ input, an unknown op, or an entity with no R1 `@key`.
 with renames) and the full required-input gate. The single-key path covers the common batch
 endpoint; these add real complexity for the long tail.
 
-**Requires:** `$batch`. **Gate:** connect v0.2+ (below → logged downgrade, skip).
+**Requires:** `$batch`.
 
 **Files:** `src/oas/nodes/batch.ts` (derivation), `src/oas/nodes/obj.ts` (`writeBatchConnector`),
 `src/oas/utils/params.ts` (shared `arrayJoin`), `src/cli/oas.ts` (`--batch`), threaded via
@@ -439,7 +446,7 @@ vs 2.14.1). `->match` literals already land via R2; `->entries` via maps; `->joi
 archived branch `feat/optional-chaining-operator`).
 
 **Files:** `src/oas/nodes/scalar.ts` (`??` defaults), `src/oas/nodes/prop*.ts`,
-`src/oas/nodes/body.ts`. (gate: v0.1+; `??` gated to connect v0.4 + federation v2.14)
+`src/oas/nodes/body.ts`. (`??` gated to connect v0.4 + federation v2.14)
 
 ### R8. `path` / `queryParams` as full JSONSelection — ✅ Done (one deferral)
 
@@ -461,7 +468,7 @@ headers (string templates) — the explicit-intent channel for everything OAS ca
 operation signature if that proves annoying.
 
 **Files:** `src/oas/io/operationWriter.ts` (`arrayJoin`, override merge),
-`src/oas/oasContext.ts` (`RequestOverride`). (gate: v0.2+; joins on all versions)
+`src/oas/oasContext.ts` (`RequestOverride`).
 
 ### R9. Computed / literal request bodies — ✅ Done
 
@@ -473,7 +480,7 @@ inferred mapping (`name: $args.input.name` + `source: $("web")` literals, `$conf
 values, renamed keys); `null` drops the body. No OAS signal expresses computed bodies, so
 this is user intent by design, like the rest of the overrides.
 
-**Files:** `src/oas/io/operationWriter.ts` (`writeBodyOverride`). (gate: v0.2+)
+**Files:** `src/oas/io/operationWriter.ts` (`writeBodyOverride`).
 
 ### R10. Reusable `@mapping` emission (connect v0.5) — 🟡 In progress
 
@@ -646,13 +653,13 @@ TEST_CORPUS.md. Regenerate `COVERAGE.md` after each fix to watch the numbers mov
 
 ## Sequencing notes
 
-- **R0 (version gating) is first** — it unblocks the per-feature gate every v0.2+/v0.4
-  item relies on, and resolves the prior ordering inconsistency (v0.4-dependent unions
-  used to precede the version bump).
+- **R0 (version gating) is first** — it establishes the v0.4 floor every item now
+  inherits at the entrypoint, and resolves the prior ordering inconsistency (v0.4-dependent
+  unions used to precede the version bump).
 - **Variable support is cross-cutting**, not a trailing item — each variable's row in
   the table is acceptance criteria inside its consuming item (R1/R4/R5/R6/R7/R9).
-- **R3 and R2** most affect *validity* of output (currently invalid/unsupported); R2
-  must respect the gate (real unions on v0.4, documented downgrade otherwise).
+- **R3 and R2** most affect *validity* of output (currently invalid/unsupported); R2's
+  union form is shape-derived and unconditional at the v0.4 floor (no downgrade path).
 - **R1** most affects *functionality* (makes the connector actually federate); do 1c
   alongside 1a/1b — never standalone.
 - **R6** depends on R1; parts of **R7/R8/R9** build on R1 and the selection work.
@@ -664,8 +671,8 @@ This is a documentation deliverable. Verify by:
 - Confirming the **coverage matrix** accounts for every spec surface in the "Reference
   (router source)" files, and that every "Mapped to" cell names a real item R0–R9 or an
   explicit non-goal — no dangling references.
-- Confirming each item carries a version gate and that the "Major requirement"
-  (reject-or-downgrade, never silent-invalid) is reflected here.
+- Confirming the "Connect spec version floor" section accurately reflects the
+  hard-reject-at-entrypoint behavior — no per-item version gate remains to check for.
 - Spot-checking the "Verified state of the emitter" claims against `src/oas/nodes/body.ts`
   and `src/oas/io/operationWriter.ts`.
 
