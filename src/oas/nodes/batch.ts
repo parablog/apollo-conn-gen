@@ -1,7 +1,6 @@
 import { Arr, IType, Obj, Op, PropArray, Res, T } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
 import { Params } from '../utils/params.js';
 import { warn } from '../log/trace.js';
 
@@ -34,15 +33,10 @@ export function applyBatchResolvers(context: OasContext, gen: OasGen, types: Map
   if (!batch) {
     return;
   }
-  const version = gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
 
   for (const [opId, entry] of Object.entries(batch)) {
     const skip = (why: string) => warn(context, '[batch]', `${opId}: ${why} — skipped`);
 
-    if (!meetsMinimum(version, 'v0.2')) {
-      skip(`batch needs connect v0.2+, target is ${version}`);
-      continue;
-    }
     const op = gen.paths.get(opId);
     if (!op || !T.isOp(op)) {
       skip('no matching operation');

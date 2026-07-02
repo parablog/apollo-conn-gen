@@ -4,8 +4,6 @@ import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Op } from '../nodes/internal.js';
 import { Writer } from './writer.js';
-import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
-import { warn } from '../log/trace.js';
 
 // R4 (opt-in): the `errors:` block of a connector — `message` from the documented error body,
 // `extensions` carrying `$status`.
@@ -17,20 +15,9 @@ export class ErrorsWriter {
   constructor(private gen: OasGen) {}
 
   // emit an `errors { message extensions { statusCode: $status } }` block for operations that
-  // document HTTP error responses. errors is a connect v0.2+ feature; below that we skip
-  // with a logged downgrade rather than emit invalid output.
+  // document HTTP error responses.
   public write(context: OasContext, writer: Writer, op: Op, indent: number): void {
     if (!context.generateOptions?.emitConnectorErrors || !this.hasDocumentedErrors(op)) {
-      return;
-    }
-
-    const version = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
-    if (!meetsMinimum(version, 'v0.2')) {
-      warn(
-        context,
-        '[errors]',
-        `@connect(errors:) requires connect v0.2, but target is ${version} — not emitted for ${op.verb} ${op.operation.path}`,
-      );
       return;
     }
 
