@@ -496,44 +496,52 @@ add the spec-surface row when it merges.
 
 ## Coverage findings — robustness backlog (from `COVERAGE.md`)
 
-`tools/coverage-spec.mts` runs **every GET op** of the corpus through generate + rover-compose under
-two configs (see `COVERAGE.md` for the live per-spec table). The failures, triaged **generator-bug vs
-input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs are kept **local-only**
-— gitignored — because the published specs embed example secrets that block pushes; this section is the
-committed summary of what they showed.)
+`tools/coverage-spec.mts` runs **every GET op** of the corpus through generate + rover-compose
+(see `COVERAGE.md` for the live per-spec table, regenerate with `make coverage`). The failures,
+triaged **generator-bug vs input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor
+specs are kept **local-only** — gitignored — because the published specs embed example secrets that
+block pushes; this section is the committed summary of what they showed.)
 
-**Corpus status (expanded tracked-real-fixture sweep; both passes at the shipping versions connect
-v0.4 / fed 2.14.1, stock rover 0.40):**
+**Corpus status (re-measured 2026-07-02, post v0.4 floor — `feat/drop-consolidate-unions`, `d39095a`;
+single pass now that the consolidate downgrade is gone — connect v0.4 / fed 2.14.1, stock rover 0.40):**
 
-| Spec | GET ops | consolidate (v0.4) | real unions (v0.4) |
-|---|--:|--:|--:|
-| googlebooks | 30 | 100% | 100% |
-| asana | 79 | 100% | 100% |
-| digitalocean | 145 | 97.9% | 97.9% |
-| slack | 80 | 96.3% | 96.3% |
-| sendgrid | 154 | 95.5% | 95.5% |
-| github | 444 | 91.2% | 95.7% |
-| adobe commerce | 242 | 88.0% | 88.0% |
-| launch library | 116 | 69.0% (27 DEGRADED) | 69.0% |
-| common room core † | 9 | 100% | 100% |
-| mindbody † | 8 | 100% | 100% |
-| TMF632 party | 4 | 0.0% (4 DEGRADED) | 0.0% |
-| TMF637 inventory | 2 | 0.0% (2 DEGRADED) | 0.0% |
-| TMF666 account | 14 | 42.9% (8 DEGRADED) | 42.9% |
-| TMF680 recommendation | 2 | 100% | 100% |
-| TMF717 customer360 | 3 | 33.3% (2 DEGRADED) | 33.3% |
-| js-mva consumer/product-selector | 4 | 100% | 100% |
-| most popular product | 4 | 100% | 100% |
-| omni † | 54 | 90.7% | 90.7% |
-| openai | 10 | 90.0% | 90.0% |
-| box | 114 | 90.4% | 98.2% (2 B3 ops open) |
-| confluence † | 65 | 75.4% (16 DEGRADED) | 89.2% |
-| mercedes CCS | 43 | **39.5%** (#14) | **39.5%** (#14) |
+| Spec | GET ops | pass-rate |
+|---|--:|--:|
+| googlebooks | 30 | 100.0% |
+| asana | 79 | 100.0% |
+| digitalocean | 145 | 97.9% |
+| slack | 80 | 96.3% |
+| sendgrid | 154 | 97.4% |
+| github | 444 | 95.7% |
+| adobe commerce | 242 | 89.7% |
+| launch library | 116 | 76.7% |
+| common room core † | 9 | 100.0% |
+| mindbody † | 8 | 100.0% |
+| TMF632 party | 4 | 0.0% |
+| TMF637 inventory | 2 | 0.0% |
+| TMF666 account | 14 | 42.9% |
+| TMF680 recommendation | 2 | 100.0% |
+| TMF717 customer360 | 3 | 33.3% |
+| js-mva consumer/product-selector | 4 | 100.0% |
+| most popular product | 4 | 100.0% |
+| omni † | 54 | 90.7% |
+| openai | 10 | 90.0% |
+| box | 114 | 98.2% (2 B3 ops open) |
+| confluence † | 65 | 93.8% |
+| mercedes CCS | 43 | **39.5%** (#14) |
 
-Overall GET: **consolidate 88.2% OK (1434/1626), 93.8% including degraded output
-(1525/1626) · real unions 90.5% OK (1472/1626)**. The expanded sweep adds 408 GET ops:
-Adobe Commerce (+242) plus tracked real fixtures (+166). It is intentionally not comparable
-one-to-one with the older 1218-op vendor-only snapshot.
+Overall GET: **91.7% OK (1491/1626)**.
+
+> **v0.4-floor re-measurement (2026-07-02):** the consolidate/real-unions split retired with
+> `feat/drop-consolidate-unions` (`d39095a`) — there's only one pass now
+> (`Union.rendersAsMergedObject()` derives the form from OAS shape, not a toggle). Net **+19 ops**
+> vs the prior real-unions snapshot (1472 → 1491), driven by adobe commerce (88.0→89.7%, +4),
+> launch library (69.0→76.7%, +9), sendgrid (95.5→97.4%, +3), confluence (89.2→93.8%, +3): the old
+> check (`consolidateUnions || !discriminator`) never looked at `kind`, so an **input-position**
+> `oneOf` with a discriminator still attempted a real `union` (invalid GraphQL — no input unions) and
+> failed compose. `rendersAsMergedObject()`'s `kind === 'input'` check fixes that as a side effect of
+> the floor refactor, not a targeted fix. Mercedes CCS unchanged at 39.5% (still blocked on upstream
+> #14); TMF632/TMF637 unchanged at 0.0% (pre-existing, input-quality per prior triage).
 
 > **Box fix (B1+B2):** `#` in an OAS path leaked into the GraphQL field name (an SDL line comment,
 > breaking `@connect` binding) and an inline single-member `allOf` array item reached the emit loop
