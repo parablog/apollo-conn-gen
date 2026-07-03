@@ -566,35 +566,57 @@ Overall GET: **91.7% OK (1491/1626)**.
 > pre-realignment v0.3 baseline; see git history.
 
 
-**Mutations corpus (post:/put:/patch:/del:, 1249 ops/pass — first measured 2026-06-12, sweep via
-`--verbs mutations`; fast guard: `tests/all/corpus-mutations.test.ts`):**
+**Mutations corpus (post:/put:/patch:/del:, expanded tracked-real-fixture sweep — re-measured
+2026-07-03, post v0.4 floor, single pass; sweep via `--verbs mutations`; fast guard:
+`tests/all/corpus-mutations.test.ts`):**
 
-> ⚠️ **Pre-realignment snapshot** — measured with the `default` pass at v0.3. Not yet re-run at v0.4
-> (the GET sweep above was re-run; mutations were not). Re-run with
-> `node --import tsx/esm ./tools/coverage-spec.mts --verbs mutations` to refresh. Treat the
-> `default (v0.3)` column as stale; the `abstract (v0.4)` column is still valid.
+| Spec | mutation ops | pass-rate |
+|---|--:|--:|
+| googlebooks | 21 | 100.0% |
+| slack | 94 | 100.0% |
+| digitalocean | 145 | 92.4% |
+| box | 144 | 91.7% |
+| openai | 18 | 100.0% |
+| asana | 88 | 83.0% |
+| sendgrid | 180 | 95.6% |
+| github | 401 | 97.3% |
+| adobe commerce | 344 | 54.9% |
+| common room core † | 13 | 69.2% |
+| mindbody † | 3 | 66.7% |
+| TMF632 party | 16 | 87.5% |
+| TMF637 inventory | 10 | 90.0% |
+| TMF666 account | 51 | 92.2% |
+| TMF680 recommendation | 6 | 100.0% |
+| TMF717 customer360 | 5 | 100.0% |
+| omni † | 92 | 92.4% |
+| confluence | 65 | 84.6% |
+| mercedes CCS | 1 | 100.0% |
 
-| Spec | mutation ops | default (v0.3) | abstract (v0.4) |
-|---|--:|--:|--:|
-| googlebooks | 21 | 100% | 100% |
-| slack | 94 | 100% | 100% |
-| sendgrid | 180 | 95.6% | 95.6% |
-| github | 401 | 92.8% | 96.0% |
-| omni | 92 | 92.4% | 92.4% |
-| digitalocean | 145 | 87.6% | 87.6% |
-| box | 144 | 81.9% | 86.1% |
-| asana | 88 | 83.0% | 83.0% |
-| openai | 18 | 100% | 100% |
-| confluence | 65 | 70.8% | 76.9% |
+(launch library, js-mva ×2, most popular product have 0 mutation ops — read-only spec surfaces,
+not a gap.)
 
-Mutations overall: **47% → 90.2% default (1127/1249) · 92.2% abstract — TARGET MET** in one
+Mutations overall: **85.8% OK (1456/1697)**. Not comparable 1:1 to the prior 1249-op snapshot
+below — the corpus grew to match the GET sweep's expanded spec list (adobe commerce +344,
+plus TMF/common-room-core/mindbody/CCS newly swept for mutations).
+
+> **v0.4-floor re-measurement (2026-07-03):** the standout finding is **adobe commerce at
+> 54.9%** (189/344) — 152 of the corpus-wide 153 `GEN-EMPTY` ops come from this one spec, by
+> far the dominant gap-histogram bucket now (vs. `INVALID_GRAPHQL`/`INVALID_SELECTION`/
+> `INVALID_BODY` compose-fails elsewhere, ~30/22/17 ops). Not yet triaged — generator-bug vs
+> input-quality is unknown; a `COV_DUMP` per-op dump (see `docs/box-fix-plan.md` for the
+> pattern) is the next step if this is worth chasing. digitalocean (87.6→92.4%), box
+> (86.1→91.7%), and github (96.0→97.3%) all improved, consistent with the same
+> input-position-union fix noted in the GET re-measurement above.
+
+Historical fix arc (measured against the pre-expansion, v0.3-era 1249-op corpus — see git
+history for exact deltas): **47% → 90.2% default (1127/1249) · 92.2% abstract — TARGET MET** in one
 arc — #27 one argument list
 (+389/pass), #28/#29 body alias direction + default literals (+66/pass), #30 body-arg name
 (#15 discipline) + #31 empty-response synthetic (+63/pass), #32 JSON-only ops + quoted body
 keys (+26/pass, deliberately narrowed: the broad leaf rule diverged shared-type selections —
 see the entry's Care note), #33 four crash families (+37 mutations, +26 GETs). Every fix
-matrix-verified (0 pass→fail). Remaining: asana/box/confluence composeFail residue, DO's
-oneOf-of-allOf bodies (2, the R2 allOf-member gap), DEGRADED unions (by design on v0.3).
+matrix-verified (0 pass→fail). Remaining (as of that snapshot): asana/box/confluence composeFail
+residue, DO's oneOf-of-allOf bodies (2, the R2 allOf-member gap), DEGRADED unions (by design on v0.3).
 
 #18 measured corpus-wide: **+36 ops/pass** (github +20, box +9, confluence +4, DO +2, slack +1).
 
