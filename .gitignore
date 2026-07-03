@@ -24,8 +24,6 @@ KNOWN_ISSUES.md
 # only — not committed. The coverage harness + corpus tests run against them locally.
 /COVERAGE.md
 /TEST_CORPUS.md
-/tools/coverage-spec.mts
-/tools/vet-spec.mts
 /tests/all/corpus.test.ts
 /tests/resources/oas/googlebooks.yaml
 /tests/resources/oas/slack.yaml
@@ -37,7 +35,9 @@ KNOWN_ISSUES.md
 /tests/resources/oas/github.yaml
 /tests/resources/oas/omni.yaml
 /tests/resources/oas/confluence.json
-tools/local/apollo-federation-cli
+
+# Local composer binary — not our code, not committed.
+/tools/local/
 
 .last
 /docs/
