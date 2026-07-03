@@ -23,6 +23,7 @@ KNOWN_ISSUES.md
 # (tokens, AWS keys, PEM private keys) that block pushes, so they are kept on disk
 # only — not committed. The coverage harness + corpus tests run against them locally.
 /COVERAGE.md
+/COVERAGE-*.md
 /TEST_CORPUS.md
 /tests/all/corpus.test.ts
 /tests/resources/oas/googlebooks.yaml
