@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
-import { IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Scalar, T } from '../nodes/internal.js';
+import { IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Res, Scalar, T } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
 
@@ -268,6 +268,15 @@ class PathsCollector {
         } else if (child instanceof PropCircRef) {
           // a cut cycle is a leaf: include its path so the commented field is emitted (in both the
           // SDL and the selection) instead of silently dropped. see docs/issues.md #10
+          newSelection.add(child.path());
+        } else if (child instanceof Scalar && child.parent instanceof Res) {
+          // a response that resolves directly to a bare scalar (no property/array/map wrapper) is
+          // a leaf too — e.g. a write op that just returns `true` (adobe commerce) or a bare token
+          // string (petstore `/user/login`). Without this the op has nothing selectable and is
+          // dropped from the schema entirely (not degraded — silently absent). Res.select already
+          // emits `$` for it; only the leaf-detection here was missing the case. Scoped to a direct
+          // Res child on purpose — a bare scalar nested deeper (e.g. inside a Map's value) has its
+          // own separate, unrelated selection gaps; this fix doesn't touch those.
           newSelection.add(child.path());
         } else {
           this.gen.expand(child);

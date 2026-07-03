@@ -926,6 +926,20 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   assert.ok((schema!.match(/label/g) || []).length >= 3, 'Shared.label selected under both fields');
 });
 
+test('test_bare_scalar_response_not_dropped', async () => {
+  // A response that resolves directly to a scalar (no property wrapper) has nothing selectable
+  // under the old leaf-detection, so the op was silently dropped from the schema entirely — not
+  // degraded, not an error, just absent. `deleteWidgetsByWidgetId` returns a bare `true` on
+  // success, matching adobe commerce's write-endpoint convention. Composes via rover.
+  const schema = await runOasTest('bare-scalar-response.yaml', ['del:/widgets/{widgetId}>**'], 1, 0, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /deleteWidgetsByWidgetId\(widgetId: Int!\): Boolean\b/.test(schema!),
+    'delete field present, returns Boolean',
+  );
+  assert.ok(/selection: """\s*\$\s*"""/.test(schema!), 'selection passes through the raw scalar value');
+});
+
 test('test_same_name_fields_not_cut_as_circular', async () => {
   // docs/issues.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
   // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing
