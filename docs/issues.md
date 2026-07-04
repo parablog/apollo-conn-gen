@@ -507,7 +507,7 @@ passes). box's 9 INTERNAL_ERROR ops confirmed a *different* mechanism (reference
 `src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override
 lookup).
 
-## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⬜ Open (upstream)
+## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⏸ Parked (upstream fix accepted, pending router release)
 **Symptom:** 26/43 Mercedes CCS ops fail the abstract pass with
 `CONNECTORS_UNRESOLVED_FIELD: AlternativesEntry.key / .value` — yet the selection selects both.
 CCS default pass: 100%.
@@ -571,7 +571,13 @@ degrade map values to `JSON` — same best-effort convention as #10.
 test fails without the patch, passes with it). Re-running the corpus through the patched composition
 (`apollo-federation-cli` + rover shim): **CCS abstract 39.5% → 100%**, and the patch recovers **~69 ops
 corpus-wide** (box +14, github +15, confluence +7, DO +4, omni +2, asana +1) — abstract overall
-73.5% → 79.1%. Awaiting internal PR.
+73.5% → 79.1%.
+
+**Status update (2026-07-04):** the router PR was reviewed and **accepted upstream**. Nothing to do
+generator-side — this closes on its own once a router release ships with the patch. Re-run the
+Mercedes CCS row of the corpus sweep (`COVERAGE.md`) against a released rover that includes it to
+confirm, then flip this entry to ✅ Fixed. Until then, stock rover still hits the same
+`CONNECTORS_UNRESOLVED_FIELD` on `->entries` — don't re-investigate this as a new bug.
 
 ## 15 · Composed/Union definition and reference emit divergent names — ✅ Fixed (`44b628d`)
 **Symptom:** the dominant compose failure after #14 — **143 ops** in the abstract sweep (DO, box,
@@ -1745,3 +1751,75 @@ failures (`GRAPH_QL_ERROR`, `SELECTED_FIELD_NOT_FOUND`) are unrelated, pre-exist
 this only makes them agree on which of two same-named props is the "real" one.
 **Refs:** `src/oas/nodes/union.ts` (`dedupedSelectedProps`, `dependencies`, `generateMergedObject`,
 `select`). Related: #26 (the reachability walk this feeds), #38 (the residue this closes).
+
+## 40 · An object-typed (or array-of-object) query param emits an invalid inline type body — ✅ Fixed (working tree)
+
+**Symptom:** box.yaml `get:/search` fails compose with `CONNECTORS_UNRESOLVED_FIELD` cascading
+across many unrelated types. The actual defect: the generated argument list contains a full
+`type X { ... }` definition body written inline, not a type-name reference — invalid GraphQL that
+breaks SDL parsing for the whole document, producing the cascade.
+
+**OAS** (box.yaml — `get:/search`'s `mdfilters` param, `tests/resources/oas/box.yaml:15121-15136`):
+```yaml
+in: query
+name: mdfilters
+schema:
+  type: array
+  items:
+    $ref: '#/components/schemas/MetadataFilter'
+```
+
+**Example** (before → after):
+```graphql
+# before: a full type body inline in the argument list
+search(..., mdfilters: [type MetadataFilter {
+  templateKey: String
+  scope: String
+  filters: JSON
+}], ...): SearchResultsMini
+# after: degrades to the existing JSON-scalar convention (#19), array cardinality preserved
+search(..., mdfilters: [JSON], ...): SearchResultsMini
+```
+
+**Cause:** `Obj.generate()` (`src/oas/nodes/obj.ts`) only special-cases
+`context.inContextOf('Res', this)` for a bare name-reference; there's no equivalent
+`inContextOf('Param', this)` case (unlike `Union.generate()` and `En.generate()`, which already
+handle this for their node types — "params with Unions are weird"). `Arr.generate()`
+(`src/oas/nodes/arr.ts`) calls `itemsType.generate()` with no special-casing either. `Param` also has
+no `dependencies()` override, so its resultType never enters `TypesCollector.collectReachable`'s walk
+(rooted only at `op.resultType`/`op.body`) — this type is only ever emitted via `Param.generate()`'s
+direct, undeduped call.
+
+**Fix:** `Param.visit()` gains a second schema coercion (alongside the existing #11 anyOf/oneOf →
+string case): a schema that is object-shaped (`type: object`, `allOf`, or non-empty `properties` —
+at the top level or in an array's `items`) has the offending part replaced with a genuinely empty
+`{}` schema before `Factory.fromSchema` runs — landing it in the existing shapeless-object → `JSON`
+scalar path (#19), preserving array cardinality where present. This also incidentally closes the
+`Composed.generate()` missing-`Param`-case gap for `allOf`-shaped params: since the coercion runs
+before `Factory.fromSchema`, an `allOf` param schema is degraded to JSON the same way a plain object
+is, and `Composed` is never constructed under a `Param` at all. No new `Obj`/`Composed`/`Arr`
+branches, no widened type-collection roots. The `$ref` sniff uses `context.resolvePointer`, not
+`lookupRef`, so checking a schema this coercion is about to discard doesn't bump its `refCount`.
+
+**Known limitation, not handled here:** a param whose `oneOf`/`anyOf` member is itself object-shaped
+(e.g. `id: oneOf [Foo, Bar]` with object `Foo`/`Bar`) is *not* covered — no corpus case observed.
+`oneOf`/`anyOf` route to `Union`, whose existing `Param`-context handling (`union.ts`) flattens by
+delegating to each member's `generate()` without shielding object-shaped members, so the same
+inline-body bug would resurface one level down through `Union` rather than through `Obj` directly.
+Deliberately not folded into this coercion's "object-like" check, since doing so would also change
+behavior for existing `oneOf`/`anyOf` params whose members are plain scalars/enums (which already
+render correctly today). If a future corpus spec hits this, it needs an `Obj`/`Composed`
+`Param`-context guard (mirroring `Union`/`En`'s existing one) — start here.
+
+**Tests:** `tests/resources/oas/param-object-array.yaml` (array-of-`$ref`-object query param) —
+`test_object_array_param_degrades_to_json_scalar` in `tests/all/oas-core.test.ts` (asserts
+`filters: [JSON]` is emitted and no inline `type SearchFilter {` appears; composes via rover;
+reverting the fix reproduces the exact `INVALID_GRAPHQL: expected R_BRACK, got SearchFilter` rover
+error, confirming the mechanism). box.yaml corpus re-measured: 98.2% → 100.0% (+1 op) — the other
+half of a previously undocumented local finding ("B3"), whose first half
+(`get:/files/.../boxSkillsCards`) was already fixed as a side effect of #39.
+
+**AST:** none — `Param.visit()` schema coercion only, same shape as #11.
+**Refs:** `src/oas/nodes/param.ts` (`Param.visit`, `degradeObjectLikeSchema`, `isObjectLike`),
+`src/oas/nodes/factory.ts` (`isShapelessObject`, the existing #19 path this reuses). Related: #11,
+#14, #19.

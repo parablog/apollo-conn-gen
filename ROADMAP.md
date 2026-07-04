@@ -289,6 +289,13 @@ promotion (loudly) when the base is used concretely elsewhere among the selected
   connector coverage. `Union.dependencies()` now dedupes the same way `generate()`/`select()`
   already did. Closes all of #38's Residue. launch_library abstract pass: 86.2% → 98.3%.
 
+**Closed 2026-07-04 (#40, details in `docs/issues.md`):**
+- ✅ an object-typed (or array-of-object) query param emitted a full `type X { ... }` body inline
+  inside the argument list — invalid GraphQL, breaking box.yaml's `get:/search`. `Param.visit()` now
+  degrades an object/`allOf`-shaped param schema (or just an array's `items`) to the existing
+  shapeless-object → `JSON` scalar fallback (#19), preserving array cardinality. box.yaml: 114/114
+  (100.0%).
+
 **Remaining scope (own slice):**
 - **Broader `allOf` → interface** beyond the discriminated-`oneOf` case (e.g. promote shared bases
   like `Extensible`/`Entity` used across many TMF types). Large blast radius.
@@ -516,7 +523,7 @@ triaged **generator-bug vs input-quality**. (The harness, `COVERAGE.md`, and the
 specs are kept **local-only** — gitignored — because the published specs embed example secrets that
 block pushes; this section is the committed summary of what they showed.)
 
-**Corpus status (re-measured 2026-07-04, post `#39` — connect v0.4 / fed 2.14.1, stock rover 0.40):**
+**Corpus status (re-measured 2026-07-04, post `#40` — connect v0.4 / fed 2.14.1, stock rover 0.40):**
 
 | Spec | GET ops | pass-rate |
 |---|--:|--:|
@@ -539,12 +546,20 @@ block pushes; this section is the committed summary of what they showed.)
 | most popular product | 4 | 100.0% |
 | omni † | 54 | 90.7% |
 | openai | 10 | 100.0% |
-| box | 114 | 98.2% (2 B3 ops open) |
+| box | 114 | 100.0% |
 | confluence † | 65 | 93.8% |
-| mercedes CCS | 43 | **39.5%** (#14) |
+| mercedes CCS | 43 | **39.5%** (#14, upstream fix accepted — pending router release) |
 
-Overall GET: **95.1% OK (1547/1626)** (launch library's +14 applied to the last full-corpus total;
-other rows unchanged since the `#38` re-measurement below — this pass only re-ran launch library).
+Overall GET: **95.3% OK (1549/1626)** (launch library's +14 and box's +2 applied to the last
+full-corpus total; other rows unchanged since the `#38` re-measurement below — this pass only
+re-ran launch library and box, scoped via `--spec`, not a full `make coverage` sweep).
+
+> **`#40` re-measurement (2026-07-04):** box **98.2% → 100.0% (+1 op, `get:/search`)** — an
+> object-typed (array-of-`$ref`-object) query param was emitted as a full `type X { ... }` body
+> inline inside the argument list (invalid GraphQL); now degrades to the existing JSON-scalar
+> fallback (`#19`), preserving array cardinality (`[JSON]`). This was the second half of a
+> previously-undocumented local-only finding ("B3"); its other half (`get:/files/.../boxSkillsCards`)
+> was already fixed as a side effect of `#39`. Box is now fully clean (114/114).
 
 > **`#39` re-measurement (2026-07-04):** launch library **86.2% → 98.3% (+14 ops)**, closing all of
 > `#38`'s Residue — a merged union's shadowed same-name member field (e.g. two members' `rocket`

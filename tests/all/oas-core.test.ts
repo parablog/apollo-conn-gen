@@ -973,6 +973,17 @@ test('test_anyof_param_coerced_to_string_arg', async () => {
   assert.ok(!/\bid: !/.test(schema!), 'no empty arg type');
 });
 
+test('test_object_array_param_degrades_to_json_scalar', async () => {
+  // A query param typed as an array of a real object schema has no GraphQL argument shape — the
+  // generator used to emit a full `type SearchFilter {...}` body inline inside the argument list
+  // (invalid GraphQL). Degrades to JSON, same convention as #19/#14, preserving array cardinality
+  // ([JSON], not a flattened bare JSON). see docs/issues.md #40. runOasTest composes via rover.
+  const schema = await runOasTest('param-object-array.yaml', ['get:/search>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bfilters: \[JSON\]/.test(schema!), 'object array param degraded to [JSON]');
+  assert.ok(!/type SearchFilter\s*\{/.test(schema!), 'no inline type body for the degraded param');
+});
+
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
   // OAS 3.1 nullable syntax `type: [string, 'null']` (no more `nullable: true`) reached
   // createScalarType as the literal "string,null" and threw. The array collapses to its first
