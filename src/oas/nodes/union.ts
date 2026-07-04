@@ -11,7 +11,7 @@ export class Union extends Type {
   // `discriminatorMapping` maps each tag value to a schema ref (value -> "#/.../Type").
   public discriminator?: string;
   public discriminatorMapping?: Record<string, string>;
-  
+
   // R2: when this discriminated union's members all share one allOf base, it is promoted to a
   // GraphQL interface. `interfaceBaseRef` is the base schema ref ("#/.../Product"); when set,
   // generate() returns the interface name (not the union name) and emits no `union` line. Set by
