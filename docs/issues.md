@@ -1606,3 +1606,81 @@ composes on stock rover.
 **Files:** `src/oas/nodes/obj.ts` (`visit`), `src/oas/nodes/typeUtils.ts` (`containsNamesakeComponent`,
 `componentSchemaRef`). Related: #12 (the limitation this realizes), #9, #36. Not covered: `allOf`-encoded
 collection wrappers.
+
+## 38 · A discriminated union nested under a field never gets its fields credited — ✅ Fixed (working tree)
+
+**Symptom:** launch library abstract pass fails 26/116 GET ops with `CONNECTORS_UNRESOLVED_FIELD`
+inside a `->match` block, even though the selection is complete. launch library: 76.7% → 86.2%
+(89 → 100 ops) after this fix; 14 ops remain, a separate issue (see Residue below).
+
+**OAS** (launch library — a paginated list whose items are a discriminated union):
+```yaml
+PaginatedPolymorphicAgencyEndpointList:
+  properties:
+    results:
+      type: array
+      items:
+        $ref: '#/components/schemas/PolymorphicAgencyEndpoint'   # oneOf [Mini, Normal, Detailed]
+```
+`PolymorphicAgencyEndpoint` itself is a normal discriminated `oneOf` (has a `discriminator`) — the
+same shape R2's other tests already cover. The only difference is *where* it sits: one level
+inside `results`, not the op's own response.
+
+**Example** (before → after, same op, same selection):
+```graphql
+# before: real union + ->match, nested inside `results { ... }` — rover credits ZERO fields inside it
+results {
+... response_mode->match(
+  ["list", $ { __typename: $("AgencyMini") name }],
+  ["normal", $ { __typename: $("AgencyNormal") name }],
+  ["detailed", $ { __typename: $("AgencyEndpointDetailed") name }]
+)
+}
+# after: one flat merged type, no ->match — composes on stock rover
+results { name }
+```
+
+**Cause:** a response that's a bare `oneOf` at the top level (`get:/item -> oneOf [...]`) composes
+fine. The same union reached through a named field (`results`, `intent`, `partyOrPartyRole`, …)
+gets wrapped in `fieldName { ... }` by the property/array node, and rover's connect-v0.4
+shape-based field-crediting walker doesn't credit anything inside a `->match` sitting behind that
+wrapper — confirmed with 4 isolated minimal repros. Same root cause as **#14** (there: a nested
+`->entries`; here: a nested `->match`) — same upstream composer limitation, two different methods
+trigger it. A pre-release patched composer (`tools/local/apollo-federation-cli`, used by this
+project's own test harness when present) already fixes both; stock, released rover 0.40 does not,
+so this is fixed here rather than left parked like #14 — a union already has a safe fallback shape
+(the merged object, built for #25) to reuse; a map/dictionary doesn't have an equally cheap one.
+
+**Fix:** `Union.isTopLevelResponse()` checks whether the union is reached directly from the op's
+response (through any number of bare arrays) or through a named field. If it's nested, the union
+degrades to the same merged-object form #25 already uses — no new state anywhere: the check reads
+only the node's own `parent` chain, and the existing `generateMergedObject()`/`consolidate()` path
+(already there for #25) absorbs the members and drops their reference count, unchanged.
+
+**Known limitation, not handled here:** the same named schema could in principle be reached both
+nested (in one op) and as a bare top-level response (in another op) within one generated schema.
+GraphQL allows only one type definition per name, so whichever use-site's node the collector keeps
+decides the SDL form for both — the other op's own selection could then disagree with it (real
+union selected as a flat object, or vice versa), a loud compose failure (same family as #13/#26's
+"same schema, different route" class). Not seen in any real corpus spec (every failing op found had
+one consistent position); left as a follow-up if actually hit, rather than building a cross-op
+mechanism for a case with no observed need — the project already has one comparable "same schema,
+divergent routes" fix (#13) to model that follow-up on if it's ever required.
+
+**Residue:** 14 launch library ops still fail. At least one (`get:/2.3.0/launches/`) is a
+different, unrelated bug: a union member (`LaunchNormal`) is ALSO referenced directly as a plain
+field type elsewhere in the same schema (`SpacecraftFlightNormal.launch: LaunchNormal!`) — once the
+union absorbs its fields into the merged object, that other, independent reference is left without
+its own connector coverage. Not investigated further here — a reachability problem in the same
+family as #13/#26, not a union-form problem.
+
+**Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` (nested-under-array, bare-array,
+inline/unnamed) — `test_R2_union_nested_in_array_degrades_to_merged_object`,
+`test_R2_union_top_level_array_stays_real_union`, `test_R2_union_inline_nested_degrades_via_local_check`
+— in `tests/all/r2-abstract.test.ts`. Existing fixtures with the same nested shape
+(`TMF637-001-UnionTest.yaml`, `TMF637-002-RecursionTest.yaml`, `launch_Library_2-docs-v2.3.0.json`)
+updated to expect the merge.
+
+**AST:** none — emission-time branch only, same shape as #25.
+**Refs:** `src/oas/nodes/union.ts` (`isTopLevelResponse`, `isFlat`),
+`src/oas/nodes/allOfBase.ts` (skips a merged union). Related: #13, #14, #25.

@@ -234,3 +234,75 @@ test('test_R2_union_form_derived_from_connect_version', async () => {
     'connect < v0.4 is rejected at the floor',
   );
 });
+
+// --- R2 (Scenario C): a discriminated union nested under a field, not the op's own response ---
+// see docs/issues.md #38
+
+test('test_R2_union_nested_in_array_degrades_to_merged_object', async () => {
+  // ItemUnion sits inside `results`, a named array field — not /list's own response. Rover can't
+  // resolve fields through a ->match reached that way, so this must degrade to one merged type,
+  // same as the no-discriminator case, and it must actually compose.
+  const schema = await runOasTest(
+    'r2-union-nested-in-list.yaml',
+    ['get:/list>**'],
+    3,
+    2,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.14.1' },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union line for a nested union');
+  assert.ok(!/->match\(/.test(schema!), 'no ->match for a nested union');
+  assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
+  assert.ok(/type ItemUnion \{/.test(schema!), 'merged object replaces the union');
+  assert.ok(/title: String/.test(schema!) && /author: String/.test(schema!) && /director: String/.test(schema!), 'both members\' fields merged');
+});
+
+test('test_R2_union_top_level_array_stays_real_union', async () => {
+  // The SAME union, but as /items's own bare response (through an array, no wrapping field) — the
+  // one tree position that composes fine. Must stay a real union, and Book/Movie must still be
+  // emitted as their own standalone types.
+  const schema = await runOasTest(
+    'r2-union-nested-in-list.yaml',
+    ['get:/items>**'],
+    3,
+    3,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.14.1' },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('union ItemUnion = Book | Movie'), 'expected a real union type');
+  assert.ok(schema!.includes('... type->match('), 'expected a spread ->match on the discriminator');
+  assert.ok(/^type Book /m.test(schema!), 'Book emitted as its own type');
+  assert.ok(/^type Movie /m.test(schema!), 'Movie emitted as its own type');
+});
+
+test('test_R2_union_inline_nested_degrades_via_local_check', async () => {
+  // An inline (no $ref) discriminated union has no name at all — proves the nested check works
+  // from the union's own position, not from anything keyed by name.
+  const schema = await runOasTest(
+    'r2-union-nested-in-list.yaml',
+    ['get:/inline-list>**'],
+    3,
+    2,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.14.1' },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union line for an inline nested union');
+  assert.ok(!/->match\(/.test(schema!), 'no ->match for an inline nested union');
+  assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
+  assert.ok(/\ba: String/.test(schema!) && /\bb: String/.test(schema!), 'both inline members\' fields merged');
+});

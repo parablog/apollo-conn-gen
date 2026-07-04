@@ -241,16 +241,17 @@ input.
   `__typename` per member, value resolved from the discriminator `mapping`. Verified to
   compose at fed 2.13+ / connect v0.4 (`test_R2_union_discriminator_*`). See
   [[connectors-abstract-type-selection]].
-- ✅ **Union form is unconditional, derived from shape, not version** — `Union.rendersAsMergedObject()`
-  decides it: an input-position `oneOf` (GraphQL has no input unions, any version) or a
-  discriminator-less `oneOf` (no tag for `->match` to dispatch on) always emits the merged
-  object (`#### union degraded to a merged object: …`); an output-position `oneOf` with a
-  discriminator always emits a real `union`/interface. There is no `consolidateUnions`
-  toggle anymore — connect is floored at v0.4 program-wide (rejected below that at the
-  entrypoint), so the only question is the shape of the input, never the target version.
-  (`test_R2_union_without_discriminator_degrades_to_merged_object`,
+- ✅ **Union form is unconditional, derived from shape, not version** — `Union.isFlat()`
+  decides it: an input-position `oneOf` (GraphQL has no input unions, any version), a
+  discriminator-less `oneOf` (no tag for `->match` to dispatch on), or a `oneOf` nested under a
+  named field rather than being the op's own response (rover won't credit fields through a
+  `->match` reached that way — #38) always emits the merged object (`#### union degraded to a
+  merged object: …`); a bare, discriminated `oneOf` sitting directly as the op's response always
+  emits a real `union`/interface. There is no `consolidateUnions` toggle anymore — connect is
+  floored at v0.4 program-wide (rejected below that at the entrypoint), so the only question is
+  the shape of the input, never the target version. (`test_R2_union_without_discriminator_degrades_to_merged_object`,
   `test_R2_input_union_consolidated_kind_is_intentional`,
-  `test_R2_union_form_derived_from_connect_version`.)
+  `test_R2_union_form_derived_from_connect_version`, `test_R2_union_nested_in_array_*`.)
 - (the earlier gaps here — discriminator-less fallback, allOf-member unions — are closed
   below; broader `allOf` → interface remains the one deferral)
 
@@ -258,7 +259,7 @@ input.
 members are all `allOf` compositions sharing **exactly one** common base ref, the base is promoted to
 a GraphQL `interface`, members emit `… implements Base`, the field returns the interface, and the
 connector reuses the `->match` selection (rover-verified to compose at fed 2.13 / connect v0.4). It is
-an **id-neutral post-collect pass** (`src/oas/nodes/interfacePromotion.ts`, wired in `writer.ts` next
+an **id-neutral post-collect pass** (`src/oas/nodes/allOfBase.ts`, wired in `writer.ts` next
 to `inferEntityResolvers`): flags `Obj.emitAsInterface` / `Composed.implementsInterface` /
 `Union.interfaceBaseRef` rather than mutating `kind` (which is embedded in node ids). Rule 3 skips
 promotion (loudly) when the base is used concretely elsewhere among the selected ops. Tested
@@ -268,12 +269,18 @@ promotion (loudly) when the base is used concretely elsewhere among the selected
 - ✅ real-union path for `allOf` members: shared `selectedMembers` filter + unique twin-member
   ids (`Type.withUniqueName`); the rule-3-skip case now lists its members and DO's
   `oneOf`-of-`allOf` bodies generate.
-- ✅ union form derived from OAS shape, not the connect version: `Union.rendersAsMergedObject()`
+- ✅ union form derived from OAS shape, not the connect version: `Union.isFlat()`
   replaced the version-derived `resolveConsolidateUnions` helper and the `consolidateUnions`
   option (both removed by `d39095a`) — real unions/interfaces are now unconditional at connect
   v0.4, the only supported version. The CLI never hardcoded consolidation to begin with.
 - ✅ discriminator-less unions: superseded by #25 — they degrade to the merged object (a tag
   cannot be inferred reliably; `->match` needs one).
+
+**Closed 2026-07-04 (#38, details in `docs/issues.md`):**
+- ✅ a discriminated union nested under a named field (not the op's own response) degrades to
+  the merged object — rover doesn't credit fields through a `->match` reached that way. Same
+  upstream limitation as #14, one method (`->match`) instead of another (`->entries`).
+  launch_library abstract pass: 76.7% → 86.2%.
 
 **Remaining scope (own slice):**
 - **Broader `allOf` → interface** beyond the discriminated-`oneOf` case (e.g. promote shared bases
@@ -405,7 +412,7 @@ JSON-load pattern. `{}`/`null` = defaults:
 
 **How it works** (`applyBatchResolvers` in `src/oas/nodes/batch.ts`, a post-collect pass after
 `inferEntityResolvers`, reading the selected op's node graph — like `inferEntityResolvers` /
-`promoteInterfaces`, never re-parsing OAS):
+`promoteAllOfBase`, never re-parsing OAS):
 - entity = the op's response array item (`[Product]` or `{ results: [Product] }`), resolved via
   `op.resultType` → `Res`/`Arr`/`Obj` and matched by `types.get(item.id)` — so its R1 `@key` is
   reused, never invented.
@@ -502,8 +509,7 @@ triaged **generator-bug vs input-quality**. (The harness, `COVERAGE.md`, and the
 specs are kept **local-only** — gitignored — because the published specs embed example secrets that
 block pushes; this section is the committed summary of what they showed.)
 
-**Corpus status (re-measured 2026-07-02, post v0.4 floor — `feat/drop-consolidate-unions`, `d39095a`;
-single pass now that the consolidate downgrade is gone — connect v0.4 / fed 2.14.1, stock rover 0.40):**
+**Corpus status (re-measured 2026-07-04, post `#38` — connect v0.4 / fed 2.14.1, stock rover 0.40):**
 
 | Spec | GET ops | pass-rate |
 |---|--:|--:|
@@ -511,37 +517,45 @@ single pass now that the consolidate downgrade is gone — connect v0.4 / fed 2.
 | asana | 79 | 100.0% |
 | digitalocean | 145 | 97.9% |
 | slack | 80 | 96.3% |
-| sendgrid | 154 | 97.4% |
+| sendgrid | 154 | 98.7% |
 | github | 444 | 95.7% |
-| adobe commerce | 242 | 89.7% |
-| launch library | 116 | 76.7% |
+| adobe commerce | 242 | 97.9% |
+| launch library | 116 | 86.2% |
 | common room core † | 9 | 100.0% |
 | mindbody † | 8 | 100.0% |
 | TMF632 party | 4 | 0.0% |
 | TMF637 inventory | 2 | 0.0% |
-| TMF666 account | 14 | 42.9% |
+| TMF666 account | 14 | 100.0% |
 | TMF680 recommendation | 2 | 100.0% |
 | TMF717 customer360 | 3 | 33.3% |
 | js-mva consumer/product-selector | 4 | 100.0% |
 | most popular product | 4 | 100.0% |
 | omni † | 54 | 90.7% |
-| openai | 10 | 90.0% |
+| openai | 10 | 100.0% |
 | box | 114 | 98.2% (2 B3 ops open) |
 | confluence † | 65 | 93.8% |
 | mercedes CCS | 43 | **39.5%** (#14) |
 
-Overall GET: **91.7% OK (1491/1626)**.
+Overall GET: **94.3% OK (1533/1626)**.
+
+> **`#38` re-measurement (2026-07-04):** launch library **76.7% → 86.2% (+11 ops)** — a discriminated
+> union nested under a field (`results: [PolymorphicX]`, not the op's own response) now degrades to a
+> merged object instead of a real union rover can't resolve fields through. Every other delta below
+> vs the last snapshot predates this fix — `df783ed` ("stop dropping ops whose response is a bare
+> scalar", already committed) landed between measurements: adobe commerce 89.7%→97.9% (+20), sendgrid
+> 97.4%→98.7% (+2), TMF666 42.9%→100.0% (+8), openai 90.0%→100.0% (+1). Mercedes CCS unchanged at
+> 39.5% (still blocked on upstream #14); TMF632/TMF637 unchanged at 0.0% (pre-existing, input-quality
+> per prior triage).
 
 > **v0.4-floor re-measurement (2026-07-02):** the consolidate/real-unions split retired with
 > `feat/drop-consolidate-unions` (`d39095a`) — there's only one pass now
-> (`Union.rendersAsMergedObject()` derives the form from OAS shape, not a toggle). Net **+19 ops**
+> (`Union.isFlat()` derives the form from OAS shape, not a toggle). Net **+19 ops**
 > vs the prior real-unions snapshot (1472 → 1491), driven by adobe commerce (88.0→89.7%, +4),
 > launch library (69.0→76.7%, +9), sendgrid (95.5→97.4%, +3), confluence (89.2→93.8%, +3): the old
 > check (`consolidateUnions || !discriminator`) never looked at `kind`, so an **input-position**
 > `oneOf` with a discriminator still attempted a real `union` (invalid GraphQL — no input unions) and
-> failed compose. `rendersAsMergedObject()`'s `kind === 'input'` check fixes that as a side effect of
-> the floor refactor, not a targeted fix. Mercedes CCS unchanged at 39.5% (still blocked on upstream
-> #14); TMF632/TMF637 unchanged at 0.0% (pre-existing, input-quality per prior triage).
+> failed compose. `isFlat()`'s `kind === 'input'` check fixes that as a side effect of
+> the floor refactor, not a targeted fix.
 
 > **Box fix (B1+B2):** `#` in an OAS path leaked into the GraphQL field name (an SDL line comment,
 > breaking `@connect` binding) and an inline single-member `allOf` array item reached the emit loop
@@ -567,7 +581,7 @@ Overall GET: **91.7% OK (1491/1626)**.
 
 
 **Mutations corpus (post:/put:/patch:/del:, expanded tracked-real-fixture sweep — re-measured
-2026-07-03, post v0.4 floor, single pass; sweep via `--verbs mutations`; fast guard:
+2026-07-04, post `#38`; sweep via `--verbs mutations`; fast guard:
 `tests/all/corpus-mutations.test.ts`):**
 
 | Spec | mutation ops | pass-rate |
@@ -580,17 +594,24 @@ Overall GET: **91.7% OK (1491/1626)**.
 | asana | 88 | 83.0% |
 | sendgrid | 180 | 95.6% |
 | github | 401 | 97.3% |
-| adobe commerce | 344 | 54.9% |
+| adobe commerce | 344 | 99.1% |
 | common room core † | 13 | 69.2% |
 | mindbody † | 3 | 66.7% |
 | TMF632 party | 16 | 87.5% |
 | TMF637 inventory | 10 | 90.0% |
-| TMF666 account | 51 | 92.2% |
+| TMF666 account | 51 | 100.0% |
 | TMF680 recommendation | 6 | 100.0% |
 | TMF717 customer360 | 5 | 100.0% |
 | omni † | 92 | 92.4% |
 | confluence | 65 | 84.6% |
 | mercedes CCS | 1 | 100.0% |
+
+Overall mutations: **95.0% OK (1612/1697)**.
+
+> **`#38` re-measurement (2026-07-04):** `#38` is GET-only (launch library, the only spec it touches,
+> has 0 mutation ops). adobe commerce 54.9%→99.1% (+152) and TMF666 92.2%→100.0% (+4) are `df783ed`
+> ("stop dropping ops whose response is a bare scalar", already committed), not `#38` — same as the
+> GET-table note above.
 
 (launch library, js-mva ×2, most popular product have 0 mutation ops — read-only spec surfaces,
 not a gap.)

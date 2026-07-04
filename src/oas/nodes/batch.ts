@@ -92,7 +92,7 @@ export function applyBatchResolvers(context: OasContext, gen: OasGen, types: Map
 }
 
 // the response array's item object: `[Product]` -> Product; `{ results: [Product] }` -> Product + "results".
-// reads the same result-type node graph as inferEntityResolvers / promoteInterfaces.
+// reads the same result-type node graph as inferEntityResolvers / promoteAllOfBase.
 function responseItem(op: IType & Op): BatchTarget | null {
   let node: IType | undefined = op.resultType;
   if (node instanceof Res) {

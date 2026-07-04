@@ -1,0 +1,99 @@
+openapi: "3.0.1"
+info:
+  title: Paginated list of a polymorphic item (union nested under a named field)
+  version: "1.0.0"
+paths:
+  # a discriminated union nested inside a named array field — the shape every paginated-list REST
+  # API produces (e.g. launch library's PaginatedAgencyList.results: [oneOf [...]]). Real unions
+  # compose fine when they're the op's own response, but rover won't resolve any field of a
+  # `->match` reached through a wrapping property. see docs/issues.md #38
+  /list:
+    get:
+      summary: A paginated list whose items are a discriminated union.
+      responses:
+        '200':
+          description: A page of items.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ItemUnion'
+  # the SAME union, but as the op's own bare response — this must stay a real union.
+  /items:
+    get:
+      summary: The same union, returned directly (not nested).
+      responses:
+        '200':
+          description: A page of items, unwrapped.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ItemUnion'
+  # an inline (non-$ref) discriminated union, nested the same way as /list — has no name to
+  # propagate a merge decision by, so it can only be fixed by the per-instance check.
+  /inline-list:
+    get:
+      summary: A paginated list of an inline (unnamed) discriminated union.
+      responses:
+        '200':
+          description: A page of items.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      discriminator:
+                        propertyName: type
+                      oneOf:
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                            a:
+                              type: string
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                            b:
+                              type: string
+components:
+  schemas:
+    ItemUnion:
+      discriminator:
+        propertyName: type
+        mapping:
+          book: '#/components/schemas/Book'
+          movie: '#/components/schemas/Movie'
+      oneOf:
+        - $ref: '#/components/schemas/Book'
+        - $ref: '#/components/schemas/Movie'
+    Book:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        author:
+          type: string
+    Movie:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        director:
+          type: string

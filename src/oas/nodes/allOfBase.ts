@@ -30,7 +30,7 @@ import { Naming } from '../utils/naming.js';
  *  3. the base is not used as a concrete type anywhere else (else promoting it would turn an
  *     unrelated field into an interface with no `__typename`) -> stay a union, logged.
  */
-export function promoteInterfaces(
+export function promoteAllOfBase(
   context: OasContext,
   gen: OasGen,
   types: Map<string, IType>,
@@ -38,6 +38,9 @@ export function promoteInterfaces(
 ): void {
   for (const union of candidateUnions(gen)) {
     if (!union.discriminator) continue;
+    // isFlat(): input position, no discriminator, or nested under a field rather than being the
+    // op's own response (#38) — already downgraded to one merged type, not an interface candidate.
+    if (union.isFlat()) continue;
 
     const members = union.children;
     if (members.length === 0) continue;

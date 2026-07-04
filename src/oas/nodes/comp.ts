@@ -9,7 +9,7 @@ import _ from 'lodash';
 
 export class Composed extends Type {
   // R2: GraphQL interface this member implements (a shared allOf base of a discriminated
-  // oneOf). When set, generate() appends `implements <Base>`. Set by promoteInterfaces.
+  // oneOf). When set, generate() appends `implements <Base>`. Set by promoteAllOfBase.
   public implementsInterface?: string;
 
   constructor(

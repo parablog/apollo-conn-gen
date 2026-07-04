@@ -2,7 +2,7 @@ import { OasGen } from '../oasGen.js';
 import { IType, T } from '../nodes/internal.js';
 import { inferEntityResolvers } from '../nodes/entity.js';
 import { applyBatchResolvers } from '../nodes/batch.js';
-import { promoteInterfaces } from '../nodes/interfacePromotion.js';
+import { promoteAllOfBase } from '../nodes/allOfBase.js';
 import { OperationWriter } from './operationWriter.js';
 import { SchemaWriter } from './schemaWriter.js';
 import { SecurityPlan } from './security.js';
@@ -63,7 +63,7 @@ export class Writer {
 
     // R2: promote discriminated oneOf-with-shared-allOf-base to a GraphQL interface (id-neutral;
     // no-op unless a qualifying discriminated output union exists). Same `types` map.
-    promoteInterfaces(context, this.gen, types, selection);
+    promoteAllOfBase(context, this.gen, types, selection);
 
     this.schemaWriter.writeDirectives(writer);
     this.schemaWriter.writeJSONScalar(writer);

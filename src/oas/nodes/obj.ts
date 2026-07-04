@@ -14,7 +14,7 @@ export class Obj extends Type {
   entityResolvers: EntityResolver[] = [];
   // R2: when promoted to a GraphQL interface (a shared allOf base of a discriminated oneOf),
   // emit `interface` instead of `type`. Id-neutral on purpose — `id` embeds `kind`, so we must
-  // NOT mutate `kind` (it would desync generatedSet/dedup/deletion keys). Set by promoteInterfaces.
+  // NOT mutate `kind` (it would desync generatedSet/dedup/deletion keys). Set by promoteAllOfBase.
   emitAsInterface: boolean = false;
 
   constructor(

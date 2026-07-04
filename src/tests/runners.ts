@@ -63,11 +63,9 @@ export async function runOasTest(
   const schema = gen.generateSchema(paths);
   assert.ok(schema !== undefined);
 
-  // Create a dedicated folder inside tmp for OAS test files
-  const oasTestDir = path.join(os.tmpdir(), 'oas-test');
-  if (!fs.existsSync(oasTestDir)) {
-    fs.mkdirSync(oasTestDir, { recursive: true });
-  }
+  // A fresh dir per call — tests run concurrently and many share the same fixture file, so a
+  // shared path here would let one test's write clobber another's mid-compose.
+  const oasTestDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oas-test-'));
 
   const schemaFile = path.join(oasTestDir, file.replace(/yaml|json|yml/, 'graphql'));
   fs.writeFileSync(schemaFile, schema, { encoding: 'utf-8', flag: 'w' });
@@ -75,9 +73,7 @@ export async function runOasTest(
   // need to write another graphql file but this only with a sample query otherwise composition
   // will fail for mutations
   const sampleFile = path.join(oasTestDir, 'simple-query.graphql');
-  if (!fs.existsSync(sampleFile)) {
-    fs.writeFileSync(sampleFile, 'type Query { hello: String }', { encoding: 'utf-8', flag: 'w' });
-  }
+  fs.writeFileSync(sampleFile, 'type Query { hello: String }', { encoding: 'utf-8', flag: 'w' });
 
   const [result, output] = compose(schemaFile, sampleFile, opts.composeFederationVersion);
   if (shouldFail) {
@@ -146,19 +142,12 @@ export async function runJsonTest(
   const schema = walker.generateSchema();
   assert.ok(schema !== undefined);
 
-  const schemaFile = path.join(os.tmpdir() + '/walker', fileOrFolder.replace(/\.yaml|\.json|\.yml/, '') + '.graphql');
-
-  // Ensure the directory exists
-  // fs.mkdirSync(path.dirname(schemaFile), { recursive: true });
-  const parentFolder = path.dirname(schemaFile);
-  if (!fs.existsSync(parentFolder)) {
-    fs.mkdirSync(parentFolder, { recursive: true });
-  }
-
-  if (fs.existsSync(schemaFile)) {
-    fs.unlinkSync(schemaFile);
-  }
-
+  // A fresh dir per call — see the matching comment in runOasTest. fileOrFolder can carry
+  // subdirectories (e.g. "stats/fixtures/championship"), so the schema file's parent may not
+  // be walkerDir itself.
+  const walkerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oas-test-'));
+  const schemaFile = path.join(walkerDir, fileOrFolder.replace(/\.yaml|\.json|\.yml/, '') + '.graphql');
+  fs.mkdirSync(path.dirname(schemaFile), { recursive: true });
   fs.writeFileSync(schemaFile, schema, { encoding: 'utf-8', flag: 'w' });
 
   const [result, output] = compose(schemaFile, undefined, options.composeFederationVersion);
@@ -203,7 +192,10 @@ function compose(schemaPath: string, samplePath?: string, federationVersion: str
     throw new Error('Rover is not available');
   }
 
-  const supergraphFile = path.join(os.tmpdir(), 'oas-test', 'supergraph.yaml');
+  // A fresh dir per call — see the matching comment in runOasTest; concurrent tests must not
+  // share this config file or each other's rover invocation.
+  const composeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oas-test-compose-'));
+  const supergraphFile = path.join(composeDir, 'supergraph.yaml');
   let content: string = `
 federation_version: =${federationVersion}
 subgraphs:
@@ -230,7 +222,7 @@ subgraphs:
     : `${rover[1]} supergraph compose --config ${supergraphFile} --elv2-license accept`;
 
   // Write the rover command to a bash script for easy re-execution
-  const scriptFile = path.join(os.tmpdir(), 'oas-test', 'run-rover.sh');
+  const scriptFile = path.join(composeDir, 'run-rover.sh');
 
   // Generate script with environment variables and dev command
   const devCmd = `APOLLO_KEY=\${APOLLO_KEY} APOLLO_GRAPH_REF=\${APOLLO_GRAPH_REF} ${rover[1]} dev --supergraph-config ${supergraphFile}`;

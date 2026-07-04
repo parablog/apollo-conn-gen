@@ -1,4 +1,4 @@
-import { Composed, Factory, Get, IType, Prop, Res, T, Type } from './internal.js';
+import { Arr, Composed, Factory, Get, IType, Prop, Res, T, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -11,10 +11,11 @@ export class Union extends Type {
   // `discriminatorMapping` maps each tag value to a schema ref (value -> "#/.../Type").
   public discriminator?: string;
   public discriminatorMapping?: Record<string, string>;
+  
   // R2: when this discriminated union's members all share one allOf base, it is promoted to a
   // GraphQL interface. `interfaceBaseRef` is the base schema ref ("#/.../Product"); when set,
   // generate() returns the interface name (not the union name) and emits no `union` line. Set by
-  // promoteInterfaces (a post-collect pass) — never in visit().
+  // promoteAllOfBase (a post-collect pass) — never in visit().
   public interfaceBaseRef?: string;
 
   constructor(
@@ -72,11 +73,6 @@ export class Union extends Type {
 
     if (this.name != null) {
       context.store(this.name, this);
-      // members are absorbed into the merged object whenever we degrade to one — input position
-      // (no input unions) or no discriminator (no tag for ->match). see docs/issues.md #25, #36
-      if (this.rendersAsMergedObject()) {
-        this.children.forEach((child) => context.decRefCount(child.name));
-      }
     }
 
     this.visited = true;
@@ -84,11 +80,25 @@ export class Union extends Type {
     context.leave(this);
   }
 
-  // A union renders as a merged object — never a real `union`/interface — when it sits in input
-  // position (GraphQL has no input unions, any connect version) or has no discriminator for `->match`
-  // to dispatch on (#25). Output + discriminator is the only case that becomes a real abstract type.
-  private rendersAsMergedObject(): boolean {
-    return this.kind === 'input' || !this.discriminator;
+  // True when this union IS the op's response (optionally under a bare array), not nested inside a
+  // field. This composes fine:
+  //   get:/item -> oneOf [Book, Movie]
+  // This doesn't — launch library's real shape, rover won't resolve anything inside the match:
+  //   PaginatedAgencyList.results: [ oneOf [AgencyMini, AgencyNormal, AgencyDetailed] ]
+  // see docs/issues.md #38
+  public isTopLevelResponse(): boolean {
+    let node: IType | undefined = this.parent;
+    while (node instanceof Arr) {
+      node = node.parent;
+    }
+    return node instanceof Res;
+  }
+
+  // A union becomes one flat merged type, not a real `union`/interface, when: it's a request body
+  // (GraphQL has no input unions), it has no tag field to pick a branch (#25), or it's nested
+  // inside a field rather than being the op's own response (#38). see docs/issues.md #25, #38
+  public isFlat(): boolean {
+    return this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
@@ -115,7 +125,7 @@ export class Union extends Type {
       const refName = Naming.getRefName(this.name);
       const name = sanitised === refName ? refName : sanitised;
 
-      if (this.rendersAsMergedObject()) {
+      if (this.isFlat()) {
         // No real union here: an input-position oneOf (GraphQL has no input unions) or no
         // discriminator (no tag for `->match`). Emit the merged object — the selection falls back to
         // the same flat form (see select), so SDL and selection agree. see docs/issues.md #25, #36
@@ -206,7 +216,7 @@ export class Union extends Type {
   // a real `union X = Book | Movie` needs its members (and a member's shared $ref base, which
   // the writer may promote to an interface — R2); a merged one needs its flat fields instead
   dependencies(context: OasContext, selection: string[]): IType[] {
-    if (this.rendersAsMergedObject()) {
+    if (this.isFlat()) {
       return this.selectedProps(selection);
     }
     // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
@@ -229,7 +239,7 @@ export class Union extends Type {
     // composable abstract-type selection (connect v0.4): a spread `->match` whose branches set a
     // string-literal __typename per member. Merged-object unions (input position or no discriminator)
     // fall back to the flat selection below. see docs/issues.md #25, #36
-    if (!this.rendersAsMergedObject()) {
+    if (!this.isFlat()) {
       this.selectAbstract(context, writer, selection);
       trace(context, '<- [union::select]', `-> out: ${this.name}`);
       return;

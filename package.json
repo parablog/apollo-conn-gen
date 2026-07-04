@@ -37,7 +37,7 @@
     "dev": "tsc --watch",
     "prebuild": "rm -rf dist",
     "build": "tsc -b",
-    "test": "node --import tsx/esm --test --test-concurrency=1 tests/all/*.test.ts",
+    "test": "node --import tsx/esm --test --test-concurrency=5 tests/all/*.test.ts",
     "test:single": "node --import tsx/esm --test 'tests/single.test.ts'",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint",
