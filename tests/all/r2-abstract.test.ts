@@ -245,7 +245,7 @@ test('test_R2_union_nested_in_array_degrades_to_merged_object', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/list>**'],
-    3,
+    4,
     2,
     false,
     false,
@@ -269,7 +269,7 @@ test('test_R2_union_top_level_array_stays_real_union', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/items>**'],
-    3,
+    4,
     3,
     false,
     false,
@@ -291,7 +291,7 @@ test('test_R2_union_inline_nested_degrades_via_local_check', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/inline-list>**'],
-    3,
+    4,
     2,
     false,
     false,
@@ -305,4 +305,31 @@ test('test_R2_union_inline_nested_degrades_via_local_check', async () => {
   assert.ok(!/->match\(/.test(schema!), 'no ->match for an inline nested union');
   assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
   assert.ok(/\ba: String/.test(schema!) && /\bb: String/.test(schema!), 'both inline members\' fields merged');
+});
+
+// --- R2 (Scenario D): merged members share a field name but disagree on its type ---
+// see docs/issues.md #39
+
+test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
+  // WrappedBasic and WrappedRich both have a "detail" field but point at different types. Only
+  // the first (DetailBasic) is written, so DetailRich (and DeepThing under it) must not appear.
+  const schema = await runOasTest(
+    'r2-union-nested-in-list.yaml',
+    ['get:/wrapped-list>**'],
+    4,
+    3,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.14.1' },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
+  assert.ok(/type WrappedUnion \{/.test(schema!), 'merged object replaces the union');
+  assert.ok(/detail: DetailBasic/.test(schema!), 'the first-encountered member field wins');
+  assert.ok(/type DetailBasic \{/.test(schema!), 'the winning field\'s type is emitted');
+  assert.ok(!/DetailRich/.test(schema!), 'the shadowed field\'s type must not be emitted at all');
+  assert.ok(!/DeepThing/.test(schema!), 'the shadowed type\'s own subtree must not be emitted either');
 });

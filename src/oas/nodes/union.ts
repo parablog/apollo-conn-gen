@@ -186,15 +186,26 @@ export class Union extends Type {
       .write(name)
       .write('\n');
 
-    const selected = this.selectedProps(selection);
-    const generated = new Set<string>();
-    for (const prop of selected) {
+    for (const prop of this.dedupedSelectedProps(selection)) {
       trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-      if (!generated.has(prop.id)) prop.generate(context, writer, selection);
-      generated.add(prop.id);
+      prop.generate(context, writer, selection);
     }
 
     writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
+  }
+
+  // Two members can name a field the same but give it different types, e.g. in the OAS:
+  //   LaunchNormal:   { rocket: { $ref: '#/…/RocketNormal' } }
+  //   LaunchDetailed: { rocket: { $ref: '#/…/RocketDetailed' } }
+  // Only the first is ever written to the merged type, so the other's type must not be emitted
+  // either. see docs/issues.md #39
+  private dedupedSelectedProps(selection: string[]): Prop[] {
+    const seen = new Set<string>();
+    return this.selectedProps(selection).filter((prop) => {
+      if (seen.has(prop.id)) return false;
+      seen.add(prop.id);
+      return true;
+    });
   }
 
   // two inline members easily share a name (`[inline:Input]` twice) — same suffixing as Composed
@@ -217,7 +228,7 @@ export class Union extends Type {
   // the writer may promote to an interface — R2); a merged one needs its flat fields instead
   dependencies(context: OasContext, selection: string[]): IType[] {
     if (this.isFlat()) {
-      return this.selectedProps(selection);
+      return this.dedupedSelectedProps(selection);
     }
     // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
     // $ref base it extends — `Book: allOf [$ref Product, …]` -> Product (r2-interface-shared-base.yaml).
@@ -245,11 +256,8 @@ export class Union extends Type {
       return;
     }
 
-    const selected = this.selectedProps(selection);
-    const generated = new Set<string>();
-    for (const prop of selected) {
-      if (!generated.has(prop.id)) prop.select(context, writer, selection);
-      generated.add(prop.id);
+    for (const prop of this.dedupedSelectedProps(selection)) {
+      prop.select(context, writer, selection);
     }
 
     /* TODO: better selection for Unions

@@ -1672,7 +1672,7 @@ different, unrelated bug: a union member (`LaunchNormal`) is ALSO referenced dir
 field type elsewhere in the same schema (`SpacecraftFlightNormal.launch: LaunchNormal!`) — once the
 union absorbs its fields into the merged object, that other, independent reference is left without
 its own connector coverage. Not investigated further here — a reachability problem in the same
-family as #13/#26, not a union-form problem.
+family as #13/#26, not a union-form problem. **Fixed by #39** — all 14 ops now pass.
 
 **Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` (nested-under-array, bare-array,
 inline/unnamed) — `test_R2_union_nested_in_array_degrades_to_merged_object`,
@@ -1684,3 +1684,64 @@ updated to expect the merge.
 **AST:** none — emission-time branch only, same shape as #25.
 **Refs:** `src/oas/nodes/union.ts` (`isTopLevelResponse`, `isFlat`),
 `src/oas/nodes/allOfBase.ts` (skips a merged union). Related: #13, #14, #25.
+
+## 39 · A merged union's shadowed same-name member field still counts as reachable — ✅ Fixed (working tree)
+
+**Symptom:** the 14 ops left in #38's Residue all fail the same way: launch library abstract pass
+86.2% → 98.3% (100 → 114/116 ops) after this fix. `rover` reports entire types with **every** field
+unresolved (`CONNECTORS_UNRESOLVED_FIELD: LaunchNormal.<every field>`, plus
+`SpacecraftConfigDetailed`, `SpacecraftConfigFamilyDetailed`, `SpacecraftConfigFamilyNormal`, …) —
+not one stray field, whole orphan types with zero connector coverage.
+
+**OAS** (launch library — two #38-merged union members share a field name, different target):
+```yaml
+LaunchNormal:
+  properties: { rocket: { $ref: '#/components/schemas/RocketNormal' } }     # simple
+LaunchDetailed:
+  properties: { rocket: { allOf: [{ $ref: '#/components/schemas/RocketDetailed' }] } }  # rich,
+    # RocketDetailed nests spacecraftStage/payloads → dockingEvents → SpacecraftFlightNormal.launch:
+    # LaunchNormal! — the SAME schema, reached this time as a plain field, not a union member.
+```
+
+**Cause:** `Union.generate()`/`select()` (the #38 merged-object path) write **one** field per name:
+`selectedProps()` returns every member's matching props un-deduped, and only the first one seen
+per `prop.id` (`generated.has(prop.id)`) is actually written — `LaunchNormal.rocket` wins (it comes
+first in the `oneOf`), so the merged object gets `rocket: RocketNormal!`, never
+`rocket: RocketDetailed!`. But `Union.dependencies()` (used by the collector's #26 reachability
+walk) called the *undeduped* `selectedProps()` directly — so the shadowed `LaunchDetailed.rocket`
+prop, and everything its type (`RocketDetailed`) transitively references, was still walked and
+collected, even though no selection anywhere ever asks for it. Two of those transitively-reachable
+schemas happen to be **also** referenced directly elsewhere in the same document as plain field
+types (`SpacecraftFlightNormal.launch: LaunchNormal!`, `PayloadFlightNormal.launch: LaunchNormal!`)
+— that's what forces `LaunchNormal` to be emitted as *its own* standalone type (distinct from the
+fields already folded into the merged `PolymorphicLaunchEndpoint`), with no selection route to it.
+
+**Example** (before → after, same op):
+```graphql
+# before: RocketDetailed (and its whole orphan subtree) emitted, nothing ever selects it
+type RocketDetailed { id spacecraftStage: [...] payloads: [...] }   # ✗ CONNECTORS_UNRESOLVED_FIELD
+type LaunchNormal { id name … }                                     # ✗ CONNECTORS_UNRESOLVED_FIELD
+# after: the shadowed branch (and everything only reachable through it) isn't collected at all
+# RocketDetailed, LaunchNormal (as a standalone type) — both gone; PolymorphicLaunchEndpoint's
+# merged object still has `rocket: RocketNormal!`, exactly as it did before this fix.
+```
+
+**Fix:** factor the existing "first prop per id wins" dedup (already inline in `generate()` and
+`select()`'s flat branch, as a local `generated` Set) into one `dedupedSelectedProps()` helper, and
+make `dependencies()` use the *same* deduped list for its flat/merged branch — so a name that loses
+the race at emission time was never "reachable" in the first place. No new state: no new field,
+Set, or Map on the class or on `OasContext` — just one small private method shared by the three
+call sites that already needed the identical logic.
+
+**Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` (`/wrapped-list` — two merged members
+share a field name, one nesting a type with its own subtree) —
+`test_R2_union_merge_name_collision_drops_shadowed_type` in `tests/all/r2-abstract.test.ts` (asserts
+the shadowed type, and its own nested type, are absent from the generated schema entirely — and
+regressed to a real collector count 5 → 3 with the fix reverted, confirming the mechanism).
+`launch_Library_2-docs-v2.3.0.json` corpus re-measured: 86.2% → 98.3% (+14 ops); the 2 remaining
+failures (`GRAPH_QL_ERROR`, `SELECTED_FIELD_NOT_FOUND`) are unrelated, pre-existing gaps.
+
+**AST:** none — `dependencies()` and `generate()`/`select()` already walked the same node graph;
+this only makes them agree on which of two same-named props is the "real" one.
+**Refs:** `src/oas/nodes/union.ts` (`dedupedSelectedProps`, `dependencies`, `generateMergedObject`,
+`select`). Related: #26 (the reachability walk this feeds), #38 (the residue this closes).

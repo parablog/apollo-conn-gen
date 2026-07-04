@@ -282,6 +282,13 @@ promotion (loudly) when the base is used concretely elsewhere among the selected
   upstream limitation as #14, one method (`->match`) instead of another (`->entries`).
   launch_library abstract pass: 76.7% → 86.2%.
 
+**Closed 2026-07-04 (#39, details in `docs/issues.md`):**
+- ✅ a merged union's shadowed same-name member field (two members sharing a field name but
+  disagreeing on its type — only the first is ever written to the merged object) was still
+  treated as reachable by the collector, emitting its type's whole orphan subtree with no
+  connector coverage. `Union.dependencies()` now dedupes the same way `generate()`/`select()`
+  already did. Closes all of #38's Residue. launch_library abstract pass: 86.2% → 98.3%.
+
 **Remaining scope (own slice):**
 - **Broader `allOf` → interface** beyond the discriminated-`oneOf` case (e.g. promote shared bases
   like `Extensible`/`Entity` used across many TMF types). Large blast radius.
@@ -509,7 +516,7 @@ triaged **generator-bug vs input-quality**. (The harness, `COVERAGE.md`, and the
 specs are kept **local-only** — gitignored — because the published specs embed example secrets that
 block pushes; this section is the committed summary of what they showed.)
 
-**Corpus status (re-measured 2026-07-04, post `#38` — connect v0.4 / fed 2.14.1, stock rover 0.40):**
+**Corpus status (re-measured 2026-07-04, post `#39` — connect v0.4 / fed 2.14.1, stock rover 0.40):**
 
 | Spec | GET ops | pass-rate |
 |---|--:|--:|
@@ -520,7 +527,7 @@ block pushes; this section is the committed summary of what they showed.)
 | sendgrid | 154 | 98.7% |
 | github | 444 | 95.7% |
 | adobe commerce | 242 | 97.9% |
-| launch library | 116 | 86.2% |
+| launch library | 116 | 98.3% |
 | common room core † | 9 | 100.0% |
 | mindbody † | 8 | 100.0% |
 | TMF632 party | 4 | 0.0% |
@@ -536,7 +543,15 @@ block pushes; this section is the committed summary of what they showed.)
 | confluence † | 65 | 93.8% |
 | mercedes CCS | 43 | **39.5%** (#14) |
 
-Overall GET: **94.3% OK (1533/1626)**.
+Overall GET: **95.1% OK (1547/1626)** (launch library's +14 applied to the last full-corpus total;
+other rows unchanged since the `#38` re-measurement below — this pass only re-ran launch library).
+
+> **`#39` re-measurement (2026-07-04):** launch library **86.2% → 98.3% (+14 ops)**, closing all of
+> `#38`'s Residue — a merged union's shadowed same-name member field (e.g. two members' `rocket`
+> field pointing at different types) was still treated as reachable by the collector even though
+> only the first one is ever written to the merged object; the shadowed one's orphan subtree (and,
+> transitively, schemas it alone re-references elsewhere) is no longer collected. The 2 ops still
+> failing (`GRAPH_QL_ERROR`, `SELECTED_FIELD_NOT_FOUND`) are unrelated, pre-existing gaps.
 
 > **`#38` re-measurement (2026-07-04):** launch library **76.7% → 86.2% (+11 ops)** — a discriminated
 > union nested under a field (`results: [PolymorphicX]`, not the op's own response) now degrades to a
