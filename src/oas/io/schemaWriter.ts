@@ -1,9 +1,9 @@
 import Oas from 'oas';
-import { ServerObject } from 'oas/types';
 import { DEFAULT_VERSIONS } from '../../versions.js';
 import { OasGen } from '../oasGen.js';
 import { Writer } from './writer.js';
 import { SecurityPlan } from './security.js';
+import { ServerUrl } from '../utils/serverUrl.js';
 
 export class SchemaWriter {
   constructor(
@@ -17,8 +17,8 @@ export class SchemaWriter {
 
   public writeDirectives(writer: Writer): void {
     const api: Oas = this.gen.parser;
-    // a spec's servers[0] can be stale or wrong (petstore) — an explicit baseURL wins
-    const host = this.gen.options.baseURL ?? this.getServerUrl(api.getDefinition().servers?.[0]);
+    // an explicit baseURL wins; otherwise pick a usable server. see docs/issues.md #41
+    const host = this.gen.options.baseURL ?? ServerUrl.resolve(api.getDefinition().servers);
     const federationVersion = this.gen.options.federationVersion || DEFAULT_VERSIONS.federationVersion;
     const connectorSpecVersion = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
     const authHeader = this.security.sourceHeader();
@@ -35,18 +35,5 @@ export class SchemaWriter {
     } else {
       writer.write('  @source(name: "api", http: { baseURL: "').write(host).write('" })\n\n');
     }
-  }
-
-  private getServerUrl(server: ServerObject | undefined): string {
-    if (!server) {
-      return 'http://localhost:4010';
-    }
-    let url: string = server.url;
-    if (server.variables) {
-      for (const key in server.variables) {
-        url = url.replace('{' + key + '}', server.variables[key].default);
-      }
-    }
-    return url;
   }
 }

@@ -984,6 +984,32 @@ test('test_object_array_param_degrades_to_json_scalar', async () => {
   assert.ok(!/type SearchFilter\s*\{/.test(schema!), 'no inline type body for the degraded param');
 });
 
+test('test_server_url_falls_back_past_bad_first_server', async () => {
+  // servers[0] is "/v1.33" (no host) — docker-engine's real shape — so it's skipped for the next
+  // server that has one. see docs/issues.md #41
+  const schema = await runOasTest('server-fallback-relative.yaml', ['get:/ping>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/baseURL: "https:\/\/example\.com\/1\.0"/.test(schema!), 'falls back to the usable server');
+  assert.ok(!/baseURL: "\/v1\.33"/.test(schema!), 'the unusable relative server is not used');
+});
+
+test('test_server_url_prefixes_protocol_relative', async () => {
+  // servers[0] is "//api.example.com" (no http/https) — just needs a scheme added.
+  const schema = await runOasTest('server-protocol-relative.yaml', ['get:/ping>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/baseURL: "https:\/\/api\.example\.com"/.test(schema!), 'protocol-relative server gets a scheme');
+  assert.ok(!/baseURL: "\/\/api\.example\.com"/.test(schema!), 'no bare protocol-relative baseURL');
+});
+
+test('test_server_url_preserves_declared_order', async () => {
+  // "//prod.example.com" is listed first, so it wins even though "https://sandbox..." (listed
+  // second) already has a scheme. see docs/issues.md #41
+  const schema = await runOasTest('server-order-preserved.yaml', ['get:/ping>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/baseURL: "https:\/\/prod\.example\.com"/.test(schema!), 'first declared server wins');
+  assert.ok(!/sandbox\.example\.com/.test(schema!), 'later server is not used just for being absolute');
+});
+
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
   // OAS 3.1 nullable syntax `type: [string, 'null']` (no more `nullable: true`) reached
   // createScalarType as the literal "string,null" and threw. The array collapses to its first

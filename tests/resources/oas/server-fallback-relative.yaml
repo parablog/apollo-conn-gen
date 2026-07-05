@@ -1,0 +1,25 @@
+openapi: 3.0.3
+info:
+  title: Relative First Server Service
+  version: 1.0.0
+servers:
+  # no host at all — must be skipped for the next usable server
+  - url: /v1.33
+  - url: https://example.com/{version}
+    variables:
+      version:
+        default: '1.0'
+paths:
+  /ping:
+    get:
+      operationId: ping
+      responses:
+        '200':
+          description: pong
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean

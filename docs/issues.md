@@ -1823,3 +1823,61 @@ half of a previously undocumented local finding ("B3"), whose first half
 **Refs:** `src/oas/nodes/param.ts` (`Param.visit`, `degradeObjectLikeSchema`, `isObjectLike`),
 `src/oas/nodes/factory.ts` (`isShapelessObject`, the existing #19 path this reuses). Related: #11,
 #14, #19.
+
+## 41 · Only servers[0] is ever consulted for @source baseURL — ✅ Fixed (working tree)
+
+**Symptom:** docker-engine.json's 43 GET ops all fail rover with `INVALID_URL_SCHEME`.
+
+**OAS** (docker-engine.json's real `servers` array):
+```json
+"servers": [
+  { "url": "/v1.33" },
+  { "url": "https://docker.com/{version}", "variables": { "version": { "default": "1.33" } } }
+]
+```
+`servers[0].url` is a bare relative path — no scheme, no host. `servers[1]` resolves fine to
+`https://docker.com/1.33`, but is never consulted.
+
+**Example** (before → after, same op):
+```graphql
+# before
+@source(name: "api", http: { baseURL: "/v1.33" })      # ✗ INVALID_URL_SCHEME, every op
+# after
+@source(name: "api", http: { baseURL: "https://docker.com/1.33" })
+```
+
+**Cause:** `SchemaWriter.writeDirectives()` only ever read `servers?.[0]`; the (now-removed)
+`getServerUrl` took it verbatim with no absolute-URL validation, ignoring any later, usable server.
+Same defect class the project already hit with Confluence (`servers[0].url` was a protocol-relative
+placeholder, `//your-domain.atlassian.net`) — fixed there by patching the fixture directly.
+`TEST_CORPUS.md` had already flagged "normalise relative / protocol-relative servers[].url" as a
+wanted generator robustness gap; a second real spec hitting the same class of bug is what prompted
+fixing it in the generator this time instead of another one-off fixture patch.
+
+**Fix:** new `src/oas/utils/serverUrl.ts` (`ServerUrl.resolve`), following this codebase's existing
+static-utility-class convention (`Naming`, `GqlUtils`, `Params`) rather than living inside the
+writer. Walks the full `servers[]` array **in OAS-declared order** — an author's ordering is
+deliberate (e.g. prod listed before sandbox), so this does not scan for "any absolute" candidate
+first and jump ahead of an earlier, merely protocol-relative one. For each candidate: normalise a
+protocol-relative URL (`//host/path`) by prefixing `https:`, then return the first one that's
+absolute (`/^https?:\/\//i`); else fall back to the existing `http://localhost:4010` — byte-identical
+to the old no-server behavior.
+
+**Known limitation, not handled here:** a `servers[]` array where *every* entry is a bare relative
+path (no absolute, no protocol-relative option anywhere) still falls back to
+`http://localhost:4010` with the relative path dropped entirely — no corpus case currently needs
+the path preserved in that fallback. This fix closes only the "skip a leading unusable server when
+a later usable one exists" slice of the broader gap `TEST_CORPUS.md` named, not that case.
+
+**Tests:** `tests/resources/oas/server-fallback-relative.yaml`
+(`test_server_url_falls_back_past_bad_first_server`), `server-protocol-relative.yaml`
+(`test_server_url_prefixes_protocol_relative`), `server-order-preserved.yaml`
+(`test_server_url_preserves_declared_order` — proves order is preserved, not "prefer whichever is
+absolute") — all in `tests/all/oas-core.test.ts`; each reverts to failing when the fix is undone,
+confirming the mechanism. docker-engine.json corpus re-measured: 0.0% → 86.0% (0/43 → 37/43); the 6
+remaining ops fail a different, unrelated error (`INVALID_SELECTION`) not investigated here.
+
+**AST:** none — pure utility logic, no node/tree changes.
+**Refs:** `src/oas/utils/serverUrl.ts` (`ServerUrl.resolve`), `src/oas/io/schemaWriter.ts`
+(`writeDirectives`, the call site). Related: the Confluence fixture-patch this generalizes past
+(see `TEST_CORPUS.md`).

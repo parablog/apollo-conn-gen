@@ -1,0 +1,21 @@
+openapi: 3.0.3
+info:
+  title: Protocol Relative Server Service
+  version: 1.0.0
+servers:
+  # no http/https prefix — just needs a scheme added
+  - url: //api.example.com
+paths:
+  /ping:
+    get:
+      operationId: ping
+      responses:
+        '200':
+          description: pong
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
