@@ -61,14 +61,13 @@ export class PropMap extends Prop {
     const fieldName = this.name;
     const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
 
-    // because we are in a map, we need to write the key-value structure
-    writer
-      .write(' '.repeat(context.indent + context.stack.length))
-      .write(sanitised)
-      .write(': ')
-      .write(sanitised);
-
-    // For maps, we need to select the key-value structure
+    // sanitised is already "alias: \"original\"" when the JSON key needs one — write it once. When
+    // it doesn't (sanitised === fieldName), keep a self-alias (name: name); some composers need it
+    // to credit fields through ->entries, and it's harmless either way.
+    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
+    if (sanitised === fieldName) {
+      writer.write(': ').write(sanitised);
+    }
     writer.write('->entries {').write('\n');
     context.enter(this);
 

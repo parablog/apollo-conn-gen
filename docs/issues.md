@@ -1881,3 +1881,64 @@ remaining ops fail a different, unrelated error (`INVALID_SELECTION`) not invest
 **Refs:** `src/oas/utils/serverUrl.ts` (`ServerUrl.resolve`), `src/oas/io/schemaWriter.ts`
 (`writeDirectives`, the call site). Related: the Confluence fixture-patch this generalizes past
 (see `TEST_CORPUS.md`).
+
+## 42 · A map field needing a JSON-key alias writes it twice, breaking the selection — ✅ Fixed (working tree)
+
+**Symptom:** any map (`additionalProperties`) field whose JSON key needs snake_case→camelCase
+aliasing emits an invalid, doubled selection. Confirmed on `stripe.json`'s `currency_options` and
+`docker-engine.json`'s `Networks` — both fail rover with `INVALID_SELECTION`,
+`nom::error::ErrorKind::Eof`.
+
+**OAS** (a map field with a JSON key needing an alias):
+```yaml
+currency_options:
+  type: object
+  additionalProperties:
+    type: object
+    properties:
+      amount_off: { type: integer }
+```
+
+**Example** (before → after, same field):
+```graphql
+# before: the alias text written twice — invalid, rover can't parse it
+currencyOptions: "currency_options": currencyOptions: "currency_options"->entries { key value { amountOff: "amount_off" } }
+# after: written once, matching every other field type
+currencyOptions: "currency_options"->entries { key value { amountOff: "amount_off" } }
+```
+
+**Cause:** `PropMap.select()` (`src/oas/nodes/propMap.ts`) always wrote
+`Naming.sanitiseFieldForSelect`'s result twice, joined by a stray `': '`. That helper already
+returns the complete text for a field — just the bare name when no alias is needed, or the full
+`name: "original"` pair when it is. Every sibling (`propArray.ts`, `propObj.ts`, `propComp.ts`,
+`propEn.ts`, `propScalar.ts`) writes it once. Writing it twice only broke when a real alias was
+present (two `name: "original"` pairs back to back); for a map field whose key needs no aliasing,
+the old code produced a harmless self-alias (`name: name->entries`) — which is why this went
+uncaught: no existing test exercised a map field that also needed aliasing.
+
+**Fix:** write the field text once. When no alias is needed, a self-alias (`name: name`) is kept
+before `->entries` — not because it's meaningful GraphQL, but because a locally-vendored pre-release
+composer build (`tools/local/apollo-federation-cli`, used by `test_060`-`062`/`test_R5_security_apikey_header_emits_named_header`
+when present) fails to credit `key`/`value` through a bare `name->entries` with no alias at all
+(`Object type X has no field key`) — a quirk in that external tool, confirmed by reproducing it
+directly, not something to fix here. Keeping the self-alias only for the no-op case preserves that
+compatibility while still fixing the genuinely broken doubled-alias case.
+
+**Known limitation, not a bug in this fix:** on stock rover (not the local pre-release build),
+composing a map field at all — regardless of aliasing — still hits the pre-existing, already-accepted
+upstream limitation from #14 (`CONNECTORS_UNRESOLVED_FIELD` on the map entry's `key`/`value`, since
+rover v0.4's shape validator credits nothing inside `->entries`). This fix corrects an independent,
+real parsing bug; it does not by itself change `stripe.json`/`docker-engine.json`'s stock-rover
+pass-rate (both re-measured, unchanged: 82.4% / 86.0%) until a rover release ships #14's patch — at
+which point these ops will compose without any further change here.
+
+**Tests:** `tests/resources/oas/map-key-aliasing.yaml`, `test_map_field_key_aliasing_not_duplicated`
+in `tests/all/oas-core.test.ts` (generation-only, no compose — mirrors
+`test_no_duplicate_type_definitions_launch_library`'s pattern, since composing a map field is
+blocked by #14 on stock rover regardless of this fix; asserts the alias text appears exactly once).
+Reverting the fix reproduces the exact duplicated output and fails the test.
+
+**AST:** none — emission-only, no node/tree changes.
+**Refs:** `src/oas/nodes/propMap.ts` (`PropMap.select`), `src/oas/utils/naming.ts`
+(`sanitiseFieldForSelect`, unchanged). Related: #14 (the separate upstream limitation still gating
+full compose on stock rover).

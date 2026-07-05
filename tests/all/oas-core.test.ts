@@ -1010,6 +1010,21 @@ test('test_server_url_preserves_declared_order', async () => {
   assert.ok(!/sandbox\.example\.com/.test(schema!), 'later server is not used just for being absolute');
 });
 
+test('test_map_field_key_aliasing_not_duplicated', async () => {
+  // A map field whose JSON key needs aliasing (currency_options -> currencyOptions) used to write
+  // the alias twice: currencyOptions: "currency_options": currencyOptions: "currency_options"->entries
+  // — invalid selection syntax rover can't parse. see docs/issues.md #42
+  const gen = await OasGen.fromFile(`${oasBasePath}/map-key-aliasing.yaml`, {
+    skipValidation: false,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/coupons>**']);
+  const occurrences = (sdl.match(/currencyOptions: "currency_options"/g) ?? []).length;
+  assert.strictEqual(occurrences, 1, 'the alias must be written exactly once');
+  assert.match(sdl, /currencyOptions: "currency_options"->entries \{/);
+});
+
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
   // OAS 3.1 nullable syntax `type: [string, 'null']` (no more `nullable: true`) reached
   // createScalarType as the literal "string,null" and threw. The array collapses to its first
