@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.15.3]
+
+### Fixed
+- A merged union's shadowed same-name member field (two members sharing a field name but disagreeing
+  on its type, e.g. `rocket: RocketNormal` vs `rocket: RocketDetailed`) was still treated as reachable,
+  emitting its type's whole subtree with no connector coverage. Closes the remaining residue from
+  #38; launch library corpus: 86.2% → 98.3% (#39).
+- An object-typed (or array-of-object) query parameter emitted a full type definition inline inside
+  the argument list — invalid GraphQL. Degrades to the existing `JSON` scalar fallback, preserving
+  array cardinality; box corpus: 98.2% → 100.0% (#40).
+- Only the first entry in an OAS `servers[]` array was ever consulted for the `@source` base URL. A
+  relative or protocol-relative leading server (no usable host) is now skipped in favor of a later,
+  usable one, in declared order; docker-engine corpus: 0.0% → 86.0% (#41).
+- A map (`additionalProperties`) field whose JSON key needed snake_case→camelCase aliasing wrote the
+  alias twice, producing an invalid selection rover couldn't parse (#42).
+
 ## [0.15.1]
 
 ### Fixed

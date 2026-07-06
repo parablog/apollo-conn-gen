@@ -94,7 +94,9 @@ export class Param extends Type {
   // Factory routes to Obj/Composed (oneOf/anyOf go through Union instead, already handled there).
   private static isObjectLike(context: OasContext, schema: SchemaObject | ReferenceObject | undefined): boolean {
     if (!schema) return false;
-    const resolved = ('$ref' in schema ? context.resolvePointer(schema.$ref ?? null) : schema) as SchemaObject | undefined;
+    const resolved = ('$ref' in schema ? context.resolvePointer(schema.$ref ?? null) : schema) as
+      | SchemaObject
+      | undefined;
     return !!resolved && (resolved.type === 'object' || resolved.allOf != null || !_.isEmpty(resolved.properties));
   }
 
