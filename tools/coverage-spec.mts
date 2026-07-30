@@ -17,7 +17,7 @@ import { OasGen } from '../src/index.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { exec as _exec } from 'child_process';
+import { exec as _exec, execSync } from 'child_process';
 import { promisify } from 'util';
 
 // The generator traces via console.log/warn; mute it (progress goes to stderr, report to file).
@@ -86,6 +86,16 @@ const SKIP_PASSES = new Map<string, string>([]);
 const skipReason = (file: string, pass: keyof typeof PASSES) => SKIP_PASSES.get(`${file}::${pass}`);
 
 const TRACE = !!process.env.COV_TRACE;
+// A normal compose takes a few seconds. Past this, rover is not going to finish: confluence's
+// `put:/wiki/rest/api/content/{id}/child/attachment/{attachmentId}` (87 input types) grows by about
+// 2 GB every 5s until the machine is out of memory. Score it as a failure instead of losing the
+// whole sweep — the ceiling this leaves is roughly 12 GB for one op.
+// COV_COMPOSE_TIMEOUT=<ms> lowers it, to check the kill works without letting the op grow first.
+// `Number` so a typo (`=30s`) falls back to the default instead of becoming NaN, which fires the
+// deadline at once and scores every op in the sweep as a timeout.
+const COMPOSE_TIMEOUT_MS = Number(process.env.COV_COMPOSE_TIMEOUT) || 30_000;
+// Above this SDL size we compose one at a time — eight rovers on a 300K schema each is what ate 60 GB.
+const BIG_SCHEMA_BYTES = 200_000;
 const tmp = path.join(os.tmpdir(), 'oas-coverage');
 fs.mkdirSync(tmp, { recursive: true });
 fs.writeFileSync(path.join(tmp, 'sample.graphql'), 'type Query { hello: String }');
@@ -116,7 +126,8 @@ async function loadBase(file: string): Promise<{ gen: OasGen; skip: boolean } | 
   return null;
 }
 
-async function compose(schema: string, fed: string, idx: number): Promise<{ ok: boolean; code?: string }> {
+async function compose(op: string, schema: string, fed: string, idx: number): Promise<{ ok: boolean; code?: string }> {
+  if (TRACE) process.stderr.write(`    compose ${idx} ${op}\n`);
   const schemaFile = path.join(tmp, `schema-${idx}.graphql`);
   const sgFile = path.join(tmp, `supergraph-${idx}.yaml`);
   fs.writeFileSync(schemaFile, schema);
@@ -124,16 +135,40 @@ async function compose(schema: string, fed: string, idx: number): Promise<{ ok: 
     sgFile,
     `federation_version: =${fed}\nsubgraphs:\n  test_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${schemaFile}\n  sample_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${path.join(tmp, 'sample.graphql')}\n`,
   );
+  const running = exec(`rover supergraph compose --config ${sgFile} --elv2-license accept`, {
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  // rover can still exit 0 once its child is gone, so remember that we killed it rather than
+  // reading the exit status.
+  let timedOut = false;
+  // `rover` is only a launcher: the composing runs in a `supergraph-<version>` child of it, and that
+  // is what grows (16 GB in 45s on confluence's attachment PUT). Kill that child FIRST — once rover
+  // is gone the child is reparented to launchd and we can no longer find it by parent, so it keeps
+  // running and keeps growing.
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    try {
+      execSync(`pkill -9 -P ${running.child.pid}`);
+    } catch {
+      /* no children left */
+    }
+    running.child.kill('SIGKILL');
+  }, COMPOSE_TIMEOUT_MS);
   try {
-    await exec(`rover supergraph compose --config ${sgFile} --elv2-license accept`, { maxBuffer: 64 * 1024 * 1024 });
-    return { ok: true };
+    await running;
+    return timedOut ? { ok: false, code: 'TIMEOUT' } : { ok: true };
   } catch (e: any) {
+    if (timedOut) {
+      return { ok: false, code: 'TIMEOUT' };
+    }
     const out = `${e.stdout ?? ''}\n${e.stderr ?? ''}\n${e.message ?? ''}`;
     // rover wraps everything in a generic [E029]; the actionable code is the federation error
     // name in the "Caused by:" body (e.g. INVALID_URL, SATISFIABILITY_ERROR, INVALID_GRAPHQL).
     const inner = out.match(/^\s*([A-Z][A-Z0-9_]{3,}):/m);
     const outer = out.match(/\[(E[0-9]+)\]/);
     return { ok: false, code: inner ? inner[1] : outer ? outer[1] : 'OTHER' };
+  } finally {
+    clearTimeout(deadline);
   }
 }
 
@@ -215,19 +250,29 @@ async function runPass(
       verdicts[op] = 'GEN-THROW';
     }
   }
-  // Phase 2 (pooled): compose candidates via rover.
+  // Phase 2 (pooled): compose candidates via rover. Big schemas run one at a time so a heavy op
+  // can't be multiplied by the pool — the idx keeps counting across both so each writes its own files.
   const fed = PASSES[passKey].fed;
-  const composed = await pool(candidates, (c, i) => compose(c.schema, fed, i), concurrency);
-  composed.forEach((res, i) => {
+  const small = candidates.filter((c) => c.schema.length < BIG_SCHEMA_BYTES);
+  const big = candidates.filter((c) => c.schema.length >= BIG_SCHEMA_BYTES);
+  const composed = new Map<string, { ok: boolean; code?: string }>();
+  (await pool(small, (c, i) => compose(c.op, c.schema, fed, i), concurrency)).forEach((res, i) =>
+    composed.set(small[i].op, res),
+  );
+  (await pool(big, (c, i) => compose(c.op, c.schema, fed, small.length + i), 1)).forEach((res, i) =>
+    composed.set(big[i].op, res),
+  );
+  for (const { op } of candidates) {
+    const res = composed.get(op)!;
     if (res.ok) {
       r.ok++;
-      verdicts[candidates[i].op] = 'OK';
+      verdicts[op] = 'OK';
     } else {
       r.composeFail++;
-      addBucket(r.buckets, `COMPOSE-FAIL [${res.code}]`, candidates[i].op);
-      verdicts[candidates[i].op] = `COMPOSE-FAIL [${res.code}]`;
+      addBucket(r.buckets, `COMPOSE-FAIL [${res.code}]`, op);
+      verdicts[op] = `COMPOSE-FAIL [${res.code}]`;
     }
-  });
+  }
   // per-op verdict dump for before/after attribution: COV_DUMP=/path/prefix
   if (process.env.COV_DUMP) {
     fs.writeFileSync(`${process.env.COV_DUMP}.${file.replace(/[^a-z0-9]+/gi, '_')}.${passKey}.json`, JSON.stringify(verdicts, null, 1));

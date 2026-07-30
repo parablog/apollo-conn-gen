@@ -33,7 +33,9 @@ export class Union extends Type {
   }
 
   get id(): string {
-    return `union:${this.name}`;
+    // The same `oneOf` sent in a request body and returned in a response is two nodes, like obj/comp/map:
+    // without the kind here one of them overwrites the other (QuickBooks `Bill.Line`). see docs/issues.md #48
+    return `union:${this.kind}:${this.name}`;
   }
 
   public forPrompt(_context: OasContext): string {

@@ -1942,3 +1942,171 @@ Reverting the fix reproduces the exact duplicated output and fails the test.
 **Refs:** `src/oas/nodes/propMap.ts` (`PropMap.select`), `src/oas/utils/naming.ts`
 (`sanitiseFieldForSelect`, unchanged). Related: #14 (the separate upstream limitation still gating
 full compose on stock rover).
+
+## 48 · The same `oneOf` used by a request body and by a response is only written once — ✅ Fixed (working tree)
+
+**Symptom:** a mutation whose request body and whose response both contain the same `oneOf` list
+generates a schema that refers to a type it never writes, so composition fails with
+`CONNECTORS_UNRESOLVED_FIELD`. Seen on `quickbooks-online.yaml` `post:/v3/company/{realm-id}/bill`
+and `post:/v3/company/{realm-id}/payment`.
+
+**OAS** — QuickBooks writes the very same `Line` list in the schema you send (`BillCreateObject`,
+line 2378) and in the schema you get back (`Bill`, line 2882):
+```yaml
+BillCreateObject:            # the request body
+  properties:
+    Line:
+      type: array
+      items:
+        oneOf:
+          - $ref: '#/components/schemas/ItemBasedExpenseLine'
+          - $ref: '#/components/schemas/AccountBasedExpenseLine'
+Bill:                        # the response
+  properties:
+    Line:
+      type: array
+      items:
+        oneOf:               # identical
+          - $ref: '#/components/schemas/ItemBasedExpenseLine'
+          - $ref: '#/components/schemas/AccountBasedExpenseLine'
+```
+
+**Example**:
+```graphql
+# before: only the input flavour is written; `LineUnion` is referenced but never defined
+input LineUnionInput { ... }        # the two members merged into one object (no discriminator, see #25)
+type Bill { line: [LineUnion] }     # ✗ CONNECTORS_UNRESOLVED_FIELD — no `LineUnion` anywhere
+
+# after: both flavours are written
+input LineUnionInput { ... }
+type LineUnion { ... }
+type Bill { line: [LineUnion] }     # ✓
+```
+
+**Cause:**
+- A node's `kind` says whether it is something you send (`input`) or something you get back (`type`).
+- `Union.id` was the only node id that left the kind out — its siblings all carry it:
+  ```
+  src/oas/nodes/obj.ts:34    obj:${this.kind}:${this.name}
+  src/oas/nodes/comp.ts:26   comp:${this.kind}:${this.name}
+  src/oas/nodes/map.ts:25    map:${this.kind}:${this.name}
+  src/oas/nodes/union.ts:38  union:${this.name}              <- the bug
+  ```
+- Two `Union` nodes are built for `Line` — one for the body, one for the response — but they end up
+  with the same id.
+- Everything that keeps track of what has been written is keyed by that id
+  (`typesCollector.ts:63-72,133`, `oasGen.ts:185`, `writer.ts:92`), so the second node replaces the
+  first and only one of the two is ever written. The body one wins, and the response field is left
+  pointing at nothing.
+- GET-only specs never showed this: with no request body there is no second node to collide with.
+- `Union.generateMergedObject` already writes the kind and appends `Input` to the name, so both
+  flavours were always meant to exist side by side — the shared id was what prevented it.
+
+**Fix:** put the kind in the id, exactly like `Obj` / `Comp` / `Map`:
+`union:${this.kind}:${this.name}`.
+
+**Tests:** `test_R2_union_shared_by_body_and_response_emits_both_flavours` in
+`tests/all/r2-abstract.test.ts` — selects `post:/v3/company/{realm-id}/bill>**` on the existing
+`quickbooks-online.yaml` fixture and asserts that both `type LineUnion` and `input LineUnionInput`
+are written. Undoing the one-line change fails it. The QuickBooks mutation sweep went from 5/7
+(71.4%) to **7/7 (100%)**; the full GET sweep is byte-identical to the run before the change.
+
+**AST:** an identity change — same nodes, same shape, one of them now has a different id, so union
+segments inside selection paths gained the kind (real path, `mapper.test.ts:28`):
+```
+before:  get:/2.3.0/agencies/>res:r>obj:type:#/c/s/PaginatedPolymorphicAgencyEndpointList
+           >prop:array:#results>union:#/c/s/PolymorphicAgencyEndpoint>…
+after:   …>prop:array:#results>union:type:#/c/s/PolymorphicAgencyEndpoint>…
+```
+A union reached from a request body gets `union:input:` instead — that is the node that used to be
+lost. 18 literal paths in `oas-core.test.ts`, `r2-abstract.test.ts`, `mapper.test.ts` and `single.test.ts`
+were updated to `union:type:`; all of them are response-side. The web UI stores checked selections
+under `oas:tree-selection`, so a selection saved before this change and crossing a union will not
+restore — it clears on the next upload.
+
+**Refs:** `src/oas/nodes/union.ts` (`Union.id`), `src/oas/nodes/obj.ts` / `comp.ts` / `map.ts` (the
+siblings it now matches), `src/oas/generator/typesCollector.ts` and `src/oas/io/writer.ts` (the two
+places keyed by the id). Related: #25 (a `oneOf` with no discriminator becoming one merged object —
+that downgrade works fine here; this is about it being written once instead of twice), #14
+(`CONNECTORS_UNRESOLVED_FIELD` from the opposite problem — types written that nothing selects).
+
+## 49 · A request body that reaches a big shared model makes composition run out of memory — ⬜ Open
+
+**Symptom:** a write op whose request body pulls in a large, self-referencing model generates a
+schema rover cannot compose in bounded memory: the composing process grows by about 2 GB every 5s
+(16 GB at 45s) and never finishes. It reached 60–75 GB and took the machine down twice. Three
+`confluence.json` ops do it, e.g. `put:/wiki/rest/api/content/{id}/child/attachment/{attachmentId}`.
+Generation itself is fine and fast — 293K of SDL in about a second, 70 MB of heap (all 65 of that
+spec's mutation ops generate in one process with a 310 MB peak).
+
+**OAS** — the body looks small, but `version` reaches the whole content model:
+```yaml
+AttachmentPropertiesUpdateBody:      # the request body: 8 fields
+  properties:
+    id:        { type: string }
+    title:     { type: string }
+    container: { $ref: '#/components/schemas/Container' }
+    version:   { $ref: '#/components/schemas/Version' }   # <- the door
+
+Version:
+  properties:
+    content: { $ref: '#/components/schemas/Content' }     # <- the whole model
+
+Content:                                                   # refers to 12 schemas, itself included
+  properties:
+    ancestors: { type: array, items: { $ref: '#/components/schemas/Content' } }
+    children:  { $ref: '#/components/schemas/ContentChildren' }
+    space:     { $ref: '#/components/schemas/Space' }
+    version:   { $ref: '#/components/schemas/Version' }   # <- back to where we came from
+    ...
+```
+
+**Example** — what one op writes:
+```graphql
+# 173 definitions for a body of 8 fields:
+type ... x86         # the response side
+input ... x87        # the same model again, as input types
+# and one @connect body selection of 134,402 characters
+```
+
+**Measurements (all on that one op):**
+- 86 output types + 87 input types, 293K of SDL.
+- The `@connect(http: { body: ... })` selection is **134 KB in a single directive** — nearly half the file.
+- 191 fields were dropped as cycle cuts (`# … - circular reference omitted`), and cycles still
+  survive on **both** sides: `User -> Space -> SpaceHistory -> User` among the output types,
+  `ContentInput -> ContentHistoryInput -> UserInput -> SpaceInput -> ContentInput` among the inputs.
+  (Recursive types are legal GraphQL — this is listed as a fact about the output, not as the cause.)
+
+**Not caused by #48** (checked, because that fix landed just before this appeared). The same op
+generated with the pre-#48 union id is byte-identical except for 10 lines — the `type LabelsUnion`
+definition that used to be missing. Both have the same 87 input types. What changed is only how far
+rover gets: the old schema referenced an undefined type, so it was rejected at parse time
+(`INVALID_GRAPHQL`, 4.2s); the corrected schema is valid, so composition actually starts, and that is
+what runs out of memory. The op failed before and fails now — only the bucket changed.
+
+**Cause:** not yet established. Two candidates, in order of suspicion:
+1. the 134 KB body selection — its size, not the schema's;
+2. the size of the input-type graph itself (87 types, 104 references between them).
+Bisecting them apart is the next step: compose the same schema with the body selection trimmed, then
+with the input types trimmed, and see which one changes the memory curve.
+
+**Mitigation (not a fix):** `tools/coverage-spec.mts` now gives each compose a 30s deadline and kills
+rover **and its `supergraph-<version>` child** (`pkill -9 -P` before killing rover — the child is
+reparented and unfindable once the parent is gone, and `child_process.exec` silently ignores
+`detached`, so a process-group kill does not work here). A runaway op now scores
+`COMPOSE-FAIL [TIMEOUT]` instead of ending the sweep. Big schemas (≥200K) also compose one at a
+time — eight of these at once is what turned 8 GB into 60 GB.
+A `TIMEOUT` is wall-clock, so it depends on the machine and what else is running: 30s is about ten
+times a normal compose and the big ones no longer compete with each other, but read a new one as
+"look at this op", not as proof on its own.
+
+**Evidence kept:** `/tmp/qbo-after.graphql` (current) and `/tmp/qbo-before.graphql` (pre-#48) —
+the pair the comparison above is based on; `/tmp/oas-coverage-keep/` holds the harness's own
+`schema-4.graphql` + `supergraph-4.yaml` for the same op.
+
+**AST:** none — the node tree is not involved. Generation produces the same tree it always did; this
+is about how much SDL that tree writes for a body, and what composition then costs.
+**Refs:** `tools/coverage-spec.mts` (the deadline and the size split). Related: #48 (the fix that
+made this op reach composition at all — not its cause), #10 (the cycle cuts that fire 191 times here
+and still leave cycles behind), and `confluence.json post:/wiki/rest/api/content/{id}/copy`, the only
+`CIRCULAR_REFERENCE` in the corpus, which may be the same shape seen from the response side.

@@ -33,10 +33,10 @@ test('test_R2_union_partial_selection_omits_unselected_member', async () => {
   // Field Definition). Here only Book's fields are selected — Movie must not appear at all, and the union
   // lists only Book. Union.dependencies() must mirror generate()/->match (selectedMembers). see #36
   const paths = [
-    'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:id',
-    'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:type',
-    'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:title',
-    'get:/item>res:r>union:itemResponse>obj:type:#/c/s/Book>prop:scalar:author',
+    'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:scalar:id',
+    'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:scalar:type',
+    'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:scalar:title',
+    'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:scalar:author',
   ];
   const schema = await runOasTest('simple-oneOf-example.yaml', paths, 1, 2, false, false, undefined, false, false, {
     connectorSpecVersion: 'v0.4',
@@ -332,4 +332,25 @@ test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
   assert.ok(/type DetailBasic \{/.test(schema!), 'the winning field\'s type is emitted');
   assert.ok(!/DetailRich/.test(schema!), 'the shadowed field\'s type must not be emitted at all');
   assert.ok(!/DeepThing/.test(schema!), 'the shadowed type\'s own subtree must not be emitted either');
+});
+
+// see docs/issues.md #48
+test('test_R2_union_shared_by_body_and_response_emits_both_flavours', async () => {
+  // QuickBooks reaches the same `Line` oneOf twice: as the POST body and as the response. Both
+  // flavours must be defined — the response's `line: [LineUnion]` used to reference a missing type.
+  const schema = await runOasTest(
+    'quickbooks-online.yaml',
+    ['post:/v3/company/{realm-id}/bill>**'],
+    15,
+    14,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.14.1' },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/type LineUnion \{/.test(schema!), 'the response flavour is emitted');
+  assert.ok(/input LineUnionInput \{/.test(schema!), 'the body flavour is emitted');
 });
