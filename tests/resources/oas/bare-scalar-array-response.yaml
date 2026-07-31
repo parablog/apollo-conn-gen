@@ -1,0 +1,30 @@
+openapi: 3.0.0
+info:
+  title: Bare array-of-scalar response (no property wrapper)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# Regression: a response schema that resolves directly to an array of scalars (not wrapped in a
+# named property) had nothing selectable, so the whole op was silently dropped from the schema —
+# same failure mode as #32's bare scalar response, one level up. Real-world shape: spotify's "check
+# saved X" endpoints (get:/me/albums/contains, etc.) return a bare `[true, false, ...]`.
+# see docs/issues.md #47
+paths:
+  /me/widgets/contains:
+    get:
+      operationId: checkUserSavedWidgets
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: array of booleans, one per requested id
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: boolean

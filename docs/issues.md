@@ -2252,6 +2252,67 @@ the compose-fail bucket — no regression, and `/system/df`'s failure category c
 two levels down), `src/oas/nodes/typeUtils.ts` (`T.isContainer`, unchanged — confirms `Arr` is
 deliberately not a container, which is exactly why this shape falls through both checks).
 
+## 47 · A bare array-of-scalar op response is dropped entirely (no Query field, empty selection) — ✅ Fixed (working tree)
+
+**Symptom:** an op whose response is a bare array of scalars (no wrapping object/property — the
+response schema itself is `{type: array, items: {type: <scalar>}}`) vanishes from the schema
+completely: no `Query`/`Mutation` field at all, not even a degraded one. Confirmed on 7
+`spotify.json` ops (`get:/me/albums/contains`, `get:/me/tracks/contains`, `get:/me/shows/contains`,
+etc. — Spotify's "check saved X" endpoints, which return `[true, false, ...]`).
+
+**OAS** (a bare array-of-boolean response, no object wrapper):
+```yaml
+responses:
+  '200':
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            type: boolean
+```
+
+**Cause — two parts, confirmed by direct repro:**
+1. **The op is dropped before generation even starts.** `PathsCollector.collectExpandedPaths`
+   (`typesCollector.ts:251-303`) decides which nodes are "leaves" (selectable) by walking the op's
+   tree; it already special-cases a *named* scalar-array property (`child instanceof PropArray &&
+   child.items instanceof Scalar`, line 262) and a *bare single scalar* direct response (`child
+   instanceof Scalar && child.parent instanceof Res`, line 272, added for #32 — e.g. a write that
+   just returns `true`). It has no case for a **bare array of scalars** as the direct response
+   (`Res -> Arr -> Scalar`, no `Prop` wrapper) — so the traversal finds no leaf at all, `newSelection`
+   stays empty for the op, and it's dropped from the schema entirely (confirmed: `gen.getTypes()`
+   returns `types.size === 0` and the generated schema has no `type Query {` block whatsoever).
+2. **Even once selectable, the connector selection would be empty.** `Res.select()` only special-cases
+   `T.isScalar(response)` (a bare scalar) by writing `$`; a bare array response falls to
+   `response.select(...)` → `Arr.select()` → unconditionally delegates to `this.itemsType.select()`
+   → `Scalar.select()`, which writes nothing unless the scalar has a JSON-schema `default`. Confirmed
+   by patching in a fix for cause 1 alone (temporary, reverted): the op does get a `Query` field
+   (`meAlbumsContains(ids: String!): [Boolean]`), but rover then rejects it with
+   `INVALID_SELECTION: @connect(selection:) on Query.meAlbumsContains is empty`.
+
+**Fix:** two matching additions, one per cause, mirroring the existing bare-scalar precedent each
+was missing:
+1. `PathsCollector.collectExpandedPaths`'s leaf-detection `T.traverse` callback gained a branch:
+   `child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar` →
+   `newSelection.add(child.path())` — same shape as the existing bare-scalar-response branch beside
+   it.
+2. `Res.select()` now emits `$` for a direct-response array whose `itemsType` is a scalar too —
+   widened the existing `T.isScalar(response)` branch to `T.isScalar(response) || (response
+   instanceof Arr && response.itemsType instanceof Scalar)`.
+
+**Tests:** `tests/resources/oas/bare-scalar-array-response.yaml` (mirrors #32's
+`bare-scalar-response.yaml`, one level up — a bare `array of boolean` response, no wrapper),
+`test_bare_scalar_array_response_not_dropped` in `tests/all/oas-core.test.ts` — asserts the field
+survives with type `[Boolean]` and the selection is the bare `$` passthrough, and composes via
+rover. Reverting both changes together reproduces the op vanishing entirely and fails the test.
+Re-verified directly against all 7 originally-affected `spotify.json` ops: full corpus sweep for
+that spec went from 87.9% (51/58, 7 `GEN-EMPTY`) to **100%** (58/58) — every dropped op now composes.
+
+**AST:** none — both fixes are leaf-detection/selection-emission additions, no new node kinds.
+**Refs:** `src/oas/generator/typesCollector.ts` (`PathsCollector.collectExpandedPaths`),
+`src/oas/nodes/res.ts` (`Res.select`). Related: #32 (the bare scalar-response precedent this extends
+to bare scalar-array responses).
+
 ## 48 · The same `oneOf` used by a request body and by a response is only written once — ✅ Fixed (working tree)
 
 **Symptom:** a mutation whose request body and whose response both contain the same `oneOf` list

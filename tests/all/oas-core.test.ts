@@ -968,6 +968,20 @@ test('test_bare_scalar_response_not_dropped', async () => {
   assert.ok(/selection: """\s*\$\s*"""/.test(schema!), 'selection passes through the raw scalar value');
 });
 
+test('test_bare_scalar_array_response_not_dropped', async () => {
+  // The same failure mode as the bare-scalar case above, one level up: a response that resolves
+  // directly to an ARRAY of scalars (no property wrapper) had no leaf at all under the old
+  // detection (PropArray's own leaf case only covers a *named* scalar-array property, and the bare
+  // scalar case only covers a direct Scalar, not an Arr-of-scalar) — the op was silently dropped
+  // entirely. Even once selectable, the connector selection was empty (Arr.select delegated to
+  // Scalar.select, which writes nothing without a default) until Res.select also learned to treat
+  // a bare array-of-scalar response like a bare scalar. Composes via rover. see docs/issues.md #47
+  const schema = await runOasTest('bare-scalar-array-response.yaml', ['get:/me/widgets/contains>**'], 1, 0);
+  assert.ok(schema !== undefined);
+  assert.ok(/meWidgetsContains\(ids: String!\): \[Boolean\]/.test(schema!), 'field present, returns [Boolean]');
+  assert.ok(/selection: """\s*\$\s*"""/.test(schema!), 'selection passes through the raw array value');
+});
+
 test('test_same_name_fields_not_cut_as_circular', async () => {
   // docs/issues.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
   // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing

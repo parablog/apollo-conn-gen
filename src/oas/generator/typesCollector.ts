@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
-import { IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Res, Scalar, T } from '../nodes/internal.js';
+import { Arr, IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Res, Scalar, T } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
 
@@ -277,6 +277,12 @@ class PathsCollector {
           // emits `$` for it; only the leaf-detection here was missing the case. Scoped to a direct
           // Res child on purpose — a bare scalar nested deeper (e.g. inside a Map's value) has its
           // own separate, unrelated selection gaps; this fix doesn't touch those.
+          newSelection.add(child.path());
+        } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
+          // the case above with a list around it — a response that is just an array of values,
+          // no object around it (spotify's "check saved" endpoints answer `[true, false]`):
+          //   responses: { '200': { schema: { type: array, items: { type: boolean } } } }
+          // Nothing to pick apart, so the array itself is the leaf. see docs/issues.md #47
           newSelection.add(child.path());
         } else {
           this.gen.expand(child);
