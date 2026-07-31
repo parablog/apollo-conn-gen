@@ -2156,6 +2156,102 @@ limitation (`currency_options`), unrelated to this fix.
 **Refs:** `src/oas/utils/naming.ts` (`Naming.genTypeName`). Related: `obj.ts` (`Obj generate`, the
 `parentName + 'Obj'` precedent for a different collision).
 
+## 46 · An array `$ref` to another array-typed schema nests an `Arr` inside a `PropArray`, breaking both the field's type name and its selection brackets — ✅ Fixed (working tree)
+
+**Symptom:** an array property whose `items` is a `$ref` that itself resolves to a `type: array`
+schema (rather than a plain object) emits a field type that references an undefined type, AND drops
+the nested selection's braces entirely — flattening the nested object's fields straight into the
+*parent's* own selection body as if they were siblings. Confirmed on `docker-engine.json
+get:/system/df`: rover rejects with `SELECTED_FIELD_NOT_FOUND: @connect(selection:) on
+Query.systemDf contains field 'command', which does not exist on SystemDfResponse`.
+
+**OAS** (`Containers` is an array whose item ref, `ContainerSummary`, is itself `type: array`):
+```json
+"SystemDfResponse": {
+  "properties": {
+    "Containers": { "type": "array", "items": { "$ref": "#/components/schemas/ContainerSummary" } }
+  }
+},
+"ContainerSummary": {
+  "type": "array",
+  "items": { "properties": { "Command": { "type": "string" }, "Id": { "type": "string" } } }
+}
+```
+
+**Example** (current, broken output):
+```graphql
+type SystemDfResponse {
+  containers: [Containers]   # "Containers" is never defined anywhere
+  ...
+}
+type ContainersItem {        # the real object — under a DIFFERENT name than the field references
+  command: String
+  id: String
+  ...
+}
+# selection: containers' own fields leak into the parent's selection, unbracketed
+containers: "Containers"      command: "Command"
+id: "Id"
+...
+```
+
+**Cause (confirmed by tracing the exact code path, one root cause explaining both symptoms):**
+`Factory.fromProp`'s array branch (`factory.ts:295-305`) resolves `Containers`' `items` — the
+`ContainerSummary` `$ref` — via `Factory.fromSchema`. Because `ContainerSummary`'s own schema is
+`{type: array, items: {...}}` (not an object), `fromSchema` routes it through `createArrayType`
+*again* (`factory.ts:248`), producing a **second, nested `Arr`** as `PropArray.items` — instead of
+the plain `Obj` every other array property gets. That nested `Arr`'s own `.name` is just inherited
+from its parent (`parentName = parent.name`, `factory.ts:250` — here the *outer* `PropArray`'s name,
+`"containers"`), and the *real* object lives one level deeper, as that inner `Arr`'s `itemsType`
+— named `ContainersItem` by `Obj.updateName()`'s array-item fallback (`obj.ts:294-297`, `parent
+instanceof Arr` branch). Two call sites in `PropArray` assume `this.items` is always the actual
+element type (object/scalar), never another `Arr`, and both break the same way once it is:
+- `PropArray.getValue()` (`propArray.ts:52-59`) takes `Naming.genTypeName(this.items.name)` —
+  reads the nested Arr's inherited name (`"containers"` → sanitised `Containers`) instead of the
+  real object's name (`ContainersItem`) two levels down. Definition and reference now name two
+  different things.
+- `PropArray.select()`'s `needsBrackets()` (`propArray.ts:80/89/103-106`) gates on
+  `T.isContainer(this.items)` (`typeUtils.ts:81-88`, true only for `obj:`/`comp:`/`union:`/`map:` id
+  prefixes) — an `Arr`'s id (`array:...`, `arr.ts`) never matches, so no `{`/`}` gets written, and
+  `this.items!.select(...)` (the nested `Arr`'s `select`, which itself has no bracket logic — it just
+  delegates straight to its own `itemsType.select()`) writes the real object's fields completely
+  unscoped, straight into whatever selection body is currently open.
+
+The real API payload (`"Containers": [{...}]`, docker's own example) is a single-level array of
+objects — `ContainerSummary` being independently modeled as `type: array` is redundant/an artifact of
+how this OAS names a reusable "list of X" schema, not a genuine array-of-arrays on the wire.
+
+**Fix:** a new `Factory.unwrapRedundantArrayItems(context, items)` helper — when `items` is a `$ref`
+that resolves to a schema itself `{type: array, items: Y}`, returns `Y` directly (skips straight to
+the true item schema) instead of letting the ref reach `fromSchema` and recurse into another
+`createArrayType`. Applied at **both** places an array's `items` gets resolved: `fromProp`'s array
+branch (`factory.ts` ~330, the named-property path — this is the one `Containers` actually takes) and
+`createArrayType` itself (`factory.ts` ~257, the generic path reached via `fromSchema`, for arrays
+found any other way). This keeps `PropArray.items` an invariant every existing call site already
+assumes — never another `Arr` — so `getValue()` and `needsBrackets()`/`select()` needed no changes
+themselves.
+
+**Tests:** `tests/resources/oas/array-refs-array-typed-schema.yaml` (`widgets: [WidgetList]` where
+`WidgetList` is itself `type: array`), `test_array_item_ref_to_array_typed_schema_unwraps_redundant_nesting`
+in `tests/all/oas-core.test.ts` — asserts `widgets: [WidgetsItem]` matches the real
+`type WidgetsItem` definition, `WidgetList` never leaks into the schema, and the selection nests
+inside braces rather than flattening. Reverting the fix reproduces a real rover failure
+(`cannot find type 'widgets' in this document`) and fails the test. Re-verified directly against
+`docker-engine.json get:/system/df`: the `SELECTED_FIELD_NOT_FOUND` on `command` is gone; the op
+still doesn't fully compose, but now only for the separate, already-documented #14 map-field
+limitation (`NetworkSettings.Networks`), which was always going to block it regardless of this fix.
+Re-ran the full `docker-engine.json` coverage sweep before/after: same 86.0% (37/43), same 6 ops in
+the compose-fail bucket — no regression, and `/system/df`'s failure category changed from
+`SELECTED_FIELD_NOT_FOUND` to the same `CONNECTORS_UNRESOLVED_FIELD` (#14) the other 5 already show.
+
+**AST:** a shape change, not emission-only — removes a redundant intermediate `Arr` node so
+`PropArray.items` always points at the true element type.
+**Refs:** `src/oas/nodes/factory.ts` (`Factory.fromProp`'s array branch, `Factory.createArrayType`),
+`src/oas/nodes/propArray.ts` (`PropArray.getValue`, `PropArray.select`, `PropArray.needsBrackets`),
+`src/oas/nodes/obj.ts` (`Obj.updateName`, the array-item naming fallback that names the *real* object
+two levels down), `src/oas/nodes/typeUtils.ts` (`T.isContainer`, unchanged — confirms `Arr` is
+deliberately not a container, which is exactly why this shape falls through both checks).
+
 ## 48 · The same `oneOf` used by a request body and by a response is only written once — ✅ Fixed (working tree)
 
 **Symptom:** a mutation whose request body and whose response both contain the same `oneOf` list

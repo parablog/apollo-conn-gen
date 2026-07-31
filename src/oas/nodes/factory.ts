@@ -254,14 +254,34 @@ export class Factory {
     }
 
     const arr = new Arr(parent, parentName);
-    const items = _.get(schema, 'items') as ArraySchemaObject;
-    arr.items = items;
+    const items = Factory.unwrapRedundantArrayItems(context, _.get(schema, 'items') as ArraySchemaObject);
+    arr.items = items as ArraySchemaObject;
 
     // TODO: check this
     arr.itemsType = Factory.fromSchema(context, arr, items);
     arr.add(arr.itemsType); // add it to the children
 
     return arr;
+  }
+
+  // An array's items can point at a schema that is itself an array (docker-engine):
+  //   Containers:       { type: array, items: { $ref: '#/…/ContainerSummary' } }
+  //   ContainerSummary: { type: array, items: { …the real object… } }
+  // The payload is still one list of objects, so take the inner items — a property's items must
+  // always be the real element. see docs/issues.md #46
+  private static unwrapRedundantArrayItems(
+    context: OasContext,
+    items: SchemaObject | ReferenceObject,
+  ): SchemaObject | ReferenceObject {
+    if (!items || !('$ref' in items)) {
+      return items;
+    }
+    const resolved = context.lookupRef(items.$ref as string);
+    const resolvedItems = resolved && (_.get(resolved, 'items') as ArraySchemaObject | undefined);
+    if (resolvedItems && (resolved!.type === 'array' || resolved!.type == null)) {
+      return resolvedItems;
+    }
+    return items;
   }
 
   public static fromProp(
@@ -299,7 +319,7 @@ export class Factory {
         const array = new PropArray(parent, propName, schema!);
         // const itemsName = Naming.genArrayItems(propName);
 
-        const itemsSchema = _.get(schemaObj, 'items') as ArraySchemaObject;
+        const itemsSchema = Factory.unwrapRedundantArrayItems(context, _.get(schemaObj, 'items') as ArraySchemaObject);
         // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
         const itemsType = Factory.fromSchema(context, array, itemsSchema);
 

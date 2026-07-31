@@ -1,0 +1,33 @@
+openapi: 3.0.0
+info:
+  title: An array property whose item $ref resolves to another array-typed schema
+  version: 1.0.0
+paths:
+  # WidgetList is itself `type: array` (a "list of X" component reused as an array-item ref) —
+  # a redundant nesting artifact, not a genuine array-of-arrays on the wire. see docs/issues.md #46
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        '200':
+          description: A response whose array property refs a redundant array-typed component.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  widgets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WidgetList'
+components:
+  schemas:
+    WidgetList:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          count:
+            type: integer

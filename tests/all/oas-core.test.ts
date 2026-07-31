@@ -867,6 +867,21 @@ test('test_reserved_root_type_name_gets_suffixed', async () => {
   assert.ok(!/^type Subscription \{/m.test(schema!), 'no bare reserved-name type remains');
 });
 
+test('test_array_item_ref_to_array_typed_schema_unwraps_redundant_nesting', async () => {
+  // WidgetList is $ref'd as an array item, but is itself `type: array` (a redundant "list of X"
+  // naming artifact, not a genuine array-of-arrays — docker-engine's real-world shape). Left alone,
+  // this produced a second, nested Arr: the field referenced an undefined type (`[WidgetList]`)
+  // while the real object was emitted under a different, property-derived name (`WidgetsItem`), and
+  // the selection lost its nesting braces entirely. Unwrapping the redundant ref keeps `items`
+  // always the true element type everywhere else already assumes it is. see docs/issues.md #46
+  const schema = await runOasTest('array-refs-array-typed-schema.yaml', ['get:/widgets>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/widgets: \[WidgetsItem\]/.test(schema!), 'field type matches the emitted object definition');
+  assert.ok(schema!.includes('type WidgetsItem {'), 'the real object is emitted under that name');
+  assert.ok(!/WidgetList/.test(schema!), 'the redundant array-typed component name must not leak in');
+  assert.ok(/widgets \{\n\s*count\n\s*name\n\s*\}/.test(schema!), 'the selection nests inside braces, not flattened');
+});
+
 test('test_inline_renamed_when_colliding_with_component_emitted_name', async () => {
   // An inline object named by its property key ('user') must not emit under the same GraphQL name as
   // a stored component ('#/c/s/User' -> `User`): occupancy is checked on the EMITTED name too, and the
