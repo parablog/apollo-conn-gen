@@ -2092,6 +2092,70 @@ entry if picked up.
 Related: #39 (the same-kind version of this collision, already fixed), `0cf24ea` (the JSON-scalar
 degrade precedent for incompatible shapes).
 
+## 45 · No reserved-GraphQL-name guard: an OAS resource literally named "Subscription" collides with the root type — ✅ Fixed (working tree)
+
+**Symptom:** any OAS component schema named `Query`, `Mutation`, or `Subscription` (case-sensitive)
+gets emitted as a plain object type of that exact name, colliding with the reserved GraphQL root
+operation type — rover composition rejects it under connectors' subscriptions-unsupported rule.
+Confirmed on `stripe.json`: 7 ops (`get:/v1/customers`, `get:/v1/subscriptions`, `get:/v1/subscriptions/
+{subscription_exposed_id}`, `get:/v1/customers/{customer}/subscriptions`, etc.) fail rover compose
+with `SUBSCRIPTION_IN_CONNECTORS`.
+
+**OAS** (a component schema literally named `subscription`, Stripe's actual resource name):
+```json
+"subscription": {
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "customer": { "type": "string" },
+    "status": { "type": "string" }
+  }
+}
+```
+
+**Example** (current output — no before/after, nothing sanitises this today):
+```graphql
+type Subscription {   # collides with GraphQL's reserved root Subscription type
+  id: String
+  customer: String
+  status: String
+}
+```
+
+**Cause:** `Naming.genTypeName()` (`naming.ts:160`) sanitises characters (drops non-identifier
+chars, guards a leading digit) but has no check against the 3 reserved root operation type names.
+There's precedent for a similar collision-avoidance suffix (`Obj.generate`, `obj.ts:309-310`:
+`parentName + 'Obj'` when a nested type shares its parent's name), but nothing for this case.
+
+**Fix:** the guard lives inside `Naming.genTypeName` itself, not at each node's own definition-line
+generation (`Obj`/`Composed`/`Union`, etc.). `genTypeName` is the one function every type
+*definition* (`Obj.generate`, `Composed.generate`, `Union.generate`, `Map.generate`, `En.generate`)
+and every type *reference* (`propRef.ts`, `propComp.ts`, `propObj.ts`, `propArray.ts`, `propMap.ts`,
+`propEn.ts`, `propCircRef.ts`, `typeUtils.ts`, `allOfBase.ts`, `oasContext.ts`, `writer.ts`) resolves
+through — there is no separate reference-side resolver to keep in sync. Guarding only a definition
+site would rename `type Subscription { ... }` but leave references to it still resolving to the old,
+now-undefined name. `genTypeName` was already a pure, idempotent function of the input string, so
+appending a suffix when the sanitised result is exactly `Query`/`Mutation`/`Subscription` produces
+the same renamed output at every call site naming the same schema — definitions and references
+alike, nothing else to update. Composes cleanly with the existing
+`sanitised === refName ? refName : sanitised` fallback used at definition sites (`obj.ts:85`,
+`comp.ts:91`, `union.ts:126`): that fallback only reverts to the raw ref name when sanitisation made
+no real change, and once a reserved-name suffix is appended `sanitised !== refName` is always true,
+so the fallback correctly keeps the suffixed name. Suffix: `Type` (`Subscription` → `SubscriptionType`).
+
+**Tests:** `tests/resources/oas/reserved-root-type-name.yaml` (a `Subscription` schema referenced
+from a nested `Customer.subscription` field), `test_reserved_root_type_name_gets_suffixed` in
+`tests/all/oas-core.test.ts` — asserts the definition and the reference both land on
+`SubscriptionType` and rover-composes. Reverting the fix reproduces the un-suffixed
+`type Subscription {` and fails the test. Also re-verified directly against `stripe.json`
+(`get:/v1/customers`, `get:/v1/subscriptions`): `SUBSCRIPTION_IN_CONNECTORS` is gone; the remaining
+7 `CONNECTORS_UNRESOLVED_FIELD` errors on those ops are the separate, already-documented #14 map-field
+limitation (`currency_options`), unrelated to this fix.
+
+**AST:** none expected — emission-only, a name-string transform in an already-existing function.
+**Refs:** `src/oas/utils/naming.ts` (`Naming.genTypeName`). Related: `obj.ts` (`Obj generate`, the
+`parentName + 'Obj'` precedent for a different collision).
+
 ## 48 · The same `oneOf` used by a request body and by a response is only written once — ✅ Fixed (working tree)
 
 **Symptom:** a mutation whose request body and whose response both contain the same `oneOf` list

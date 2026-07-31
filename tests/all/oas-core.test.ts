@@ -854,6 +854,19 @@ test('test_response_allof_snake_path_def_ref_names_converge', async () => {
   assert.ok(!schema!.includes('Billing_history'), 'no underscore-divergent type name remains');
 });
 
+test('test_reserved_root_type_name_gets_suffixed', async () => {
+  // A component schema literally named "Subscription" collides with GraphQL's reserved root
+  // Subscription type — connectors doesn't support subscriptions, so rover rejects a plain `type
+  // Subscription { ... }` with SUBSCRIPTION_IN_CONNECTORS. genTypeName now suffixes the 3 reserved
+  // root type names; every call site (definitions and references) resolves through it, so the
+  // definition and the nested field referencing it stay in agreement. see docs/issues.md #45
+  const schema = await runOasTest('reserved-root-type-name.yaml', ['get:/customers/{id}>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type SubscriptionType {'), 'reserved name gets suffixed at the definition');
+  assert.ok(/subscription: SubscriptionType\b/.test(schema!), 'reference matches the suffixed definition');
+  assert.ok(!/^type Subscription \{/m.test(schema!), 'no bare reserved-name type remains');
+});
+
 test('test_inline_renamed_when_colliding_with_component_emitted_name', async () => {
   // An inline object named by its property key ('user') must not emit under the same GraphQL name as
   // a stored component ('#/c/s/User' -> `User`): occupancy is checked on the EMITTED name too, and the
