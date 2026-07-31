@@ -245,7 +245,7 @@ test('test_R2_union_nested_in_array_degrades_to_merged_object', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/list>**'],
-    4,
+    5,
     2,
     false,
     false,
@@ -269,7 +269,7 @@ test('test_R2_union_top_level_array_stays_real_union', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/items>**'],
-    4,
+    5,
     3,
     false,
     false,
@@ -285,13 +285,42 @@ test('test_R2_union_top_level_array_stays_real_union', async () => {
   assert.ok(/^type Movie /m.test(schema!), 'Movie emitted as its own type');
 });
 
+// see docs/issues.md #43
+test('test_R2_union_snake_case_member_refs_resolve_sanitised_name', async () => {
+  // Same shape as /items (a real, top-level union), but the member component refs are snake_case
+  // (`book_item`, `movie_item`). The union's member list and `->match`'s __typename must agree with
+  // the sanitised (PascalCase) name each member's own `type` definition actually uses — not the raw
+  // ref — or every member field reads as unresolvable to rover.
+  const schema = await runOasTest(
+    'r2-union-nested-in-list.yaml',
+    ['get:/snake-items>**'],
+    5,
+    3,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.14.1' },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(
+    schema!.includes('union SnakeItemUnion = BookItem | MovieItem'),
+    'union member list must use the sanitised type names, not the raw snake_case refs',
+  );
+  assert.ok(schema!.includes('__typename: $("BookItem")'), 'expected sanitised __typename for book_item');
+  assert.ok(schema!.includes('__typename: $("MovieItem")'), 'expected sanitised __typename for movie_item');
+  assert.ok(/^type BookItem /m.test(schema!), 'BookItem emitted as its own type');
+  assert.ok(/^type MovieItem /m.test(schema!), 'MovieItem emitted as its own type');
+});
+
 test('test_R2_union_inline_nested_degrades_via_local_check', async () => {
   // An inline (no $ref) discriminated union has no name at all — proves the nested check works
   // from the union's own position, not from anything keyed by name.
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/inline-list>**'],
-    4,
+    5,
     2,
     false,
     false,
@@ -316,7 +345,7 @@ test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/wrapped-list>**'],
-    4,
+    5,
     3,
     false,
     false,

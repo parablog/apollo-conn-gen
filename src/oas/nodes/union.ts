@@ -123,9 +123,7 @@ export class Union extends Type {
     else {
       // Definition/reference agreement, like comp.ts: references emit genTypeName(name), so the
       // union line (and its consolidate-downgrade type) must too. see docs/issues.md #15, #6
-      const sanitised = Naming.genTypeName(this.name);
-      const refName = Naming.getRefName(this.name);
-      const name = sanitised === refName ? refName : sanitised;
+      const name = Union.resolvedTypeName(this.name);
 
       if (this.isFlat()) {
         // No real union here: an input-position oneOf (GraphQL has no input unions) or no
@@ -139,6 +137,8 @@ export class Union extends Type {
       } else {
         // output + discriminator: a real `union X = A | B`. Filtering by prop-parent identity broke
         // for allOf members (their folded props keep the inner part as parent -> `union X = `). #34
+        // Members are listed under the name their own `type` line uses: a component named
+        // `http_rule_response` is written as `HttpRuleResponse`. see docs/issues.md #43
         const filtered = this.selectedMembers(selection);
 
         writer
@@ -146,7 +146,7 @@ export class Union extends Type {
           .write(name)
           .write(this.nameSuffix())
           .write(' = ')
-          .write(filtered.map((child) => Naming.getRefName(child.name)).join(' | '))
+          .write(filtered.map((child) => Union.resolvedTypeName(child.name)).join(' | '))
           .write('\n\n');
       }
     }
@@ -307,11 +307,12 @@ export class Union extends Type {
     writer.write(pad(base)).write(`... ${field}->match(\n`);
 
     members.forEach((child, idx) => {
-      const typeName = Naming.getRefName(child.name)!;
-      // OAS 3.x: when no explicit discriminator `mapping` is present, the implicit tag value
-      // is the bare (un-prefixed) ref name — e.g. "Book", NOT "book". Lowercasing it produced a
-      // `->match` branch that never fired against spec-compliant payloads. See C1.
-      const value = this.discriminatorValue(child) ?? typeName;
+      // `__typename` is the written name (`http_rule_response` -> `HttpRuleResponse`), or the router
+      // can't match what comes back to a member. see docs/issues.md #43
+      const typeName = Union.resolvedTypeName(child.name);
+      // With no `mapping`, the value the service sends is the plain ref name — "Book", not "book".
+      // It is compared against real payloads, so it keeps the name the OAS uses, unsanitised.
+      const value = this.discriminatorValue(child) ?? Naming.getRefName(child.name)!;
 
       writer.write(pad(base + 2)).write(`["${value}", $ {\n`);
       writer.write(pad(base + 4)).write(`__typename: $("${typeName}")\n`);
@@ -330,6 +331,14 @@ export class Union extends Type {
     });
 
     writer.write(pad(base)).write(')\n');
+  }
+
+  // The name a ref is written as: `http_rule_response` -> `HttpRuleResponse`. Same rule `Obj` and
+  // `Composed` use for their own `type X {` line. see docs/issues.md #15, #43
+  private static resolvedTypeName(ref: string): string {
+    const sanitised = Naming.genTypeName(ref);
+    const refName = Naming.getRefName(ref);
+    return sanitised === refName ? refName : sanitised;
   }
 
   /** Reverse-lookup the explicit discriminator `mapping` value for a member — e.g. given

@@ -1943,6 +1943,70 @@ Reverting the fix reproduces the exact duplicated output and fails the test.
 (`sanitiseFieldForSelect`, unchanged). Related: #14 (the separate upstream limitation still gating
 full compose on stock rover).
 
+## 43 · Real-union member list and `__typename` use the raw ref name, not the sanitised one — ✅ Fixed (working tree)
+
+**Symptom:** a real (discriminated, top-level) union whose OAS member refs aren't already
+PascalCase composes as a flood of `CONNECTORS_UNRESOLVED_FIELD` — one per field of every member.
+Confirmed on `ably-control.json get:/apps/{app_id}/rules` (172 rover build errors, one op).
+
+**OAS** (snake_case discriminator mapping refs):
+```json
+"rule_response": {
+  "discriminator": {
+    "propertyName": "ruleType",
+    "mapping": {
+      "http": "#/components/schemas/http_rule_response",
+      "http/ifttt": "#/components/schemas/ifttt_rule_response"
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/components/schemas/http_rule_response" },
+    { "$ref": "#/components/schemas/ifttt_rule_response" }
+  ]
+}
+```
+
+**Example** (before → after, same op):
+```graphql
+# before: member list + __typename reference an undefined, unsanitised type name
+union RuleResponse = http_rule_response | ifttt_rule_response
+...
+__typename: $("http_rule_response")
+
+# after: both agree with the real emitted type definition
+union RuleResponse = HttpRuleResponse | IftttRuleResponse
+...
+__typename: $("HttpRuleResponse")
+```
+
+**Cause:** `Obj.generate()` (`obj.ts:80-85`) and `Composed.generate()` already resolve a member's
+ref through the established `sanitised === refName ? refName : sanitised` pattern (PascalCase when
+it differs from the raw ref — see #15), so `http_rule_response` is correctly emitted as
+`type HttpRuleResponse`. But `Union.generate()`'s real-union branch (`union.ts:147`, was
+`Naming.getRefName(child.name)`) and `Union.selectAbstract()`'s `__typename` literal (`union.ts:308`,
+same bug) used the **raw** `Naming.getRefName` only, producing a `union X = ...` line and a
+`__typename` string that name a type that was never defined. Rover then can't resolve any field of
+any member — the union's member list is the only thing tying them to the schema at all.
+
+**Fix:** added a `Union.resolvedTypeName(ref)` private static helper (the same sanitised/refName
+pattern, scoped to this class since it's needed 3x in this file — matches obj.ts/comp.ts's existing
+per-file duplication rather than centralizing into `Naming`, which is already correct everywhere
+else). Used at the union member-list line and at `__typename`. Left the discriminator match-value
+fallback (`this.discriminatorValue(child) ?? Naming.getRefName(child.name)`) on the raw ref name —
+that value is compared against real API payloads, which carry the schema's own snake_case tag, not
+the sanitised GraphQL name.
+
+**Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` (`/snake-items`, `snake_item_union` +
+`book_item`/`movie_item`), `test_R2_union_snake_case_member_refs_resolve_sanitised_name` in
+`tests/all/r2-abstract.test.ts`. Existing coverage (`test_R2_union_top_level_array_stays_real_union`)
+used PascalCase members (`Book`/`Movie`), so it never exercised a snake_case component ref on a real
+union. Reverting the fix reproduces rover's exact failure (`cannot find type 'book_item' in this
+document`) and fails the test.
+
+**AST:** none — emission-only, no node/tree changes.
+**Refs:** `src/oas/nodes/union.ts` (`Union.generate`, `Union.selectAbstract`). Related: #15 (the
+def/ref name-agreement pattern this extends to unions' member list).
+
 ## 48 · The same `oneOf` used by a request body and by a response is only written once — ✅ Fixed (working tree)
 
 **Symptom:** a mutation whose request body and whose response both contain the same `oneOf` list

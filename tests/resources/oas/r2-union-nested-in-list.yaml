@@ -68,6 +68,21 @@ paths:
                               type: string
                             b:
                               type: string
+  # the same real-union shape as /items, but with snake_case component refs — the union's member
+  # list and __typename must resolve the same sanitised (PascalCase) name the member's own `type`
+  # definition uses, not the raw ref. see docs/issues.md #43
+  /snake-items:
+    get:
+      summary: A real union whose member refs are snake_case, not PascalCase.
+      responses:
+        '200':
+          description: A page of items, unwrapped.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/snake_item_union'
   # WrappedBasic and WrappedRich both have a "detail" field but point at different types — only
   # the first is kept, the other must not leak into the schema. see docs/issues.md #39
   /wrapped-list:
@@ -153,4 +168,27 @@ components:
         title:
           type: string
         director:
+          type: string
+    snake_item_union:
+      discriminator:
+        propertyName: type
+        mapping:
+          book_item: '#/components/schemas/book_item'
+          movie_item: '#/components/schemas/movie_item'
+      oneOf:
+        - $ref: '#/components/schemas/book_item'
+        - $ref: '#/components/schemas/movie_item'
+    book_item:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+    movie_item:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
           type: string
