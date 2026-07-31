@@ -245,7 +245,7 @@ test('test_R2_union_nested_in_array_degrades_to_merged_object', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/list>**'],
-    5,
+    6,
     2,
     false,
     false,
@@ -269,7 +269,7 @@ test('test_R2_union_top_level_array_stays_real_union', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/items>**'],
-    5,
+    6,
     3,
     false,
     false,
@@ -294,7 +294,7 @@ test('test_R2_union_snake_case_member_refs_resolve_sanitised_name', async () => 
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/snake-items>**'],
-    5,
+    6,
     3,
     false,
     false,
@@ -320,7 +320,7 @@ test('test_R2_union_inline_nested_degrades_via_local_check', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/inline-list>**'],
-    5,
+    6,
     2,
     false,
     false,
@@ -345,7 +345,7 @@ test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/wrapped-list>**'],
-    5,
+    6,
     3,
     false,
     false,
@@ -361,6 +361,32 @@ test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
   assert.ok(/type DetailBasic \{/.test(schema!), 'the winning field\'s type is emitted');
   assert.ok(!/DetailRich/.test(schema!), 'the shadowed field\'s type must not be emitted at all');
   assert.ok(!/DeepThing/.test(schema!), 'the shadowed type\'s own subtree must not be emitted either');
+});
+
+// see docs/issues.md #44
+test('test_R2_union_merge_kind_collision_degrades_to_json', async () => {
+  // StatusEnumKind and StatusStringKind both have a "status" field, but of incompatible KINDS
+  // (enum vs plain string) — not just different targets of the same kind (that's the test above,
+  // #39). Neither kind can be arbitrarily kept: the field must degrade to the untyped JSON scalar
+  // fallback, and the enum type must not leak into the schema at all.
+  const schema = await runOasTest(
+    'r2-union-nested-in-list.yaml',
+    ['get:/kind-collision-list>**'],
+    6,
+    2,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.14.1' },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
+  assert.ok(/type KindCollisionUnion \{/.test(schema!), 'merged object replaces the union');
+  assert.ok(/status: JSON/.test(schema!), 'the incompatible field degrades to the JSON scalar fallback');
+  assert.ok(!/status: String/.test(schema!), 'the string kind must not be kept either');
+  assert.ok(!/active/.test(schema!) && !/inactive/.test(schema!), 'the enum kind\'s own type must not leak in');
 });
 
 // see docs/issues.md #48

@@ -1,4 +1,4 @@
-import { Arr, Composed, Factory, Get, IType, Prop, Res, T, Type } from './internal.js';
+import { Arr, Composed, Factory, Get, IType, Prop, PropScalar, Res, T, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -196,18 +196,36 @@ export class Union extends Type {
     writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
   }
 
-  // Two members can name a field the same but give it different types, e.g. in the OAS:
-  //   LaunchNormal:   { rocket: { $ref: '#/…/RocketNormal' } }
-  //   LaunchDetailed: { rocket: { $ref: '#/…/RocketDetailed' } }
-  // Only the first is ever written to the merged type, so the other's type must not be emitted
-  // either. see docs/issues.md #39
+  // Members can give the same field name two different shapes. Both objects — keep the first,
+  // picking common fields out of differently-shaped payloads is fine (launch library):
+  //   LaunchNormal:   { rocket: { allOf: [{ $ref: '#/…/RocketNormal' }] } }
+  //   LaunchDetailed: { rocket: { allOf: [{ $ref: '#/…/RocketDetailed' }] } }
+  // A list of allowed values next to a plain string — no single field fits both, so fall back to
+  // the JSON scalar rather than pick a member (TMF717):
+  //   Individual: { status: { $ref: '#/…/IndividualStateType' } }   # enum
+  //   PartyRole:  { status: { type: string } }
+  // see docs/issues.md #39, #44
   private dedupedSelectedProps(selection: string[]): Prop[] {
-    const seen = new Set<string>();
-    return this.selectedProps(selection).filter((prop) => {
-      if (seen.has(prop.id)) return false;
-      seen.add(prop.id);
-      return true;
-    });
+    const kindOf = (prop: Prop) => prop.id.split(':')[1];
+
+    const firstByName = new Map<string, Prop>();
+    const kindByName = new Map<string, string>();
+    const incompatible = new Set<string>();
+
+    for (const prop of this.selectedProps(selection)) {
+      const kind = kindOf(prop);
+      const existingKind = kindByName.get(prop.name);
+      if (existingKind === undefined) {
+        firstByName.set(prop.name, prop);
+        kindByName.set(prop.name, kind);
+      } else if (kind !== existingKind) {
+        incompatible.add(prop.name);
+      }
+    }
+
+    return Array.from(firstByName.entries()).map(([name, prop]) =>
+      incompatible.has(name) ? new PropScalar(prop.parent!, name, 'JSON', {}) : prop,
+    );
   }
 
   // two inline members easily share a name (`[inline:Input]` twice) — same suffixing as Composed

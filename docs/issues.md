@@ -2007,6 +2007,91 @@ document`) and fails the test.
 **Refs:** `src/oas/nodes/union.ts` (`Union.generate`, `Union.selectAbstract`). Related: #15 (the
 def/ref name-agreement pattern this extends to unions' member list).
 
+## 44 · Merged-union field dedup keys on Prop kind, not field name — and ignores type compatibility — ✅ Fixed (working tree)
+
+**Symptom:** a nested (merged/flattened) union whose members share a field name but give it
+**different kinds** (e.g. one member has it as an OAS `enum`, another as a plain string) emits the
+field twice — invalid GraphQL SDL. Confirmed on `TMF717_Customer360-v5.0.0.oas.yaml get:/customer360`:
+rover rejects with `INVALID_GRAPHQL: Field status already exists on PartyOrPartyRole`.
+
+**OAS** (two `PartyOrPartyRole` union members, same field name `status`, different kinds):
+```yaml
+Individual:
+  properties:
+    status:
+      $ref: '#/components/schemas/IndividualStateType'   # enum
+PartyRole:
+  allOf:
+    - type: object
+      properties:
+        status:
+          type: string                                    # plain scalar
+          description: Used to track the lifecycle status of the party role.
+```
+
+**Example** (current, broken output):
+```graphql
+type PartyOrPartyRole { #### replacement for Union PartyOrPartyRole
+  ...
+  status: IndividualStateType
+  ...
+  status: String          # duplicate field name -> INVALID_GRAPHQL
+  ...
+}
+```
+
+**Cause:** `Union.dedupedSelectedProps()` (`union.ts:202-207`, added for #39) dedupes merged-union
+member fields by `prop.id`. `prop.id` is prefixed by the `Prop` *subclass* — `prop:enum:status`
+(`propEn.ts:17`) vs `prop:scalar:status` (`propScalar.ts:21`) — so two members giving the same field
+name **different kinds** both survive dedup. #39 only covered same-kind collisions (two `$ref`
+members pointing at different object types, both `prop:ref:#detail` — see the existing
+`test_R2_union_merge_name_collision_drops_shadowed_type`), never a kind mismatch.
+
+**Fix:** a bare `prop.id` → `prop.name` key isn't enough on its own — GraphQL forbids two
+same-named fields regardless of kind, but a name match alone doesn't mean two members' fields are
+interchangeable. The plan's first draft compared each collision's resolved GraphQL type
+(`getValue(context)`) and degraded on any mismatch — that broke the *existing* #39 test: two `$ref`
+members pointing at different object types (`DetailBasic` vs `DetailRich`) resolve to different
+`getValue()` strings too, but that collision was always meant to keep the first member's type
+(shadowing the rest), not degrade to JSON. The correct comparison is **kind**, not resolved type —
+the `id`'s subclass segment (`prop.id.split(':')[1]`: `enum`, `scalar`, `ref`, `obj`, `comp`, `map`,
+`array`). Two members giving a field the *same kind* (whatever concrete type each resolves to) can
+still be safely shadowed — selecting common sub-fields from differently-shaped payloads is fine,
+exactly the #39 case. Two members giving a field *different kinds* (enum vs scalar, object vs
+scalar, …) genuinely can't share one GraphQL representation — that's when it degrades to the
+untyped JSON scalar fallback instead of arbitrarily picking one member's kind, reusing the same
+"give up, use JSON scalar" policy already shipped for incompatible object-typed query params
+(`0cf24ea`). No new data structures: `dedupedSelectedProps` still takes just `selection` (threading
+`context` through turned out unnecessary once the comparison moved from `getValue()` to `id`-derived
+kind).
+
+**Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` gained `/kind-collision-list`
+(`StatusEnumKind`/`StatusStringKind`, an enum-vs-scalar `status` collision — the enum has to be a
+named `$ref` schema, not inline, or it degrades to a plain scalar before ever reaching the union
+merge and never exercises the kind-mismatch path at all).
+`test_R2_union_merge_kind_collision_degrades_to_json` in `tests/all/r2-abstract.test.ts` asserts
+`status: JSON` and that the enum type never leaks into the schema. The existing #39 test
+(`test_R2_union_merge_name_collision_drops_shadowed_type`) re-passes unchanged, confirming
+same-kind/different-target collisions still shadow-and-keep-first exactly as before. Reverting just
+the `dedupedSelectedProps` body (keeping the rest of the #43 changes in the same file) reproduces the
+enum type leaking in and fails the new test. Also re-ran coverage on the other union-heavy specs
+named in the plan (docker-engine 86.0%, launch_library 99.1%, common-room 100%, TMF717 33.3%) —
+unchanged from baseline in every case, no regressions.
+
+**Aside (flagged, not fixed here — out of scope for this entry):** clearing the `status` collision
+on `TMF717_Customer360-v5.0.0.oas.yaml get:/customer360` surfaced a *second*, previously-masked
+compose error on the same op: `INVALID_GRAPHQL: Field type already exists on
+Customer360PromotionVO` — a duplicate `type` field (`String!` vs `String`) from two different
+`allOf` branches of a **`Composed`** type, not a `Union`. This is a distinct bug in `Composed`'s
+allOf field collection (unrelated to this entry's `Union.dedupedSelectedProps`) that was simply
+hidden behind the `status` error until now. Not triaged or fixed as part of #44 — worth its own
+entry if picked up.
+
+**AST:** none expected — emission-only, changes which `Prop` survives dedup and how it's typed.
+**Refs:** `src/oas/nodes/union.ts` (`Union.dedupedSelectedProps`, `Union.generateMergedObject`).
+Related: #39 (the same-kind version of this collision, already fixed), `0cf24ea` (the JSON-scalar
+degrade precedent for incompatible shapes).
+
 ## 48 · The same `oneOf` used by a request body and by a response is only written once — ✅ Fixed (working tree)
 
 **Symptom:** a mutation whose request body and whose response both contain the same `oneOf` list

@@ -83,6 +83,25 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/snake_item_union'
+  # StatusEnumKind and StatusStringKind both have a "status" field but of incompatible KINDS (enum
+  # vs plain string) — not just different targets of the same kind (that's /wrapped-list, #39).
+  # Must degrade to the untyped JSON scalar fallback, not silently keep one kind and drop the
+  # other. see docs/issues.md #44
+  /kind-collision-list:
+    get:
+      summary: A nested union whose members share a field name of incompatible kinds.
+      responses:
+        '200':
+          description: A page of items.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/KindCollisionUnion'
   # WrappedBasic and WrappedRich both have a "detail" field but point at different types — only
   # the first is kept, the other must not leak into the schema. see docs/issues.md #39
   /wrapped-list:
@@ -191,4 +210,32 @@ components:
         type:
           type: string
         title:
+          type: string
+    KindCollisionUnion:
+      discriminator:
+        propertyName: type
+        mapping:
+          enumKind: '#/components/schemas/StatusEnumKind'
+          stringKind: '#/components/schemas/StatusStringKind'
+      oneOf:
+        - $ref: '#/components/schemas/StatusEnumKind'
+        - $ref: '#/components/schemas/StatusStringKind'
+    StatusEnumKind:
+      type: object
+      properties:
+        type:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+    StatusEnum:
+      type: string
+      enum:
+        - active
+        - inactive
+    StatusStringKind:
+      type: object
+      properties:
+        type:
+          type: string
+        status:
           type: string
