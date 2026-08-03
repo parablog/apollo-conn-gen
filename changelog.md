@@ -4,6 +4,122 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.16.0]
+
+### Changed
+- Added 'kind' to union (e.g.: `union:type:LineUnion`) for input bodies. Issue #48.
+
+### Fixed
+- The same `oneOf` used by a request body and by a response was written only once, so the response
+  referred to a type that was never defined; found in QuickBooks mutations, issue #48.
+- A real union listed its members, and matched `__typename`, under the raw `$ref` name rather than
+  the name each member is written as, so a snake_case component made every member field
+  unresolvable to rover; found in ably (`http_rule_response`), issue #43.
+- A merged union whose members gave one field name two different kinds (an enum in one, a plain
+  string in another) emitted the field twice resulting in invalid SDL. Incompatible kinds now
+  degrade to the `JSON` scalar fallback; same-kind collisions keep the first member as before.
+  TMF717, issue #44.
+- A schema named `Query`, `Mutation` or `Subscription` collided with the GraphQL root type and
+  failed compose; those three names are now suffixed. Stripe, issue #45.
+- An array whose items held another array nested a second array node, so the field named a type
+  that was never defined and its selection lost its braces. A genuine list of lists still stays
+  nested. Found in docker-engine (`ContainerSummary`) and slack (`messages`), issues #46 and #52.
+- An op whose response is a bare array of scalars was dropped from the schema entirely — no field
+  at all, not even a degraded one. Spotify, issue #47.
+- A request body written as an `anyOf` with no `oneOf` lost every member, emitting an input type
+  with no fields and sending nothing. Digitalocean, issue #50.
+- A write whose response object has no fields emitted an empty type and an empty selection. Turning
+  a fieldless object into `JSON` only happened when the whole operation had nothing to select, and
+  a write's body nearly always does. The response and the body are now checked separately. Asana,
+  issue #51.
+
+## [0.15.3]
+
+### Fixed
+- A merged union's shadowed same-name member field (two members sharing a field name but disagreeing
+  on its type, e.g. `rocket: RocketNormal` vs `rocket: RocketDetailed`) was still treated as reachable,
+  emitting its type's whole subtree with no connector coverage. Closes the remaining residue from
+  #38; launch library corpus: 86.2% → 98.3% (#39).
+- An object-typed (or array-of-object) query parameter emitted a full type definition inline inside
+  the argument list — invalid GraphQL. Degrades to the existing `JSON` scalar fallback, preserving
+  array cardinality; box corpus: 98.2% → 100.0% (#40).
+- Only the first entry in an OAS `servers[]` array was ever consulted for the `@source` base URL. A
+  relative or protocol-relative leading server (no usable host) is now skipped in favor of a later,
+  usable one, in declared order; docker-engine corpus: 0.0% → 86.0% (#41).
+- A map (`additionalProperties`) field whose JSON key needed snake_case→camelCase aliasing wrote the
+  alias twice, producing an invalid selection rover couldn't parse (#42).
+
+## [0.15.1]
+
+### Fixed
+- A `#` in an OAS path (a sub-resource convention like `/shared_items#web_links`) no longer leaks
+  into the GraphQL field name, where it started an SDL line comment and broke `@connect` selection
+  binding. `#` is now a field-name separator; the runtime HTTP path is untouched (B1).
+- An inline single-member `allOf` used as an array's `items` (no `$ref`, e.g. box
+  `MetadataQueryIndices.…fields`) no longer reaches the emit loop nameless and crashes generation.
+  The `Composed` type is now named at its construction site; the writer fails fast on any nameless
+  type that still slips through, and `isRef` is null-safe (B2).
+- Cycle detection now compares the resolved schema, not the field name: a field was wrongly cut as
+  circular when a same-named field sat above it on the path, even for unrelated types (Adobe
+  `extension_attributes`), emptying the type and failing compose. Both legacy name-based cut sites
+  are now schema-identity (#36).
+- An inline wrapper whose key matches the component it lists (Confluence `subjects.group` listing
+  `Group`) no longer emits a second `type Group` that rover reads as circular. The wrapper is
+  renamed after its container (`group` → `SubjectsGroup`); the component keeps its name (#37).
+
+## [0.15.0]
+
+### Added
+- **`--skip-auth` CLI flag**: omit all auth from the generated connector — no `headers` on
+  `@source`, no auth header or `queryParams` entry on any `@connect` — even when the spec
+  declares security schemes. Useful when auth is handled upstream, or for local/mock generation.
+
+### Fixed
+- A `oneOf` discriminator without an explicit `mapping` now emits the OAS-spec-correct tag — the
+  bare ref name (e.g. `"Book"`, not the lowercased `"book"`) — so the emitted `->match` branch
+  matches real payloads (C1).
+- `@connect`'s `http.body` is now emitted only when targeting connect ≥ v0.2; below v0.2 it is
+  skipped with a logged downgrade instead of violating the contract (C2).
+- The global-security dropped-scheme warning is emitted once per generation, not once per
+  inheriting operation (C3).
+- Removed a stray debug `console.log` (fired for every map-typed property) and an unused `esbuild`
+  import from a runtime module (C4+C5).
+
+## [0.14.0]
+
+### Added
+- **apiKey-in-query auth on `@connect`** (R5 slice 3): a global or per-op `apiKey` security scheme
+  with `in: query` is emitted on the op's `queryParams` (a JSONSelection sibling of the
+  `$args { … }` block), since `SourceHTTP` has no `queryParams` and can't carry it on `@source`.
+  An auth-only op still emits a `queryParams` block (no `$args {}`).
+
+### Changed
+- Improved `@connect` http-block indentation: `queryParams`/`headers`/`body` sit one level under
+  `http:` (was flush with it); the request `body` no longer carries a stray comma. Compact
+  `{ GET: "/x"}` form unchanged.
+- Internal: `@connect` auth resolution is consolidated into a single `SecurityPlan` (computed once
+  per generation, then queried by `@source` and per-`@connect`) instead of re-scanning the spec per
+  operation. No output change.
+
+### Fixed
+- Security resolution only warns for genuinely unresolvable schemes (undefined, apiKey-in-cookie,
+  or an unmappable type such as http/digest); a legitimate OR alternative — a non-winning
+  `security` option — is now silent instead of noisy.
+- The per-op auth mode switch scans only the emitted methods (get/post/put/patch/delete), so a
+  `security` declared solely on an un-emitted HEAD/OPTIONS op no longer suppresses the shared
+  `@source` header.
+
+## [0.13.1]
+
+### Fixed
+- A `$ref` reached two ways — as an array item (`obj:type`) and as a single-member `allOf`
+  (`comp:type`) — emitted `type X` twice (invalid SDL). The emit-once gate now keys on the
+  emitted type name, not the node id, so output `X` and request `XInput` stay distinct
+  (regression from #26).
+
+### Changed
+- Internal: removed `any` casts across the CLI and JSON walker (no output change).
+
 ## [0.13.0]
 
 ### Added

@@ -1,0 +1,44 @@
+openapi: 3.0.0
+info:
+  title: Same-named fields of different types
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# Regression for docs/issues.md #36: two fields named `extension` on one path point to DIFFERENT types.
+# The old name-based check wrongly cut the inner one as a loop, leaving its type empty (Inner has only
+# that one field). So this fails to compose before the fix and composes after. See #36 for the details.
+paths:
+  /thing:
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: a thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Outer'
+components:
+  schemas:
+    Outer:
+      type: object
+      properties:
+        id:
+          type: string
+        extension:
+          $ref: '#/components/schemas/OuterExtension'   # (1) `extension` -> OuterExtension
+    OuterExtension:
+      type: object
+      properties:
+        inner:
+          $ref: '#/components/schemas/Inner'
+    Inner:
+      type: object
+      properties:
+        extension:
+          $ref: '#/components/schemas/InnerExtension'   # (2) `extension` again, a DIFFERENT type
+    InnerExtension:
+      type: object
+      properties:
+        value:
+          type: string

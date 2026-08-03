@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info:
+  title: Map Field Key Aliasing Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # a map (additionalProperties) field whose JSON key needs snake_case -> camelCase aliasing —
+  # mirrors stripe's currency_options / docker-engine's Networks. see docs/issues.md #42
+  /coupons:
+    get:
+      operationId: getCoupons
+      responses:
+        '200':
+          description: A coupon.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  currency_options:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        amount_off:
+                          type: integer

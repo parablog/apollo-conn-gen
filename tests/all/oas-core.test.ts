@@ -3,6 +3,7 @@ import fs from 'fs';
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
+import { OasGen } from '../../src/index.js';
 import './_setup.js';
 
 /// OAS TESTS
@@ -249,11 +250,11 @@ test('test_018_oas_anidated-allOf-example-**', async () => {
 test('test_019_oas_test_010_TMF633_IntentOrValue_to_Union', async () => {
   const paths = [
     'get:/product/{id}>res:r>comp:type:#/c/s/Product>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
-    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/IntentRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:@referredType',
-    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/IntentRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:id',
-    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:name',
-    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
-    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:description',
+    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:type:#/c/s/IntentRefOrValue>comp:type:#/c/s/IntentRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:@referredType',
+    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:type:#/c/s/IntentRefOrValue>comp:type:#/c/s/IntentRef>comp:type:#/c/s/EntityRef>obj:type:[inline:#/c/s/EntityRef]>prop:scalar:id',
+    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:type:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:name',
+    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:type:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>comp:type:#/c/s/Entity>obj:type:#/c/s/Addressable>prop:scalar:id',
+    'get:/product/{id}>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:comp:intent>union:type:#/c/s/IntentRefOrValue>comp:type:#/c/s/Intent>obj:type:[inline:#/c/s/Intent]>prop:scalar:description',
   ];
   await runOasTest('TMF637-001-UnionTest.yaml', paths, 1, 2);
 });
@@ -314,10 +315,10 @@ test('test_024_oas_test_014_testTMF637_TestRecursion', async () => {
     'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:#/c/s/Extensible>prop:scalar:@schemaLocation',
     'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:#/c/s/Extensible>prop:scalar:@type',
     'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:scalar:role',
-    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:#/c/s/Entity>prop:scalar:href',
-    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:#/c/s/Entity>prop:scalar:id',
-    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:[inline:#/c/s/PartyRole]>prop:scalar:name',
-    // 'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:[inline:#/c/s/PartyRole]>prop:circular-ref:#relatedParty'
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:type:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:#/c/s/Entity>prop:scalar:href',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:type:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:#/c/s/Entity>prop:scalar:id',
+    'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:type:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:[inline:#/c/s/PartyRole]>prop:scalar:name',
+    // 'get:/productById>res:r>comp:type:#/c/s/Product>obj:type:[inline:#/c/s/Product]>prop:array:#relatedParty>comp:type:#/c/s/RelatedPartyOrPartyRole>obj:type:[inline:#/c/s/RelatedPartyOrPartyRole]>prop:comp:partyOrPartyRole>union:type:#/c/s/PartyOrPartyRole>comp:type:#/c/s/Producer>comp:type:#/c/s/PartyRole>obj:type:[inline:#/c/s/PartyRole]>prop:circular-ref:#relatedParty'
   ];
 
   // expect.assertions(6);
@@ -646,8 +647,12 @@ test('test_053_oas_test_036_time-series', async () => {
 test('test_054_oas_test-better-naming', async () => {
   const paths = [
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:scalar:count',
-    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
-    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name'
+    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:type:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
+    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:type:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
+    // this union is nested inside a named field (`results`), not the op's own response, so it
+    // renders as one merged type instead of a real `union` — see docs/issues.md #38. All 3 members
+    // still need a selected field or the merge emits an empty one.
+    'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:type:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name'
   ]
 
   await runOasTest('launch_Library_2-docs-v2.3.0.json', paths, 116, 3);
@@ -657,12 +662,7 @@ test('test_060_oas_test_additionalProperties_support', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22, false, false, undefined, false, false, {
-    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
-    connectorSpecVersion: 'v0.3',
-    federationVersion: 'v2.12',
-    composeFederationVersion: '2.12.0',
-  });
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false);
 });
 
 test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
@@ -670,12 +670,7 @@ test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 22, false, false, undefined, false, false, {
-    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
-    connectorSpecVersion: 'v0.3',
-    federationVersion: 'v2.12',
-    composeFederationVersion: '2.12.0',
-  });
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false);
 });
 
 test('test_062_oas_test_images_additionalProperties', async () => {
@@ -683,12 +678,7 @@ test('test_062_oas_test_images_additionalProperties', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>prop:map:images>**',
   ];
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5, false, false, undefined, false, false, {
-    // pinned to v0.3: composing v0.4 ->entries on stock rover hits the unreleased #14 fix
-    connectorSpecVersion: 'v0.3',
-    federationVersion: 'v2.12',
-    composeFederationVersion: '2.12.0',
-  });
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 5, false, false, undefined, false, false);
 });
 
 test('test_ref_into_paths_pointer_resolves_and_composes', async () => {
@@ -782,6 +772,26 @@ test('test_composed_collision_with_stored_object_splits_by_container', async () 
   assert.ok(!/type Permissions \{[^}]*canDelete/s.test(schema!), 'no redefinition of Permissions');
 });
 
+test('test_no_duplicate_type_definitions_launch_library', async () => {
+  // A $ref reached two ways builds two nodes with the same name but different ids — `AgencyMini`
+  // as an array item (`obj:type:…`) and as a single-member allOf (`comp:type:…`). The emit gate
+  // keyed on the id missed the repeat and printed `type AgencyMini` twice (invalid SDL; rover
+  // connector list is lenient, so it slipped the suite). see docs/issues.md #26.
+  const gen = await OasGen.fromFile(`${oasBasePath}/launch_Library_2-docs-v2.3.0.json`, {
+    skipValidation: true,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const root = [...gen.paths.keys()].find((k) => k.includes('/agencies/'))!;
+  const sdl = gen.generateSchema([`${root}>**`]);
+
+  const typeNames = [...sdl.matchAll(/^type (\w+)/gm)].map((m) => m[1]);
+  const duplicates = [...new Set(typeNames.filter((n, i, a) => a.indexOf(n) !== i))];
+  assert.deepStrictEqual(duplicates, [], `every named type must be emitted once; duplicated: ${duplicates.join(', ')}`);
+  // the surviving node must be complete (guard against keeping a cycle-cut twin)
+  assert.match(sdl, /type AgencyMini \{[^}]*type: AgencyType!/s);
+});
+
 test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
   // Reported combo: Infer Entity Resolvers + Emit Connector Errors + v0.4/consolidate:false on
   // petstore get:/user/{username}. Locks that the entity type block is emitted CONTIGUOUSLY
@@ -791,10 +801,9 @@ test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
     'petstore.yaml', ['get:/user/{username}>**'], 19, 1, false, true, undefined, false,
     true, // inferEntityResolvers
     {
-      consolidateUnions: false,
       connectorSpecVersion: 'v0.4',
-      federationVersion: 'v2.13',
-      composeFederationVersion: '2.13.0',
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.14.1',
       emitConnectorErrors: true,
     },
   );
@@ -807,7 +816,8 @@ test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
   assert.ok(entitySelIdx > userIdx && entitySelIdx < queryIdx, 'entity selection inside the User block');
   assert.ok(userFieldsIdx > userIdx && userFieldsIdx < queryIdx, 'User fields contiguous with the type');
   assert.ok(/@key\(fields: "username"\)/.test(schema!), 'entity key emitted');
-  assert.ok(/errors: \{ extensions/.test(schema!), 'connector errors emitted on the Query connector');
+  // errors is now emitted fully expanded: `errors {` then `extensions: """…"""` on its own lines
+  assert.ok(/errors: \{[\s\S]*?extensions: """/.test(schema!), 'connector errors emitted on the Query connector');
 });
 
 test('test_param_default_boolean_emits_literal', async () => {
@@ -844,6 +854,34 @@ test('test_response_allof_snake_path_def_ref_names_converge', async () => {
   assert.ok(!schema!.includes('Billing_history'), 'no underscore-divergent type name remains');
 });
 
+test('test_reserved_root_type_name_gets_suffixed', async () => {
+  // A component schema literally named "Subscription" collides with GraphQL's reserved root
+  // Subscription type — connectors doesn't support subscriptions, so rover rejects a plain `type
+  // Subscription { ... }` with SUBSCRIPTION_IN_CONNECTORS. genTypeName now suffixes the 3 reserved
+  // root type names; every call site (definitions and references) resolves through it, so the
+  // definition and the nested field referencing it stay in agreement. see docs/issues.md #45
+  const schema = await runOasTest('reserved-root-type-name.yaml', ['get:/customers/{id}>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type SubscriptionType {'), 'reserved name gets suffixed at the definition');
+  assert.ok(/subscription: SubscriptionType\b/.test(schema!), 'reference matches the suffixed definition');
+  assert.ok(!/^type Subscription \{/m.test(schema!), 'no bare reserved-name type remains');
+});
+
+test('test_array_item_ref_to_array_typed_schema_unwraps_redundant_nesting', async () => {
+  // WidgetList is $ref'd as an array item, but is itself `type: array` (a redundant "list of X"
+  // naming artifact, not a genuine array-of-arrays — docker-engine's real-world shape). Left alone,
+  // this produced a second, nested Arr: the field referenced an undefined type (`[WidgetList]`)
+  // while the real object was emitted under a different, property-derived name (`WidgetsItem`), and
+  // the selection lost its nesting braces entirely. Unwrapping the redundant ref keeps `items`
+  // always the true element type everywhere else already assumes it is. see docs/issues.md #46
+  const schema = await runOasTest('array-refs-array-typed-schema.yaml', ['get:/widgets>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/widgets: \[WidgetsItem\]/.test(schema!), 'field type matches the emitted object definition');
+  assert.ok(schema!.includes('type WidgetsItem {'), 'the real object is emitted under that name');
+  assert.ok(!/WidgetList/.test(schema!), 'the redundant array-typed component name must not leak in');
+  assert.ok(/widgets \{\n\s*count\n\s*name\n\s*\}/.test(schema!), 'the selection nests inside braces, not flattened');
+});
+
 test('test_inline_renamed_when_colliding_with_component_emitted_name', async () => {
   // An inline object named by its property key ('user') must not emit under the same GraphQL name as
   // a stored component ('#/c/s/User' -> `User`): occupancy is checked on the EMITTED name too, and the
@@ -857,6 +895,44 @@ test('test_inline_renamed_when_colliding_with_component_emitted_name', async () 
   assert.ok((schema!.match(/^type User /gm) || []).length === 1, 'exactly one type User emitted');
 });
 
+test('test_wrapper_named_after_contained_component_renames_both_owners', async () => {
+  // A wrapper named after the component it lists (`group` containing [Group]) used to emit a second
+  // `type Group` and fail to compose. Two `group` wrappers under different parents must each get their
+  // own name (`SubjectsGroup`, `MembersGroup`); before the fix both stayed `Group` and clashed.
+  // see docs/issues.md #12, #37. composes via rover.
+  const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['get:/permission>**'], 3, 6);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type SubjectsGroup'), 'subjects.group qualified by its container');
+  assert.ok(schema!.includes('type MembersGroup'), 'members.group qualified by its container');
+  assert.ok((schema!.match(/^type Group /gm) || []).length === 1, 'exactly one type Group (the component)');
+  assert.ok(/\bgroup: SubjectsGroup\b/.test(schema!), 'subjects selection follows its own rename');
+  assert.ok(/\bgroup: MembersGroup\b/.test(schema!), 'members selection follows its own rename');
+});
+
+test('test_inline_not_renamed_without_contained_same_named_ref', async () => {
+  // The check is on the wrapper's own contents, not just a matching name: `status` matches a scalar
+  // component (which emits no type) and `label` matches a component this op never reaches — neither
+  // contains a ref to itself, so neither is renamed. see docs/issues.md #37.
+  const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['get:/widget>**'], 3, 3);
+  assert.ok(schema !== undefined);
+  assert.ok((schema!.match(/^type Status /gm) || []).length === 1, 'inline status keeps its name (scalar is not an occupant)');
+  assert.ok((schema!.match(/^type Label /gm) || []).length === 1, 'inline label keeps its name (component unreached)');
+  assert.ok(/\bstatus: Status\b/.test(schema!) && /\blabel: Label\b/.test(schema!), 'references keep the bare names');
+});
+
+test('test_same_key_wrapper_co_emits_safely_across_input_output', async () => {
+  // The same `subjects.user` wrapper appears on the request body and the response, with different fields.
+  // Both would take the same name; they stay distinct because the input one becomes `SubjectsUserInput`
+  // and the output one is pushed to a longer name (`SpaceLikeSubjectsUser`). No duplicate, so it composes.
+  // see docs/issues.md #37.
+  const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['post:/space>**'], 3, 8);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('input SubjectsUserInput'), 'input-side user wrapper qualified + Input-suffixed');
+  assert.ok(schema!.includes('type SpaceLikeSubjectsUser'), 'output-side user wrapper gets its own distinct name');
+  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate type/input definitions: ' + defs.join(', '));
+});
+
 test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   // A recursive schema (Node.parent -> Node, Node.children -> [Node]) must terminate on the
   // non-consolidating v0.4 path and compose: the re-entering field is cut at the first repeat of a
@@ -864,10 +940,9 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   // A shared non-recursive component (Shared, referenced twice from sibling fields) must NOT be cut.
   // see docs/issues.md #10. runOasTest composes via rover.
   const schema = await runOasTest('recursive-cycle.yaml', ['get:/nodes>**'], 1, 2, false, true, undefined, false, false, {
-    consolidateUnions: false,
     connectorSpecVersion: 'v0.4',
-    federationVersion: 'v2.13',
-    composeFederationVersion: '2.13.0',
+    federationVersion: 'v2.14',
+    composeFederationVersion: '2.14.1',
   });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('# children: [Node] - circular reference omitted'), 'array-items cycle cut in SDL');
@@ -879,6 +954,113 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   assert.ok((schema!.match(/label/g) || []).length >= 3, 'Shared.label selected under both fields');
 });
 
+test('test_bare_scalar_response_not_dropped', async () => {
+  // A response that resolves directly to a scalar (no property wrapper) has nothing selectable
+  // under the old leaf-detection, so the op was silently dropped from the schema entirely — not
+  // degraded, not an error, just absent. `deleteWidgetsByWidgetId` returns a bare `true` on
+  // success, matching adobe commerce's write-endpoint convention. Composes via rover.
+  const schema = await runOasTest('bare-scalar-response.yaml', ['del:/widgets/{widgetId}>**'], 1, 0, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /deleteWidgetsByWidgetId\(widgetId: Int!\): Boolean\b/.test(schema!),
+    'delete field present, returns Boolean',
+  );
+  assert.ok(/selection: """\s*\$\s*"""/.test(schema!), 'selection passes through the raw scalar value');
+});
+
+test('test_bare_scalar_array_response_not_dropped', async () => {
+  // The same failure mode as the bare-scalar case above, one level up: a response that resolves
+  // directly to an ARRAY of scalars (no property wrapper) had no leaf at all under the old
+  // detection (PropArray's own leaf case only covers a *named* scalar-array property, and the bare
+  // scalar case only covers a direct Scalar, not an Arr-of-scalar) — the op was silently dropped
+  // entirely. Even once selectable, the connector selection was empty (Arr.select delegated to
+  // Scalar.select, which writes nothing without a default) until Res.select also learned to treat
+  // a bare array-of-scalar response like a bare scalar. Composes via rover. see docs/issues.md #47
+  const schema = await runOasTest('bare-scalar-array-response.yaml', ['get:/me/widgets/contains>**'], 1, 0);
+  assert.ok(schema !== undefined);
+  assert.ok(/meWidgetsContains\(ids: String!\): \[Boolean\]/.test(schema!), 'field present, returns [Boolean]');
+  assert.ok(/selection: """\s*\$\s*"""/.test(schema!), 'selection passes through the raw array value');
+});
+
+test('test_anyof_only_body_keeps_its_members', async () => {
+  // A body listing its variants under `anyOf` with no `oneOf` (digitalocean's create-record, one
+  // member per DNS record type). Members used to be read from `oneOf` alone, so the union was built
+  // empty and wrote `input InputInput { }` — invalid SDL, and nothing was sent either.
+  // see docs/issues.md #50
+  const schema = await runOasTest('anyof-only-body.yaml', ['post:/records>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/input InputInput \{[^}]*\bname: String!/.test(schema!), 'the body carries the anyOf members');
+  assert.ok(!/input \w+ \{\s*\}/.test(schema!), 'no empty input block is written');
+  assert.ok(/body: """[^"]*\bpriority\b/.test(schema!), 'the members reach the body selection');
+});
+
+test('test_empty_response_alongside_a_selectable_body', async () => {
+  // A write answering with an object that has no fields (asana's success-is-the-status-code
+  // convention). The free-form-JSON fallback only fired when the WHOLE op had nothing selectable,
+  // and this op's body does, so the response was written as an empty `type … { }` with an empty
+  // selection. see docs/issues.md #51
+  const schema = await runOasTest(
+    'empty-response-with-body.yaml',
+    ['post:/goals/{goalId}/removeSupportingRelationship>**'],
+    1,
+    4,
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/\bdata: JSON\b/.test(schema!), 'the empty response object degrades to JSON');
+  assert.ok(/selection: """\s*data\s*"""/.test(schema!), 'the selection asks for the field');
+  assert.ok(!/type \w+Response \{\s*\}/.test(schema!), 'no empty response type is written');
+});
+
+test('test_inline_array_wrapping_another_array_unwraps_to_the_real_element', async () => {
+  // `messages: { type: array, items: { items: … } }` — the inner schema's only key is `items`, so it
+  // is a wrapper, not an element (slack `get:/conversations.replies`). Left alone it made the
+  // field reference a type nobody defines and flattened the element's fields into the parent's
+  // selection, unbracketed. Sibling of #46, which covered only the `$ref` form.
+  // see docs/issues.md #52
+  const schema = await runOasTest('nested-array-items.yaml', ['get:/wrapper-array>**'], 2, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/messages: \[MessagesUnion\]/.test(schema!), 'the field names the type that is defined');
+  assert.ok(/^type MessagesUnion /m.test(schema!), 'that type is emitted');
+  assert.ok(/messages \{/.test(schema!), 'the element nests inside braces in the selection');
+});
+
+test('test_genuine_array_of_arrays_stays_nested', async () => {
+  // The guard for the test above: an explicit inner `type: array` is a real list of lists (docker's
+  // `top`, one array of column values per process), NOT a wrapper — unwrapping it would publish a
+  // shape the service never sends. `processes` is dropped today for a separate reason (an array of
+  // arrays of plain values has no leaf to select), so what this pins is that it never appears
+  // flattened. Relaxing the unwrap test to accept `type: array` makes it appear, and fails here.
+  // see docs/issues.md #52
+  const schema = await runOasTest('nested-array-items.yaml', ['get:/matrix>**'], 2, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(!/processes: \[String\]/.test(schema!), 'the matrix must not be flattened into one list');
+  assert.ok(/titles: \[String\]/.test(schema!), 'the genuinely flat sibling is unaffected');
+});
+
+test('test_same_name_fields_not_cut_as_circular', async () => {
+  // docs/issues.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
+  // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing
+  // composition); now it is kept. Exercises BOTH fromProp and Type.add. Composes via rover.
+  const schema = await runOasTest('same-name-fields.yaml', ['get:/thing>**'], 1, 4, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bextension: InnerExtension\b/.test(schema!), 'inner same-named field kept (not cut)');
+  assert.ok(/^type InnerExtension /m.test(schema!), 'InnerExtension emitted');
+  assert.ok(/^type Inner /m.test(schema!), 'Inner emitted, not empty');
+});
+
+test('test_genuine_cycles_cut_by_route', async () => {
+  // docs/issues.md #36 companion: a genuine Node self-cycle reached via each route must STILL be cut by
+  // object identity, while the shared non-recursive Shared stays expanded under both referencing fields.
+  // Composes via rover (default v0.4 / fed 2.14).
+  const schema = await runOasTest('cycles-by-route.yaml', ['get:/nodes>**'], 1, 3, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/# parent: Node - circular reference omitted/.test(schema!), 'direct $ref cycle cut');
+  assert.ok(/# children: \[Node\] - circular reference omitted/.test(schema!), 'array-items cycle cut');
+  assert.ok(/# back: Node - circular reference omitted/.test(schema!), 'inline deep $ref cycle cut');
+  assert.ok(/\bwrapper: Wrapper\b/.test(schema!) && /\blabel: String\b/.test(schema!), 'Wrapper kept non-empty');
+  assert.ok(/\bmeta: Shared\b/.test(schema!) && /\bextra: Shared\b/.test(schema!), 'shared non-recursive kept under both');
+});
+
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
   // emitting `id: !`); coerce it to String. see docs/issues.md #11. runOasTest composes via rover.
@@ -886,6 +1068,58 @@ test('test_anyof_param_coerced_to_string_arg', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/\bid: String!/.test(schema!), 'anyOf param coerced to a String arg');
   assert.ok(!/\bid: !/.test(schema!), 'no empty arg type');
+});
+
+test('test_object_array_param_degrades_to_json_scalar', async () => {
+  // A query param typed as an array of a real object schema has no GraphQL argument shape — the
+  // generator used to emit a full `type SearchFilter {...}` body inline inside the argument list
+  // (invalid GraphQL). Degrades to JSON, same convention as #19/#14, preserving array cardinality
+  // ([JSON], not a flattened bare JSON). see docs/issues.md #40. runOasTest composes via rover.
+  const schema = await runOasTest('param-object-array.yaml', ['get:/search>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bfilters: \[JSON\]/.test(schema!), 'object array param degraded to [JSON]');
+  assert.ok(!/type SearchFilter\s*\{/.test(schema!), 'no inline type body for the degraded param');
+});
+
+test('test_server_url_falls_back_past_bad_first_server', async () => {
+  // servers[0] is "/v1.33" (no host) — docker-engine's real shape — so it's skipped for the next
+  // server that has one. see docs/issues.md #41
+  const schema = await runOasTest('server-fallback-relative.yaml', ['get:/ping>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/baseURL: "https:\/\/example\.com\/1\.0"/.test(schema!), 'falls back to the usable server');
+  assert.ok(!/baseURL: "\/v1\.33"/.test(schema!), 'the unusable relative server is not used');
+});
+
+test('test_server_url_prefixes_protocol_relative', async () => {
+  // servers[0] is "//api.example.com" (no http/https) — just needs a scheme added.
+  const schema = await runOasTest('server-protocol-relative.yaml', ['get:/ping>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/baseURL: "https:\/\/api\.example\.com"/.test(schema!), 'protocol-relative server gets a scheme');
+  assert.ok(!/baseURL: "\/\/api\.example\.com"/.test(schema!), 'no bare protocol-relative baseURL');
+});
+
+test('test_server_url_preserves_declared_order', async () => {
+  // "//prod.example.com" is listed first, so it wins even though "https://sandbox..." (listed
+  // second) already has a scheme. see docs/issues.md #41
+  const schema = await runOasTest('server-order-preserved.yaml', ['get:/ping>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/baseURL: "https:\/\/prod\.example\.com"/.test(schema!), 'first declared server wins');
+  assert.ok(!/sandbox\.example\.com/.test(schema!), 'later server is not used just for being absolute');
+});
+
+test('test_map_field_key_aliasing_not_duplicated', async () => {
+  // A map field whose JSON key needs aliasing (currency_options -> currencyOptions) used to write
+  // the alias twice: currencyOptions: "currency_options": currencyOptions: "currency_options"->entries
+  // — invalid selection syntax rover can't parse. see docs/issues.md #42
+  const gen = await OasGen.fromFile(`${oasBasePath}/map-key-aliasing.yaml`, {
+    skipValidation: false,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/coupons>**']);
+  const occurrences = (sdl.match(/currencyOptions: "currency_options"/g) ?? []).length;
+  assert.strictEqual(occurrences, 1, 'the alias must be written exactly once');
+  assert.match(sdl, /currencyOptions: "currency_options"->entries \{/);
 });
 
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
@@ -1014,4 +1248,19 @@ test('test_R7_default_coalesces_R8_array_params_join', async () => {
   assert.ok(/"ids": ids->joinNotNull\(","\)/.test(schema!), 'form/explode:false joins with comma');
   assert.ok(/"tags": tags->joinNotNull\("\|"\)/.test(schema!), 'pipeDelimited joins with |');
   assert.ok(/"page": page\n/.test(schema!), 'plain params unchanged');
+});
+
+test('test_http_block_layout_with_all_members', async () => {
+  // A POST carrying all three http-object member types (queryParams + headers + body) renders
+  // the expanded form: `http: {` on its own line, the verb and each member at indent 8, the
+  // closing `}` aligned under `http:` (indent 6), and no commas between members.
+  const schema = await runOasTest('r5-http-layout.yaml', ['post:/things>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  const http = schema!.slice(schema!.indexOf('http: {'), schema!.indexOf('selection: """'));
+  assert.ok(/http: \{\n {8}POST: "\/things"\n/.test(http), `expected http: { then POST at indent 8:\n${http}`);
+  assert.ok(/\n {8}queryParams: """/.test(http), 'queryParams block at indent 8');
+  assert.ok(/\n {8}headers: \[/.test(http), 'headers block at indent 8');
+  assert.ok(/\n {8}body: """/.test(http), 'body block at indent 8');
+  assert.ok(/\n {6}\}\n/.test(http), 'http closing brace at indent 6 (aligned under http:)');
+  assert.ok(!/,\n/.test(http), 'no commas between http members');
 });

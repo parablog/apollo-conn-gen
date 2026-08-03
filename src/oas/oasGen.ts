@@ -5,8 +5,8 @@ import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
-import { DEFAULT_VERSIONS, requireConnectVersion, resolveConsolidateUnions, validateVersionOptions } from '../versions.js';
-import { GenerateOptions, OasContext, RequestOverride } from './oasContext.js';
+import { DEFAULT_VERSIONS, requireConnectVersion, validateVersionOptions } from '../versions.js';
+import { BatchConfig, GenerateOptions, OasContext, RequestOverride } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
@@ -18,7 +18,7 @@ interface IGenOptions {
   skipValidation?: boolean;
   baseURL?: string;
   overrides?: Record<string, RequestOverride>;
-  consolidateUnions?: boolean;
+  batch?: BatchConfig;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
@@ -27,6 +27,7 @@ interface IGenOptions {
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   reusableMappings?: boolean;
+  skipAuth?: boolean;
 }
 
 // --reusable-mappings emits @mapping, a connect v0.5 construct — reject lower targets
@@ -49,7 +50,6 @@ export class OasGen {
     data: ArrayBuffer,
     options: IGenOptions = {
       skipValidation: false,
-      consolidateUnions: true,
       showParentInSelections: false,
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
@@ -89,7 +89,6 @@ export class OasGen {
     sourceFile: string,
     options: IGenOptions = {
       skipValidation: false,
-      consolidateUnions: true,
       showParentInSelections: false,
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
@@ -139,15 +138,7 @@ export class OasGen {
 
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
-    // real unions/interfaces only exist from connect v0.4 — derive the union form from the
-    // version unless explicitly chosen (an invalid explicit choice downgrades loudly). R2
-    this.options = {
-      ...options,
-      consolidateUnions: resolveConsolidateUnions(
-        options.connectorSpecVersion ?? DEFAULT_VERSIONS.connectorSpecVersion,
-        options.consolidateUnions,
-      ),
-    };
+    this.options = options;
     this.collector = new TypesCollector(this);
   }
 

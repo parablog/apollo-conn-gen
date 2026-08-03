@@ -205,11 +205,14 @@ export class Factory {
     }
     // union
     else if (schema.oneOf || schema.anyOf) {
-      const oneOfs = schema.oneOf || [];
+      // an `anyOf` lists members just like a `oneOf` — read them too, or the union is built with
+      // none and writes an empty block (digitalocean's create-record body). see docs/issues.md #50
+      //   schema: { anyOf: [ { allOf: [ … ] }, { … } ] }
+      const members = schema.oneOf || schema.anyOf || [];
       result = new Union(
         parent,
         ref || _.get(schema, 'name'),
-        oneOfs as SchemaObject[],
+        members as SchemaObject[],
         false,
         _.get(schema, 'discriminator'),
       );
@@ -254,14 +257,49 @@ export class Factory {
     }
 
     const arr = new Arr(parent, parentName);
-    const items = _.get(schema, 'items') as ArraySchemaObject;
-    arr.items = items;
+    const items = Factory.unwrapRedundantArrayItems(context, _.get(schema, 'items') as ArraySchemaObject);
+    arr.items = items as ArraySchemaObject;
 
     // TODO: check this
     arr.itemsType = Factory.fromSchema(context, arr, items);
     arr.add(arr.itemsType); // add it to the children
 
     return arr;
+  }
+
+  // An array's items sometimes hold another array instead of the real element — a property's items
+  // must always be the element itself, so take the inner one. Two ways a spec writes it:
+  //
+  // through a `$ref` to a component that is itself a list (docker-engine). see docs/issues.md #46
+  //   Containers:       { type: array, items: { $ref: '#/…/ContainerSummary' } }
+  //   ContainerSummary: { type: array, items: { …the real object… } }
+  //
+  // inline, as a wrapper holding nothing but `items` (slack). see docs/issues.md #52
+  //   messages: { type: array, items: { items: { anyOf: [ … ] } } }
+  //
+  // Inline needs the stricter test: an explicit `type: array` there is a real list of lists (docker
+  // `top` rows, metric [time, value] pairs) and must stay nested, so only a `type`-less wrapper with
+  // no fields of its own unwraps. A named component is treated as the "list of X" artifact it is.
+  private static unwrapRedundantArrayItems(
+    context: OasContext,
+    items: SchemaObject | ReferenceObject,
+  ): SchemaObject | ReferenceObject {
+    if (!items) {
+      return items;
+    }
+
+    if (!('$ref' in items)) {
+      const wrapped = _.get(items, 'items') as SchemaObject | undefined;
+      const isWrapper = wrapped != null && items.type == null && _.isEmpty(items.properties);
+      return isWrapper ? wrapped : items;
+    }
+
+    const resolved = context.lookupRef(items.$ref as string);
+    const resolvedItems = resolved && (_.get(resolved, 'items') as ArraySchemaObject | undefined);
+    if (resolvedItems && (resolved!.type === 'array' || resolved!.type == null)) {
+      return resolvedItems;
+    }
+    return items;
   }
 
   public static fromProp(
@@ -299,7 +337,7 @@ export class Factory {
         const array = new PropArray(parent, propName, schema!);
         // const itemsName = Naming.genArrayItems(propName);
 
-        const itemsSchema = _.get(schemaObj, 'items') as ArraySchemaObject;
+        const itemsSchema = Factory.unwrapRedundantArrayItems(context, _.get(schemaObj, 'items') as ArraySchemaObject);
         // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
         const itemsType = Factory.fromSchema(context, array, itemsSchema);
 
@@ -335,7 +373,6 @@ export class Factory {
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
           prop = propComp;
         } else if (this.isMapSchema(schemaObj)) {
-          console.log('isMapSchema', schemaObj);
           // Map property: object with only additionalProperties
           const mapType: Map = new Map(parent, ref || propName, schemaObj);
           prop = new PropMap(parent, propName, schemaObj, mapType);
@@ -398,11 +435,10 @@ export class Factory {
       prop = new PropScalar(parent, propName, 'JSON', schemaObj);
     }
 
-    // Cut a recursive direct-`$ref` property: the legacy id/name check, plus a schema-identity check
-    // (the resolved component schema already on the path) that catches cycles the name check misses
-    // because the recursion mints distinct per-depth names. see docs/issues.md #10
-    const cyclic = ref ? this.cyclicAncestor(parent, schema as SchemaObject) : undefined;
-    if (cyclic || parent.ancestors().find((a) => a.id === prop.id)) {
+    // Cut only a real loop: a field pointing back to a type we already passed through. Compare the schema,
+    // not the field name — different types reuse field names (e.g. Adobe `extension_attributes`). docs/issues.md #36
+    const cyclic = this.cyclicAncestor(parent, schemaObj);
+    if (cyclic) {
       prop = new PropCircRef(parent, prop);
     }
 

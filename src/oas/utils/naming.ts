@@ -135,6 +135,10 @@ class ParamNameConverter extends AbstractConverter {
 }
 
 export class Naming {
+  // GraphQL keeps these three names for itself. A schema called one of them (stripe's
+  // `Subscription`) can't also be an ordinary type. see docs/issues.md #45
+  private static readonly RESERVED_ROOT_TYPE_NAMES = new Set(['Query', 'Mutation', 'Subscription']);
+
   public static genParamName(param: string): string {
     // Split on any run of non-alphanumeric characters, camelCase the parts, then
     // guarantee a valid GraphQL identifier: non-empty and not starting with a digit.
@@ -165,7 +169,9 @@ export class Naming {
     if (cleaned.length === 0) {
       return Naming.NUMBER_PREFIX;
     }
-    return /^[0-9]/.test(cleaned) ? Naming.NUMBER_PREFIX + cleaned : cleaned;
+    const identifier = /^[0-9]/.test(cleaned) ? Naming.NUMBER_PREFIX + cleaned : cleaned;
+    // every name goes through here, so the definition and everything pointing at it stay in step
+    return Naming.RESERVED_ROOT_TYPE_NAMES.has(identifier) ? identifier + 'Type' : identifier;
   }
 
   public static sanitiseField(name: string): string {
@@ -227,7 +233,11 @@ export class Naming {
     // Step 1: Remove parameters enclosed in {}.
     const paramsJoined = parameters.join('');
     let cleanedPath = path.replace(/\{[^}]*\}/g, paramsJoined);
-    cleanedPath = Naming.capitaliseParts(cleanedPath, /[:\-.+]+/); // using regex similar to "[:\-\.]+"
+
+    // Split `#` for GraphQL field names because SDL treats `#` as a comment marker. Box's
+    // `/shared_items#web_links` becomes `shared_itemsWeb_links`; the connector HTTP path still
+    // comes from operation.path as `GET: "/shared_items#web_links"`.
+    cleanedPath = Naming.capitaliseParts(cleanedPath, /[:\-.+#]+/);
 
     // Step 2: Split the path by "/" and capitalize each part.
     const capitalisedParts = Naming.capitaliseParts(cleanedPath, '/');

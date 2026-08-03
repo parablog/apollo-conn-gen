@@ -11,7 +11,7 @@ Source of truth for the spec surface:
 
 | | Router `main` | apollo-conn-gen today |
 |---|---|---|
-| Connect spec | v0.1–v0.3 stable, **v0.4 preview** | **LATEST** default (v0.4 today — `LATEST_CONNECT_VERSION`, 2026-06-12) |
+| Connect spec | v0.1–v0.3 stable, **v0.4 preview** | **v0.4 only** — floor, not a default (`SUPPORTED_CONNECT_VERSIONS = ['v0.4']`; below is rejected at the entrypoint, `d39095a`) |
 | Federation | current | **v2.14** default (latest released; v0.4 floor is v2.13) |
 
 What `gen` already emits well:
@@ -40,22 +40,16 @@ What `gen` already emits well:
 
 ---
 
-## Major requirement: per-feature version gating (cross-cutting)
+## Connect spec version floor (cross-cutting)
 
-The features below span v0.1 → v0.4-preview. The generator MUST treat the selected
-connector spec version as a hard constraint on output, not just a `@link` URL string:
-
-- Every emitter records the **minimum spec version** its output requires (e.g.
-  unions/interfaces ⇒ v0.4; `errors`/`isSuccess` ⇒ v0.2; aliasing ⇒ v0.1).
-- Before emission, the generator compares each feature's minimum against the selected
-  target version. If the target is lower, the generator MUST either:
-  - **downgrade explicitly** — emit a documented fallback (e.g. the consolidate-unions
-    workaround instead of real unions) and record the downgrade in output/log, or
-  - **reject explicitly** — fail with an actionable error naming the feature and the
-    version it needs.
-- The generator MUST NOT silently emit a construct the target version cannot parse.
-- The version table/gate plumbing (**R0**) is a prerequisite for ALL version-sensitive
-  items; the requirement is then satisfied incrementally as each item lands.
+Connect is floored at v0.4 program-wide (`feat/drop-consolidate-unions`, commit `d39095a`):
+`SUPPORTED_CONNECT_VERSIONS = ['v0.4']` in `src/versions.ts`, and `validateVersionOptions`
+(called from `OasGen.fromData`/`fromFile` and `JsonGen`) rejects anything below v0.4 — or
+federation below v2.13 — at the entrypoint, before generation starts. There is no
+per-feature downgrade-or-reject path anymore; the tool has no real users to carry v0.1–v0.3
+backwards-compat for. A feature that needs *more* than the v0.4 floor (e.g. R7's `??`,
+which also needs federation v2.14) still self-gates its own output with
+`meetsMinimum(target, min)`.
 
 ## Cross-cutting requirement: variable support
 
@@ -101,9 +95,9 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | `@connect` | `entity: true` (Query-field resolver) | Deliberately not emitted (type-level `$this` favoured — R1 note) | R1 (1a) |
 | `@connect` | type-level on OBJECT + `$this` | Done (`--infer-entity-resolvers`) | R1 (1b) |
 | `@connect` | `errors` | Done opt-in (`message: "$.message"` heuristic + `extensions`/`$status`; `isSuccess` not in the spec SDL) | R4 |
-| `@connect` | `batch` (ConnectBatch) | Missing | R6 |
+| `@connect` | `batch` (ConnectBatch) | Done opt-in (`--batch`; single key + one scalar-array input; composite/object-array deferred) | R6 |
 | `ConnectorErrors` | `message`, `extensions` | Done (opt-in; `message` heuristic + `extensions`) | R4 |
-| `ConnectBatch` | `maxSize` | Missing | R6 |
+| `ConnectBatch` | `maxSize` | Done (default `100`, file-overridable) | R6 |
 | `HTTPHeaderMapping` | `name` | Partial (global `@source` + per-op `@connect` auth) | R5 |
 | `HTTPHeaderMapping` | `value` (StringTemplate `{$config}`/`{$env}`/`{$context}`) | Partial (`{$config.*}` on global `@source` + per-op `@connect` auth; `$env`/`$context` pending) | R5 |
 | `HTTPHeaderMapping` | `from` (response-header extract) | Missing | R5 |
@@ -111,12 +105,12 @@ Every router-spec surface maps to a roadmap item (R#) or an explicit non-goal.
 | JSONSelection | field selection + nesting + `->entries` | Done | — |
 | JSONSelection | aliasing / quoted keys / camelCase | Done (responses R3; request bodies #28/#32) | R3 |
 | JSONSelection | methods, literals, spreads, `??`/`?!`, optional chaining | Partial (`->entries`, `->match`, `->joinNotNull`, `??` coalesced defaults, `$(literal)`/`__typename` done; spreads/`?!`/chaining pending) | R7 |
-| OAS `oneOf`/`anyOf` + discriminator | unions/interfaces | Done (real `union` + `->match` `__typename` + interface promotion on v0.4; consolidate/merged-object downgrades below; version-derived) | R2 |
+| OAS `oneOf`/`anyOf` + discriminator | unions/interfaces | Done (real `union` + `->match` `__typename` + interface promotion; merged-object degrade for input-position or discriminator-less `oneOf`, shape-derived not version-derived) | R2 |
 | Variables | `$args` | Done | — |
-| Variables | `$this` (R1), `$config` (R5), `$status` (R4) | Done | — |
-| Variables | `$env`, `$batch`, `$request.*`, `$response.*`, `@` | Missing | Cross-cutting (lands with R4/R5/R6/R7/R9) |
+| Variables | `$this` (R1), `$config` (R5), `$status` (R4), `$batch` (R6) | Done | — |
+| Variables | `$env`, `$request.*`, `$response.*`, `@` | Missing | Cross-cutting (lands with R4/R5/R7/R9) |
 | Variables | `$context` | Missing | Non-goal |
-| Version enum / `@link` | v0.1–v0.4 selection + gating | Done (R0 plumbing; union form version-derived, #34) | R0 |
+| Version enum / `@link` | v0.4 fixed, rejected below | Done (R0 plumbing; floor enforced at the entrypoint, `d39095a`) | R0 |
 
 **Explicit non-goals (named so they are not mistaken for missed work):**
 
@@ -134,20 +128,22 @@ must be extended before the roadmap is re-approved.
 ## Roadmap items (priority order == execution order)
 
 Items are numbered R0–R9 in execution order. **R0 (version gating) is first because
-every v0.2+/v0.4 item depends on it.** Variable support is cross-cutting (see above),
-not a numbered item — its rows are acceptance criteria inside the consuming items.
+every item inherits the v0.4 floor it establishes at the entrypoint.** Variable support
+is cross-cutting (see above), not a numbered item — its rows are acceptance criteria
+inside the consuming items.
 
 **Status legend:** ✅ Done · 🟡 Partial · ⬜ Not started
 
 | Item | Status | Summary |
 |---|---|---|
-| R0. Version gating | ✅ Done | defaults v0.3/v2.12, version table + gate plumbing |
+| R0. Version gating | ✅ Done | connect floored at v0.4 / federation floored at v2.13 (`SUPPORTED_CONNECT_VERSIONS = ['v0.4']`, `d39095a`); below-floor targets rejected at the entrypoint, no per-feature gate |
 | R1. Entity resolution | ✅ Done | `entity`/`@key`/`$this` (`--infer-entity-resolvers`) |
-| R2. Unions & interfaces | ✅ Done (one deferral) | real `union`/`->match`/interface promotion (v0.4), consolidate downgrade (< v0.4), discriminator-less merged-object degrade (#25), allOf-member unions (#34), version-derived form (`resolveConsolidateUnions`); broader `allOf`→interface deferred to its own slice |
+| R2. Unions & interfaces | ✅ Done (one deferral) | real `union`/`->match`/interface promotion, unconditional at the v0.4 floor; shape-derived merged-object degrade for input-position or discriminator-less `oneOf` (#25); allOf-member unions (#34); broader `allOf`→interface deferred to its own slice |
 | R3. Selection aliasing | ✅ Done | safe-name aliasing + camelCase, OAS + JSON paths |
-| R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status` (v0.2+); only `@source`-level errors pending |
-| R5. Dynamic headers / auth | 🟡 Partial | slices 1-2 done (global `@source` + per-op `@connect` auth via per-source mode switch); `$env`, `from:`, `$request.headers`, apiKey query/cookie remain |
-| R6. Batch entity resolution | ⬜ Not started | depends on R1 |
+| R4. Error handling | 🟡 Partial | opt-in `@connect(errors:)` done: `message` heuristic (corpus-ranked field) + `extensions`/`$status`; only `@source`-level errors pending |
+| R5. Dynamic headers / auth | 🟡 Partial | slices 1-3 done (global `@source` + per-op `@connect` header auth via per-source mode switch + apiKey-in-query on `@connect` queryParams); `$env`, `from:`, `$request.headers`, apiKey cookie remain |
+| R6. Batch entity resolution | 🟡 Common case done | infer from OAS (`--batch` op-id file); single key + one scalar-array input; composite/object-array deferred |
+| R10. Reusable `@mapping` | 🟡 In progress (branch `feat/r10-reusable-mappings`) | `--reusable-mappings`, connect v0.5 |
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
 | R8. `path`/`queryParams` JSONSelection | ✅ Done | serialization joins (inferred) + per-op `overrides` for path/queryParams (user intent) |
 | R9. Computed / literal bodies | ✅ Done | inferred `$args.input { … }` + `overrides[opId].body` raw JSONSelection (replace/drop) |
@@ -156,20 +152,22 @@ not a numbered item — its rows are acceptance criteria inside the consuming it
 
 ### R0. Spec version gating — ✅ Done
 
-**Why:** v0.4-dependent items (unions) and v0.2-dependent items (errors, batch) can't be
-emitted safely without a version gate.
+**Why:** unions/interfaces, errors, batch, and computed bodies all need real spec support
+under them; the version gate is what made it safe to build those without emitting
+constructs older connect versions can't parse.
 
-**Status:** Done (commit `72f625e`; defaults re-bumped 2026-06-12: no version asked for
-means LATEST — connect v0.4 / federation v2.14, via `LATEST_CONNECT_VERSION`). Originally:
-version table, `parseVersion`/`compareVersions`/`meetsMinimum`, and the
-reject-or-downgrade gate plumbing live in `src/versions.ts` and are consumed by later
-items (e.g. R1).
+**Status:** Done. Originally a per-feature reject-or-downgrade gate (commit `72f625e`);
+superseded by a hard floor (`feat/drop-consolidate-unions`, commit `d39095a`, 2026-06-25):
+connect is floored at v0.4, federation at v2.13, both rejected at the entrypoint before
+generation starts. `parseVersion`/`compareVersions`/`meetsMinimum` and the version
+constants live in `src/versions.ts` and are consumed by later items (e.g. R1, R7).
 
 **Scope:**
-- Version table + per-feature minimum-version gate (the "Major requirement" above).
-- Default `connectorSpecVersion` → **v0.3**; allow **v0.4** opt-in.
-- Emit matching `@link(url: ".../connect/vX.Y", import: ["@connect", "@source"])`.
-- Provide the reject-or-downgrade plumbing every later item plugs into.
+- Version table + hard floor enforced at the entrypoint (the "Connect spec version
+  floor" section above).
+- `connectorSpecVersion` is v0.4 only; anything below is rejected before generation starts.
+- Emit matching `@link(url: ".../connect/v0.4", import: ["@connect", "@source"])`.
+- A feature needing more than the floor still self-gates with `meetsMinimum` (see R7).
 
 **Files:** `src/versions.ts`, `@link` emission in `src/oas/io/schemaWriter.ts`.
 (gate: foundational)
@@ -221,38 +219,47 @@ into three separately-emittable cases; conflating them produces invalid schemas.
   resolver args (1a) or `$this` references (1b).
 
 **Files:** `src/oas/io/operationWriter.ts`, `src/oas/io/schemaWriter.ts`,
-`src/oas/nodes/obj.ts`, `src/oas/nodes/get.ts`. (gate: v0.2+)
+`src/oas/nodes/obj.ts`, `src/oas/nodes/get.ts`.
 
 > Do 1c alongside 1a/1b — never standalone.
 
 ### R2. Unions & interfaces (OAS `oneOf` / `anyOf` + discriminators) — ✅ Done (one deferral)
 
 **Why:** Router v0.4 adds interface/union support. `gen` already has substantial union
-machinery; this item finishes the gaps and ties the fallback to the version gate.
+machinery; this item finishes the gaps. Connect v0.4 is now the floor for the whole
+generator (`feat/drop-consolidate-unions`, commit `d39095a`), so union form no longer
+needs a fallback tied to a version gate — it is derived purely from the shape of the OAS
+input.
 
 **Verified state of the emitter (read `src/oas/nodes/union.ts`):**
-- ✅ **Real `union X = A | B`** (`Union.generate`, `consolidateUnions: false` branch),
-  filtered to selected members. `Factory` builds `Union` nodes from `oneOf`/`anyOf`.
-- ✅ **Discriminator → `__typename`** (DONE this slice): `Union` now stores the OAS
-  `discriminator` (`propertyName` + `mapping`), wired through `Factory`. `Union.select`
-  emits the composable connect-v0.4 abstract-type form —
+- ✅ **Real `union X = A | B`** (`Union.generate`), filtered to selected members. `Factory`
+  builds `Union` nodes from `oneOf`/`anyOf`.
+- ✅ **Discriminator → `__typename`**: `Union` stores the OAS `discriminator`
+  (`propertyName` + `mapping`), wired through `Factory`. `Union.select` emits the
+  composable connect-v0.4 abstract-type form —
   `... <discr>->match(["book", $ { __typename: $("Book") … }], …)` — with a string-literal
   `__typename` per member, value resolved from the discriminator `mapping`. Verified to
-  compose at fed 2.13 / connect v0.4 (`test_R2_union_discriminator_*`). See
+  compose at fed 2.13+ / connect v0.4 (`test_R2_union_discriminator_*`). See
   [[connectors-abstract-type-selection]].
-- ✅ **Consolidate-unions downgrade** unchanged and still the **default**
-  (`consolidateUnions: true`): merges members into one replacement OBJECT with the
-  `#### NOT SUPPORTED YET BY CONNECTORS!!! union …` marker. The new abstract path only
-  triggers when `consolidateUnions: false` AND a discriminator exists, so default output
-  is byte-identical (`test_R2_union_consolidate_downgrade_unchanged`).
-- (the earlier gaps here — version-gate wiring, discriminator-less fallback, allOf-member
-  unions — are closed below; broader `allOf` → interface remains the one deferral)
+- ✅ **Union form is unconditional, derived from shape, not version** — `Union.isFlat()`
+  decides it: an input-position `oneOf` (GraphQL has no input unions, any version), a
+  discriminator-less `oneOf` (no tag for `->match` to dispatch on), or a `oneOf` nested under a
+  named field rather than being the op's own response (rover won't credit fields through a
+  `->match` reached that way — #38) always emits the merged object (`#### union degraded to a
+  merged object: …`); a bare, discriminated `oneOf` sitting directly as the op's response always
+  emits a real `union`/interface. There is no `consolidateUnions` toggle anymore — connect is
+  floored at v0.4 program-wide (rejected below that at the entrypoint), so the only question is
+  the shape of the input, never the target version. (`test_R2_union_without_discriminator_degrades_to_merged_object`,
+  `test_R2_input_union_consolidated_kind_is_intentional`,
+  `test_R2_union_form_derived_from_connect_version`, `test_R2_union_nested_in_array_*`.)
+- (the earlier gaps here — discriminator-less fallback, allOf-member unions — are closed
+  below; broader `allOf` → interface remains the one deferral)
 
 **Done this slice — `oneOf` + shared `allOf` base → `interface`:** when a discriminated `oneOf`'s
 members are all `allOf` compositions sharing **exactly one** common base ref, the base is promoted to
 a GraphQL `interface`, members emit `… implements Base`, the field returns the interface, and the
 connector reuses the `->match` selection (rover-verified to compose at fed 2.13 / connect v0.4). It is
-an **id-neutral post-collect pass** (`src/oas/nodes/interfacePromotion.ts`, wired in `writer.ts` next
+an **id-neutral post-collect pass** (`src/oas/nodes/allOfBase.ts`, wired in `writer.ts` next
 to `inferEntityResolvers`): flags `Obj.emitAsInterface` / `Composed.implementsInterface` /
 `Union.interfaceBaseRef` rather than mutating `kind` (which is embedded in node ids). Rule 3 skips
 promotion (loudly) when the base is used concretely elsewhere among the selected ops. Tested
@@ -262,24 +269,46 @@ promotion (loudly) when the base is used concretely elsewhere among the selected
 - ✅ real-union path for `allOf` members: shared `selectedMembers` filter + unique twin-member
   ids (`Type.withUniqueName`); the rule-3-skip case now lists its members and DO's
   `oneOf`-of-`allOf` bodies generate.
-- ✅ version-gate wiring: `resolveConsolidateUnions` derives the union form from the connect
-  version (v0.4+ → abstract types; below → consolidate downgrade); an explicit ask for real
-  unions on < v0.4 downgrades with a warning. The CLI no longer hardcodes consolidation.
-- ✅ discriminator-less unions: superseded by #25 — they degrade to the merged object on v0.4
-  too (a tag cannot be inferred reliably; `->match` needs one).
+- ✅ union form derived from OAS shape, not the connect version: `Union.isFlat()`
+  replaced the version-derived `resolveConsolidateUnions` helper and the `consolidateUnions`
+  option (both removed by `d39095a`) — real unions/interfaces are now unconditional at connect
+  v0.4, the only supported version. The CLI never hardcoded consolidation to begin with.
+- ✅ discriminator-less unions: superseded by #25 — they degrade to the merged object (a tag
+  cannot be inferred reliably; `->match` needs one).
+
+**Closed 2026-07-04 (#38, details in `docs/issues.md`):**
+- ✅ a discriminated union nested under a named field (not the op's own response) degrades to
+  the merged object — rover doesn't credit fields through a `->match` reached that way. Same
+  upstream limitation as #14, one method (`->match`) instead of another (`->entries`).
+  launch_library abstract pass: 76.7% → 86.2%.
+
+**Closed 2026-07-04 (#39, details in `docs/issues.md`):**
+- ✅ a merged union's shadowed same-name member field (two members sharing a field name but
+  disagreeing on its type — only the first is ever written to the merged object) was still
+  treated as reachable by the collector, emitting its type's whole orphan subtree with no
+  connector coverage. `Union.dependencies()` now dedupes the same way `generate()`/`select()`
+  already did. Closes all of #38's Residue. launch_library abstract pass: 86.2% → 98.3%.
+
+**Closed 2026-07-04 (#40, details in `docs/issues.md`):**
+- ✅ an object-typed (or array-of-object) query param emitted a full `type X { ... }` body inline
+  inside the argument list — invalid GraphQL, breaking box.yaml's `get:/search`. `Param.visit()` now
+  degrades an object/`allOf`-shaped param schema (or just an array's `items`) to the existing
+  shapeless-object → `JSON` scalar fallback (#19), preserving array cardinality. box.yaml: 114/114
+  (100.0%).
 
 **Remaining scope (own slice):**
 - **Broader `allOf` → interface** beyond the discriminated-`oneOf` case (e.g. promote shared bases
   like `Extensible`/`Entity` used across many TMF types). Large blast radius.
 
 **Test infra:** `runOasTest` gained an `opts` arg
-(`{ consolidateUnions, connectorSpecVersion, federationVersion, composeFederationVersion }`)
-so v0.4/fed-2.13 paths can be generated and composed; existing callers default to the old
-behaviour (consolidate + fed 2.12).
+(`{ connectorSpecVersion, federationVersion, composeFederationVersion }`) so different
+compose targets can be generated and composed; the `consolidateUnions` knob was removed
+along with the option itself (`d39095a`) — existing callers default to connect v0.4 / fed
+2.14 (real unions).
 
 **Files:** `src/oas/nodes/union.ts`, `src/oas/nodes/factory.ts` (done);
 `src/oas/nodes/comp.ts`, `src/oas/io/schemaWriter.ts` (interfaces + version gate, pending).
-(gate: v0.4; else explicit downgrade)
+(connect floored at v0.4 program-wide; no per-feature gate)
 
 ### R3. Selection aliasing / renaming (non-GraphQL-safe keys, snake↔camel) — ✅ Done
 
@@ -297,7 +326,7 @@ leading digit, reserved words) or snake_case keys produce invalid/awkward schema
 - Apply in both the OAS path and the JSON-walker path.
 
 **Files:** `src/oas/nodes/prop*.ts` (`select()`), `src/oas/utils/` naming helpers,
-`src/json/walker/naming.ts`. (gate: v0.1+)
+`src/json/walker/naming.ts`.
 
 ### Medium value
 
@@ -310,12 +339,12 @@ to a **string**; `$status`/`$response.headers`/`$`/`@` are available in both. `i
 `@connect`/`@source` (maps chosen status codes to success) — the spec tool's directive SDL omits it, so
 its compose-version is unverified.
 
-**Done — baseline slice (opt-in `emitConnectorErrors`, connect v0.2+):** for operations that document
+**Done — baseline slice (opt-in `emitConnectorErrors`):** for operations that document
 HTTP error responses, the connector emits `errors: { extensions: """ statusCode: $status """ }` (surfaces
-the HTTP status in the GraphQL error extensions). Opt-in (default output byte-identical, like R1) and
-version-gated — below v0.2 it skips with a logged downgrade. The error-response predicate matches numeric
-`4xx/5xx` and the OAS range keys `4XX`/`5XX` (case-insensitive), excluding `default`. Verified to compose
-(rover, fed 2.12 / connect v0.3). Files: `src/oas/io/operationWriter.ts` (`writeConnector` +
+the HTTP status in the GraphQL error extensions). Opt-in (default output byte-identical, like R1); connect
+is floored at v0.4 program-wide, so no per-feature gate is needed here. The error-response predicate matches
+numeric `4xx/5xx` and the OAS range keys `4XX`/`5XX` (case-insensitive), excluding `default`. Verified to compose
+(rover). Files: `src/oas/io/operationWriter.ts` (`writeConnector` +
 `hasDocumentedErrors`), options threaded in `oasGen.ts`/`oasContext.ts`/`runners.ts`. Tested
 (`tests/all/r4-errors.test.ts`).
 
@@ -339,7 +368,7 @@ it lands in the SDL.
 **Requires:** `$status` (done), `$response.headers`, `@` (see variable table).
 
 **Files:** `src/oas/io/errorsWriter.ts` (all errors emission);
-`src/oas/io/schemaWriter.ts` (source-level, pending). (gate: v0.2+)
+`src/oas/io/schemaWriter.ts` (source-level, pending).
 
 ### R5. Dynamic headers / auth from OAS security schemes — 🟡 Partial
 
@@ -352,8 +381,12 @@ switch**: when any operation declares its own `security`, the shared `@source` h
 and every `@connect` carries its *effective* auth (own requirement, the inherited global, or nothing
 for a `security: []` public op). This is the OAS-correct model — a `@connect` header cannot remove a
 `@source` one, so a shared header would leak on public ops and double up on different-named overrides.
-Shared logic lives in `src/oas/io/security.ts` (`mapSchemeToAuthHeader`/`resolveAuthHeader`/`anyOperationDeclaresSecurity`),
-reused by both writers. Deferred cases still warn, never drop. Tested (`test_R5_*`, default v0.4/fed-2.14, rover-composed).
+Slice 3 adds **apiKey in query** on each `@connect`'s `queryParams` (a JSONSelection sibling of the
+`$args { … }` block, e.g. `"api_key": $config.apiKey`) — no mode gate, since `SourceHTTP` has no
+`queryParams` field so query auth can never live on `@source`. Shared logic lives in
+`src/oas/io/security.ts` (`mapSchemeToAuth`/`resolveAuth`/`anyOperationDeclaresSecurity`), reused by
+both writers. Deferred cases (cookie only) still warn, never drop. Tested (`test_R5_*`, default
+v0.4/fed-2.14, rover-composed).
 
 **Scope:**
 - ✅ apiKey/header → `{ name: "N", value: "{$config.apiKey}" }` (slice 1).
@@ -361,29 +394,62 @@ reused by both writers. Deferred cases still warn, never drop. Tested (`test_R5_
   http basic → `Authorization: Basic {$config.token}` (slice 1).
 - ✅ Per-operation auth on `@connect` — own/inherited/public resolved per op; per-source mode
   switch suppresses the `@source` header when any op declares its own `security` (slice 2).
-- ⬜ apiKey in **query** / **cookie** (warned + deferred today).
+- ✅ apiKey in **query** → `"N": $config.apiKey` on each `@connect`'s `queryParams` (slice 3).
+- ⬜ apiKey in **cookie** (warned + deferred — no spec field, only a `Cookie:` header hack).
 - ⬜ `$env`-backed secrets; `from:` response-header extraction; `$request.headers`
   passthrough.
 
 **Requires:** `$config` (done), `$env`, `$request.headers` (see variable table).
 
 **Files:** `src/oas/io/security.ts` (shared), `src/oas/io/schemaWriter.ts`,
-`src/oas/io/operationWriter.ts`. (gate: v0.1+)
+`src/oas/io/operationWriter.ts`.
 
 ### Lower value / advanced
 
-### R6. Batch entity resolution — `batch: { maxSize }` + `$batch` — ⬜ Not started
+### R6. Batch entity resolution — `$batch` + `batch: { maxSize }` — 🟡 Common case done
 
-**Why:** Reduces N+1 entity lookups. Depends on R1 (reuses the `@key` from 1c; R1 is
-done). (Verified: no `batch`/`$batch`/`maxSize` emitted today.)
+**Status:** Done for the single-key common case (branch `feat/r6-batch-infer`); the config-driven
+first draft (`feat/r6-batch`, deleted) is gone. A batch `@connect` is the R1 type-level resolver
+with **`$batch` in place of `$this`** — same `@key`, same selection, but the keys come from the
+batch endpoint's array input. Everything is inferred from a thin op-id file plus the entity's R1
+`@key`; only `maxSize` is a knob.
 
-**Scope:** For bulk endpoints (e.g. `POST /things/batch`), emit a type-level `@connect`
-with `batch: { maxSize }` and a `$batch`-based selection.
+**Why:** Reduces N+1 entity lookups. Builds on R1 (reuses its `@key`) and R8 (`arrayJoin`).
+
+**Input — `--batch <file>`, keyed by op id** (the one thing OAS can't give: *which* op is the
+batch endpoint). The endpoint must also be in the selection — like R1's by-id endpoint, it's
+emitted as a normal field AND wired as the entity's batch resolver. Reuses the `--overrides`
+JSON-load pattern. `{}`/`null` = defaults:
+```json
+{ "post:/products/batch": {}, "get:/products": { "maxSize": 50 } }
+```
+
+**How it works** (`applyBatchResolvers` in `src/oas/nodes/batch.ts`, a post-collect pass after
+`inferEntityResolvers`, reading the selected op's node graph — like `inferEntityResolvers` /
+`promoteAllOfBase`, never re-parsing OAS):
+- entity = the op's response array item (`[Product]` or `{ results: [Product] }`), resolved via
+  `op.resultType` → `Res`/`Arr`/`Obj` and matched by `types.get(item.id)` — so its R1 `@key` is
+  reused, never invented.
+- request = the single scalar-array input (`op.params` / `op.body.payload`), `$batch`-rooted:
+  - exploded query array → `queryParams: "id: $batch.id"`;
+  - comma/space/pipe-packed query array → `+ ->joinNotNull(",")` (R8's `arrayJoin`, shared);
+  - named body array → `body: "ids: $batch.id"`.
+- selection reuses the entity's R1 selection (wrapped as `$.results { … }` for a wrapped response).
+- always emits `batch: { maxSize: 100 }` (no OAS signal; file-overridable).
+
+**Skipped (warns via the project logger, never guesses):** an unselected endpoint, composite keys,
+object-array request bodies, top-level array bodies, endpoints with path params, more than one array
+input, an unknown op, or an entity with no R1 `@key`.
+
+**Deferred to a follow-up slice:** composite keys + object-array bodies (`body: "items: $batch { … }"`
+with renames) and the full required-input gate. The single-key path covers the common batch
+endpoint; these add real complexity for the long tail.
 
 **Requires:** `$batch`.
 
-**Files:** `src/oas/io/operationWriter.ts`, entity detection (shared with R1).
-(gate: v0.2+)
+**Files:** `src/oas/nodes/batch.ts` (derivation), `src/oas/nodes/obj.ts` (`writeBatchConnector`),
+`src/oas/utils/params.ts` (shared `arrayJoin`), `src/cli/oas.ts` (`--batch`), threaded via
+`oasContext.ts`/`oasGen.ts`/`writer.ts`. Tested (`tests/all/r6-batch.test.ts`, rover-composed).
 
 ### R7. Richer JSONSelection — methods, literals, spreads, coalescing, optional chaining — 🟡 Partial
 
@@ -401,7 +467,7 @@ vs 2.14.1). `->match` literals already land via R2; `->entries` via maps; `->joi
 archived branch `feat/optional-chaining-operator`).
 
 **Files:** `src/oas/nodes/scalar.ts` (`??` defaults), `src/oas/nodes/prop*.ts`,
-`src/oas/nodes/body.ts`. (gate: v0.1+; `??` gated to connect v0.4 + federation v2.14)
+`src/oas/nodes/body.ts`. (`??` gated to connect v0.4 + federation v2.14)
 
 ### R8. `path` / `queryParams` as full JSONSelection — ✅ Done (one deferral)
 
@@ -423,7 +489,7 @@ headers (string templates) — the explicit-intent channel for everything OAS ca
 operation signature if that proves annoying.
 
 **Files:** `src/oas/io/operationWriter.ts` (`arrayJoin`, override merge),
-`src/oas/oasContext.ts` (`RequestOverride`). (gate: v0.2+; joins on all versions)
+`src/oas/oasContext.ts` (`RequestOverride`).
 
 ### R9. Computed / literal request bodies — ✅ Done
 
@@ -435,63 +501,173 @@ inferred mapping (`name: $args.input.name` + `source: $("web")` literals, `$conf
 values, renamed keys); `null` drops the body. No OAS signal expresses computed bodies, so
 this is user intent by design, like the rest of the overrides.
 
-**Files:** `src/oas/io/operationWriter.ts` (`writeBodyOverride`). (gate: v0.2+)
+**Files:** `src/oas/io/operationWriter.ts` (`writeBodyOverride`).
+
+### R10. Reusable `@mapping` emission (connect v0.5) — 🟡 In progress
+
+**Status:** Branch `feat/r10-reusable-mappings` (commits `b7dfff6`, `fe3277d`). Emits reusable
+`@mapping` selections under `--reusable-mappings`, gated to connect v0.5; tests compose against a
+local composer build (`tests/all/r10-mappings.test.ts`). Not yet in the coverage matrix above —
+add the spec-surface row when it merges.
+
+**Files:** `src/oas/nodes/typeUtils.ts`, `propArray.ts`/`propComp.ts`/`propObj.ts`,
+`src/oas/io/writer.ts`, `src/versions.ts`. (gate: v0.5)
 
 ---
 
 ## Coverage findings — robustness backlog (from `COVERAGE.md`)
 
-`tools/coverage-spec.mts` runs **every GET op** of the corpus through generate + rover-compose under
-two configs (see `COVERAGE.md` for the live per-spec table). The failures, triaged **generator-bug vs
-input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor specs are kept **local-only**
-— gitignored — because the published specs embed example secrets that block pushes; this section is the
-committed summary of what they showed.)
+`tools/coverage-spec.mts` runs **every GET op** of the corpus through generate + rover-compose
+(see `COVERAGE.md` for the live per-spec table, regenerate with `make coverage`). The failures,
+triaged **generator-bug vs input-quality**. (The harness, `COVERAGE.md`, and the real-world vendor
+specs are kept **local-only** — gitignored — because the published specs embed example secrets that
+block pushes; this section is the committed summary of what they showed.)
 
-**Corpus status (measured 2026-06-12 post-#33, stock rover 0.40 / composition 2.13):**
+**Corpus status (re-measured 2026-07-04, post `#40` — connect v0.4 / fed 2.14.1, stock rover 0.40):**
 
-| Spec | GET ops | default (v0.3) | abstract (v0.4) |
-|---|--:|--:|--:|
-| googlebooks | 30 | 100% | 100% |
-| asana | 79 | 100% | 100% |
-| mercedes CCS | 43 | 100% | 39.5% → **100% with the #14 patch** |
-| digitalocean | 145 | 97.9% | 97.9% (#33 file endpoints) |
-| slack | 80 | 96.3% | 96.3% |
-| sendgrid | 154 | 95.5% | 95.5% |
-| github | 444 | 92.1% | 95.0% |
-| omni | 54 | 92.6% | 90.7% |
-| openai | 10 | 90.0% | 90.0% |
-| box | 114 | 87.7% (#33) | 93.9% |
-| confluence | 65 | 75.4% (16 DEGRADED) | 89.2% (#33) |
+| Spec | GET ops | pass-rate |
+|---|--:|--:|
+| googlebooks | 30 | 100.0% |
+| asana | 79 | 100.0% |
+| digitalocean | 145 | 97.9% |
+| slack | 80 | 96.3% |
+| sendgrid | 154 | 98.7% |
+| github | 444 | 95.7% |
+| adobe commerce | 242 | 97.9% |
+| launch library | 116 | 98.3% |
+| common room core † | 9 | 100.0% |
+| mindbody † | 8 | 100.0% |
+| TMF632 party | 4 | 0.0% |
+| TMF637 inventory | 2 | 0.0% |
+| TMF666 account | 14 | 100.0% |
+| TMF680 recommendation | 2 | 100.0% |
+| TMF717 customer360 | 3 | 33.3% |
+| js-mva consumer/product-selector | 4 | 100.0% |
+| most popular product | 4 | 100.0% |
+| omni † | 54 | 90.7% |
+| openai | 10 | 100.0% |
+| box | 114 | 100.0% |
+| confluence † | 65 | 93.8% |
+| mercedes CCS | 43 | **39.5%** (#14, upstream fix accepted — pending router release) |
 
-Overall GET: **default 93.2% (1135/1218) · abstract 93.3% (1137/1218)**, abstract ~96%+ once
-the #14 patch ships. Increments: #23+#24 +67/pass, #25 +6 abstract, #26 +76 (76 fail→pass /
-0 pass→fail), #33 +26 GETs (file endpoints → synthetic success).
+Overall GET: **95.3% OK (1549/1626)** (launch library's +14 and box's +2 applied to the last
+full-corpus total; other rows unchanged since the `#38` re-measurement below — this pass only
+re-ran launch library and box, scoped via `--spec`, not a full `make coverage` sweep).
+
+> **`#40` re-measurement (2026-07-04):** box **98.2% → 100.0% (+1 op, `get:/search`)** — an
+> object-typed (array-of-`$ref`-object) query param was emitted as a full `type X { ... }` body
+> inline inside the argument list (invalid GraphQL); now degrades to the existing JSON-scalar
+> fallback (`#19`), preserving array cardinality (`[JSON]`). This was the second half of a
+> previously-undocumented local-only finding ("B3"); its other half (`get:/files/.../boxSkillsCards`)
+> was already fixed as a side effect of `#39`. Box is now fully clean (114/114).
+
+> **`#39` re-measurement (2026-07-04):** launch library **86.2% → 98.3% (+14 ops)**, closing all of
+> `#38`'s Residue — a merged union's shadowed same-name member field (e.g. two members' `rocket`
+> field pointing at different types) was still treated as reachable by the collector even though
+> only the first one is ever written to the merged object; the shadowed one's orphan subtree (and,
+> transitively, schemas it alone re-references elsewhere) is no longer collected. The 2 ops still
+> failing (`GRAPH_QL_ERROR`, `SELECTED_FIELD_NOT_FOUND`) are unrelated, pre-existing gaps.
+
+> **`#38` re-measurement (2026-07-04):** launch library **76.7% → 86.2% (+11 ops)** — a discriminated
+> union nested under a field (`results: [PolymorphicX]`, not the op's own response) now degrades to a
+> merged object instead of a real union rover can't resolve fields through. Every other delta below
+> vs the last snapshot predates this fix — `df783ed` ("stop dropping ops whose response is a bare
+> scalar", already committed) landed between measurements: adobe commerce 89.7%→97.9% (+20), sendgrid
+> 97.4%→98.7% (+2), TMF666 42.9%→100.0% (+8), openai 90.0%→100.0% (+1). Mercedes CCS unchanged at
+> 39.5% (still blocked on upstream #14); TMF632/TMF637 unchanged at 0.0% (pre-existing, input-quality
+> per prior triage).
+
+> **v0.4-floor re-measurement (2026-07-02):** the consolidate/real-unions split retired with
+> `feat/drop-consolidate-unions` (`d39095a`) — there's only one pass now
+> (`Union.isFlat()` derives the form from OAS shape, not a toggle). Net **+19 ops**
+> vs the prior real-unions snapshot (1472 → 1491), driven by adobe commerce (88.0→89.7%, +4),
+> launch library (69.0→76.7%, +9), sendgrid (95.5→97.4%, +3), confluence (89.2→93.8%, +3): the old
+> check (`consolidateUnions || !discriminator`) never looked at `kind`, so an **input-position**
+> `oneOf` with a discriminator still attempted a real `union` (invalid GraphQL — no input unions) and
+> failed compose. `isFlat()`'s `kind === 'input'` check fixes that as a side effect of
+> the floor refactor, not a targeted fix.
+
+> **Box fix (B1+B2):** `#` in an OAS path leaked into the GraphQL field name (an SDL line comment,
+> breaking `@connect` binding) and an inline single-member `allOf` array item reached the emit loop
+> nameless (`startsWith` of undefined). B1 adds `#` to the field-name split class (HTTP path
+> untouched); B2 names the inline-allOf `Composed` at its construction site + a writer-level
+> name/emittability invariant + null-safe `isRef`. Box **86.8→90.4% consolidate (99→103 OK)** and
+> **93.0→98.2% real unions (106→112 OK)** — exactly the 5 `#` ops + the 1 GEN-throw, verified by
+> per-op dump. **2 real-unions ops remain** (`get:/search`, `get:/files/{file_id}/metadata/global/boxSkillsCards`,
+> both `CONNECTORS_UNRESOLVED_FIELD`, neither has a `#`) = **B3**, a separate union-member-field
+> coverage follow-up (see `docs/box-fix-plan.md`). No other corpus spec has a `#` path, so B1/B2 move
+> only box; overall totals updated by box's delta (+4 consolidate, +6 real unions).
+
+> **Realignment finding:** the `default` pass moved v0.3 → v0.4 to match the shipping default
+> (`9ca5ce7`). Headline: at v0.4 **real unions now beats consolidate** (93.5% vs 90.6%) — the
+> consolidate pass dropped ~32 ops vs the prior v0.3 snapshot (1135 → 1103). **Mercedes CCS went
+> 100% → 39.5% on the consolidate pass**: the v0.3 composer accepted its consolidated-union shapes,
+> but v0.4's stricter shape validator (#14) rejects them — so the old 100% was a v0.3 artifact that
+> hid the #14 block. Mercedes is now 39.5% on **both** passes (`CONNECTORS_UNRESOLVED_FIELD`, 26 ops).
+> In the expanded corpus, the gap histogram's #1 bucket is still `CONNECTORS_UNRESOLVED_FIELD`
+> (119 across both passes), now including the new low-scoring Launch Library and TMF cases.
+> Historical increments — #23/#24 +67/pass, #26 +76, #33 +26 GETs — were measured against the
+> pre-realignment v0.3 baseline; see git history.
 
 
-**Mutations corpus (post:/put:/patch:/del:, 1249 ops/pass — first measured 2026-06-12, sweep via
-`--verbs mutations`; fast guard: `tests/all/corpus-mutations.test.ts`):**
+**Mutations corpus (post:/put:/patch:/del:, expanded tracked-real-fixture sweep — re-measured
+2026-07-04, post `#38`; sweep via `--verbs mutations`; fast guard:
+`tests/all/corpus-mutations.test.ts`):**
 
-| Spec | mutation ops | default (v0.3) | abstract (v0.4) |
-|---|--:|--:|--:|
-| googlebooks | 21 | 100% | 100% |
-| slack | 94 | 100% | 100% |
-| sendgrid | 180 | 95.6% | 95.6% |
-| github | 401 | 92.8% | 96.0% |
-| omni | 92 | 92.4% | 92.4% |
-| digitalocean | 145 | 87.6% | 87.6% |
-| box | 144 | 81.9% | 86.1% |
-| asana | 88 | 83.0% | 83.0% |
-| openai | 18 | 100% | 100% |
-| confluence | 65 | 70.8% | 76.9% |
+| Spec | mutation ops | pass-rate |
+|---|--:|--:|
+| googlebooks | 21 | 100.0% |
+| slack | 94 | 100.0% |
+| digitalocean | 145 | 92.4% |
+| box | 144 | 91.7% |
+| openai | 18 | 100.0% |
+| asana | 88 | 83.0% |
+| sendgrid | 180 | 95.6% |
+| github | 401 | 97.3% |
+| adobe commerce | 344 | 99.1% |
+| common room core † | 13 | 69.2% |
+| mindbody † | 3 | 66.7% |
+| TMF632 party | 16 | 87.5% |
+| TMF637 inventory | 10 | 90.0% |
+| TMF666 account | 51 | 100.0% |
+| TMF680 recommendation | 6 | 100.0% |
+| TMF717 customer360 | 5 | 100.0% |
+| omni † | 92 | 92.4% |
+| confluence | 65 | 84.6% |
+| mercedes CCS | 1 | 100.0% |
 
-Mutations overall: **47% → 90.2% default (1127/1249) · 92.2% abstract — TARGET MET** in one
+Overall mutations: **95.0% OK (1612/1697)**.
+
+> **`#38` re-measurement (2026-07-04):** `#38` is GET-only (launch library, the only spec it touches,
+> has 0 mutation ops). adobe commerce 54.9%→99.1% (+152) and TMF666 92.2%→100.0% (+4) are `df783ed`
+> ("stop dropping ops whose response is a bare scalar", already committed), not `#38` — same as the
+> GET-table note above.
+
+(launch library, js-mva ×2, most popular product have 0 mutation ops — read-only spec surfaces,
+not a gap.)
+
+Mutations overall: **85.8% OK (1456/1697)**. Not comparable 1:1 to the prior 1249-op snapshot
+below — the corpus grew to match the GET sweep's expanded spec list (adobe commerce +344,
+plus TMF/common-room-core/mindbody/CCS newly swept for mutations).
+
+> **v0.4-floor re-measurement (2026-07-03):** the standout finding is **adobe commerce at
+> 54.9%** (189/344) — 152 of the corpus-wide 153 `GEN-EMPTY` ops come from this one spec, by
+> far the dominant gap-histogram bucket now (vs. `INVALID_GRAPHQL`/`INVALID_SELECTION`/
+> `INVALID_BODY` compose-fails elsewhere, ~30/22/17 ops). Not yet triaged — generator-bug vs
+> input-quality is unknown; a `COV_DUMP` per-op dump (see `docs/box-fix-plan.md` for the
+> pattern) is the next step if this is worth chasing. digitalocean (87.6→92.4%), box
+> (86.1→91.7%), and github (96.0→97.3%) all improved, consistent with the same
+> input-position-union fix noted in the GET re-measurement above.
+
+Historical fix arc (measured against the pre-expansion, v0.3-era 1249-op corpus — see git
+history for exact deltas): **47% → 90.2% default (1127/1249) · 92.2% abstract — TARGET MET** in one
 arc — #27 one argument list
 (+389/pass), #28/#29 body alias direction + default literals (+66/pass), #30 body-arg name
 (#15 discipline) + #31 empty-response synthetic (+63/pass), #32 JSON-only ops + quoted body
 keys (+26/pass, deliberately narrowed: the broad leaf rule diverged shared-type selections —
 see the entry's Care note), #33 four crash families (+37 mutations, +26 GETs). Every fix
-matrix-verified (0 pass→fail). Remaining: asana/box/confluence composeFail residue, DO's
-oneOf-of-allOf bodies (2, the R2 allOf-member gap), DEGRADED unions (by design on v0.3).
+matrix-verified (0 pass→fail). Remaining (as of that snapshot): asana/box/confluence composeFail
+residue, DO's oneOf-of-allOf bodies (2, the R2 allOf-member gap), DEGRADED unions (by design on v0.3).
 
 #18 measured corpus-wide: **+36 ops/pass** (github +20, box +9, confluence +4, DO +2, slack +1).
 
@@ -558,13 +734,13 @@ TEST_CORPUS.md. Regenerate `COVERAGE.md` after each fix to watch the numbers mov
 
 ## Sequencing notes
 
-- **R0 (version gating) is first** — it unblocks the per-feature gate every v0.2+/v0.4
-  item relies on, and resolves the prior ordering inconsistency (v0.4-dependent unions
-  used to precede the version bump).
+- **R0 (version gating) is first** — it establishes the v0.4 floor every item now
+  inherits at the entrypoint, and resolves the prior ordering inconsistency (v0.4-dependent
+  unions used to precede the version bump).
 - **Variable support is cross-cutting**, not a trailing item — each variable's row in
   the table is acceptance criteria inside its consuming item (R1/R4/R5/R6/R7/R9).
-- **R3 and R2** most affect *validity* of output (currently invalid/unsupported); R2
-  must respect the gate (real unions on v0.4, documented downgrade otherwise).
+- **R3 and R2** most affect *validity* of output (currently invalid/unsupported); R2's
+  union form is shape-derived and unconditional at the v0.4 floor (no downgrade path).
 - **R1** most affects *functionality* (makes the connector actually federate); do 1c
   alongside 1a/1b — never standalone.
 - **R6** depends on R1; parts of **R7/R8/R9** build on R1 and the selection work.
@@ -576,8 +752,8 @@ This is a documentation deliverable. Verify by:
 - Confirming the **coverage matrix** accounts for every spec surface in the "Reference
   (router source)" files, and that every "Mapped to" cell names a real item R0–R9 or an
   explicit non-goal — no dangling references.
-- Confirming each item carries a version gate and that the "Major requirement"
-  (reject-or-downgrade, never silent-invalid) is reflected here.
+- Confirming the "Connect spec version floor" section accurately reflects the
+  hard-reject-at-entrypoint behavior — no per-item version gate remains to check for.
 - Spot-checking the "Verified state of the emitter" claims against `src/oas/nodes/body.ts`
   and `src/oas/io/operationWriter.ts`.
 

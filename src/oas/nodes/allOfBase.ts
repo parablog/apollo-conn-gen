@@ -24,26 +24,23 @@ import { Naming } from '../utils/naming.js';
  * Promotion is id-neutral: it sets flags (`Obj.emitAsInterface`, `Composed.implementsInterface`,
  * `Union.interfaceBaseRef`) and never mutates `kind` (which is embedded in node ids).
  *
- * Gating mirrors the committed union slice: `consolidateUnions === false` + a discriminator. (Wiring
- * this to the spec version — connect >= v0.4 — is a separate roadmap follow-up.) A candidate union is
- * promoted only when ALL hold:
+ * A candidate union (a discriminated output union) is promoted only when ALL hold:
  *  1. every member is an allOf {@link Composed};
  *  2. exactly one `$ref` is common to every member's `allOf` (empty or >1 -> stay a union);
  *  3. the base is not used as a concrete type anywhere else (else promoting it would turn an
  *     unrelated field into an interface with no `__typename`) -> stay a union, logged.
  */
-export function promoteInterfaces(
+export function promoteAllOfBase(
   context: OasContext,
   gen: OasGen,
   types: Map<string, IType>,
   _selection: string[],
 ): void {
-  if (context.generateOptions.consolidateUnions) {
-    return; // interfaces only on the real-abstract-types path
-  }
-
   for (const union of candidateUnions(gen)) {
     if (!union.discriminator) continue;
+    // isFlat(): input position, no discriminator, or nested under a field rather than being the
+    // op's own response (#38) — already downgraded to one merged type, not an interface candidate.
+    if (union.isFlat()) continue;
 
     const members = union.children;
     if (members.length === 0) continue;

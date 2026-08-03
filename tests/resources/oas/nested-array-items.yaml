@@ -1,0 +1,60 @@
+openapi: 3.0.0
+info:
+  title: An array whose items hold another array, written inline
+  version: 1.0.0
+paths:
+  # A wrapper holding nothing but `items` is a spec-generator artifact — the payload is one list
+  # (slack `get:/conversations.replies`, whose messages are `[ {…} ]`). The inner items are the real
+  # element, so the wrapper is dropped. see docs/issues.md #52
+  /wrapper-array:
+    get:
+      operationId: listWrapped
+      responses:
+        '200':
+          description: An array property wrapping another array around its real element.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      items:
+                        anyOf:
+                          - type: object
+                            properties:
+                              text:
+                                type: string
+                              ts:
+                                type: string
+                          - type: object
+                            properties:
+                              text:
+                                type: string
+                              replyCount:
+                                type: integer
+  # The opposite: an explicit inner `type: array` is a real list of lists (docker's `top` rows, one
+  # array of column values per process). It must stay nested — dropping a level here would publish a
+  # shape the service never sends. see docs/issues.md #52
+  /matrix:
+    get:
+      operationId: listMatrix
+      responses:
+        '200':
+          description: A genuine array of arrays.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  processes:
+                    type: array
+                    items:
+                      type: array
+                      items:
+                        type: string
+                  titles:
+                    type: array
+                    items:
+                      type: string

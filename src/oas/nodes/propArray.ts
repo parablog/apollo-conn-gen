@@ -3,7 +3,6 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
-import { context } from 'esbuild';
 
 export class PropArray extends Prop {
   public items?: IType;

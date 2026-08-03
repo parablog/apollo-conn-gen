@@ -1,19 +1,16 @@
-// Connector / federation spec versions and the version-gating primitives that
-// later roadmap items (R1+) build on.
-//
-// Gating contract: an emitter whose output requires a minimum connect spec
-// version MUST either
-//   - downgrade explicitly  -> branch on `meetsMinimum(target, min)` and emit a
-//     documented fallback, or
-//   - reject explicitly     -> call `requireConnectVersion(feature, target, min)`
-//     which throws an actionable error.
-// It must never silently emit a construct the target version cannot parse.
+// Connector / federation spec versions and the version-gating primitives later roadmap
+// items build on. The connect spec version itself is floored at v0.4 and rejected below
+// that at the entrypoint (validateVersionOptions) — there is no per-feature downgrade or
+// reject path anymore. A feature that needs MORE than the v0.4 floor (e.g. R7's `??`
+// needing federation v2.14) still gates its own output with `meetsMinimum(target, min)`.
 //
 // Connect spec identifiers are plain `vMAJOR.MINOR` (e.g. "v0.4"). Ordering is fully
 // defined by `(major, minor)` as integers.
 
-// Authoritative list of connect spec identifiers we will emit in an `@link` URL.
-export const SUPPORTED_CONNECT_VERSIONS = ['v0.1', 'v0.2', 'v0.3', 'v0.4', 'v0.5'] as const;
+// Authoritative list of connect spec identifiers we will emit. Floored at v0.4: real unions/interfaces
+// need v0.4, and the pre-v0.4 consolidate downgrade was removed, so anything below v0.4 is rejected.
+// v0.5 is the preview that carries `@mapping`; it is opt-in, never the default (see LATEST below).
+export const SUPPORTED_CONNECT_VERSIONS = ['v0.4', 'v0.5'] as const;
 export type ConnectVersion = (typeof SUPPORTED_CONNECT_VERSIONS)[number];
 
 // The newest version we can emit — and the default: no version asked for means LATEST.
@@ -87,24 +84,7 @@ export function requireConnectVersion(feature: string, target: string, min: stri
   }
 }
 
-/**
- * Real unions/interfaces need connect v0.4; below that the only valid form is the consolidate
- * downgrade. Derived from the version when not chosen explicitly; an explicit choice is
- * respected unless it would emit constructs the target cannot parse — that downgrades loudly
- * (the R0 contract: never silently emit what the target can't read). see ROADMAP R2
- */
-export function resolveConsolidateUnions(connect: string, explicit?: boolean): boolean {
-  const supportsAbstractTypes = meetsMinimum(connect, 'v0.4');
-  if (explicit === false && !supportsAbstractTypes) {
-    console.warn(
-      `Warning: real unions/interfaces require connect v0.4, but target is ${connect} — ` +
-        'downgrading to consolidated unions.',
-    );
-    return true;
-  }
-  return explicit ?? !supportsAbstractTypes;
-}
-
+/** Non-blocking heads-up that v0.5 is experimental and needs router opt-in. */
 export function warnIfExperimentalConnectVersion(v: string): void {
   if (v === 'v0.5') {
     console.warn(
@@ -124,5 +104,10 @@ export function validateVersionOptions(opts: { connectorSpecVersion?: string; fe
   const federation = opts.federationVersion ?? DEFAULT_VERSIONS.federationVersion;
   assertSupportedConnectVersion(connect);
   assertVersionFormat(federation);
+  // connect is floored at v0.4 (above), which needs federation >= v2.13. Order-aware compare via
+  // meetsMinimum — never string-compare ('v2.9' >= 'v2.13' is lexicographically true but wrong).
+  if (!meetsMinimum(federation, 'v2.13')) {
+    throw new Error(`connect ${connect} requires federation >= v2.13, but federation is ${federation}.`);
+  }
   warnIfExperimentalConnectVersion(connect);
 }

@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
-import { IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Scalar, T } from '../nodes/internal.js';
+import { Arr, IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Res, Scalar, T } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
 
@@ -81,9 +81,10 @@ export class TypesCollector {
     // but the connector selection is assembled from ALL routes: it can ask for a field the
     // written node doesn't have, and composition fails (SELECTED_FIELD_NOT_FOUND).
     //
-    // e.g. (confluence, one op): `Space` is reached twice —
-    //   via Content: its `history` field was removed (history loops back to Content)
-    //   via Results: `history` kept — and that route's selection asks for it
+    // e.g. confluence `get:/wiki/rest/api/content/{id}/restriction`: `Space` is reached twice —
+    //   via `content`:      that route goes through Content, so Space's `homepage` was removed
+    //   via `restrictions`: it doesn't, so `homepage` is kept — and that route's selection asks for it
+    // both routes are written out in full in the issue entry.
     //
     // The routes are already spelled out in `expanded`, so for each removed field we look for a
     // selection path carrying the real field under the same type id, walk that path to its node,
@@ -269,18 +270,36 @@ class PathsCollector {
           // a cut cycle is a leaf: include its path so the commented field is emitted (in both the
           // SDL and the selection) instead of silently dropped. see docs/issues.md #10
           newSelection.add(child.path());
+        } else if (child instanceof Scalar && child.parent instanceof Res) {
+          // a response that is just a value, no object around it — a write answering `true` (adobe
+          // commerce), or a token string (petstore `/user/login`):
+          //   responses: { '200': { schema: { type: boolean } } }
+          // Nothing to pick apart, so the value itself is the leaf. see docs/issues.md #32
+          newSelection.add(child.path());
+        } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
+          // the case above with a list around it — a response that is just an array of values,
+          // no object around it (spotify's "check saved" endpoints answer `[true, false]`):
+          //   responses: { '200': { schema: { type: array, items: { type: boolean } } } }
+          // Nothing to pick apart, so the array itself is the leaf. see docs/issues.md #47
+          newSelection.add(child.path());
         } else {
           this.gen.expand(child);
         }
       });
 
-      // an op whose expansion found nothing selectable still has fields to write when its only
-      // content is a free-form JSON object (asana: `data: $ref EmptyResponse` -> `data: JSON`,
-      // emitted as an EMPTY invalid type before) — take those fields as the leaves. Scoped to
-      // otherwise-empty ops on purpose: doing it everywhere diverged the selections of types
-      // shared across connectors. see docs/issues.md #32
-      if (!Array.from(newSelection).some((p) => p.startsWith(root.path()))) {
-        T.traverse(root, (child) => {
+      // a side of the op whose expansion found nothing selectable still has fields to write when
+      // its only content is a free-form JSON object (asana: `data: $ref EmptyResponse` ->
+      // `data: JSON`, emitted as an EMPTY invalid type before) — take those fields as the leaves.
+      // Per side, not per op: a write whose body is selectable can still answer with an empty
+      // object, and checking the op as a whole never fires for it. see docs/issues.md #32, #51
+      const sides = T.isOp(root) ? root.children : [root];
+      for (const side of sides) {
+        if (Array.from(newSelection).some((p) => p.startsWith(side.path()))) {
+          continue;
+        }
+        // scoped to an otherwise-empty side on purpose: doing it everywhere diverged the
+        // selections of types shared across connectors. see docs/issues.md #32
+        T.traverse(side, (child) => {
           if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
             newSelection.add(child.path());
           }

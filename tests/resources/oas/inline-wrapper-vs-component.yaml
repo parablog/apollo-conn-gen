@@ -1,0 +1,155 @@
+openapi: 3.0.0
+info:
+  title: Inline wrapper collides with a component's emitted name (descendant order)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # Op A: two inline wrappers named `group`, each listing the `Group` component through its own `results`.
+  # Each used to emit a second `type Group` and clash. They have different fields, so they must get
+  # different names (`SubjectsGroup`, `MembersGroup`). see docs/issues.md #12, #37.
+  /permission:
+    get:
+      operationId: getPermission
+      responses:
+        '200':
+          description: SpacePermission with two `group` wrappers over the Group component.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacePermission'
+  # Op B: cases that must NOT rename. `status` matches a scalar component (which emits no type) and
+  # `label` matches a component this op never reaches -- neither lists itself, so neither is renamed.
+  /widget:
+    get:
+      operationId: getWidget
+      responses:
+        '200':
+          description: Inline objects whose key matches a component that never clashes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    $ref: '#/components/schemas/Status'
+                  status:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                  label:
+                    type: object
+                    properties:
+                      text:
+                        type: string
+  # Op C: the same `subjects.user` wrapper on the request body and the response, with different fields.
+  # Both would take the same name; the input/output split keeps them apart (`SubjectsUserInput` vs the
+  # output's own name) so they never emit one duplicated type. see docs/issues.md #37.
+  /space:
+    post:
+      operationId: createSpace
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceCreateLike'
+      responses:
+        '200':
+          description: created space
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceLike'
+components:
+  schemas:
+    SpacePermission:
+      type: object
+      properties:
+        id:
+          type: string
+        subjects:
+          type: object
+          properties:
+            group:
+              type: object
+              properties:
+                size:
+                  type: integer
+                results:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Group'
+        members:
+          type: object
+          properties:
+            group:
+              type: object
+              properties:
+                start:
+                  type: integer
+                results:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Group'
+    Group:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    # scalar component: emits no type, so the inline `status` never clashes with it
+    Status:
+      type: string
+    # object component this op never reaches, so the inline `label` never clashes with it
+    Label:
+      type: object
+      properties:
+        id:
+          type: string
+    # request-body `subjects.user` wrapper -> becomes SubjectsUserInput; fields {results,size}
+    SpaceCreateLike:
+      type: object
+      properties:
+        name:
+          type: string
+        subjects:
+          type: object
+          properties:
+            user:
+              type: object
+              properties:
+                size:
+                  type: integer
+                results:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/User'
+    # response `subjects.user` wrapper -> its own name; different fields {results,size,start,limit}
+    SpaceLike:
+      type: object
+      properties:
+        id:
+          type: string
+        subjects:
+          type: object
+          properties:
+            user:
+              type: object
+              properties:
+                size:
+                  type: integer
+                start:
+                  type: integer
+                limit:
+                  type: integer
+                results:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/User'
+    User:
+      type: object
+      properties:
+        accountId:
+          type: string

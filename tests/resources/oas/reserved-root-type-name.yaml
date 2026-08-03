@@ -1,0 +1,40 @@
+openapi: 3.0.0
+info:
+  title: A component schema literally named "Subscription"
+  version: 1.0.0
+paths:
+  # Subscription is reached two ways: as a nested field (Customer.subscription) and would also be
+  # reached directly if selected on its own — both must agree on the same sanitised type name.
+  # see docs/issues.md #45
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A customer with a nested subscription.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+components:
+  schemas:
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+        subscription:
+          $ref: '#/components/schemas/Subscription'
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string

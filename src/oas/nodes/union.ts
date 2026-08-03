@@ -1,4 +1,4 @@
-import { Composed, Factory, Get, IType, Prop, Res, T, Type } from './internal.js';
+import { Arr, Composed, Factory, Get, IType, Prop, PropScalar, Res, T, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -11,10 +11,11 @@ export class Union extends Type {
   // `discriminatorMapping` maps each tag value to a schema ref (value -> "#/.../Type").
   public discriminator?: string;
   public discriminatorMapping?: Record<string, string>;
+
   // R2: when this discriminated union's members all share one allOf base, it is promoted to a
   // GraphQL interface. `interfaceBaseRef` is the base schema ref ("#/.../Product"); when set,
   // generate() returns the interface name (not the union name) and emits no `union` line. Set by
-  // promoteInterfaces (a post-collect pass) — never in visit().
+  // promoteAllOfBase (a post-collect pass) — never in visit().
   public interfaceBaseRef?: string;
 
   constructor(
@@ -32,7 +33,9 @@ export class Union extends Type {
   }
 
   get id(): string {
-    return `union:${this.name}`;
+    // The same `oneOf` sent in a request body and returned in a response is two nodes, like obj/comp/map:
+    // without the kind here one of them overwrites the other (QuickBooks `Bill.Line`). see docs/issues.md #48
+    return `union:${this.kind}:${this.name}`;
   }
 
   public forPrompt(_context: OasContext): string {
@@ -72,17 +75,32 @@ export class Union extends Type {
 
     if (this.name != null) {
       context.store(this.name, this);
-      // members are absorbed into the merged object whenever we downgrade — in consolidate
-      // mode, and in v0.4 mode when there is no discriminator (no tag field for ->match, so
-      // generate() emits the merged object there too). see docs/issues.md #25
-      if (context.generateOptions.consolidateUnions || !this.discriminator) {
-        this.children.forEach((child) => context.decRefCount(child.name));
-      }
     }
 
     this.visited = true;
     trace(context, '<- [union:visit]', 'out: ' + schemas);
     context.leave(this);
+  }
+
+  // True when this union IS the op's response (optionally under a bare array), not nested inside a
+  // field. This composes fine:
+  //   get:/item -> oneOf [Book, Movie]
+  // This doesn't — launch library's real shape, rover won't resolve anything inside the match:
+  //   PaginatedAgencyList.results: [ oneOf [AgencyMini, AgencyNormal, AgencyDetailed] ]
+  // see docs/issues.md #38
+  public isTopLevelResponse(): boolean {
+    let node: IType | undefined = this.parent;
+    while (node instanceof Arr) {
+      node = node.parent;
+    }
+    return node instanceof Res;
+  }
+
+  // A union becomes one flat merged type, not a real `union`/interface, when: it's a request body
+  // (GraphQL has no input unions), it has no tag field to pick a branch (#25), or it's nested
+  // inside a field rather than being the op's own response (#38). see docs/issues.md #25, #38
+  public isFlat(): boolean {
+    return this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
@@ -105,31 +123,22 @@ export class Union extends Type {
     else {
       // Definition/reference agreement, like comp.ts: references emit genTypeName(name), so the
       // union line (and its consolidate-downgrade type) must too. see docs/issues.md #15, #6
-      const sanitised = Naming.genTypeName(this.name);
-      const refName = Naming.getRefName(this.name);
-      const name = sanitised === refName ? refName : sanitised;
+      const name = Union.resolvedTypeName(this.name);
 
-      if (context.generateOptions.consolidateUnions) {
-        this.generateMergedObject(context, writer, selection, name, '#### NOT SUPPORTED YET BY CONNECTORS!!! union ');
-      } else if (!this.discriminator) {
-        // No tag field for `->match` to dispatch on, so a real union cannot be selected — the
-        // selection already falls back to the flat merged form (see select); emit the matching
-        // merged object here, or SDL says `union` while the selection selects a group on it
-        // (GROUP_SELECTION_IS_NOT_OBJECT). see docs/issues.md #25
-        this.generateMergedObject(
-          context,
-          writer,
-          selection,
-          name,
-          '#### no discriminator — union degraded to a merged object: ',
-        );
+      if (this.isFlat()) {
+        // No real union here: an input-position oneOf (GraphQL has no input unions) or no
+        // discriminator (no tag for `->match`). Emit the merged object — the selection falls back to
+        // the same flat form (see select), so SDL and selection agree. see docs/issues.md #25, #36
+        this.generateMergedObject(context, writer, selection, name, '#### union degraded to a merged object: ');
       } else if (this.interfaceBaseRef) {
         // R2: promoted to an interface — the base (emitted as `interface`) and the members
         // (each `... implements Base`) carry the type system; emit no `union X = A | B` line.
         trace(context, '   [union::generate]', `[interface] suppressing union line for ${this.name}`);
       } else {
-        // list the members with selected fields. Filtering by prop-parent identity broke for
-        // allOf members (their folded props keep the inner part as parent -> `union X = `). #34
+        // output + discriminator: a real `union X = A | B`. Filtering by prop-parent identity broke
+        // for allOf members (their folded props keep the inner part as parent -> `union X = `). #34
+        // Members are listed under the name their own `type` line uses: a component named
+        // `http_rule_response` is written as `HttpRuleResponse`. see docs/issues.md #43
         const filtered = this.selectedMembers(selection);
 
         writer
@@ -137,7 +146,7 @@ export class Union extends Type {
           .write(name)
           .write(this.nameSuffix())
           .write(' = ')
-          .write(filtered.map((child) => Naming.getRefName(child.name)).join(' | '))
+          .write(filtered.map((child) => Union.resolvedTypeName(child.name)).join(' | '))
           .write('\n\n');
       }
     }
@@ -164,6 +173,13 @@ export class Union extends Type {
 
     trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
 
+    // The merged object's keyword follows the node's `kind`, which is inherited from the parent
+    // context: a response-rooted Union is `kind='type'`; a request-body-rooted Union is
+    // `kind='input'` (Body sets it on construction — see body.ts). Both are correct: the merged
+    // object is referenced exactly as its context dictates (response -> output field, body ->
+    // Mutation argument), and `nameSuffix()` (`'Input'` when kind=input) keeps the names
+    // distinct when the same schema is reached both ways. Do NOT hard-code `'type '` here —
+    // it would emit an input-position merge as an output type and break the body case. See C6.
     writer
       .write(this.kind + ' ')
       .write(name)
@@ -172,15 +188,44 @@ export class Union extends Type {
       .write(name)
       .write('\n');
 
-    const selected = this.selectedProps(selection);
-    const generated = new Set<string>();
-    for (const prop of selected) {
+    for (const prop of this.dedupedSelectedProps(selection)) {
       trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-      if (!generated.has(prop.id)) prop.generate(context, writer, selection);
-      generated.add(prop.id);
+      prop.generate(context, writer, selection);
     }
 
     writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
+  }
+
+  // Members can give the same field name two different shapes. Both objects — keep the first,
+  // picking common fields out of differently-shaped payloads is fine (launch library):
+  //   LaunchNormal:   { rocket: { allOf: [{ $ref: '#/…/RocketNormal' }] } }
+  //   LaunchDetailed: { rocket: { allOf: [{ $ref: '#/…/RocketDetailed' }] } }
+  // A list of allowed values next to a plain string — no single field fits both, so fall back to
+  // the JSON scalar rather than pick a member (TMF717):
+  //   Individual: { status: { $ref: '#/…/IndividualStateType' } }   # enum
+  //   PartyRole:  { status: { type: string } }
+  // see docs/issues.md #39, #44
+  private dedupedSelectedProps(selection: string[]): Prop[] {
+    const kindOf = (prop: Prop) => prop.id.split(':')[1];
+
+    const firstByName = new Map<string, Prop>();
+    const kindByName = new Map<string, string>();
+    const incompatible = new Set<string>();
+
+    for (const prop of this.selectedProps(selection)) {
+      const kind = kindOf(prop);
+      const existingKind = kindByName.get(prop.name);
+      if (existingKind === undefined) {
+        firstByName.set(prop.name, prop);
+        kindByName.set(prop.name, kind);
+      } else if (kind !== existingKind) {
+        incompatible.add(prop.name);
+      }
+    }
+
+    return Array.from(firstByName.entries()).map(([name, prop]) =>
+      incompatible.has(name) ? new PropScalar(prop.parent!, name, 'JSON', {}) : prop,
+    );
   }
 
   // two inline members easily share a name (`[inline:Input]` twice) — same suffixing as Composed
@@ -202,11 +247,14 @@ export class Union extends Type {
   // a real `union X = Book | Movie` needs its members (and a member's shared $ref base, which
   // the writer may promote to an interface — R2); a merged one needs its flat fields instead
   dependencies(context: OasContext, selection: string[]): IType[] {
-    if (context.generateOptions.consolidateUnions || !this.discriminator) {
-      return this.selectedProps(selection);
+    if (this.isFlat()) {
+      return this.dedupedSelectedProps(selection);
     }
-    return this.children.flatMap((member) => [
+    // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
+    // $ref base it extends — `Book: allOf [$ref Product, …]` -> Product (r2-interface-shared-base.yaml).
+    return this.selectedMembers(selection).flatMap((member) => [
       member,
+      // expand the list with all those that are referenced by this type, so we can filter them too
       ...(member instanceof Composed ? T.containers(member).filter((c) => T.isRef(c.name)) : []),
     ]);
   }
@@ -218,47 +266,19 @@ export class Union extends Type {
       this.consolidate(selection);
     }
 
-    // R2: when we emit a *real* `union X = A | B` (not the consolidate downgrade) and the
-    // spec gives us a discriminator, produce the composable abstract-type selection
-    // (connect v0.4): a spread `->match` whose branches set a string-literal __typename per
-    // concrete member. Without a discriminator, or when consolidating, fall back to the flat
-    // merged selection (the consolidate-downgrade shape).
-    if (!context.generateOptions.consolidateUnions && this.discriminator) {
+    // R2: for a real output `union X = A | B` (output position + discriminator) produce the
+    // composable abstract-type selection (connect v0.4): a spread `->match` whose branches set a
+    // string-literal __typename per member. Merged-object unions (input position or no discriminator)
+    // fall back to the flat selection below. see docs/issues.md #25, #36
+    if (!this.isFlat()) {
       this.selectAbstract(context, writer, selection);
       trace(context, '<- [union::select]', `-> out: ${this.name}`);
       return;
     }
 
-    const selected = this.selectedProps(selection);
-    const generated = new Set<string>();
-    for (const prop of selected) {
-      if (!generated.has(prop.id)) prop.select(context, writer, selection);
-      generated.add(prop.id);
+    for (const prop of this.dedupedSelectedProps(selection)) {
+      prop.select(context, writer, selection);
     }
-
-    /*if (context.generateOptions.consolidateUnions) {
-      if (!this.consolidated) {
-        this.consolidate(selection);
-      }
-
-      const selected = this.selectedProps(selection);
-      const generated = new Set<string>();
-      for (const prop of selected) {
-        if (!generated.has(prop.id))
-          prop.select(context, writer, selection);
-        generated.add(prop.id);
-      }
-    } else {
-      // add the prop parent paths to a set so we can only include those parents that have been selected
-      const propParentsPathSet = new Set(this.selectedProps(selection).map(p => p.parent!.path()));
-
-      // we should only include the names of those properties that have been selected
-      this.children
-        .filter(c => propParentsPathSet.has(c.path()))
-        .forEach((child) => {
-          child.select(context, writer, selection);
-        });
-    }*/
 
     /* TODO: better selection for Unions
     dataPoints: dataFormat->match(
@@ -305,8 +325,12 @@ export class Union extends Type {
     writer.write(pad(base)).write(`... ${field}->match(\n`);
 
     members.forEach((child, idx) => {
-      const typeName = Naming.getRefName(child.name)!;
-      const value = this.discriminatorValue(child) ?? typeName.toLowerCase();
+      // `__typename` is the written name (`http_rule_response` -> `HttpRuleResponse`), or the router
+      // can't match what comes back to a member. see docs/issues.md #43
+      const typeName = Union.resolvedTypeName(child.name);
+      // With no `mapping`, the value the service sends is the plain ref name — "Book", not "book".
+      // It is compared against real payloads, so it keeps the name the OAS uses, unsanitised.
+      const value = this.discriminatorValue(child) ?? Naming.getRefName(child.name)!;
 
       writer.write(pad(base + 2)).write(`["${value}", $ {\n`);
       writer.write(pad(base + 4)).write(`__typename: $("${typeName}")\n`);
@@ -327,7 +351,17 @@ export class Union extends Type {
     writer.write(pad(base)).write(')\n');
   }
 
-  /** Reverse-lookup an OAS discriminator value (e.g. "book") for a concrete member type. */
+  // The name a ref is written as: `http_rule_response` -> `HttpRuleResponse`. Same rule `Obj` and
+  // `Composed` use for their own `type X {` line. see docs/issues.md #15, #43
+  private static resolvedTypeName(ref: string): string {
+    const sanitised = Naming.genTypeName(ref);
+    const refName = Naming.getRefName(ref);
+    return sanitised === refName ? refName : sanitised;
+  }
+
+  /** Reverse-lookup the explicit discriminator `mapping` value for a member — e.g. given
+   * `mapping: { book: '#/components/schemas/Book' }`, returns "book" for the Book member.
+   * Null when there's no explicit mapping (the caller then uses the bare ref name). */
   private discriminatorValue(child: IType): string | null {
     const mapping = this.discriminatorMapping;
     if (!mapping) return null;
@@ -370,7 +404,7 @@ export class Union extends Type {
     // and finally sort the props and copy them to our original
     props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
 
-    // and return the types.ts we've used
+    // and return the set of types we've used
     this.consolidated = true;
 
     // now remove every added ID

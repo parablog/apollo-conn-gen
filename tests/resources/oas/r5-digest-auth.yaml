@@ -1,0 +1,37 @@
+openapi: 3.0.3
+info:
+  title: Digest Auth Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# Global http/digest — mapSchemeToAuth only handles bearer/basic, so this maps to null and
+# resolveAuth warns "has no supported connector mapping". No auth header is emitted on @source.
+security:
+  - digestAuth: []
+paths:
+  /things:
+    get:
+      operationId: listThings
+      summary: List all things
+      responses:
+        '200':
+          description: A list of things
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Thing:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+  securitySchemes:
+    digestAuth:
+      type: http
+      scheme: digest

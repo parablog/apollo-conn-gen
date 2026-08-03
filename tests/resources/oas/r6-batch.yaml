@@ -1,0 +1,236 @@
+openapi: 3.0.3
+info:
+  title: R6 Batch Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # by-id endpoint -> R1 gives Product a @key(fields: "id")
+  /products/{id}:
+    get:
+      operationId: getProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+  # batch via an exploded array query param (?id=1&id=2) -> queryParams: "id: $batch.id"
+  /products:
+    get:
+      operationId: listProducts
+      parameters:
+        - name: id
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  # batch via a comma-packed array query param -> "id: $batch.id->joinNotNull(",")"
+  /products/search:
+    get:
+      operationId: searchProducts
+      parameters:
+        - name: id
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  # batch via a named body array -> body: "ids: $batch.id"
+  /products/batch:
+    post:
+      operationId: batchProducts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  # batch with a wrapped response -> selection: "$.results { … }"
+  /products/lookup:
+    post:
+      operationId: lookupProducts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Wrapped products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+  # has a path param -> can't batch (no $batch value to fill {storeId})
+  /stores/{storeId}/products/batch:
+    post:
+      operationId: batchStoreProducts
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  # two array inputs -> ambiguous, skipped
+  /products/ambiguous:
+    post:
+      operationId: ambiguousProducts
+      parameters:
+        - name: id
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  # composite-key entity (key "sku storeId") -> batch skipped (not supported yet)
+  /stores/{storeId}/items/{sku}:
+    get:
+      operationId: getStoreItem
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sku
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A store item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreItem'
+  /store-items/batch:
+    post:
+      operationId: batchStoreItems
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Store items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StoreItem'
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    StoreItem:
+      type: object
+      properties:
+        storeId:
+          type: string
+        sku:
+          type: string
+        name:
+          type: string

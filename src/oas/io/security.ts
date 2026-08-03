@@ -1,128 +1,230 @@
 import _ from 'lodash';
-import Oas from 'oas';
+import type Oas from 'oas';
 import { SecurityRequirementObject, SecuritySchemeObject, SecuritySchemesObject } from 'oas/types';
-import { OpenAPIV3 } from 'openapi-types';
+import type { Op } from '../nodes/internal.js';
 
-// One auth header: the header name and its value template (e.g. Authorization / "Bearer {$config.token}").
-export type AuthHeader = { name: string; value: string };
+// A connector name/value entry: a header (`{ name, value }`) or a query param (`"name": value`).
+// Also the shape mergeOverrides produces for inferred/overridden header & query params.
+export interface NameValue {
+  name: string;
+  value: string;
+}
 
-// The HTTP methods a path item can hold — reuse the canonical enum rather than a local literal.
-const HTTP_METHODS = Object.values(OpenAPIV3.HttpMethods);
+// One resolved auth credential: a NameValue plus where it goes. Header values carry `{}`
+// interpolation (`Bearer {$config.token}`); a query value is a raw JSONSelection (`$config.apiKey`).
+interface AuthEntry extends NameValue {
+  kind: 'header' | 'query';
+}
+
+// The HTTP methods the generator actually emits (see OasGen.isSupported). Scanning only these for
+// the per-op-mode switch keeps the decision consistent with what gets written — a `security` on an
+// un-emitted HEAD/OPTIONS op no longer flips the whole spec into per-op mode.
+const SUPPORTED_METHODS: readonly string[] = ['get', 'post', 'put', 'patch', 'delete'];
 
 /**
- * Map one OAS security scheme to its connector header, or null when it makes no header.
- * Shared by the @source writer (slice 1) and the per-operation @connect writer (slice 2).
+ * Map one OAS security scheme to its connector auth entry, or null when it makes none.
+ * Header values carry `{}` interpolation; a query value is a raw JSONSelection (no braces) because
+ * it lands in a `queryParams: """…"""` block, which is already a JSONSelection context.
  */
-export function mapSchemeToAuthHeader(scheme: SecuritySchemeObject): AuthHeader | null {
+function mapSchemeToAuth(scheme: SecuritySchemeObject): AuthEntry | null {
   switch (scheme.type) {
     case 'apiKey':
-      // apiKey carried in a header, e.g. `{ type: apiKey, in: header, name: X-API-Key }`
+      // apiKey in a header, e.g. `{ type: apiKey, in: header, name: X-API-Key }`
       if (scheme.in === 'header' && scheme.name) {
-        return { name: scheme.name, value: '{$config.apiKey}' };
+        return { kind: 'header', name: scheme.name, value: '{$config.apiKey}' };
       }
-      return null; // query / cookie are deferred and warned about, not emitted as headers
+      // apiKey in the query string, e.g. `{ type: apiKey, in: query, name: api_key }`
+      if (scheme.in === 'query' && scheme.name) {
+        return { kind: 'query', name: scheme.name, value: '$config.apiKey' };
+      }
+      return null; // cookie is deferred and warned about, not emitted
     case 'http':
-      // e.g. `{ type: http, scheme: bearer }`
       if (scheme.scheme === 'bearer') {
-        return { name: 'Authorization', value: 'Bearer {$config.token}' };
+        return { kind: 'header', name: 'Authorization', value: 'Bearer {$config.token}' };
       }
-      // e.g. `{ type: http, scheme: basic }`
       if (scheme.scheme === 'basic') {
-        return { name: 'Authorization', value: 'Basic {$config.token}' };
+        return { kind: 'header', name: 'Authorization', value: 'Basic {$config.token}' };
       }
       return null;
     case 'oauth2':
     case 'openIdConnect':
       // both flows ultimately send a bearer token
-      return { name: 'Authorization', value: 'Bearer {$config.token}' };
+      return { kind: 'header', name: 'Authorization', value: 'Bearer {$config.token}' };
     default:
       return null;
   }
 }
 
-/** Build a loud warning for a scheme that was not turned into a header. */
-export function dropWarning(name: string, scheme: SecuritySchemeObject | undefined): string {
+/** The warning text for a referenced scheme we did not emit (undefined, deferred, or not the winner). */
+function droppedSchemeWarning(name: string, scheme: SecuritySchemeObject | undefined): string {
   if (!scheme) {
-    return `[security] scheme "${name}" is referenced by global security but not defined; skipped.`;
-  }
-  if (scheme.type === 'apiKey' && scheme.in === 'query') {
-    return `[security] scheme "${name}" is apiKey in query — not emitted as a header (query-param auth deferred).`;
+    return `[security] scheme "${name}" is referenced but not defined; skipped.`;
   }
   if (scheme.type === 'apiKey' && scheme.in === 'cookie') {
-    return `[security] scheme "${name}" is apiKey in cookie — not emitted as a header (cookie auth deferred).`;
+    return `[security] scheme "${name}" is apiKey in cookie — not emitted (cookie auth deferred).`;
   }
-  return `[security] scheme "${name}" (${scheme.type}) not emitted — only the first header-producing scheme of the requirement is mapped.`;
+  return `[security] scheme "${name}" (${scheme.type}) has no supported connector mapping; skipped.`;
 }
 
 /**
- * Resolve a security requirement to a single header, reusing the slice-1 rule: flatten the
- * referenced scheme names and pick the first that produces a header; every other scheme is
- * warned about. An absent (`undefined`) or empty (`[]`, i.e. public) requirement makes no
- * header. The caller decides what a null header means in its context (see the mode switch in
- * schemaWriter / operationWriter) and emits the returned warnings with its own prefix.
+ * Resolve a security requirement to the single auth entry the connector should send.
+ *
+ * A requirement is an OR of scheme-name sets (`[{ a: [] }, { b: [] }]` = "a OR b"). We flatten to
+ * names in order and pick the FIRST that maps to an entry. A later viable alternative is a
+ * legitimate OR choice, not a failure, so it stays silent; only genuinely unresolvable names —
+ * undefined, deferred (cookie), or an unmappable scheme — are reported in `warnings`. An absent or
+ * empty (`[]`, public) requirement yields no entry and no warnings.
  */
-export function resolveAuthHeader(
-  // e.g. `[{ bearerAuth: [] }]` (one requirement, one scheme) or `[{ a: [] }, { b: [] }]` (OR of schemes)
+function resolveAuth(
   securityRequirements: SecurityRequirementObject[] | undefined,
-  securitySchemes: SecuritySchemesObject,
-): { header: AuthHeader | null; warnings: string[] } {
-  // absent or `security: []` (public) → no header, nothing to warn about
-  if (!securityRequirements?.length) {
-    return { header: null, warnings: [] };
+  schemes: SecuritySchemesObject,
+): { auth: AuthEntry | null; warnings: string[] } {
+  let auth: AuthEntry | null = null;
+  const warnings: string[] = [];
+
+  for (const name of securityRequirements?.flatMap((requirement) => Object.keys(requirement)) ?? []) {
+    const scheme = schemes[name];
+    const entry = scheme ? mapSchemeToAuth(scheme) : null;
+
+    if (entry) {
+      // first scheme that maps wins; a later viable alternative is a silent OR choice
+      if (!auth) auth = entry;
+    } else {
+      // genuinely unresolvable: undefined scheme, cookie, or no supported mapping
+      warnings.push(droppedSchemeWarning(name, scheme));
+    }
   }
 
-  // flatten to scheme names (across objects = OR, within each = AND), then resolve each to a header
-  // (null if it makes none, e.g. apiKey in query)
-  const candidates = securityRequirements
-    .flatMap((requirement) => Object.keys(requirement))
-    .map((name) => {
-      const scheme = securitySchemes[name];
-      return { name, scheme, header: scheme ? mapSchemeToAuthHeader(scheme) : null };
-    });
-
-  // the first scheme that produces a header wins; every other referenced scheme is warned about
-  const chosen = candidates.find((candidate) => candidate.header);
-  const warnings = candidates
-    .filter((candidate) => candidate !== chosen)
-    .map((candidate) => dropWarning(candidate.name, candidate.scheme));
-
-  return { header: chosen?.header ?? null, warnings };
+  return { auth, warnings };
 }
 
-/** Read `components.securitySchemes` (OAS 3) falling back to `securityDefinitions` (Swagger 2.0). */
-export function securitySchemes(api: Oas): SecuritySchemesObject {
-  const def = api.getDefinition();
-  // oas-normalize usually up-converts Swagger 2.0 → components.securitySchemes; the
-  // securityDefinitions fallback (same shape, exposed via OASDocument's index signature) is a
-  // safety net. refs are already dereferenced by oas, so the shape is a plain SecuritySchemesObject.
-  return (def.components?.securitySchemes ?? def.securityDefinitions ?? {}) as SecuritySchemesObject;
-}
-
-/** The spec's global `security` requirement (the document-level default), or undefined. */
-export function globalSecurity(api: Oas): SecurityRequirementObject[] | undefined {
-  return api.getDefinition().security;
-}
-
-/**
- * True when ANY operation in the spec declares its own `security` (empty `[]` or non-empty).
- * This is the per-source mode switch: when true, a shared `@source` auth header is unsafe
- * (a public op would still leak it, and a different-named override would send both), so auth
- * moves to each operation's `@connect` instead. See the ROADMAP R5 slice 2 notes.
- */
-export function anyOperationDeclaresSecurity(api: Oas): boolean {
-  const paths = api.getDefinition().paths ?? {};
-
+/** True when ANY emitted operation declares its own `security` (empty `[]` or non-empty). */
+function hasPerOperationSecurity(def: ReturnType<Oas['getDefinition']>): boolean {
+  const paths = def.paths ?? {};
   for (const pathName of Object.keys(paths)) {
     const path = paths[pathName];
     if (!path) continue;
-
-    for (const method of HTTP_METHODS) {
-      const op = path[method];
+    for (const method of SUPPORTED_METHODS) {
       // own property (not inherited) — an explicit `security: []` is still a declaration
-      if (op && _.has(op, 'security')) {
+      if (_.has(path, [method, 'security'])) {
         return true;
       }
     }
   }
   return false;
+}
+
+/**
+ * Resolved security for one generation pass: computed once from the parsed spec, then queried for
+ * `@source` (sourceHeader) and per-`@connect` (forOp). Owning all auth warnings here removes the old
+ * uniform-vs-per-op "who warns when" coordination between SchemaWriter and OperationWriter.
+ *
+ * Mode switch: when any emitted op declares its own `security`, a shared `@source` header is unsafe
+ * (a public op would leak it; a differently-named override would send both), so header auth moves to
+ * each `@connect`. Query auth always lives per-`@connect` — `SourceHTTP` has no `queryParams`.
+ */
+export class SecurityPlan {
+  private readonly schemes: SecuritySchemesObject;
+  private readonly globalReq: SecurityRequirementObject[] | undefined;
+  private readonly perOpMode: boolean;
+  // C3: the global requirement's dropped-scheme warnings, pre-resolved once. In per-op mode every
+  // inheriting op would re-fire them otherwise; this set identifies them so forOp can skip what's
+  // already been emitted (once) and only surface genuinely op-specific warnings with op context.
+  private readonly globalWarningBodies: Set<string>;
+  private globalWarningsEmitted = false;
+
+  private constructor(
+    schemes: SecuritySchemesObject,
+    globalReq: SecurityRequirementObject[] | undefined,
+    perOpMode: boolean,
+    private readonly skipAuth: boolean = false,
+  ) {
+    this.schemes = schemes;
+    this.globalReq = globalReq;
+    this.perOpMode = perOpMode;
+    this.globalWarningBodies = new Set(globalReq ? resolveAuth(globalReq, schemes).warnings : []);
+  }
+
+  static from(api: Oas, opts?: { skipAuth?: boolean }): SecurityPlan {
+    const def = api.getDefinition();
+    // oas-normalize usually up-converts Swagger 2.0 → components.securitySchemes; the
+    // securityDefinitions fallback (same shape) is a safety net. refs are dereferenced by oas,
+    // so the shape is a plain SecuritySchemesObject.
+    const schemes = (def.components?.securitySchemes ?? def.securityDefinitions ?? {}) as SecuritySchemesObject;
+    return new SecurityPlan(schemes, def.security, hasPerOperationSecurity(def), opts?.skipAuth ?? false);
+  }
+
+  // C3: emit the global's dropped-scheme warnings exactly once per generation. Called from
+  // sourceHeader (uniform mode) and the first forOp (per-op mode) — both run before the warnings
+  // would otherwise leak per-op. Idempotent via `globalWarningsEmitted`.
+  private emitGlobalWarningsOnce(): void {
+    if (this.globalWarningsEmitted) return;
+    this.globalWarningsEmitted = true;
+    for (const body of this.globalWarningBodies) console.warn(body);
+  }
+
+  /** The `@source`-level auth header literal (uniform mode + header kind), or null. */
+  sourceHeader(): string | null {
+    // --skip-auth: emit no auth anywhere — no header on @source (and forOp returns nothing too)
+    if (this.skipAuth) return null;
+    // per-op mode: each @connect carries its own auth — nothing on @source
+    if (this.perOpMode) return null;
+    // no global requirement -> keep the headerless @source byte-for-byte
+    if (!this.globalReq || this.globalReq.length === 0) return null;
+
+    const { auth, warnings } = resolveAuth(this.globalReq, this.schemes);
+    // C3: surface the global's dropped-scheme warnings exactly once (uniform mode; per-op mode
+    // emits them from the first forOp).
+    this.emitGlobalWarningsOnce();
+    void warnings; // already accounted for via globalWarningBodies
+
+    // @source carries only header auth; query auth lives on each @connect (SourceHTTP has no
+    // queryParams) and is returned by forOp — emit nothing here.
+    if (auth?.kind !== 'header') {
+      if (!auth) {
+        const names = this.globalReq.flatMap((req) => Object.keys(req));
+        console.warn(
+          `[security] global security requirement (${names.join(', ')}) maps to no header-producing scheme; no auth header emitted on @source.`,
+        );
+      }
+      return null;
+    }
+
+    return `{ name: "${auth.name}", value: "${auth.value}" }`;
+  }
+
+  /**
+   * This op's resolved auth, split by placement.
+   *  - `header`: the header entry in per-op mode (uniform mode puts it on `@source`), else null
+   *  - `query`:  the query entry, always (SourceHTTP has no queryParams), else null
+   *
+   * Per-op warnings are emitted here with op context; in uniform mode the global warnings were
+   * already emitted once by sourceHeader. C3: in per-op mode, the global's dropped-scheme
+   * warnings are emitted exactly once (via emitGlobalWarningsOnce) — only genuinely op-specific
+   * warnings carry the `(operation …)` suffix.
+   */
+  forOp(op: Op): { header: NameValue | null; query: NameValue | null } {
+    // --skip-auth: no per-@connect auth either (companion to sourceHeader's skip)
+    if (this.skipAuth) return { header: null, query: null };
+    // `??` not `||`: an explicit `security: []` (public) must NOT fall back to the global.
+    const effective = op.operation.schema.security ?? this.globalReq;
+    const { auth, warnings } = resolveAuth(effective, this.schemes);
+
+    if (this.perOpMode) {
+      // surface the global's dropped-scheme warnings exactly once (idempotent), then warn only
+      // about op-specific drops with the op's location attached.
+      this.emitGlobalWarningsOnce();
+      const where = `${op.verb} ${op.operation.path}`;
+      for (const w of warnings) {
+        if (!this.globalWarningBodies.has(w)) {
+          console.warn(`${w} (operation ${where})`);
+        }
+      }
+    }
+
+    return {
+      header: this.perOpMode && auth?.kind === 'header' ? auth : null,
+      query: auth?.kind === 'query' ? auth : null,
+    };
+  }
 }

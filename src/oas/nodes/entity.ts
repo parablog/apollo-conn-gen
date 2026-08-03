@@ -20,6 +20,20 @@ export interface EntityResolver {
   verb: string;
   /** The `@source` name the connector references. */
   source: string;
+  /** R6: set on a batch resolver — same @key/selection, but $batch instead of $this. */
+  batch?: BatchSpec;
+}
+
+/** R6: the batch `@connect` spec attached to a resolver — built by `applyBatchResolvers`. */
+export interface BatchSpec {
+  /** `<param>: $batch.<key>` query mapping (with any array join); mutually exclusive with `body`. */
+  queryParams?: string;
+  /** `<prop>: $batch.<key>` body mapping; mutually exclusive with `queryParams`. */
+  body?: string;
+  /** wrap the selection as `$.<wrapperKey> { … }` when the response array is wrapped. */
+  wrapperKey?: string;
+  /** the `batch: { maxSize }` cap. */
+  maxSize: number;
 }
 
 /**

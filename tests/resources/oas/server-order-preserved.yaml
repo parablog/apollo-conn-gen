@@ -1,0 +1,22 @@
+openapi: 3.0.3
+info:
+  title: Server Order Preserved Service
+  version: 1.0.0
+servers:
+  # listed first, so it wins even though the next one already has https://
+  - url: //prod.example.com
+  - url: https://sandbox.example.com
+paths:
+  /ping:
+    get:
+      operationId: ping
+      responses:
+        '200':
+          description: pong
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean

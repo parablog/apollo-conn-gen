@@ -436,7 +436,8 @@ users: [User]                          # component #/c/s/User
   (same instance, name-derived id) so the reference follows. `$ref`-named types (`T.isRef`) never rename.
 
 **Limitation** (pre-existing, same as #9): occupancy is point-in-time — an inline visiting *before* the
-component is stored won't see the collision. Components are reached at shallower depths first in practice.
+component is stored won't see the collision. Components are reached at shallower depths first in practice
+— but #36's visit-order change broke that for array-reached wrappers; re-fixed structurally in #37.
 
 **AST:** identity-only, like #9 — `obj:type:user` → `obj:type:SubjectsUser`; no shape change.
 **Refs:** `src/oas/nodes/obj.ts` (`collidesWithStoredType`/`resolveNameConflict`), `oasContext.ts`
@@ -463,6 +464,19 @@ path A (under Content): Space { # history — cut }      path B: Space { history
 emitted (first wins):   type Space { # history … }     selection (path B): … space { history { … } }
                         → SELECTED_FIELD_NOT_FOUND     goal: emitted Space = union → history survives
 ```
+
+**The two routes** (`get:/wiki/rest/api/content/{id}/restriction`, re-checked 2026-07-30). They part
+company at `ContentRestriction`, and only the first one travels through `Content` — which is what
+makes `homepage` loop back and get cut there:
+```
+… >obj:type:#/c/s/ContentRestriction>prop:obj:content>obj:type:#/c/s/Content>prop:obj:history> …
+  … >obj:type:#/c/s/User>prop:obj:personalSpace>obj:type:#/c/s/Space>prop:circular-ref:#homepage
+… >obj:type:#/c/s/ContentRestriction>prop:obj:restrictions> … >obj:type:#/c/s/UserArray
+  >prop:array:#results>obj:type:#/c/s/User>prop:obj:personalSpace>obj:type:#/c/s/Space>prop:obj:homepage
+```
+The field it bites **today** is `homepage`: across all 65 confluence GET ops, `Space.homepage` is cut
+351 times and `Space.history` never — `history` keeps its slot and the cut inside it lands on
+`history.createdBy`. The June symptom above quotes `history`; same mechanism, different field.
 
 **Cause:**
 - #10's cycle cut is **per expansion path**: `Space` under a `Content` ancestor has `history`/`homepage`
@@ -506,7 +520,7 @@ passes). box's 9 INTERNAL_ERROR ops confirmed a *different* mechanism (reference
 `src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override
 lookup).
 
-## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⬜ Open (upstream)
+## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⏸ Parked (upstream fix accepted, pending router release)
 **Symptom:** 26/43 Mercedes CCS ops fail the abstract pass with
 `CONNECTORS_UNRESOLVED_FIELD: AlternativesEntry.key / .value` — yet the selection selects both.
 CCS default pass: 100%.
@@ -570,7 +584,13 @@ degrade map values to `JSON` — same best-effort convention as #10.
 test fails without the patch, passes with it). Re-running the corpus through the patched composition
 (`apollo-federation-cli` + rover shim): **CCS abstract 39.5% → 100%**, and the patch recovers **~69 ops
 corpus-wide** (box +14, github +15, confluence +7, DO +4, omni +2, asana +1) — abstract overall
-73.5% → 79.1%. Awaiting internal PR.
+73.5% → 79.1%.
+
+**Status update (2026-07-04):** the router PR was reviewed and **accepted upstream**. Nothing to do
+generator-side — this closes on its own once a router release ships with the patch. Re-run the
+Mercedes CCS row of the corpus sweep (`COVERAGE.md`) against a released rover that includes it to
+confirm, then flip this entry to ✅ Fixed. Until then, stock rover still hits the same
+`CONNECTORS_UNRESOLVED_FIELD` on `->entries` — don't re-investigate this as a new bug.
 
 ## 15 · Composed/Union definition and reference emit divergent names — ✅ Fixed (`44b628d`)
 **Symptom:** the dominant compose failure after #14 — **143 ops** in the abstract sweep (DO, box,
@@ -1449,3 +1469,1212 @@ Flipped four known-bad pins to passing: `articles/clockwatch`, `articles/blog`,
 `articles/article` and the single-article file (all the same mechanism).
 **Refs:** `src/json/walker/jsonGen.ts` (`walkArray`), `src/json/walker/jsonContext.ts`
 (`merge`/`isUnknownShape`), fixture `tests/resources/json/articles/clockwatch`.
+
+## 36 · Fields that share a name are wrongly treated as circular, leaving an empty type — ✅ Fixed (working tree)
+**What happened:** generating the connector for `get:/V1/carts/mine` (adobe-commerce-swagger.json) failed
+to compose:
+`INTERNAL_ERROR: Type QuoteDataProductOptionInterface must define one or more fields.`
+GraphQL does not allow a type with no fields, and this one came out empty.
+
+**The spec that triggers it** (condensed from adobe-commerce-swagger.json; every `$ref` points into
+`#/components/schemas/`, irrelevant fields removed):
+```yaml
+quote-data-cart-interface:
+  properties:
+    items:                { type: array, items: { $ref: quote-data-cart-item-interface } }
+    extension_attributes: { $ref: quote-data-cart-extension-interface }        # (1) the cart's
+
+quote-data-cart-extension-interface:
+  properties:
+    shipping_assignments: { type: array, items: { $ref: quote-data-shipping-assignment-interface } }
+
+quote-data-shipping-assignment-interface:
+  properties:
+    items: { type: array, items: { $ref: quote-data-cart-item-interface } }    # cart items reached again, deeper
+
+quote-data-cart-item-interface:
+  properties:
+    product_option:       { $ref: quote-data-product-option-interface }
+    extension_attributes: { $ref: quote-data-cart-item-extension-interface }
+
+quote-data-product-option-interface:                                            # has ONLY one field:
+  properties:
+    extension_attributes: { $ref: quote-data-product-option-extension-interface }   # (2) the product option's
+```
+Fields (1) and (2) are both called `extension_attributes` but are completely different types.
+
+**Why the type was empty:** the generator decided a field was circular (repeating) by checking whether a
+field with the *same name* already appeared higher up the path. In Adobe Commerce many unrelated types
+have an `extension_attributes` field. So on the path below, the product option's `extension_attributes`
+(2) sits under the cart's `extension_attributes` (1); the generator mistook the inner one for a repeat
+of the outer one and dropped it. `quote-data-product-option-interface` has no other field, so it was left
+empty.
+```
+get:/V1/carts/mine
+  cart
+    > extension_attributes          (1) the cart's
+      > shipping_assignments > items > product_option
+        > extension_attributes      (2) the product option's   <- dropped here
+```
+
+**What the output looks like:**
+```graphql
+# the type's one field was removed, so the type is empty:
+type QuoteDataProductOptionInterface {
+  # extensionAttributes: QuoteDataProductOptionExtensionInterface - circular reference omitted
+}
+# and the selection asks for product_option but picks nothing inside it:
+productOption: "product_option" { }
+```
+
+**The fix — compare the object, not the name, in TWO places.** A field is part of a cycle only when it
+points back to the *same object* (same `$ref`, same resolved definition) already on the path — never
+because of a shared name. The generator already had that check by object identity (`cyclicAncestor`, from
+#10); the bug was two *legacy name-based* checks sitting beside it, both comparing node ids, and every id
+is `<kind>:<name>` — the field name only, blind to the type:
+- `src/oas/nodes/factory.ts` (`fromProp`) — where a property is built.
+- `src/oas/nodes/type.ts` (`Type.add`) — where a built node is attached to its parent.
+
+Both now cut only when the matched ancestor is the *same schema instance*. Fixing only `fromProp` is not
+enough: the inner `extension_attributes` is then re-cut by `Type.add` on the same id collision — and a
+`Type.add` cut renders nothing in the SDL, so the field just vanishes (that is what produced the
+`SELECTED_FIELD_NOT_FOUND ... on QuoteDataCartItemInterface` seen mid-fix; it was the false cut moving,
+not a real divergence). With both sites on object identity, `get:/V1/carts/mine` expands fully (32 types)
+and composes. (Schema-less structural nodes — arrays, unions — keep the name behaviour in `Type.add`;
+they cannot be the same-name/different-type case this targets.)
+
+**Aliases:** a YAML anchor reused in two *sibling* places survives loading as one shared `SchemaObject`
+(so identity is the right comparison there too), but a *self*-nested anchor is rejected at load (stack
+overflow in `OASNormalize.convert()`). So no inline self-cycle ever reaches the generator: inline fields
+never falsely cut, and identity still guards the (unreachable-in-practice) self-alias.
+
+**Separate, still open:** a type whose *only* field is a *genuine* cycle still degrades to an empty type
+(e.g. an inline `{ back: $ref Self }`). That is the "never emit a fieldless type" concern, not this fix.
+
+**Tests:** `tests/resources/oas/same-name-fields.yaml` (false positive, exercises both sites — fails
+before, composes after) and `cycles-by-route.yaml` (a genuine cycle per route, each still cut), both
+wired in `tests/all/oas-core.test.ts`. The CCS `additionalProperties` tests gained one legitimately
+un-cut type (`Ingredient`, 22→23).
+
+**Files:** `src/oas/nodes/factory.ts` (`fromProp`), `src/oas/nodes/type.ts` (`Type.add`); ids are
+name-based (`src/oas/nodes/propObj.ts` etc.). Related: #10, #13.
+
+## 37 · Inline wrapper named after the component it lists re-collides after #36 — ✅ Fixed (working tree)
+**What happened:** the Confluence abstract pass regressed (89.2% → 81.5%): 8 ops failed to compose with
+`CIRCULAR_REFERENCE: type Group appears more than once in …subjects.group.results`, and the subgraph
+carried two `type Group` definitions. This is #12 returning — its fix stopped firing under #36's new
+visit order.
+
+**The spec that triggers it** (real Confluence — an *inline* pagination wrapper whose key is the same as
+the component it lists):
+```yaml
+SpacePermission:
+  properties:
+    subjects:
+      type: object
+      properties:
+        group:                        # inline wrapper, key `group`
+          type: object
+          properties:
+            results: { type: array, items: { $ref: '#/components/schemas/Group' } }
+            size:    { type: integer }
+```
+The same shape exists for `subjects.user`. (The `space`/`version`/`container` inline objects do NOT
+contain their own component, so they are a different, non-cyclic collision class — out of scope here.)
+
+**Why #12's fix stopped firing:** #12 renames an inline collider only when the colliding component is
+*already* stored (`collidesWithStoredType` reads point-in-time occupancy — #12's own stated Limitation).
+Here the component `Group` is reached *only* through the wrapper's own `results`, and arrays expand
+**lazily** — so `Group` is not stored when the wrapper is checked. #36 changed visit/cut order and removed
+the incidental sibling ordering that used to store such a component early. So the wrapper keeps `group` →
+emits a second `type Group` → rover reads `group.results` as `Group → Group` → circular.
+
+**What the output looks like:**
+```graphql
+# before: the wrapper and the component both emit `type Group`
+type Group { limit, results: [Group], size, start }   # the inline wrapper (paginated)
+type Group { id, name }                                # the component
+# after: the wrapper is qualified by its container; one `type Group` remains
+type SubjectsGroup { limit, results: [Group], size, start }
+type Group { id, name }
+…  subjects { group: SubjectsGroup }
+```
+
+**The fix — detect the wrapper from its OWN raw schema, not from occupancy.** A new
+`T.wrapsSameNamedComponent` runs at the existing `obj.ts` rename check (before `visitProperties`): an
+inline object named `X` whose schema has a property that is (an array of) `#/components/schemas/X` is a
+self-referential wrapper → rename via the existing `resolveNameConflict` (`group` → `SubjectsGroup`). The
+ref name is in the raw schema, so this needs no expansion, no occupancy, no ordering — it cannot regress
+on visit order again. Two deliberate constraints: only `#/components/schemas/*` refs (the single ref class
+that emits a colliding `type X`), and the array test mirrors the generator's own rule (`items` present,
+`type === 'array' || type == null`, `factory.ts:83`). The component keeps its `$ref` name
+(`isExemptFromRename`); only inline objects rename.
+
+**Input/output co-emit is safe:** the two real `subjects.user` wrappers (request body + response, with
+*different* bodies) both qualify to base `SubjectsUser`. They stay distinct because the input one carries
+`kind='input'` — which appends `Input` and embeds the kind in the node id (`SubjectsUserInput`) — and the
+two `subjects` themselves also collide and cascade-qualify the output. No duplicate; it composes. (A
+same-namespace twin — two different-bodied output wrappers — would still hit the writer `nameKey` gap; not
+a Confluence case, see #22-adjacent.)
+
+**Tests:** `tests/resources/oas/inline-wrapper-vs-component.yaml` — two same-key owners → distinct names,
+the scalar/unreached negatives (not renamed), and the real input+output `subjects.user` co-emit — wired in
+`tests/all/oas-core.test.ts`. The real Confluence descendant op now emits one `type Group`/`type User` and
+composes on stock rover.
+
+**Files:** `src/oas/nodes/obj.ts` (`visit`), `src/oas/nodes/typeUtils.ts` (`containsNamesakeComponent`,
+`componentSchemaRef`). Related: #12 (the limitation this realizes), #9, #36. Not covered: `allOf`-encoded
+collection wrappers.
+
+## 38 · A discriminated union nested under a field never gets its fields credited — ✅ Fixed (working tree)
+
+**Symptom:** launch library abstract pass fails 26/116 GET ops with `CONNECTORS_UNRESOLVED_FIELD`
+inside a `->match` block, even though the selection is complete. launch library: 76.7% → 86.2%
+(89 → 100 ops) after this fix; 14 ops remain, a separate issue (see Residue below).
+
+**OAS** (launch library — a paginated list whose items are a discriminated union):
+```yaml
+PaginatedPolymorphicAgencyEndpointList:
+  properties:
+    results:
+      type: array
+      items:
+        $ref: '#/components/schemas/PolymorphicAgencyEndpoint'   # oneOf [Mini, Normal, Detailed]
+```
+`PolymorphicAgencyEndpoint` itself is a normal discriminated `oneOf` (has a `discriminator`) — the
+same shape R2's other tests already cover. The only difference is *where* it sits: one level
+inside `results`, not the op's own response.
+
+**Example** (before → after, same op, same selection):
+```graphql
+# before: real union + ->match, nested inside `results { ... }` — rover credits ZERO fields inside it
+results {
+... response_mode->match(
+  ["list", $ { __typename: $("AgencyMini") name }],
+  ["normal", $ { __typename: $("AgencyNormal") name }],
+  ["detailed", $ { __typename: $("AgencyEndpointDetailed") name }]
+)
+}
+# after: one flat merged type, no ->match — composes on stock rover
+results { name }
+```
+
+**Cause:** a response that's a bare `oneOf` at the top level (`get:/item -> oneOf [...]`) composes
+fine. The same union reached through a named field (`results`, `intent`, `partyOrPartyRole`, …)
+gets wrapped in `fieldName { ... }` by the property/array node, and rover's connect-v0.4
+shape-based field-crediting walker doesn't credit anything inside a `->match` sitting behind that
+wrapper — confirmed with 4 isolated minimal repros. Same root cause as **#14** (there: a nested
+`->entries`; here: a nested `->match`) — same upstream composer limitation, two different methods
+trigger it. A pre-release patched composer (`tools/local/apollo-federation-cli`, used by this
+project's own test harness when present) already fixes both; stock, released rover 0.40 does not,
+so this is fixed here rather than left parked like #14 — a union already has a safe fallback shape
+(the merged object, built for #25) to reuse; a map/dictionary doesn't have an equally cheap one.
+
+**Fix:** `Union.isTopLevelResponse()` checks whether the union is reached directly from the op's
+response (through any number of bare arrays) or through a named field. If it's nested, the union
+degrades to the same merged-object form #25 already uses — no new state anywhere: the check reads
+only the node's own `parent` chain, and the existing `generateMergedObject()`/`consolidate()` path
+(already there for #25) absorbs the members and drops their reference count, unchanged.
+
+**Known limitation, not handled here:** the same named schema could in principle be reached both
+nested (in one op) and as a bare top-level response (in another op) within one generated schema.
+GraphQL allows only one type definition per name, so whichever use-site's node the collector keeps
+decides the SDL form for both — the other op's own selection could then disagree with it (real
+union selected as a flat object, or vice versa), a loud compose failure (same family as #13/#26's
+"same schema, different route" class). Not seen in any real corpus spec (every failing op found had
+one consistent position); left as a follow-up if actually hit, rather than building a cross-op
+mechanism for a case with no observed need — the project already has one comparable "same schema,
+divergent routes" fix (#13) to model that follow-up on if it's ever required.
+
+**Residue:** 14 launch library ops still fail. At least one (`get:/2.3.0/launches/`) is a
+different, unrelated bug: a union member (`LaunchNormal`) is ALSO referenced directly as a plain
+field type elsewhere in the same schema (`SpacecraftFlightNormal.launch: LaunchNormal!`) — once the
+union absorbs its fields into the merged object, that other, independent reference is left without
+its own connector coverage. Not investigated further here — a reachability problem in the same
+family as #13/#26, not a union-form problem. **Fixed by #39** — all 14 ops now pass.
+
+**Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` (nested-under-array, bare-array,
+inline/unnamed) — `test_R2_union_nested_in_array_degrades_to_merged_object`,
+`test_R2_union_top_level_array_stays_real_union`, `test_R2_union_inline_nested_degrades_via_local_check`
+— in `tests/all/r2-abstract.test.ts`. Existing fixtures with the same nested shape
+(`TMF637-001-UnionTest.yaml`, `TMF637-002-RecursionTest.yaml`, `launch_Library_2-docs-v2.3.0.json`)
+updated to expect the merge.
+
+**AST:** none — emission-time branch only, same shape as #25.
+**Refs:** `src/oas/nodes/union.ts` (`isTopLevelResponse`, `isFlat`),
+`src/oas/nodes/allOfBase.ts` (skips a merged union). Related: #13, #14, #25.
+
+## 39 · A merged union's shadowed same-name member field still counts as reachable — ✅ Fixed (working tree)
+
+**Symptom:** the 14 ops left in #38's Residue all fail the same way: launch library abstract pass
+86.2% → 98.3% (100 → 114/116 ops) after this fix. `rover` reports entire types with **every** field
+unresolved (`CONNECTORS_UNRESOLVED_FIELD: LaunchNormal.<every field>`, plus
+`SpacecraftConfigDetailed`, `SpacecraftConfigFamilyDetailed`, `SpacecraftConfigFamilyNormal`, …) —
+not one stray field, whole orphan types with zero connector coverage.
+
+**OAS** (launch library — two #38-merged union members share a field name, different target):
+```yaml
+LaunchNormal:
+  properties: { rocket: { $ref: '#/components/schemas/RocketNormal' } }     # simple
+LaunchDetailed:
+  properties: { rocket: { allOf: [{ $ref: '#/components/schemas/RocketDetailed' }] } }  # rich,
+    # RocketDetailed nests spacecraftStage/payloads → dockingEvents → SpacecraftFlightNormal.launch:
+    # LaunchNormal! — the SAME schema, reached this time as a plain field, not a union member.
+```
+
+**Cause:** `Union.generate()`/`select()` (the #38 merged-object path) write **one** field per name:
+`selectedProps()` returns every member's matching props un-deduped, and only the first one seen
+per `prop.id` (`generated.has(prop.id)`) is actually written — `LaunchNormal.rocket` wins (it comes
+first in the `oneOf`), so the merged object gets `rocket: RocketNormal!`, never
+`rocket: RocketDetailed!`. But `Union.dependencies()` (used by the collector's #26 reachability
+walk) called the *undeduped* `selectedProps()` directly — so the shadowed `LaunchDetailed.rocket`
+prop, and everything its type (`RocketDetailed`) transitively references, was still walked and
+collected, even though no selection anywhere ever asks for it. Two of those transitively-reachable
+schemas happen to be **also** referenced directly elsewhere in the same document as plain field
+types (`SpacecraftFlightNormal.launch: LaunchNormal!`, `PayloadFlightNormal.launch: LaunchNormal!`)
+— that's what forces `LaunchNormal` to be emitted as *its own* standalone type (distinct from the
+fields already folded into the merged `PolymorphicLaunchEndpoint`), with no selection route to it.
+
+**Example** (before → after, same op):
+```graphql
+# before: RocketDetailed (and its whole orphan subtree) emitted, nothing ever selects it
+type RocketDetailed { id spacecraftStage: [...] payloads: [...] }   # ✗ CONNECTORS_UNRESOLVED_FIELD
+type LaunchNormal { id name … }                                     # ✗ CONNECTORS_UNRESOLVED_FIELD
+# after: the shadowed branch (and everything only reachable through it) isn't collected at all
+# RocketDetailed, LaunchNormal (as a standalone type) — both gone; PolymorphicLaunchEndpoint's
+# merged object still has `rocket: RocketNormal!`, exactly as it did before this fix.
+```
+
+**Fix:** factor the existing "first prop per id wins" dedup (already inline in `generate()` and
+`select()`'s flat branch, as a local `generated` Set) into one `dedupedSelectedProps()` helper, and
+make `dependencies()` use the *same* deduped list for its flat/merged branch — so a name that loses
+the race at emission time was never "reachable" in the first place. No new state: no new field,
+Set, or Map on the class or on `OasContext` — just one small private method shared by the three
+call sites that already needed the identical logic.
+
+**Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` (`/wrapped-list` — two merged members
+share a field name, one nesting a type with its own subtree) —
+`test_R2_union_merge_name_collision_drops_shadowed_type` in `tests/all/r2-abstract.test.ts` (asserts
+the shadowed type, and its own nested type, are absent from the generated schema entirely — and
+regressed to a real collector count 5 → 3 with the fix reverted, confirming the mechanism).
+`launch_Library_2-docs-v2.3.0.json` corpus re-measured: 86.2% → 98.3% (+14 ops); the 2 remaining
+failures (`GRAPH_QL_ERROR`, `SELECTED_FIELD_NOT_FOUND`) are unrelated, pre-existing gaps.
+
+**AST:** none — `dependencies()` and `generate()`/`select()` already walked the same node graph;
+this only makes them agree on which of two same-named props is the "real" one.
+**Refs:** `src/oas/nodes/union.ts` (`dedupedSelectedProps`, `dependencies`, `generateMergedObject`,
+`select`). Related: #26 (the reachability walk this feeds), #38 (the residue this closes).
+
+## 40 · An object-typed (or array-of-object) query param emits an invalid inline type body — ✅ Fixed (working tree)
+
+**Symptom:** box.yaml `get:/search` fails compose with `CONNECTORS_UNRESOLVED_FIELD` cascading
+across many unrelated types. The actual defect: the generated argument list contains a full
+`type X { ... }` definition body written inline, not a type-name reference — invalid GraphQL that
+breaks SDL parsing for the whole document, producing the cascade.
+
+**OAS** (box.yaml — `get:/search`'s `mdfilters` param, `tests/resources/oas/box.yaml:15121-15136`):
+```yaml
+in: query
+name: mdfilters
+schema:
+  type: array
+  items:
+    $ref: '#/components/schemas/MetadataFilter'
+```
+
+**Example** (before → after):
+```graphql
+# before: a full type body inline in the argument list
+search(..., mdfilters: [type MetadataFilter {
+  templateKey: String
+  scope: String
+  filters: JSON
+}], ...): SearchResultsMini
+# after: degrades to the existing JSON-scalar convention (#19), array cardinality preserved
+search(..., mdfilters: [JSON], ...): SearchResultsMini
+```
+
+**Cause:** `Obj.generate()` (`src/oas/nodes/obj.ts`) only special-cases
+`context.inContextOf('Res', this)` for a bare name-reference; there's no equivalent
+`inContextOf('Param', this)` case (unlike `Union.generate()` and `En.generate()`, which already
+handle this for their node types — "params with Unions are weird"). `Arr.generate()`
+(`src/oas/nodes/arr.ts`) calls `itemsType.generate()` with no special-casing either. `Param` also has
+no `dependencies()` override, so its resultType never enters `TypesCollector.collectReachable`'s walk
+(rooted only at `op.resultType`/`op.body`) — this type is only ever emitted via `Param.generate()`'s
+direct, undeduped call.
+
+**Fix:** `Param.visit()` gains a second schema coercion (alongside the existing #11 anyOf/oneOf →
+string case): a schema that is object-shaped (`type: object`, `allOf`, or non-empty `properties` —
+at the top level or in an array's `items`) has the offending part replaced with a genuinely empty
+`{}` schema before `Factory.fromSchema` runs — landing it in the existing shapeless-object → `JSON`
+scalar path (#19), preserving array cardinality where present. This also incidentally closes the
+`Composed.generate()` missing-`Param`-case gap for `allOf`-shaped params: since the coercion runs
+before `Factory.fromSchema`, an `allOf` param schema is degraded to JSON the same way a plain object
+is, and `Composed` is never constructed under a `Param` at all. No new `Obj`/`Composed`/`Arr`
+branches, no widened type-collection roots. The `$ref` sniff uses `context.resolvePointer`, not
+`lookupRef`, so checking a schema this coercion is about to discard doesn't bump its `refCount`.
+
+**Known limitation, not handled here:** a param whose `oneOf`/`anyOf` member is itself object-shaped
+(e.g. `id: oneOf [Foo, Bar]` with object `Foo`/`Bar`) is *not* covered — no corpus case observed.
+`oneOf`/`anyOf` route to `Union`, whose existing `Param`-context handling (`union.ts`) flattens by
+delegating to each member's `generate()` without shielding object-shaped members, so the same
+inline-body bug would resurface one level down through `Union` rather than through `Obj` directly.
+Deliberately not folded into this coercion's "object-like" check, since doing so would also change
+behavior for existing `oneOf`/`anyOf` params whose members are plain scalars/enums (which already
+render correctly today). If a future corpus spec hits this, it needs an `Obj`/`Composed`
+`Param`-context guard (mirroring `Union`/`En`'s existing one) — start here.
+
+**Tests:** `tests/resources/oas/param-object-array.yaml` (array-of-`$ref`-object query param) —
+`test_object_array_param_degrades_to_json_scalar` in `tests/all/oas-core.test.ts` (asserts
+`filters: [JSON]` is emitted and no inline `type SearchFilter {` appears; composes via rover;
+reverting the fix reproduces the exact `INVALID_GRAPHQL: expected R_BRACK, got SearchFilter` rover
+error, confirming the mechanism). box.yaml corpus re-measured: 98.2% → 100.0% (+1 op) — the other
+half of a previously undocumented local finding ("B3"), whose first half
+(`get:/files/.../boxSkillsCards`) was already fixed as a side effect of #39.
+
+**AST:** none — `Param.visit()` schema coercion only, same shape as #11.
+**Refs:** `src/oas/nodes/param.ts` (`Param.visit`, `degradeObjectLikeSchema`, `isObjectLike`),
+`src/oas/nodes/factory.ts` (`isShapelessObject`, the existing #19 path this reuses). Related: #11,
+#14, #19.
+
+## 41 · Only servers[0] is ever consulted for @source baseURL — ✅ Fixed (working tree)
+
+**Symptom:** docker-engine.json's 43 GET ops all fail rover with `INVALID_URL_SCHEME`.
+
+**OAS** (docker-engine.json's real `servers` array):
+```json
+"servers": [
+  { "url": "/v1.33" },
+  { "url": "https://docker.com/{version}", "variables": { "version": { "default": "1.33" } } }
+]
+```
+`servers[0].url` is a bare relative path — no scheme, no host. `servers[1]` resolves fine to
+`https://docker.com/1.33`, but is never consulted.
+
+**Example** (before → after, same op):
+```graphql
+# before
+@source(name: "api", http: { baseURL: "/v1.33" })      # ✗ INVALID_URL_SCHEME, every op
+# after
+@source(name: "api", http: { baseURL: "https://docker.com/1.33" })
+```
+
+**Cause:** `SchemaWriter.writeDirectives()` only ever read `servers?.[0]`; the (now-removed)
+`getServerUrl` took it verbatim with no absolute-URL validation, ignoring any later, usable server.
+Same defect class the project already hit with Confluence (`servers[0].url` was a protocol-relative
+placeholder, `//your-domain.atlassian.net`) — fixed there by patching the fixture directly.
+`TEST_CORPUS.md` had already flagged "normalise relative / protocol-relative servers[].url" as a
+wanted generator robustness gap; a second real spec hitting the same class of bug is what prompted
+fixing it in the generator this time instead of another one-off fixture patch.
+
+**Fix:** new `src/oas/utils/serverUrl.ts` (`ServerUrl.resolve`), following this codebase's existing
+static-utility-class convention (`Naming`, `GqlUtils`, `Params`) rather than living inside the
+writer. Walks the full `servers[]` array **in OAS-declared order** — an author's ordering is
+deliberate (e.g. prod listed before sandbox), so this does not scan for "any absolute" candidate
+first and jump ahead of an earlier, merely protocol-relative one. For each candidate: normalise a
+protocol-relative URL (`//host/path`) by prefixing `https:`, then return the first one that's
+absolute (`/^https?:\/\//i`); else fall back to the existing `http://localhost:4010` — byte-identical
+to the old no-server behavior.
+
+**Known limitation, not handled here:** a `servers[]` array where *every* entry is a bare relative
+path (no absolute, no protocol-relative option anywhere) still falls back to
+`http://localhost:4010` with the relative path dropped entirely — no corpus case currently needs
+the path preserved in that fallback. This fix closes only the "skip a leading unusable server when
+a later usable one exists" slice of the broader gap `TEST_CORPUS.md` named, not that case.
+
+**Tests:** `tests/resources/oas/server-fallback-relative.yaml`
+(`test_server_url_falls_back_past_bad_first_server`), `server-protocol-relative.yaml`
+(`test_server_url_prefixes_protocol_relative`), `server-order-preserved.yaml`
+(`test_server_url_preserves_declared_order` — proves order is preserved, not "prefer whichever is
+absolute") — all in `tests/all/oas-core.test.ts`; each reverts to failing when the fix is undone,
+confirming the mechanism. docker-engine.json corpus re-measured: 0.0% → 86.0% (0/43 → 37/43); the 6
+remaining ops fail a different, unrelated error (`INVALID_SELECTION`) not investigated here.
+
+**AST:** none — pure utility logic, no node/tree changes.
+**Refs:** `src/oas/utils/serverUrl.ts` (`ServerUrl.resolve`), `src/oas/io/schemaWriter.ts`
+(`writeDirectives`, the call site). Related: the Confluence fixture-patch this generalizes past
+(see `TEST_CORPUS.md`).
+
+## 42 · A map field needing a JSON-key alias writes it twice, breaking the selection — ✅ Fixed (working tree)
+
+**Symptom:** any map (`additionalProperties`) field whose JSON key needs snake_case→camelCase
+aliasing emits an invalid, doubled selection. Confirmed on `stripe.json`'s `currency_options` and
+`docker-engine.json`'s `Networks` — both fail rover with `INVALID_SELECTION`,
+`nom::error::ErrorKind::Eof`.
+
+**OAS** (a map field with a JSON key needing an alias):
+```yaml
+currency_options:
+  type: object
+  additionalProperties:
+    type: object
+    properties:
+      amount_off: { type: integer }
+```
+
+**Example** (before → after, same field):
+```graphql
+# before: the alias text written twice — invalid, rover can't parse it
+currencyOptions: "currency_options": currencyOptions: "currency_options"->entries { key value { amountOff: "amount_off" } }
+# after: written once, matching every other field type
+currencyOptions: "currency_options"->entries { key value { amountOff: "amount_off" } }
+```
+
+**Cause:** `PropMap.select()` (`src/oas/nodes/propMap.ts`) always wrote
+`Naming.sanitiseFieldForSelect`'s result twice, joined by a stray `': '`. That helper already
+returns the complete text for a field — just the bare name when no alias is needed, or the full
+`name: "original"` pair when it is. Every sibling (`propArray.ts`, `propObj.ts`, `propComp.ts`,
+`propEn.ts`, `propScalar.ts`) writes it once. Writing it twice only broke when a real alias was
+present (two `name: "original"` pairs back to back); for a map field whose key needs no aliasing,
+the old code produced a harmless self-alias (`name: name->entries`) — which is why this went
+uncaught: no existing test exercised a map field that also needed aliasing.
+
+**Fix:** write the field text once. When no alias is needed, a self-alias (`name: name`) is kept
+before `->entries` — not because it's meaningful GraphQL, but because a locally-vendored pre-release
+composer build (`tools/local/apollo-federation-cli`, used by `test_060`-`062`/`test_R5_security_apikey_header_emits_named_header`
+when present) fails to credit `key`/`value` through a bare `name->entries` with no alias at all
+(`Object type X has no field key`) — a quirk in that external tool, confirmed by reproducing it
+directly, not something to fix here. Keeping the self-alias only for the no-op case preserves that
+compatibility while still fixing the genuinely broken doubled-alias case.
+
+**Known limitation, not a bug in this fix:** on stock rover (not the local pre-release build),
+composing a map field at all — regardless of aliasing — still hits the pre-existing, already-accepted
+upstream limitation from #14 (`CONNECTORS_UNRESOLVED_FIELD` on the map entry's `key`/`value`, since
+rover v0.4's shape validator credits nothing inside `->entries`). This fix corrects an independent,
+real parsing bug; it does not by itself change `stripe.json`/`docker-engine.json`'s stock-rover
+pass-rate (both re-measured, unchanged: 82.4% / 86.0%) until a rover release ships #14's patch — at
+which point these ops will compose without any further change here.
+
+**Tests:** `tests/resources/oas/map-key-aliasing.yaml`, `test_map_field_key_aliasing_not_duplicated`
+in `tests/all/oas-core.test.ts` (generation-only, no compose — mirrors
+`test_no_duplicate_type_definitions_launch_library`'s pattern, since composing a map field is
+blocked by #14 on stock rover regardless of this fix; asserts the alias text appears exactly once).
+Reverting the fix reproduces the exact duplicated output and fails the test.
+
+**AST:** none — emission-only, no node/tree changes.
+**Refs:** `src/oas/nodes/propMap.ts` (`PropMap.select`), `src/oas/utils/naming.ts`
+(`sanitiseFieldForSelect`, unchanged). Related: #14 (the separate upstream limitation still gating
+full compose on stock rover).
+
+## 43 · Real-union member list and `__typename` use the raw ref name, not the sanitised one — ✅ Fixed (working tree)
+
+**Symptom:** a real (discriminated, top-level) union whose OAS member refs aren't already
+PascalCase composes as a flood of `CONNECTORS_UNRESOLVED_FIELD` — one per field of every member.
+Confirmed on `ably-control.json get:/apps/{app_id}/rules` (172 rover build errors, one op).
+
+**OAS** (snake_case discriminator mapping refs):
+```json
+"rule_response": {
+  "discriminator": {
+    "propertyName": "ruleType",
+    "mapping": {
+      "http": "#/components/schemas/http_rule_response",
+      "http/ifttt": "#/components/schemas/ifttt_rule_response"
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/components/schemas/http_rule_response" },
+    { "$ref": "#/components/schemas/ifttt_rule_response" }
+  ]
+}
+```
+
+**Example** (before → after, same op):
+```graphql
+# before: member list + __typename reference an undefined, unsanitised type name
+union RuleResponse = http_rule_response | ifttt_rule_response
+...
+__typename: $("http_rule_response")
+
+# after: both agree with the real emitted type definition
+union RuleResponse = HttpRuleResponse | IftttRuleResponse
+...
+__typename: $("HttpRuleResponse")
+```
+
+**Cause:** `Obj.generate()` (`obj.ts:80-85`) and `Composed.generate()` already resolve a member's
+ref through the established `sanitised === refName ? refName : sanitised` pattern (PascalCase when
+it differs from the raw ref — see #15), so `http_rule_response` is correctly emitted as
+`type HttpRuleResponse`. But `Union.generate()`'s real-union branch (`union.ts:147`, was
+`Naming.getRefName(child.name)`) and `Union.selectAbstract()`'s `__typename` literal (`union.ts:308`,
+same bug) used the **raw** `Naming.getRefName` only, producing a `union X = ...` line and a
+`__typename` string that name a type that was never defined. Rover then can't resolve any field of
+any member — the union's member list is the only thing tying them to the schema at all.
+
+**Fix:** added a `Union.resolvedTypeName(ref)` private static helper (the same sanitised/refName
+pattern, scoped to this class since it's needed 3x in this file — matches obj.ts/comp.ts's existing
+per-file duplication rather than centralizing into `Naming`, which is already correct everywhere
+else). Used at the union member-list line and at `__typename`. Left the discriminator match-value
+fallback (`this.discriminatorValue(child) ?? Naming.getRefName(child.name)`) on the raw ref name —
+that value is compared against real API payloads, which carry the schema's own snake_case tag, not
+the sanitised GraphQL name.
+
+**Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` (`/snake-items`, `snake_item_union` +
+`book_item`/`movie_item`), `test_R2_union_snake_case_member_refs_resolve_sanitised_name` in
+`tests/all/r2-abstract.test.ts`. Existing coverage (`test_R2_union_top_level_array_stays_real_union`)
+used PascalCase members (`Book`/`Movie`), so it never exercised a snake_case component ref on a real
+union. Reverting the fix reproduces rover's exact failure (`cannot find type 'book_item' in this
+document`) and fails the test.
+
+**AST:** none — emission-only, no node/tree changes.
+**Refs:** `src/oas/nodes/union.ts` (`Union.generate`, `Union.selectAbstract`). Related: #15 (the
+def/ref name-agreement pattern this extends to unions' member list).
+
+## 44 · Merged-union field dedup keys on Prop kind, not field name — and ignores type compatibility — ✅ Fixed (working tree)
+
+**Symptom:** a nested (merged/flattened) union whose members share a field name but give it
+**different kinds** (e.g. one member has it as an OAS `enum`, another as a plain string) emits the
+field twice — invalid GraphQL SDL. Confirmed on `TMF717_Customer360-v5.0.0.oas.yaml get:/customer360`:
+rover rejects with `INVALID_GRAPHQL: Field status already exists on PartyOrPartyRole`.
+
+**OAS** (two `PartyOrPartyRole` union members, same field name `status`, different kinds):
+```yaml
+Individual:
+  properties:
+    status:
+      $ref: '#/components/schemas/IndividualStateType'   # enum
+PartyRole:
+  allOf:
+    - type: object
+      properties:
+        status:
+          type: string                                    # plain scalar
+          description: Used to track the lifecycle status of the party role.
+```
+
+**Example** (current, broken output):
+```graphql
+type PartyOrPartyRole { #### replacement for Union PartyOrPartyRole
+  ...
+  status: IndividualStateType
+  ...
+  status: String          # duplicate field name -> INVALID_GRAPHQL
+  ...
+}
+```
+
+**Cause:** `Union.dedupedSelectedProps()` (`union.ts:202-207`, added for #39) dedupes merged-union
+member fields by `prop.id`. `prop.id` is prefixed by the `Prop` *subclass* — `prop:enum:status`
+(`propEn.ts:17`) vs `prop:scalar:status` (`propScalar.ts:21`) — so two members giving the same field
+name **different kinds** both survive dedup. #39 only covered same-kind collisions (two `$ref`
+members pointing at different object types, both `prop:ref:#detail` — see the existing
+`test_R2_union_merge_name_collision_drops_shadowed_type`), never a kind mismatch.
+
+**Fix:** a bare `prop.id` → `prop.name` key isn't enough on its own — GraphQL forbids two
+same-named fields regardless of kind, but a name match alone doesn't mean two members' fields are
+interchangeable. The plan's first draft compared each collision's resolved GraphQL type
+(`getValue(context)`) and degraded on any mismatch — that broke the *existing* #39 test: two `$ref`
+members pointing at different object types (`DetailBasic` vs `DetailRich`) resolve to different
+`getValue()` strings too, but that collision was always meant to keep the first member's type
+(shadowing the rest), not degrade to JSON. The correct comparison is **kind**, not resolved type —
+the `id`'s subclass segment (`prop.id.split(':')[1]`: `enum`, `scalar`, `ref`, `obj`, `comp`, `map`,
+`array`). Two members giving a field the *same kind* (whatever concrete type each resolves to) can
+still be safely shadowed — selecting common sub-fields from differently-shaped payloads is fine,
+exactly the #39 case. Two members giving a field *different kinds* (enum vs scalar, object vs
+scalar, …) genuinely can't share one GraphQL representation — that's when it degrades to the
+untyped JSON scalar fallback instead of arbitrarily picking one member's kind, reusing the same
+"give up, use JSON scalar" policy already shipped for incompatible object-typed query params
+(`0cf24ea`). No new data structures: `dedupedSelectedProps` still takes just `selection` (threading
+`context` through turned out unnecessary once the comparison moved from `getValue()` to `id`-derived
+kind).
+
+**Tests:** `tests/resources/oas/r2-union-nested-in-list.yaml` gained `/kind-collision-list`
+(`StatusEnumKind`/`StatusStringKind`, an enum-vs-scalar `status` collision — the enum has to be a
+named `$ref` schema, not inline, or it degrades to a plain scalar before ever reaching the union
+merge and never exercises the kind-mismatch path at all).
+`test_R2_union_merge_kind_collision_degrades_to_json` in `tests/all/r2-abstract.test.ts` asserts
+`status: JSON` and that the enum type never leaks into the schema. The existing #39 test
+(`test_R2_union_merge_name_collision_drops_shadowed_type`) re-passes unchanged, confirming
+same-kind/different-target collisions still shadow-and-keep-first exactly as before. Reverting just
+the `dedupedSelectedProps` body (keeping the rest of the #43 changes in the same file) reproduces the
+enum type leaking in and fails the new test. Also re-ran coverage on the other union-heavy specs
+named in the plan (docker-engine 86.0%, launch_library 99.1%, common-room 100%, TMF717 33.3%) —
+unchanged from baseline in every case, no regressions.
+
+**Aside (flagged, not fixed here — out of scope for this entry):** clearing the `status` collision
+on `TMF717_Customer360-v5.0.0.oas.yaml get:/customer360` surfaced a *second*, previously-masked
+compose error on the same op: `INVALID_GRAPHQL: Field type already exists on
+Customer360PromotionVO` — a duplicate `type` field (`String!` vs `String`) from two different
+`allOf` branches of a **`Composed`** type, not a `Union`. This is a distinct bug in `Composed`'s
+allOf field collection (unrelated to this entry's `Union.dedupedSelectedProps`) that was simply
+hidden behind the `status` error until now. Not triaged or fixed as part of #44 — worth its own
+entry if picked up.
+
+**AST:** none expected — emission-only, changes which `Prop` survives dedup and how it's typed.
+**Refs:** `src/oas/nodes/union.ts` (`Union.dedupedSelectedProps`, `Union.generateMergedObject`).
+Related: #39 (the same-kind version of this collision, already fixed), `0cf24ea` (the JSON-scalar
+degrade precedent for incompatible shapes).
+
+## 45 · No reserved-GraphQL-name guard: an OAS resource literally named "Subscription" collides with the root type — ✅ Fixed (working tree)
+
+**Symptom:** any OAS component schema named `Query`, `Mutation`, or `Subscription` (case-sensitive)
+gets emitted as a plain object type of that exact name, colliding with the reserved GraphQL root
+operation type — rover composition rejects it under connectors' subscriptions-unsupported rule.
+Confirmed on `stripe.json`: 7 ops (`get:/v1/customers`, `get:/v1/subscriptions`, `get:/v1/subscriptions/
+{subscription_exposed_id}`, `get:/v1/customers/{customer}/subscriptions`, etc.) fail rover compose
+with `SUBSCRIPTION_IN_CONNECTORS`.
+
+**OAS** (a component schema literally named `subscription`, Stripe's actual resource name):
+```json
+"subscription": {
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "customer": { "type": "string" },
+    "status": { "type": "string" }
+  }
+}
+```
+
+**Example** (current output — no before/after, nothing sanitises this today):
+```graphql
+type Subscription {   # collides with GraphQL's reserved root Subscription type
+  id: String
+  customer: String
+  status: String
+}
+```
+
+**Cause:** `Naming.genTypeName()` (`naming.ts:160`) sanitises characters (drops non-identifier
+chars, guards a leading digit) but has no check against the 3 reserved root operation type names.
+There's precedent for a similar collision-avoidance suffix (`Obj.generate`, `obj.ts:309-310`:
+`parentName + 'Obj'` when a nested type shares its parent's name), but nothing for this case.
+
+**Fix:** the guard lives inside `Naming.genTypeName` itself, not at each node's own definition-line
+generation (`Obj`/`Composed`/`Union`, etc.). `genTypeName` is the one function every type
+*definition* (`Obj.generate`, `Composed.generate`, `Union.generate`, `Map.generate`, `En.generate`)
+and every type *reference* (`propRef.ts`, `propComp.ts`, `propObj.ts`, `propArray.ts`, `propMap.ts`,
+`propEn.ts`, `propCircRef.ts`, `typeUtils.ts`, `allOfBase.ts`, `oasContext.ts`, `writer.ts`) resolves
+through — there is no separate reference-side resolver to keep in sync. Guarding only a definition
+site would rename `type Subscription { ... }` but leave references to it still resolving to the old,
+now-undefined name. `genTypeName` was already a pure, idempotent function of the input string, so
+appending a suffix when the sanitised result is exactly `Query`/`Mutation`/`Subscription` produces
+the same renamed output at every call site naming the same schema — definitions and references
+alike, nothing else to update. Composes cleanly with the existing
+`sanitised === refName ? refName : sanitised` fallback used at definition sites (`obj.ts:85`,
+`comp.ts:91`, `union.ts:126`): that fallback only reverts to the raw ref name when sanitisation made
+no real change, and once a reserved-name suffix is appended `sanitised !== refName` is always true,
+so the fallback correctly keeps the suffixed name. Suffix: `Type` (`Subscription` → `SubscriptionType`).
+
+**Tests:** `tests/resources/oas/reserved-root-type-name.yaml` (a `Subscription` schema referenced
+from a nested `Customer.subscription` field), `test_reserved_root_type_name_gets_suffixed` in
+`tests/all/oas-core.test.ts` — asserts the definition and the reference both land on
+`SubscriptionType` and rover-composes. Reverting the fix reproduces the un-suffixed
+`type Subscription {` and fails the test. Also re-verified directly against `stripe.json`
+(`get:/v1/customers`, `get:/v1/subscriptions`): `SUBSCRIPTION_IN_CONNECTORS` is gone; the remaining
+7 `CONNECTORS_UNRESOLVED_FIELD` errors on those ops are the separate, already-documented #14 map-field
+limitation (`currency_options`), unrelated to this fix.
+
+**AST:** none expected — emission-only, a name-string transform in an already-existing function.
+**Refs:** `src/oas/utils/naming.ts` (`Naming.genTypeName`). Related: `obj.ts` (`Obj generate`, the
+`parentName + 'Obj'` precedent for a different collision).
+
+## 46 · An array `$ref` to another array-typed schema nests an `Arr` inside a `PropArray`, breaking both the field's type name and its selection brackets — ✅ Fixed (working tree)
+
+**Symptom:** an array property whose `items` is a `$ref` that itself resolves to a `type: array`
+schema (rather than a plain object) emits a field type that references an undefined type, AND drops
+the nested selection's braces entirely — flattening the nested object's fields straight into the
+*parent's* own selection body as if they were siblings. Confirmed on `docker-engine.json
+get:/system/df`: rover rejects with `SELECTED_FIELD_NOT_FOUND: @connect(selection:) on
+Query.systemDf contains field 'command', which does not exist on SystemDfResponse`.
+
+**OAS** (`Containers` is an array whose item ref, `ContainerSummary`, is itself `type: array`):
+```json
+"SystemDfResponse": {
+  "properties": {
+    "Containers": { "type": "array", "items": { "$ref": "#/components/schemas/ContainerSummary" } }
+  }
+},
+"ContainerSummary": {
+  "type": "array",
+  "items": { "properties": { "Command": { "type": "string" }, "Id": { "type": "string" } } }
+}
+```
+
+**Example** (current, broken output):
+```graphql
+type SystemDfResponse {
+  containers: [Containers]   # "Containers" is never defined anywhere
+  ...
+}
+type ContainersItem {        # the real object — under a DIFFERENT name than the field references
+  command: String
+  id: String
+  ...
+}
+# selection: containers' own fields leak into the parent's selection, unbracketed
+containers: "Containers"      command: "Command"
+id: "Id"
+...
+```
+
+**Cause (confirmed by tracing the exact code path, one root cause explaining both symptoms):**
+`Factory.fromProp`'s array branch (`factory.ts:295-305`) resolves `Containers`' `items` — the
+`ContainerSummary` `$ref` — via `Factory.fromSchema`. Because `ContainerSummary`'s own schema is
+`{type: array, items: {...}}` (not an object), `fromSchema` routes it through `createArrayType`
+*again* (`factory.ts:248`), producing a **second, nested `Arr`** as `PropArray.items` — instead of
+the plain `Obj` every other array property gets. That nested `Arr`'s own `.name` is just inherited
+from its parent (`parentName = parent.name`, `factory.ts:250` — here the *outer* `PropArray`'s name,
+`"containers"`), and the *real* object lives one level deeper, as that inner `Arr`'s `itemsType`
+— named `ContainersItem` by `Obj.updateName()`'s array-item fallback (`obj.ts:294-297`, `parent
+instanceof Arr` branch). Two call sites in `PropArray` assume `this.items` is always the actual
+element type (object/scalar), never another `Arr`, and both break the same way once it is:
+- `PropArray.getValue()` (`propArray.ts:52-59`) takes `Naming.genTypeName(this.items.name)` —
+  reads the nested Arr's inherited name (`"containers"` → sanitised `Containers`) instead of the
+  real object's name (`ContainersItem`) two levels down. Definition and reference now name two
+  different things.
+- `PropArray.select()`'s `needsBrackets()` (`propArray.ts:80/89/103-106`) gates on
+  `T.isContainer(this.items)` (`typeUtils.ts:81-88`, true only for `obj:`/`comp:`/`union:`/`map:` id
+  prefixes) — an `Arr`'s id (`array:...`, `arr.ts`) never matches, so no `{`/`}` gets written, and
+  `this.items!.select(...)` (the nested `Arr`'s `select`, which itself has no bracket logic — it just
+  delegates straight to its own `itemsType.select()`) writes the real object's fields completely
+  unscoped, straight into whatever selection body is currently open.
+
+The real API payload (`"Containers": [{...}]`, docker's own example) is a single-level array of
+objects — `ContainerSummary` being independently modeled as `type: array` is redundant/an artifact of
+how this OAS names a reusable "list of X" schema, not a genuine array-of-arrays on the wire.
+
+**Fix:** a new `Factory.unwrapRedundantArrayItems(context, items)` helper — when `items` is a `$ref`
+that resolves to a schema itself `{type: array, items: Y}`, returns `Y` directly (skips straight to
+the true item schema) instead of letting the ref reach `fromSchema` and recurse into another
+`createArrayType`. Applied at **both** places an array's `items` gets resolved: `fromProp`'s array
+branch (`factory.ts` ~330, the named-property path — this is the one `Containers` actually takes) and
+`createArrayType` itself (`factory.ts` ~257, the generic path reached via `fromSchema`, for arrays
+found any other way). This keeps `PropArray.items` an invariant every existing call site already
+assumes — never another `Arr` — so `getValue()` and `needsBrackets()`/`select()` needed no changes
+themselves.
+
+**Tests:** `tests/resources/oas/array-refs-array-typed-schema.yaml` (`widgets: [WidgetList]` where
+`WidgetList` is itself `type: array`), `test_array_item_ref_to_array_typed_schema_unwraps_redundant_nesting`
+in `tests/all/oas-core.test.ts` — asserts `widgets: [WidgetsItem]` matches the real
+`type WidgetsItem` definition, `WidgetList` never leaks into the schema, and the selection nests
+inside braces rather than flattening. Reverting the fix reproduces a real rover failure
+(`cannot find type 'widgets' in this document`) and fails the test. Re-verified directly against
+`docker-engine.json get:/system/df`: the `SELECTED_FIELD_NOT_FOUND` on `command` is gone; the op
+still doesn't fully compose, but now only for the separate, already-documented #14 map-field
+limitation (`NetworkSettings.Networks`), which was always going to block it regardless of this fix.
+Re-ran the full `docker-engine.json` coverage sweep before/after: same 86.0% (37/43), same 6 ops in
+the compose-fail bucket — no regression, and `/system/df`'s failure category changed from
+`SELECTED_FIELD_NOT_FOUND` to the same `CONNECTORS_UNRESOLVED_FIELD` (#14) the other 5 already show.
+
+**AST:** a shape change, not emission-only — removes a redundant intermediate `Arr` node so
+`PropArray.items` always points at the true element type.
+**Refs:** `src/oas/nodes/factory.ts` (`Factory.fromProp`'s array branch, `Factory.createArrayType`),
+`src/oas/nodes/propArray.ts` (`PropArray.getValue`, `PropArray.select`, `PropArray.needsBrackets`),
+`src/oas/nodes/obj.ts` (`Obj.updateName`, the array-item naming fallback that names the *real* object
+two levels down), `src/oas/nodes/typeUtils.ts` (`T.isContainer`, unchanged — confirms `Arr` is
+deliberately not a container, which is exactly why this shape falls through both checks).
+
+## 47 · A bare array-of-scalar op response is dropped entirely (no Query field, empty selection) — ✅ Fixed (working tree)
+
+**Symptom:** an op whose response is a bare array of scalars (no wrapping object/property — the
+response schema itself is `{type: array, items: {type: <scalar>}}`) vanishes from the schema
+completely: no `Query`/`Mutation` field at all, not even a degraded one. Confirmed on 7
+`spotify.json` ops (`get:/me/albums/contains`, `get:/me/tracks/contains`, `get:/me/shows/contains`,
+etc. — Spotify's "check saved X" endpoints, which return `[true, false, ...]`).
+
+**OAS** (a bare array-of-boolean response, no object wrapper):
+```yaml
+responses:
+  '200':
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            type: boolean
+```
+
+**Cause — two parts, confirmed by direct repro:**
+1. **The op is dropped before generation even starts.** `PathsCollector.collectExpandedPaths`
+   (`typesCollector.ts:251-303`) decides which nodes are "leaves" (selectable) by walking the op's
+   tree; it already special-cases a *named* scalar-array property (`child instanceof PropArray &&
+   child.items instanceof Scalar`, line 262) and a *bare single scalar* direct response (`child
+   instanceof Scalar && child.parent instanceof Res`, line 272, added for #32 — e.g. a write that
+   just returns `true`). It has no case for a **bare array of scalars** as the direct response
+   (`Res -> Arr -> Scalar`, no `Prop` wrapper) — so the traversal finds no leaf at all, `newSelection`
+   stays empty for the op, and it's dropped from the schema entirely (confirmed: `gen.getTypes()`
+   returns `types.size === 0` and the generated schema has no `type Query {` block whatsoever).
+2. **Even once selectable, the connector selection would be empty.** `Res.select()` only special-cases
+   `T.isScalar(response)` (a bare scalar) by writing `$`; a bare array response falls to
+   `response.select(...)` → `Arr.select()` → unconditionally delegates to `this.itemsType.select()`
+   → `Scalar.select()`, which writes nothing unless the scalar has a JSON-schema `default`. Confirmed
+   by patching in a fix for cause 1 alone (temporary, reverted): the op does get a `Query` field
+   (`meAlbumsContains(ids: String!): [Boolean]`), but rover then rejects it with
+   `INVALID_SELECTION: @connect(selection:) on Query.meAlbumsContains is empty`.
+
+**Fix:** two matching additions, one per cause, mirroring the existing bare-scalar precedent each
+was missing:
+1. `PathsCollector.collectExpandedPaths`'s leaf-detection `T.traverse` callback gained a branch:
+   `child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar` →
+   `newSelection.add(child.path())` — same shape as the existing bare-scalar-response branch beside
+   it.
+2. `Res.select()` now emits `$` for a direct-response array whose `itemsType` is a scalar too —
+   widened the existing `T.isScalar(response)` branch to `T.isScalar(response) || (response
+   instanceof Arr && response.itemsType instanceof Scalar)`.
+
+**Tests:** `tests/resources/oas/bare-scalar-array-response.yaml` (mirrors #32's
+`bare-scalar-response.yaml`, one level up — a bare `array of boolean` response, no wrapper),
+`test_bare_scalar_array_response_not_dropped` in `tests/all/oas-core.test.ts` — asserts the field
+survives with type `[Boolean]` and the selection is the bare `$` passthrough, and composes via
+rover. Reverting both changes together reproduces the op vanishing entirely and fails the test.
+Re-verified directly against all 7 originally-affected `spotify.json` ops: full corpus sweep for
+that spec went from 87.9% (51/58, 7 `GEN-EMPTY`) to **100%** (58/58) — every dropped op now composes.
+
+**AST:** none — both fixes are leaf-detection/selection-emission additions, no new node kinds.
+**Refs:** `src/oas/generator/typesCollector.ts` (`PathsCollector.collectExpandedPaths`),
+`src/oas/nodes/res.ts` (`Res.select`). Related: #32 (the bare scalar-response precedent this extends
+to bare scalar-array responses).
+
+## 48 · The same `oneOf` used by a request body and by a response is only written once — ✅ Fixed (working tree)
+
+**Symptom:** a mutation whose request body and whose response both contain the same `oneOf` list
+generates a schema that refers to a type it never writes, so composition fails with
+`CONNECTORS_UNRESOLVED_FIELD`. Seen on `quickbooks-online.yaml` `post:/v3/company/{realm-id}/bill`
+and `post:/v3/company/{realm-id}/payment`.
+
+**OAS** — QuickBooks writes the very same `Line` list in the schema you send (`BillCreateObject`,
+line 2378) and in the schema you get back (`Bill`, line 2882):
+```yaml
+BillCreateObject:            # the request body
+  properties:
+    Line:
+      type: array
+      items:
+        oneOf:
+          - $ref: '#/components/schemas/ItemBasedExpenseLine'
+          - $ref: '#/components/schemas/AccountBasedExpenseLine'
+Bill:                        # the response
+  properties:
+    Line:
+      type: array
+      items:
+        oneOf:               # identical
+          - $ref: '#/components/schemas/ItemBasedExpenseLine'
+          - $ref: '#/components/schemas/AccountBasedExpenseLine'
+```
+
+**Example**:
+```graphql
+# before: only the input flavour is written; `LineUnion` is referenced but never defined
+input LineUnionInput { ... }        # the two members merged into one object (no discriminator, see #25)
+type Bill { line: [LineUnion] }     # ✗ CONNECTORS_UNRESOLVED_FIELD — no `LineUnion` anywhere
+
+# after: both flavours are written
+input LineUnionInput { ... }
+type LineUnion { ... }
+type Bill { line: [LineUnion] }     # ✓
+```
+
+**Cause:**
+- A node's `kind` says whether it is something you send (`input`) or something you get back (`type`).
+- `Union.id` was the only node id that left the kind out — its siblings all carry it:
+  ```
+  src/oas/nodes/obj.ts:34    obj:${this.kind}:${this.name}
+  src/oas/nodes/comp.ts:26   comp:${this.kind}:${this.name}
+  src/oas/nodes/map.ts:25    map:${this.kind}:${this.name}
+  src/oas/nodes/union.ts:38  union:${this.name}              <- the bug
+  ```
+- Two `Union` nodes are built for `Line` — one for the body, one for the response — but they end up
+  with the same id.
+- Everything that keeps track of what has been written is keyed by that id
+  (`typesCollector.ts:63-72,133`, `oasGen.ts:185`, `writer.ts:92`), so the second node replaces the
+  first and only one of the two is ever written. The body one wins, and the response field is left
+  pointing at nothing.
+- GET-only specs never showed this: with no request body there is no second node to collide with.
+- `Union.generateMergedObject` already writes the kind and appends `Input` to the name, so both
+  flavours were always meant to exist side by side — the shared id was what prevented it.
+
+**Fix:** put the kind in the id, exactly like `Obj` / `Comp` / `Map`:
+`union:${this.kind}:${this.name}`.
+
+**Tests:** `test_R2_union_shared_by_body_and_response_emits_both_flavours` in
+`tests/all/r2-abstract.test.ts` — selects `post:/v3/company/{realm-id}/bill>**` on the existing
+`quickbooks-online.yaml` fixture and asserts that both `type LineUnion` and `input LineUnionInput`
+are written. Undoing the one-line change fails it. The QuickBooks mutation sweep went from 5/7
+(71.4%) to **7/7 (100%)**; the full GET sweep is byte-identical to the run before the change.
+
+**AST:** an identity change — same nodes, same shape, one of them now has a different id, so union
+segments inside selection paths gained the kind (real path, `mapper.test.ts:28`):
+```
+before:  get:/2.3.0/agencies/>res:r>obj:type:#/c/s/PaginatedPolymorphicAgencyEndpointList
+           >prop:array:#results>union:#/c/s/PolymorphicAgencyEndpoint>…
+after:   …>prop:array:#results>union:type:#/c/s/PolymorphicAgencyEndpoint>…
+```
+A union reached from a request body gets `union:input:` instead — that is the node that used to be
+lost. 18 literal paths in `oas-core.test.ts`, `r2-abstract.test.ts`, `mapper.test.ts` and `single.test.ts`
+were updated to `union:type:`; all of them are response-side. The web UI stores checked selections
+under `oas:tree-selection`, so a selection saved before this change and crossing a union will not
+restore — it clears on the next upload.
+
+**Refs:** `src/oas/nodes/union.ts` (`Union.id`), `src/oas/nodes/obj.ts` / `comp.ts` / `map.ts` (the
+siblings it now matches), `src/oas/generator/typesCollector.ts` and `src/oas/io/writer.ts` (the two
+places keyed by the id). Related: #25 (a `oneOf` with no discriminator becoming one merged object —
+that downgrade works fine here; this is about it being written once instead of twice), #14
+(`CONNECTORS_UNRESOLVED_FIELD` from the opposite problem — types written that nothing selects).
+
+## 49 · A request body that reaches a big shared model makes composition run out of memory — ⬜ Open
+
+**Symptom:** a write op whose request body pulls in a large, self-referencing model generates a
+schema rover cannot compose in bounded memory: the composing process grows by about 2 GB every 5s
+(16 GB at 45s) and never finishes. It reached 60–75 GB and took the machine down twice. Three
+`confluence.json` ops do it, e.g. `put:/wiki/rest/api/content/{id}/child/attachment/{attachmentId}`.
+Generation itself is fine and fast — 293K of SDL in about a second, 70 MB of heap (all 65 of that
+spec's mutation ops generate in one process with a 310 MB peak).
+
+**OAS** — the body looks small, but `version` reaches the whole content model:
+```yaml
+AttachmentPropertiesUpdateBody:      # the request body: 8 fields
+  properties:
+    id:        { type: string }
+    title:     { type: string }
+    container: { $ref: '#/components/schemas/Container' }
+    version:   { $ref: '#/components/schemas/Version' }   # <- the door
+
+Version:
+  properties:
+    content: { $ref: '#/components/schemas/Content' }     # <- the whole model
+
+Content:                                                   # refers to 12 schemas, itself included
+  properties:
+    ancestors: { type: array, items: { $ref: '#/components/schemas/Content' } }
+    children:  { $ref: '#/components/schemas/ContentChildren' }
+    space:     { $ref: '#/components/schemas/Space' }
+    version:   { $ref: '#/components/schemas/Version' }   # <- back to where we came from
+    ...
+```
+
+**Example** — what one op writes:
+```graphql
+# 173 definitions for a body of 8 fields:
+type ... x86         # the response side
+input ... x87        # the same model again, as input types
+# and one @connect body selection of 134,402 characters
+```
+
+**Measurements (all on that one op):**
+- 86 output types + 87 input types, 293K of SDL.
+- The `@connect(http: { body: ... })` selection is **134 KB in a single directive** — nearly half the file.
+- 191 fields were dropped as cycle cuts (`# … - circular reference omitted`), and cycles still
+  survive on **both** sides: `User -> Space -> SpaceHistory -> User` among the output types,
+  `ContentInput -> ContentHistoryInput -> UserInput -> SpaceInput -> ContentInput` among the inputs.
+  (Recursive types are legal GraphQL — this is listed as a fact about the output, not as the cause.)
+
+**Not caused by #48** (checked, because that fix landed just before this appeared). The same op
+generated with the pre-#48 union id is byte-identical except for 10 lines — the `type LabelsUnion`
+definition that used to be missing. Both have the same 87 input types. What changed is only how far
+rover gets: the old schema referenced an undefined type, so it was rejected at parse time
+(`INVALID_GRAPHQL`, 4.2s); the corrected schema is valid, so composition actually starts, and that is
+what runs out of memory. The op failed before and fails now — only the bucket changed.
+
+**Cause:** not yet established. Two candidates, in order of suspicion:
+1. the 134 KB body selection — its size, not the schema's;
+2. the size of the input-type graph itself (87 types, 104 references between them).
+Bisecting them apart is the next step: compose the same schema with the body selection trimmed, then
+with the input types trimmed, and see which one changes the memory curve.
+
+**Mitigation (not a fix):** `tools/coverage-spec.mts` now gives each compose a 30s deadline and kills
+rover **and its `supergraph-<version>` child** (`pkill -9 -P` before killing rover — the child is
+reparented and unfindable once the parent is gone, and `child_process.exec` silently ignores
+`detached`, so a process-group kill does not work here). A runaway op now scores
+`COMPOSE-FAIL [TIMEOUT]` instead of ending the sweep. Big schemas (≥200K) also compose one at a
+time — eight of these at once is what turned 8 GB into 60 GB.
+A `TIMEOUT` is wall-clock, so it depends on the machine and what else is running: 30s is about ten
+times a normal compose and the big ones no longer compete with each other, but read a new one as
+"look at this op", not as proof on its own.
+
+**Evidence kept:** `/tmp/qbo-after.graphql` (current) and `/tmp/qbo-before.graphql` (pre-#48) —
+the pair the comparison above is based on; `/tmp/oas-coverage-keep/` holds the harness's own
+`schema-4.graphql` + `supergraph-4.yaml` for the same op.
+
+**AST:** none — the node tree is not involved. Generation produces the same tree it always did; this
+is about how much SDL that tree writes for a body, and what composition then costs.
+**Refs:** `tools/coverage-spec.mts` (the deadline and the size split). Related: #48 (the fix that
+made this op reach composition at all — not its cause), #10 (the cycle cuts that fire 191 times here
+and still leave cycles behind), and `confluence.json post:/wiki/rest/api/content/{id}/copy`, the only
+`CIRCULAR_REFERENCE` in the corpus, which may be the same shape seen from the response side.
+
+## 50 · An `anyOf` with no `oneOf` loses all its members and writes an empty block — ✅ Fixed (working tree)
+
+**Symptom:** an op whose request body is an `anyOf` (and not also a `oneOf`) writes an input type
+with no fields — invalid GraphQL, rejected by rover as `INVALID_GRAPHQL`. The body selection is
+empty too, so even the fields the service requires are never sent. Seen on 8 of
+`digitalocean.yaml`'s 10 failing mutations, e.g. `post:/v2/domains/{domain_name}/records`.
+
+**OAS** — digitalocean lists the record variants under `anyOf`, with no `oneOf` anywhere:
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        anyOf:                                  # 9 members, one per DNS record type
+          - allOf:
+              - $ref: '#/paths/~1v2~1domains~1%7Bdomain_name%7D~1records/get/…/domain_records/items'
+              - required: [type, name]
+          - …
+        discriminator: { propertyName: type }
+```
+
+**Example**:
+```graphql
+# before: no fields, and nothing is sent
+input InputInput { }                    # ✗ INVALID_GRAPHQL
+body: """ $args.input { } """
+
+# after: the members are merged as usual
+input InputInput { data: String, name: String, type: String!, ttl: Int, … }
+```
+
+**Cause:**
+- `Factory.createContainerType` sends a schema to `Union` when it has **either** `oneOf` or `anyOf`.
+- But it then read the member list from `oneOf` alone: `const oneOfs = schema.oneOf || []`.
+- So an `anyOf`-only schema built a union with **zero** members.
+- Everything after that behaved correctly on an empty union — an empty merged object, an empty body
+  selection. The tree confirms it: the whole body is one childless node.
+  ```
+  post:/v2/domains/{domain_name}/records>body:b>union:input:Input     (no children)
+  ```
+- #20 already handles one `anyOf` case — two members where one is a fieldless placeholder, which
+  collapses to the other before reaching here. An `anyOf` with several real members had no path.
+
+**Fix:** read the members from whichever keyword carries them —
+`const members = schema.oneOf || schema.anyOf || [];`. `allOf` still wins (it is checked first), and
+a member list with no discriminator lands in the existing merged-object form (#25) like any `oneOf`.
+
+**Tests:** `test_anyof_only_body_keeps_its_members` in `tests/all/oas-core.test.ts` — selects
+digitalocean's create-record op and asserts the input carries the real fields and that no empty
+`input … { }` block is written; composes via rover. Reverting the one line fails it.
+
+**AST:** a shape change — the union node gains the children it should always have had. No new node
+kinds; node ids are unchanged.
+**Refs:** `src/oas/nodes/factory.ts` (`Factory.createContainerType`). Related: #20 (the narrow
+`anyOf` case that already worked), #25 (the merged-object form these bodies take), #51 (the other
+half of the empty-block family, fixed alongside this).
+
+## 51 · An empty response object is left empty when the op's body is selectable — ✅ Fixed (working tree)
+
+**Symptom:** a write whose response is an object with no fields emits `type … { }` and
+`selection: """ """` — invalid, and rover rejects it with `INVALID_SELECTION`. Only mutations are
+affected. Seen across `asana.yaml`, e.g. `post:/goals/{goal_gid}/removeSupportingRelationship`;
+asana declares 30 such writes.
+
+**OAS** — asana's "nothing to return" convention, an object whose schema declares no properties:
+```yaml
+responses:
+  '200':
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            data: { $ref: '#/components/schemas/EmptyResponse' }
+components:
+  schemas:
+    EmptyResponse:      # "An empty object. Some endpoints do not return an object on success."
+      type: object
+```
+
+**Example**:
+```graphql
+# before
+type CreateGoalsRemoveSupportingRelationshipResponse { }   # ✗ INVALID_SELECTION
+selection: """ """
+
+# after
+type CreateGoalsRemoveSupportingRelationshipResponse { data: JSON }
+selection: """ data """
+```
+
+**Cause:**
+- #32 already covers this shape: when an op's expansion finds nothing selectable, its fieldless
+  objects are taken as the leaves and written as `JSON`.
+- That check asked whether the **whole op** had nothing selected. A write has two sides, and its
+  body usually does have something — so the check passed and the fallback never ran for the
+  response. The AST shows the split, one side selectable and the other not:
+  ```
+  post:…>body:b>obj:input:Input>prop:obj:data>obj:input:#/c/s/…Request>prop:scalar:supporting_resource
+  post:…>res:r>obj:type:createGoals…Response>prop:obj:data>obj:type:#/c/s/EmptyResponse   <- no leaf
+  ```
+- GET ops never showed it: with no body, "the op" and "the response" are the same thing.
+
+**Fix:** ask the question per side instead of per op — for each of the op's own children (`res`,
+`body`), if nothing under that side was selected, run the same fieldless-object traversal there. The
+mechanism is #32's, unchanged; only the scope it is applied at moved.
+
+**Tests:** `test_empty_response_alongside_a_selectable_body` in `tests/all/oas-core.test.ts` —
+asserts `data: JSON` on the response type and `data` in the selection, composing via rover.
+Narrowing the scope back to the op fails it.
+
+**AST:** none — the node tree is untouched; this only changes which paths the collector selects.
+**Refs:** `src/oas/generator/typesCollector.ts` (`PathsCollector.collectExpandedPaths`). Related:
+#32 (the fallback this generalises), #50 (the other half of the empty-block family).
+
+## 52 · An array whose items wrap another array, written inline, breaks the field name and its selection — ✅ Fixed (working tree)
+
+**Symptom:** a list field points at a type nobody defines, and the element's fields are written into
+the parent's selection with no braces around them, so rover reports `SELECTED_FIELD_NOT_FOUND` for
+each of them. Found on `slack.yaml get:/conversations.replies` after #50 gave the `anyOf` its
+members; slack has 5 sites of this shape.
+
+**OAS** — the inner schema's only key is `items`, so it wraps the element rather than being it:
+```yaml
+messages:
+  type: array
+  items:                    # no `type`, no `properties` — only `items`
+    items:
+      anyOf: [ {…}, {…} ]
+```
+slack's own example payload is one level — `"messages": [ {…}, {…} ]` — so the extra level is an
+artifact of how the spec was generated, not something the service sends.
+
+**Example**:
+```graphql
+# before
+type ConversationsRepliesResponse { messages: [messages]! }   # ✗ nothing is named `messages`
+type MessagesUnion { lastRead: String, … }                    # the real definition, other name
+selection: """ messages      lastRead: "last_read" … """      # ✗ no braces: the element's fields
+                                                              #   read as the parent's own
+
+# after
+type ConversationsRepliesResponse { messages: [MessagesUnion]! }
+selection: """ messages { lastRead: "last_read" … } """
+```
+
+**Cause:**
+- A property's `items` is expected to be the element itself. Here it is another array, so the tree
+  carries an extra level:
+  ```
+  …>prop:array:#messages>array:messagesUnion>union:type:messagesUnion>obj:type:[inline:messagesUnion]>…
+  ```
+- `PropArray.getValue` then reads the inner array's name — inherited from the property, `messages` —
+  instead of the element's real name two levels down.
+- `PropArray.select`'s brace test asks `T.isContainer`, which is true for objects, unions and maps
+  but never for an array id, so no `{`/`}` is written.
+- This is #46's defect exactly. #46 fixed it only where the wrapper arrives through a `$ref` to a
+  component that is itself a list; written inline, nothing handled it.
+
+**Fix:** the same helper, `Factory.unwrapRedundantArrayItems`, gained a branch for the inline form:
+when `items` has `items` of its own, no `type`, and no `properties`, take the inner one.
+
+**The inline test is stricter than the `$ref` one, on purpose.** An explicit `type: array` there is
+a real list of lists and must stay nested — docker's `top` (one array of column values per process),
+digitalocean's monitoring `[timestamp, value]` pairs, box's `name_conflicts`. A scan of the corpus
+splits cleanly: 5 wrapper sites, all `type`-less, all slack; 11 genuine sites across 6 specs, all
+with an explicit `type: array`. Accepting both would have corrupted the 11 to fix the 5. Note this
+is deliberately narrower than the implied-array rule in `fromSchema` (#4), which treats a missing
+`type` and `type: array` alike.
+
+**Tests:** `tests/resources/oas/nested-array-items.yaml` carries both halves — `/wrapper-array`
+(the artifact, mirroring slack) and `/matrix` (a genuine list of lists, mirroring docker `top`).
+`test_inline_array_wrapping_another_array_unwraps_to_the_real_element` asserts the field names the
+type that is defined and that the element nests inside braces;
+`test_genuine_array_of_arrays_stays_nested` asserts the matrix is never flattened to a single list.
+Both in `tests/all/oas-core.test.ts`, composing via rover. Dropping the branch fails the first;
+relaxing the test to accept `type: array` fails the second, so the restriction is load-bearing.
+
+**AST:** a shape change — the intermediate `Arr` is gone, so `PropArray.items` is again always the
+real element, the invariant every call site already assumed. Same as #46.
+**Refs:** `src/oas/nodes/factory.ts` (`Factory.unwrapRedundantArrayItems`),
+`src/oas/nodes/propArray.ts` (`getValue`, `select`/`needsBrackets` — unchanged, they work once the
+invariant holds). Related: #46 (the `$ref` form of the same defect), #50 (which made slack's union
+non-empty and so exposed this), #4 (the implied-array rule this deliberately does not mirror).

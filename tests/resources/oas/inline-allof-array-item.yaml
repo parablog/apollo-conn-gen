@@ -1,0 +1,63 @@
+openapi: 3.0.3
+info:
+  title: Nameless Composed Array Item Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # Mirrors Box's `get:/metadata_query_indices`: `fields.items` is an inline single-member allOf
+  # with no `$ref`. The generator must name that item from the parent field (`Fields`) and keep
+  # `fields: [Fields]` in the generated GraphQL schema.
+  /metadata_query_indices:
+    get:
+      operationId: getMetadataQueryIndices
+      summary: List metadata query indices
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The metadata query indices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataQueryIndices'
+components:
+  schemas:
+    MetadataQueryIndices:
+      type: object
+      description: A collection of metadata query indices.
+      properties:
+        entries:
+          type: array
+          description: A page of metadata query indices.
+          items:
+            $ref: '#/components/schemas/MetadataQueryIndex'
+        limit:
+          type: integer
+          description: The limit that was used for this request.
+    MetadataQueryIndex:
+      type: object
+      description: A single metadata query index.
+      properties:
+        id:
+          type: string
+          description: The ID of the metadata query index.
+        fields:
+          type: array
+          description: A list of template fields which make up the index.
+          items:
+            # Inline single-member allOf with no $ref; this should generate the `Fields` type.
+            allOf:
+              - type: object
+                description: The field which makes up the index.
+                properties:
+                  key:
+                    type: string
+                    description: The metadata template field key.
+                  sort_direction:
+                    type: string
+                    description: The sort direction of the field.

@@ -3,7 +3,7 @@ import { Command, OptionValues } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
-import { RequestOverride } from '../oas/oasContext.js';
+import { BatchConfig, RequestOverride } from '../oas/oasContext.js';
 import { RulesLoader, OpNameMapper, MapRules, Mapper } from '../oas/mapper/index.js';
 
 const originalConsole = Object.assign(
@@ -40,16 +40,30 @@ function loadOverrides(opts: OptionValues): Record<string, RequestOverride> | un
   }
 }
 
+function loadBatch(opts: OptionValues): BatchConfig | undefined {
+  if (!opts.batch) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(opts.batch, 'utf-8'));
+  } catch (error) {
+    console.error(`Error loading batch file: ${error}`);
+    return undefined;
+  }
+}
+
 async function main(sourceFile: string, opts: OptionValues): Promise<void> {
   console.log = () => {};
 
   const mapper = loadRules(opts);
   const overrides = loadOverrides(opts);
+  const batch = loadBatch(opts);
 
   const gen = await OasGen.fromFile(sourceFile, {
     ...opts,
     baseURL: opts.baseUrl,
     overrides,
+    batch,
     showParentInSelections: false,
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
@@ -57,6 +71,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     skipOptionalArgs: opts.skipOptionalArgs,
     inferEntityResolvers: opts.inferEntityResolvers,
     reusableMappings: opts.reusableMappings,
+    skipAuth: opts.skipAuth,
   });
 
   await gen.visit();
@@ -113,11 +128,12 @@ program
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .option('--base-url <url>', 'Override the @source base URL (default: servers[0] from the spec)')
   .option('--overrides <file>', 'Load per-operation path/queryParams overrides from a JSON file')
+  .option('--batch <file>', 'Load batch endpoints (op id -> { maxSize? }) from a JSON file')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
   .option('--reusable-mappings', 'Emit reusable @mapping directives (requires connect v0.5)', false)
+  .option('--skip-auth', 'Omit all auth (no headers on @source, no auth on @connect)', false)
   .parse(process.argv);
 
 const source = program.args[0];
-main(source, program.opts())
-  .then(() => console.log('done'));
+main(source, program.opts()).then(() => console.log('done'));

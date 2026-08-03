@@ -1,4 +1,4 @@
-import { Factory, IType, Type, T } from './internal.js';
+import { Arr, Factory, IType, Scalar, Type, T } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -63,7 +63,9 @@ export class Res extends Type {
 
     const response = this.response;
     if (response) {
-      if (T.isScalar(response)) {
+      // a plain value, or a list of them — nothing to pick apart, so pass the answer through as is.
+      // see docs/issues.md #47
+      if (T.isScalar(response) || (response instanceof Arr && response.itemsType instanceof Scalar)) {
         // best attempt to just copy the value that comes out of the service. most likely the
         // value will have to be replaced by a GQL type. In fact, we could potentially use SYN_ here but
         // it will have to do for now.

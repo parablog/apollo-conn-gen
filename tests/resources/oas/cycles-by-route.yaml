@@ -1,0 +1,50 @@
+openapi: 3.0.0
+info:
+  title: Genuine cycles reached by each route
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# Companion to same-name-fields.yaml (docs/issues.md #36): checks that REAL loops are still cut after the
+# fix, reached three ways — `parent` (direct ref), `children` (array), and `wrapper.back` (a ref inside an
+# inline object). `Shared` is reused but is not a loop, so it must stay. Each looping field sits next to a
+# normal field, so cutting the loop still leaves a usable type. See #36.
+paths:
+  /nodes:
+    get:
+      operationId: getNodes
+      responses:
+        '200':
+          description: a recursive node
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        id:
+          type: string
+        parent:
+          $ref: '#/components/schemas/Node'              # direct $ref self-cycle
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'            # array-items self-cycle
+        wrapper:
+          type: object                                   # INLINE object ...
+          properties:
+            label:
+              type: string                               # ... non-cyclic field (keeps Wrapper non-empty)
+            back:
+              $ref: '#/components/schemas/Node'          # ... deep field re-enters Node -> cut
+        meta:
+          $ref: '#/components/schemas/Shared'            # shared, non-recursive -> must NOT be cut
+        extra:
+          $ref: '#/components/schemas/Shared'
+    Shared:
+      type: object
+      properties:
+        label:
+          type: string

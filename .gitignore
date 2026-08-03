@@ -23,9 +23,8 @@ KNOWN_ISSUES.md
 # (tokens, AWS keys, PEM private keys) that block pushes, so they are kept on disk
 # only — not committed. The coverage harness + corpus tests run against them locally.
 /COVERAGE.md
+/COVERAGE-*.md
 /TEST_CORPUS.md
-/tools/coverage-spec.mts
-/tools/vet-spec.mts
 /tests/all/corpus.test.ts
 /tests/resources/oas/googlebooks.yaml
 /tests/resources/oas/slack.yaml
@@ -37,4 +36,26 @@ KNOWN_ISSUES.md
 /tests/resources/oas/github.yaml
 /tests/resources/oas/omni.yaml
 /tests/resources/oas/confluence.json
-tools/local/apollo-federation-cli
+/tests/resources/oas/1password-connect.json
+/tests/resources/oas/1password-events.json
+/tests/resources/oas/ably-control.json
+/tests/resources/oas/amadeus-flight-offers.json
+/tests/resources/oas/docker-engine.json
+/tests/resources/oas/nasa-apod.json
+/tests/resources/oas/nytimes-article-search.json
+/tests/resources/oas/nytimes-books.json
+/tests/resources/oas/openfigi.json
+/tests/resources/oas/plaid.json
+/tests/resources/oas/quickbooks-online.yaml
+/tests/resources/oas/spotify.json
+/tests/resources/oas/square.json
+/tests/resources/oas/stripe.json
+/tests/resources/oas/trello.json
+/tests/resources/oas/visualcrossing-weather.json
+
+# Local composer binary — not our code, not committed.
+/tools/local/
+
+.last
+/docs/
+**/.DS_Store

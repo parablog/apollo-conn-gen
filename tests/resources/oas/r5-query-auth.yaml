@@ -1,0 +1,85 @@
+openapi: 3.0.3
+info:
+  title: R5 query auth
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# global default: an apiKey carried in the query string (?api_key=…)
+security:
+  - GlobalQueryKey: []
+paths:
+  # no own security -> inherits the global query auth on its @connect
+  /inherits:
+    get:
+      operationId: getInherits
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+  # a real query param + the inherited global query auth -> both merge into one queryParams block
+  /search:
+    get:
+      operationId: getSearch
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+  # own query security with a DIFFERENT key name -> "token": $config.apiKey on this @connect
+  /own:
+    get:
+      operationId: getOwn
+      security:
+        - OwnQueryKey: []
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+  # explicit `security: []` -> public op -> no query auth at all
+  /public:
+    get:
+      operationId: getPublic
+      security: []
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ref:
+                    type: string
+components:
+  securitySchemes:
+    GlobalQueryKey:
+      type: apiKey
+      in: query
+      name: api_key
+    OwnQueryKey:
+      type: apiKey
+      in: query
+      name: token

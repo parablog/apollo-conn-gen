@@ -1,0 +1,27 @@
+openapi: 3.0.0
+info:
+  title: Bare scalar response (no property wrapper)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# Regression: a response schema that resolves directly to a scalar (not wrapped in a named
+# property) had nothing selectable, so the whole op was silently dropped from the schema — not
+# degraded, not an error, just absent. Real-world shape: adobe commerce's write endpoints return
+# a bare `true` on success (99 ops), petstore's `/user/login` returns a bare token string.
+paths:
+  /widgets/{widgetId}:
+    delete:
+      operationId: deleteWidget
+      parameters:
+        - name: widgetId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: true on success
+          content:
+            application/json:
+              schema:
+                type: boolean

@@ -1,0 +1,72 @@
+openapi: 3.0.3
+info:
+  title: R5 per-op global-warning dedup (C3)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+# global default is a cookie scheme — unemittable, so resolveAuth drops it with a warning.
+# In per-op mode (triggered by /admin below) every op that inherits the global would re-fire
+# that warning. C3 makes the global's dropped-scheme warning fire exactly once per generation.
+security:
+  - CookieAuth: []
+paths:
+  /inherits1:
+    get:
+      operationId: getInherits1
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+  /inherits2:
+    get:
+      operationId: getInherits2
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+  /inherits3:
+    get:
+      operationId: getInherits3
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+  # own security -> triggers per-op mode for the whole spec.
+  /admin:
+    get:
+      operationId: getAdmin
+      security:
+        - AdminBearer: []
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name: { type: string }
+components:
+  securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+    AdminBearer:
+      type: http
+      scheme: bearer

@@ -18,10 +18,17 @@ export type RequestOverride = {
   body?: string | null;
 };
 
+// R6: per-batch-endpoint settings. The only knob is the size cap; everything else
+// (entity, key, request, selection) is inferred. `{}`/`null` = defaults.
+export type BatchEntry = { maxSize?: number };
+
+// R6: batch endpoints, keyed by op id. e.g. { "post:/products/batch": { maxSize: 50 } }
+export type BatchConfig = Record<string, BatchEntry | null>;
+
 export type GenerateOptions = {
   baseURL?: string;
   overrides?: Record<string, RequestOverride>;
-  consolidateUnions?: boolean;
+  batch?: BatchConfig;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;
@@ -30,6 +37,7 @@ export type GenerateOptions = {
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   reusableMappings?: boolean;
+  skipAuth?: boolean;
 };
 
 // Max nested $ref hops resolvePointer will follow before giving up (guards against ref cycles).
@@ -87,7 +95,6 @@ export class OasContext {
     this.parser = parser;
     this.indent = 0;
     this.generateOptions = options || {
-      consolidateUnions: true, // by default, we consolidate fields until unions are supported
       showParentInSelections: true, // by default, we don't show where the fields are coming from
       federationVersion: DEFAULT_VERSIONS.federationVersion,
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,

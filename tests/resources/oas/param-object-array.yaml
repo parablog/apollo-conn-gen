@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Object Array Param Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # a query param typed as an array of a real ($ref'd) object schema has no GraphQL argument
+  # shape (an inline `type X {...}` body isn't legal inside an argument list) — degrade to the
+  # JSON scalar, preserving array cardinality. see docs/issues.md #40
+  /search:
+    get:
+      operationId: search
+      parameters:
+        - name: filters
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SearchFilter'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+components:
+  schemas:
+    SearchFilter:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string
