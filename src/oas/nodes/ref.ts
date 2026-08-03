@@ -1,4 +1,4 @@
-import { Arr, Factory, IType, Prop, Type } from './internal.js';
+import { Arr, Factory, IType, Prop, Res, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -66,7 +66,7 @@ export class Ref extends Type {
 
     // If we're in a Response context and the resolved type is an Arr,
     // generate it with array notation.
-    if (context.inContextOf('Res', this) && this.refType instanceof Arr) {
+    if (context.inContextOf(Res, this) && this.refType instanceof Arr) {
       writer.write('[').write(this.firstChild().name).write(']');
     } else {
       // Rewrite terrible names to something more sensible.

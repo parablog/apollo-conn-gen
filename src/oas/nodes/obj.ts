@@ -1,4 +1,4 @@
-import { Arr, Body, Factory, Get, IType, PropArray, Type, Res, T } from './internal.js';
+import { Arr, Body, Composed, Factory, Get, IType, PropArray, Type, Res, T } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -42,7 +42,7 @@ export class Obj extends Type {
     context.enter(this);
     trace(context, '-> [obj:visit]', 'in ' + this.name);
 
-    if (!context.inContextOf('Composed', this)) {
+    if (!context.inContextOf(Composed, this)) {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
@@ -69,7 +69,7 @@ export class Obj extends Type {
       return;
     }
 
-    if (context.inContextOf('Res', this)) {
+    if (context.inContextOf(Res, this)) {
       writer.write(Naming.genTypeName(this.name));
       return;
     }

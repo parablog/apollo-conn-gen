@@ -982,6 +982,30 @@ test('test_bare_scalar_array_response_not_dropped', async () => {
   assert.ok(/selection: """\s*\$\s*"""/.test(schema!), 'selection passes through the raw array value');
 });
 
+test('test_enum_query_param_is_a_scalar_argument', async () => {
+  // An argument can only be a plain value, so petstore's `status` is written as `String`:
+  //   status: { in: query, schema: { type: string, enum: [available, pending, sold] } }
+  // The list of allowed values must never be written inside the argument. see docs/issues.md #53
+  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 3, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/petFindByStatus\(status: String/.test(schema!), 'the enum param is a scalar argument');
+  assert.ok(!/enum Enum \{/.test(schema!), 'no enum definition inside the argument list');
+});
+
+test('test_webhooks_are_ignored_not_generated', async () => {
+  // A spec can list `webhooks:` next to `paths:`. We only ever read the paths, so a webhook is
+  // skipped rather than refused. see docs/issues.md #53
+  const gen = await OasGen.fromFile(`${oasBasePath}/webhooks.yaml`, {
+    showParentInSelections: false,
+    skipValidation: true,
+  });
+  await gen.visit();
+
+  // the spec really does have a webhook — otherwise the next check would pass on its own
+  assert.deepStrictEqual(Object.keys(gen.parser.getWebhooks() ?? {}), ['petCreated']);
+  assert.deepStrictEqual(Array.from(gen.paths.keys()), ['get:/ping'], 'only the path op is collected');
+});
+
 test('test_anyof_only_body_keeps_its_members', async () => {
   // A body listing its variants under `anyOf` with no `oneOf` (digitalocean's create-record, one
   // member per DNS record type). Members used to be read from `oneOf` alone, so the union was built

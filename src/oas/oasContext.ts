@@ -219,14 +219,17 @@ export class OasContext {
     return cur;
   }
 
-  public inContextOf(type: string, node: IType): boolean {
-    // console
+  // Takes the class itself, not its name: the browser build renames classes, so asking for "Param"
+  // by name never found it and a `status` query param came out as a whole enum block:
+  //   parameters: [{ name: status, in: query, schema: { type: string, enum: [available, sold] } }]
+  // see docs/issues.md #53
+  public inContextOf<T extends IType>(type: new (...args: never[]) => T, node: IType): boolean {
     for (let i = this.stack.length - 1; i >= 0; i--) {
       if (this.stack[i] === node) {
         continue;
       }
 
-      if (this.stack[i].constructor.name === type) {
+      if (this.stack[i] instanceof type) {
         return true;
       }
     }

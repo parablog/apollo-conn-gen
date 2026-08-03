@@ -1,4 +1,4 @@
-import { IType, Type } from './internal.js';
+import { IType, Param, Type, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -28,7 +28,7 @@ export class En extends Type {
     context.enter(this);
     trace(context, '-> [enum:visit]', 'in: ' + this.items.toString());
 
-    if (!context.inContextOf('Param', this)) {
+    if (!context.inContextOf(Param, this)) {
       context.store(this.name, this);
     }
 
@@ -46,7 +46,7 @@ export class En extends Type {
     context.enter(this);
     trace(context, '-> [enum::generate]', `-> in: ${this.name}`);
 
-    if (!context.inContextOf('Param', this)) {
+    if (!context.inContextOf(Param, this)) {
       // Definition and reference must agree (the #15 discipline): PropEn references emit
       // genTypeName(name), so the definition does too (`author-association` -> `AuthorAssociation`).
       const sanitised = Naming.genTypeName(this.name);
@@ -60,7 +60,7 @@ export class En extends Type {
       writer.write(builder);
     }
     // this covers the case where a union combines a scalar with an enum.
-    else if (!context.inContextOf('Union', this)) {
+    else if (!context.inContextOf(Union, this)) {
       writer.write(GqlUtils.getGQLScalarType(this.schema));
     }
 

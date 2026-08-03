@@ -331,9 +331,6 @@ export class OasGen {
   private visitPath(context: OasContext, name: string, pathItem: Record<string, Webhook | Operation>): IType[] {
     const paths: IType[] = [];
     if (pathItem.get !== undefined) {
-      if ((pathItem.get as Webhook | Operation)?.constructor.name === 'Webhook') {
-        throw new Error('Webhook not supported');
-      }
       paths.push(this.visitGet(context, name, pathItem.get as Webhook | Operation));
     }
 

@@ -1,4 +1,4 @@
-import { Arr, Composed, Factory, Get, IType, Prop, PropScalar, Res, T, Type } from './internal.js';
+import { Arr, Composed, Factory, Get, IType, Param, Prop, PropScalar, Res, T, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -52,7 +52,7 @@ export class Union extends Type {
     context.enter(this);
     trace(context, '-> [union:visit]', 'in: ' + schemas);
 
-    if (!context.inContextOf('Composed', this)) {
+    if (!context.inContextOf(Composed, this)) {
       trace(context, '[union]', 'In union: ' + this.parent?.name);
     }
 
@@ -69,7 +69,7 @@ export class Union extends Type {
       trace(context, ' [union:visit]', 'of type: ' + type);
     }
 
-    if (!context.inContextOf('Param', this)) {
+    if (!context.inContextOf(Param, this)) {
       this.visitProperties(context);
     }
 
@@ -110,11 +110,11 @@ export class Union extends Type {
 
     /* params with Unions are weird, but here's an example:
      * id: oneOf [string, Enum {me}] */
-    if (context.inContextOf('Param', this)) {
+    if (context.inContextOf(Param, this)) {
       for (const child of this.children) {
         child.generate(context, writer, selection);
       }
-    } else if (context.inContextOf('Res', this)) {
+    } else if (context.inContextOf(Res, this)) {
       // R2: when promoted to an interface, the field returns the base interface, not the union name.
       writer.write(Naming.genTypeName(this.interfaceBaseRef ?? this.name));
       return;
