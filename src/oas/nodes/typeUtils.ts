@@ -157,6 +157,13 @@ export class T {
     return Naming.genTypeName(target.name) + target.nameSuffix();
   }
 
+  // R10: how a field hands its value to the child's @mapping. The form is always
+  // `alias: path->Type`, so a plain field repeats its own name: `category: category->Category`.
+  // An already-aliased field just gets the arrow: `photo: "photo-url"` -> `photo: "photo-url"->Photo`.
+  public static mappingSpreadSuffix(sanitised: string, spread: string): string {
+    return sanitised.includes(': ') ? `->${spread}` : `: ${sanitised}->${spread}`;
+  }
+
   // R10: the child type a prop's selection would spread to, or undefined for scalar/enum/etc.
   private static spreadChildOf(prop: Prop): IType | undefined {
     if (prop instanceof PropObj) return prop.obj;

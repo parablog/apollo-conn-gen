@@ -90,7 +90,7 @@ export class PropArray extends Prop {
             context.inlineFallbackDepth--;
           }
         } else {
-          writer.write(` { ...${spread} }`).write('\n');
+          writer.write(T.mappingSpreadSuffix(sanitised, spread)).write('\n');
         }
         trace(context, '<- [prop:array:select]', 'out (mapped) ' + this.name);
         return;

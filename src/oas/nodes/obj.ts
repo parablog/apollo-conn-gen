@@ -179,7 +179,7 @@ export class Obj extends Type {
     // the field body lives in its @mapping.
     const spread = context.generateOptions.reusableMappings ? T.mappingSpreadName(this, selection) : undefined;
     if (spread) {
-      writer.write(i6).write(`...${spread}\n`);
+      writer.write(i6).write(`$->${spread}\n`);
     } else {
       // Base the selection at 6 spaces like a Query connector. `select` adds
       // `context.stack.length` (this object is mid-generation on the stack), so subtract it.
