@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.16.1]
+
+### Fixed
+- An enum query parameter was written as a whole enum block instead of a plain `String`, in bundled
+  builds only. Petstore `findByStatus`, issue #53.
+
 ## [0.16.0]
 
 ### Changed
