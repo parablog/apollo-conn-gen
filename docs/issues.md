@@ -2480,3 +2480,60 @@ is about how much SDL that tree writes for a body, and what composition then cos
 made this op reach composition at all — not its cause), #10 (the cycle cuts that fire 191 times here
 and still leave cycles behind), and `confluence.json post:/wiki/rest/api/content/{id}/copy`, the only
 `CIRCULAR_REFERENCE` in the corpus, which may be the same shape seen from the response side.
+
+## 50 · An `anyOf` with no `oneOf` loses all its members and writes an empty block — ✅ Fixed (working tree)
+
+**Symptom:** an op whose request body is an `anyOf` (and not also a `oneOf`) writes an input type
+with no fields — invalid GraphQL, rejected by rover as `INVALID_GRAPHQL`. The body selection is
+empty too, so even the fields the service requires are never sent. Seen on 8 of
+`digitalocean.yaml`'s 10 failing mutations, e.g. `post:/v2/domains/{domain_name}/records`.
+
+**OAS** — digitalocean lists the record variants under `anyOf`, with no `oneOf` anywhere:
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        anyOf:                                  # 9 members, one per DNS record type
+          - allOf:
+              - $ref: '#/paths/~1v2~1domains~1%7Bdomain_name%7D~1records/get/…/domain_records/items'
+              - required: [type, name]
+          - …
+        discriminator: { propertyName: type }
+```
+
+**Example**:
+```graphql
+# before: no fields, and nothing is sent
+input InputInput { }                    # ✗ INVALID_GRAPHQL
+body: """ $args.input { } """
+
+# after: the members are merged as usual
+input InputInput { data: String, name: String, type: String!, ttl: Int, … }
+```
+
+**Cause:**
+- `Factory.createContainerType` sends a schema to `Union` when it has **either** `oneOf` or `anyOf`.
+- But it then read the member list from `oneOf` alone: `const oneOfs = schema.oneOf || []`.
+- So an `anyOf`-only schema built a union with **zero** members.
+- Everything after that behaved correctly on an empty union — an empty merged object, an empty body
+  selection. The tree confirms it: the whole body is one childless node.
+  ```
+  post:/v2/domains/{domain_name}/records>body:b>union:input:Input     (no children)
+  ```
+- #20 already handles one `anyOf` case — two members where one is a fieldless placeholder, which
+  collapses to the other before reaching here. An `anyOf` with several real members had no path.
+
+**Fix:** read the members from whichever keyword carries them —
+`const members = schema.oneOf || schema.anyOf || [];`. `allOf` still wins (it is checked first), and
+a member list with no discriminator lands in the existing merged-object form (#25) like any `oneOf`.
+
+**Tests:** `test_anyof_only_body_keeps_its_members` in `tests/all/oas-core.test.ts` — selects
+digitalocean's create-record op and asserts the input carries the real fields and that no empty
+`input … { }` block is written; composes via rover. Reverting the one line fails it.
+
+**AST:** a shape change — the union node gains the children it should always have had. No new node
+kinds; node ids are unchanged.
+**Refs:** `src/oas/nodes/factory.ts` (`Factory.createContainerType`). Related: #20 (the narrow
+`anyOf` case that already worked), #25 (the merged-object form these bodies take), #51 (the other
+half of the empty-block family, fixed alongside this).

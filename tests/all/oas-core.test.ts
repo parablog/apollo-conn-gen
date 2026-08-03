@@ -982,6 +982,18 @@ test('test_bare_scalar_array_response_not_dropped', async () => {
   assert.ok(/selection: """\s*\$\s*"""/.test(schema!), 'selection passes through the raw array value');
 });
 
+test('test_anyof_only_body_keeps_its_members', async () => {
+  // A body listing its variants under `anyOf` with no `oneOf` (digitalocean's create-record, one
+  // member per DNS record type). Members used to be read from `oneOf` alone, so the union was built
+  // empty and wrote `input InputInput { }` — invalid SDL, and nothing was sent either.
+  // see docs/issues.md #50
+  const schema = await runOasTest('anyof-only-body.yaml', ['post:/records>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/input InputInput \{[^}]*\bname: String!/.test(schema!), 'the body carries the anyOf members');
+  assert.ok(!/input \w+ \{\s*\}/.test(schema!), 'no empty input block is written');
+  assert.ok(/body: """[^"]*\bpriority\b/.test(schema!), 'the members reach the body selection');
+});
+
 test('test_same_name_fields_not_cut_as_circular', async () => {
   // docs/issues.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
   // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing

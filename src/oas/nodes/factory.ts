@@ -205,11 +205,14 @@ export class Factory {
     }
     // union
     else if (schema.oneOf || schema.anyOf) {
-      const oneOfs = schema.oneOf || [];
+      // an `anyOf` lists members just like a `oneOf` — read them too, or the union is built with
+      // none and writes an empty block (digitalocean's create-record body). see docs/issues.md #50
+      //   schema: { anyOf: [ { allOf: [ … ] }, { … } ] }
+      const members = schema.oneOf || schema.anyOf || [];
       result = new Union(
         parent,
         ref || _.get(schema, 'name'),
-        oneOfs as SchemaObject[],
+        members as SchemaObject[],
         false,
         _.get(schema, 'discriminator'),
       );
