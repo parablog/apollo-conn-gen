@@ -259,7 +259,8 @@ export class T {
     if (autoMap) {
       writer.write(' @mapping');
     } else {
-      writer.write(' @mapping(selection: """\n').write(body).write('""")');
+      // close at the body's column (2) so the directive reads as one aligned block, like @connect
+      writer.write(' @mapping(selection: """\n').write(body).write('  """)');
     }
   }
 

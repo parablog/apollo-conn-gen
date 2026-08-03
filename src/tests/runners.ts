@@ -212,13 +212,13 @@ function compose(
   federationVersion: string = '2.14.1',
   connectorSpecVersion?: string,
 ) {
-  console.info('schemaPath', schemaPath);
-
+  
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');
   if (!rover[0]) {
     throw new Error('Rover is not available');
   }
-
+  console.info('schemaPath', schemaPath);
+  
   const supergraphFile = path.join(os.tmpdir(), 'oas-test', 'supergraph.yaml');
   let content: string = `
 federation_version: =${federationVersion}
@@ -275,6 +275,7 @@ ${devCmd}
 
   let output;
   try {
+    console.info('cmd', cmd);
     output = execSync(cmd, { stdio: 'pipe' });
     return [true, undefined];
   } catch (error) {

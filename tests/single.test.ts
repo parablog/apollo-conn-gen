@@ -5,6 +5,7 @@ import fs from 'fs';
 import _ from 'lodash';
 import assert from 'assert';
 import { OpNameMapper } from '../src/oas/mapper/index.js';
+import { parseVersion } from '../src/versions.js';
 // import diff from 'deep-diff';
 // import { stringify } from 'flatted';
 // import { stringify } from 'superjson'
@@ -131,11 +132,20 @@ test('test_053_oas_test_036_time-series', async () => {
 // });
 
 
-test('test-single', async () => {
-  // const paths = ["get:/api/v1/markets/{marketId}/dataversion/{dataversion}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**"];
-  const paths = [
-    // 'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
-    "get:/api/v1/markets>res:r>array:#/c/s/Market>obj:type:#/c/s/Market>prop:scalar:country",
-  ]
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 1, false, true, undefined, true);
+// test('test-single', async () => {
+//   // const paths = ["get:/api/v1/markets/{marketId}/dataversion/{dataversion}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**"];
+//   const paths = [
+//     // 'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
+//     "get:/api/v1/markets>res:r>array:#/c/s/Market>obj:type:#/c/s/Market>prop:scalar:country",
+//   ]
+//   await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 1, false, true, undefined, true);
+// });
+
+test('test_064_versions_parse', () => {
+  assert.deepStrictEqual(parseVersion('v0.4'), { major: 0, minor: 4 });
+  assert.deepStrictEqual(parseVersion('v2.12'), { major: 2, minor: 12 });
+  assert.deepStrictEqual(parseVersion('v2.14.1'), { major: 2, minor: 14, patch: 1 });
+  for (const bad of ['2.11', 'v2', 'vx.y', 'v0.4-preview']) {
+    assert.throws(() => parseVersion(bad), /Invalid version/);
+  }
 });
