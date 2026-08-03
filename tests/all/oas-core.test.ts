@@ -1011,6 +1011,32 @@ test('test_empty_response_alongside_a_selectable_body', async () => {
   assert.ok(!/type \w+Response \{\s*\}/.test(schema!), 'no empty response type is written');
 });
 
+test('test_inline_array_wrapping_another_array_unwraps_to_the_real_element', async () => {
+  // `messages: { type: array, items: { items: … } }` — the inner schema's only key is `items`, so it
+  // is a wrapper, not an element (slack `get:/conversations.replies`). Left alone it made the
+  // field reference a type nobody defines and flattened the element's fields into the parent's
+  // selection, unbracketed. Sibling of #46, which covered only the `$ref` form.
+  // see docs/issues.md #52
+  const schema = await runOasTest('nested-array-items.yaml', ['get:/wrapper-array>**'], 2, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/messages: \[MessagesUnion\]/.test(schema!), 'the field names the type that is defined');
+  assert.ok(/^type MessagesUnion /m.test(schema!), 'that type is emitted');
+  assert.ok(/messages \{/.test(schema!), 'the element nests inside braces in the selection');
+});
+
+test('test_genuine_array_of_arrays_stays_nested', async () => {
+  // The guard for the test above: an explicit inner `type: array` is a real list of lists (docker's
+  // `top`, one array of column values per process), NOT a wrapper — unwrapping it would publish a
+  // shape the service never sends. `processes` is dropped today for a separate reason (an array of
+  // arrays of plain values has no leaf to select), so what this pins is that it never appears
+  // flattened. Relaxing the unwrap test to accept `type: array` makes it appear, and fails here.
+  // see docs/issues.md #52
+  const schema = await runOasTest('nested-array-items.yaml', ['get:/matrix>**'], 2, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(!/processes: \[String\]/.test(schema!), 'the matrix must not be flattened into one list');
+  assert.ok(/titles: \[String\]/.test(schema!), 'the genuinely flat sibling is unaffected');
+});
+
 test('test_same_name_fields_not_cut_as_circular', async () => {
   // docs/issues.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
   // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing

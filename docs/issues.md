@@ -2595,3 +2595,73 @@ Narrowing the scope back to the op fails it.
 **AST:** none — the node tree is untouched; this only changes which paths the collector selects.
 **Refs:** `src/oas/generator/typesCollector.ts` (`PathsCollector.collectExpandedPaths`). Related:
 #32 (the fallback this generalises), #50 (the other half of the empty-block family).
+
+## 52 · An array whose items wrap another array, written inline, breaks the field name and its selection — ✅ Fixed (working tree)
+
+**Symptom:** a list field points at a type nobody defines, and the element's fields are written into
+the parent's selection with no braces around them, so rover reports `SELECTED_FIELD_NOT_FOUND` for
+each of them. Found on `slack.yaml get:/conversations.replies` after #50 gave the `anyOf` its
+members; slack has 5 sites of this shape.
+
+**OAS** — the inner schema's only key is `items`, so it wraps the element rather than being it:
+```yaml
+messages:
+  type: array
+  items:                    # no `type`, no `properties` — only `items`
+    items:
+      anyOf: [ {…}, {…} ]
+```
+slack's own example payload is one level — `"messages": [ {…}, {…} ]` — so the extra level is an
+artifact of how the spec was generated, not something the service sends.
+
+**Example**:
+```graphql
+# before
+type ConversationsRepliesResponse { messages: [messages]! }   # ✗ nothing is named `messages`
+type MessagesUnion { lastRead: String, … }                    # the real definition, other name
+selection: """ messages      lastRead: "last_read" … """      # ✗ no braces: the element's fields
+                                                              #   read as the parent's own
+
+# after
+type ConversationsRepliesResponse { messages: [MessagesUnion]! }
+selection: """ messages { lastRead: "last_read" … } """
+```
+
+**Cause:**
+- A property's `items` is expected to be the element itself. Here it is another array, so the tree
+  carries an extra level:
+  ```
+  …>prop:array:#messages>array:messagesUnion>union:type:messagesUnion>obj:type:[inline:messagesUnion]>…
+  ```
+- `PropArray.getValue` then reads the inner array's name — inherited from the property, `messages` —
+  instead of the element's real name two levels down.
+- `PropArray.select`'s brace test asks `T.isContainer`, which is true for objects, unions and maps
+  but never for an array id, so no `{`/`}` is written.
+- This is #46's defect exactly. #46 fixed it only where the wrapper arrives through a `$ref` to a
+  component that is itself a list; written inline, nothing handled it.
+
+**Fix:** the same helper, `Factory.unwrapRedundantArrayItems`, gained a branch for the inline form:
+when `items` has `items` of its own, no `type`, and no `properties`, take the inner one.
+
+**The inline test is stricter than the `$ref` one, on purpose.** An explicit `type: array` there is
+a real list of lists and must stay nested — docker's `top` (one array of column values per process),
+digitalocean's monitoring `[timestamp, value]` pairs, box's `name_conflicts`. A scan of the corpus
+splits cleanly: 5 wrapper sites, all `type`-less, all slack; 11 genuine sites across 6 specs, all
+with an explicit `type: array`. Accepting both would have corrupted the 11 to fix the 5. Note this
+is deliberately narrower than the implied-array rule in `fromSchema` (#4), which treats a missing
+`type` and `type: array` alike.
+
+**Tests:** `tests/resources/oas/nested-array-items.yaml` carries both halves — `/wrapper-array`
+(the artifact, mirroring slack) and `/matrix` (a genuine list of lists, mirroring docker `top`).
+`test_inline_array_wrapping_another_array_unwraps_to_the_real_element` asserts the field names the
+type that is defined and that the element nests inside braces;
+`test_genuine_array_of_arrays_stays_nested` asserts the matrix is never flattened to a single list.
+Both in `tests/all/oas-core.test.ts`, composing via rover. Dropping the branch fails the first;
+relaxing the test to accept `type: array` fails the second, so the restriction is load-bearing.
+
+**AST:** a shape change — the intermediate `Arr` is gone, so `PropArray.items` is again always the
+real element, the invariant every call site already assumed. Same as #46.
+**Refs:** `src/oas/nodes/factory.ts` (`Factory.unwrapRedundantArrayItems`),
+`src/oas/nodes/propArray.ts` (`getValue`, `select`/`needsBrackets` — unchanged, they work once the
+invariant holds). Related: #46 (the `$ref` form of the same defect), #50 (which made slack's union
+non-empty and so exposed this), #4 (the implied-array rule this deliberately does not mirror).

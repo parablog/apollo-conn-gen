@@ -267,18 +267,33 @@ export class Factory {
     return arr;
   }
 
-  // An array's items can point at a schema that is itself an array (docker-engine):
+  // An array's items sometimes hold another array instead of the real element — a property's items
+  // must always be the element itself, so take the inner one. Two ways a spec writes it:
+  //
+  // through a `$ref` to a component that is itself a list (docker-engine). see docs/issues.md #46
   //   Containers:       { type: array, items: { $ref: '#/…/ContainerSummary' } }
   //   ContainerSummary: { type: array, items: { …the real object… } }
-  // The payload is still one list of objects, so take the inner items — a property's items must
-  // always be the real element. see docs/issues.md #46
+  //
+  // inline, as a wrapper holding nothing but `items` (slack). see docs/issues.md #52
+  //   messages: { type: array, items: { items: { anyOf: [ … ] } } }
+  //
+  // Inline needs the stricter test: an explicit `type: array` there is a real list of lists (docker
+  // `top` rows, metric [time, value] pairs) and must stay nested, so only a `type`-less wrapper with
+  // no fields of its own unwraps. A named component is treated as the "list of X" artifact it is.
   private static unwrapRedundantArrayItems(
     context: OasContext,
     items: SchemaObject | ReferenceObject,
   ): SchemaObject | ReferenceObject {
-    if (!items || !('$ref' in items)) {
+    if (!items) {
       return items;
     }
+
+    if (!('$ref' in items)) {
+      const wrapped = _.get(items, 'items') as SchemaObject | undefined;
+      const isWrapper = wrapped != null && items.type == null && _.isEmpty(items.properties);
+      return isWrapper ? wrapped : items;
+    }
+
     const resolved = context.lookupRef(items.$ref as string);
     const resolvedItems = resolved && (_.get(resolved, 'items') as ArraySchemaObject | undefined);
     if (resolvedItems && (resolved!.type === 'array' || resolved!.type == null)) {
