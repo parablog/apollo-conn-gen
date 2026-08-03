@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.16.0]
+
+### Changed
+- Added 'kind' to union (e.g.: `union:type:LineUnion`) for input bodies. Issue #48.
+
+### Fixed
+- The same `oneOf` used by a request body and by a response was written only once, so the response
+  referred to a type that was never defined; found in QuickBooks mutations, issue #48.
+- A real union listed its members, and matched `__typename`, under the raw `$ref` name rather than
+  the name each member is written as, so a snake_case component made every member field
+  unresolvable to rover; found in ably (`http_rule_response`), issue #43.
+- A merged union whose members gave one field name two different kinds (an enum in one, a plain
+  string in another) emitted the field twice resulting in invalid SDL. Incompatible kinds now
+  degrade to the `JSON` scalar fallback; same-kind collisions keep the first member as before.
+  TMF717, issue #44.
+- A schema named `Query`, `Mutation` or `Subscription` collided with the GraphQL root type and
+  failed compose; those three names are now suffixed. Stripe, issue #45.
+- An array whose items held another array nested a second array node, so the field named a type
+  that was never defined and its selection lost its braces. A genuine list of lists still stays
+  nested. Found in docker-engine (`ContainerSummary`) and slack (`messages`), issues #46 and #52.
+- An op whose response is a bare array of scalars was dropped from the schema entirely — no field
+  at all, not even a degraded one. Spotify, issue #47.
+- A request body written as an `anyOf` with no `oneOf` lost every member, emitting an input type
+  with no fields and sending nothing. Digitalocean, issue #50.
+- A write whose response object has no fields emitted an empty type and an empty selection. Turning
+  a fieldless object into `JSON` only happened when the whole operation had nothing to select, and
+  a write's body nearly always does. The response and the body are now checked separately. Asana,
+  issue #51.
+
 ## [0.15.3]
 
 ### Fixed
