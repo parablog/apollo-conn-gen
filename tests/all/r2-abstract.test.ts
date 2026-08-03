@@ -391,13 +391,14 @@ test('test_R2_union_merge_kind_collision_degrades_to_json', async () => {
 
 // see docs/issues.md #48
 test('test_R2_union_shared_by_body_and_response_emits_both_flavours', async () => {
-  // QuickBooks reaches the same `Line` oneOf twice: as the POST body and as the response. Both
-  // flavours must be defined — the response's `line: [LineUnion]` used to reference a missing type.
+  // The same `Line` oneOf is reached twice: as the POST body and as the response (QuickBooks
+  // `post:/v3/company/{realm-id}/bill`). Both flavours must be defined — the response's
+  // `line: [LineUnion]` used to reference a missing type.
   const schema = await runOasTest(
-    'quickbooks-online.yaml',
-    ['post:/v3/company/{realm-id}/bill>**'],
-    15,
-    14,
+    'union-shared-body-and-response.yaml',
+    ['post:/bills>**'],
+    1,
+    4,
     false,
     false,
     undefined,

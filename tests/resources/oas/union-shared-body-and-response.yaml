@@ -1,0 +1,67 @@
+openapi: 3.0.0
+info:
+  title: The same oneOf reached from a request body and from a response
+  version: 1.0.0
+paths:
+  # `Line` is the same list of variants in the schema you send and in the schema you get back
+  # (QuickBooks `post:/v3/company/{realm-id}/bill`). Both flavours have to be written — the response
+  # used to reference a type that was never defined, because the two collided on one id.
+  # see docs/issues.md #48
+  /bills:
+    post:
+      operationId: createBill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillCreateObject'
+      responses:
+        '200':
+          description: The created bill.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+components:
+  schemas:
+    BillCreateObject:
+      type: object
+      properties:
+        vendorRef:
+          type: string
+        line:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/ItemBasedExpenseLine'
+              - $ref: '#/components/schemas/AccountBasedExpenseLine'
+    Bill:
+      type: object
+      properties:
+        id:
+          type: string
+        line:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/ItemBasedExpenseLine'
+              - $ref: '#/components/schemas/AccountBasedExpenseLine'
+    ItemBasedExpenseLine:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: number
+        detailType:
+          type: string
+    AccountBasedExpenseLine:
+      type: object
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        detailType:
+          type: string

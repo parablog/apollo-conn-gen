@@ -36,6 +36,22 @@ KNOWN_ISSUES.md
 /tests/resources/oas/github.yaml
 /tests/resources/oas/omni.yaml
 /tests/resources/oas/confluence.json
+/tests/resources/oas/1password-connect.json
+/tests/resources/oas/1password-events.json
+/tests/resources/oas/ably-control.json
+/tests/resources/oas/amadeus-flight-offers.json
+/tests/resources/oas/docker-engine.json
+/tests/resources/oas/nasa-apod.json
+/tests/resources/oas/nytimes-article-search.json
+/tests/resources/oas/nytimes-books.json
+/tests/resources/oas/openfigi.json
+/tests/resources/oas/plaid.json
+/tests/resources/oas/quickbooks-online.yaml
+/tests/resources/oas/spotify.json
+/tests/resources/oas/square.json
+/tests/resources/oas/stripe.json
+/tests/resources/oas/trello.json
+/tests/resources/oas/visualcrossing-weather.json
 
 # Local composer binary — not our code, not committed.
 /tools/local/
