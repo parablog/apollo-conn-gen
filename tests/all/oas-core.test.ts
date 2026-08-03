@@ -994,6 +994,23 @@ test('test_anyof_only_body_keeps_its_members', async () => {
   assert.ok(/body: """[^"]*\bpriority\b/.test(schema!), 'the members reach the body selection');
 });
 
+test('test_empty_response_alongside_a_selectable_body', async () => {
+  // A write answering with an object that has no fields (asana's success-is-the-status-code
+  // convention). The free-form-JSON fallback only fired when the WHOLE op had nothing selectable,
+  // and this op's body does, so the response was written as an empty `type … { }` with an empty
+  // selection. see docs/issues.md #51
+  const schema = await runOasTest(
+    'empty-response-with-body.yaml',
+    ['post:/goals/{goalId}/removeSupportingRelationship>**'],
+    1,
+    4,
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/\bdata: JSON\b/.test(schema!), 'the empty response object degrades to JSON');
+  assert.ok(/selection: """\s*data\s*"""/.test(schema!), 'the selection asks for the field');
+  assert.ok(!/type \w+Response \{\s*\}/.test(schema!), 'no empty response type is written');
+});
+
 test('test_same_name_fields_not_cut_as_circular', async () => {
   // docs/issues.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
   // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing

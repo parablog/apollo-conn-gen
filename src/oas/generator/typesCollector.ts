@@ -289,13 +289,19 @@ class PathsCollector {
         }
       });
 
-      // an op whose expansion found nothing selectable still has fields to write when its only
-      // content is a free-form JSON object (asana: `data: $ref EmptyResponse` -> `data: JSON`,
-      // emitted as an EMPTY invalid type before) — take those fields as the leaves. Scoped to
-      // otherwise-empty ops on purpose: doing it everywhere diverged the selections of types
-      // shared across connectors. see docs/issues.md #32
-      if (!Array.from(newSelection).some((p) => p.startsWith(root.path()))) {
-        T.traverse(root, (child) => {
+      // a side of the op whose expansion found nothing selectable still has fields to write when
+      // its only content is a free-form JSON object (asana: `data: $ref EmptyResponse` ->
+      // `data: JSON`, emitted as an EMPTY invalid type before) — take those fields as the leaves.
+      // Per side, not per op: a write whose body is selectable can still answer with an empty
+      // object, and checking the op as a whole never fires for it. see docs/issues.md #32, #51
+      const sides = T.isOp(root) ? root.children : [root];
+      for (const side of sides) {
+        if (Array.from(newSelection).some((p) => p.startsWith(side.path()))) {
+          continue;
+        }
+        // scoped to an otherwise-empty side on purpose: doing it everywhere diverged the
+        // selections of types shared across connectors. see docs/issues.md #32
+        T.traverse(side, (child) => {
           if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
             newSelection.add(child.path());
           }

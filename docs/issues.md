@@ -2537,3 +2537,61 @@ kinds; node ids are unchanged.
 **Refs:** `src/oas/nodes/factory.ts` (`Factory.createContainerType`). Related: #20 (the narrow
 `anyOf` case that already worked), #25 (the merged-object form these bodies take), #51 (the other
 half of the empty-block family, fixed alongside this).
+
+## 51 · An empty response object is left empty when the op's body is selectable — ✅ Fixed (working tree)
+
+**Symptom:** a write whose response is an object with no fields emits `type … { }` and
+`selection: """ """` — invalid, and rover rejects it with `INVALID_SELECTION`. Only mutations are
+affected. Seen across `asana.yaml`, e.g. `post:/goals/{goal_gid}/removeSupportingRelationship`;
+asana declares 30 such writes.
+
+**OAS** — asana's "nothing to return" convention, an object whose schema declares no properties:
+```yaml
+responses:
+  '200':
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            data: { $ref: '#/components/schemas/EmptyResponse' }
+components:
+  schemas:
+    EmptyResponse:      # "An empty object. Some endpoints do not return an object on success."
+      type: object
+```
+
+**Example**:
+```graphql
+# before
+type CreateGoalsRemoveSupportingRelationshipResponse { }   # ✗ INVALID_SELECTION
+selection: """ """
+
+# after
+type CreateGoalsRemoveSupportingRelationshipResponse { data: JSON }
+selection: """ data """
+```
+
+**Cause:**
+- #32 already covers this shape: when an op's expansion finds nothing selectable, its fieldless
+  objects are taken as the leaves and written as `JSON`.
+- That check asked whether the **whole op** had nothing selected. A write has two sides, and its
+  body usually does have something — so the check passed and the fallback never ran for the
+  response. The AST shows the split, one side selectable and the other not:
+  ```
+  post:…>body:b>obj:input:Input>prop:obj:data>obj:input:#/c/s/…Request>prop:scalar:supporting_resource
+  post:…>res:r>obj:type:createGoals…Response>prop:obj:data>obj:type:#/c/s/EmptyResponse   <- no leaf
+  ```
+- GET ops never showed it: with no body, "the op" and "the response" are the same thing.
+
+**Fix:** ask the question per side instead of per op — for each of the op's own children (`res`,
+`body`), if nothing under that side was selected, run the same fieldless-object traversal there. The
+mechanism is #32's, unchanged; only the scope it is applied at moved.
+
+**Tests:** `test_empty_response_alongside_a_selectable_body` in `tests/all/oas-core.test.ts` —
+asserts `data: JSON` on the response type and `data` in the selection, composing via rover.
+Narrowing the scope back to the op fails it.
+
+**AST:** none — the node tree is untouched; this only changes which paths the collector selects.
+**Refs:** `src/oas/generator/typesCollector.ts` (`PathsCollector.collectExpandedPaths`). Related:
+#32 (the fallback this generalises), #50 (the other half of the empty-block family).
