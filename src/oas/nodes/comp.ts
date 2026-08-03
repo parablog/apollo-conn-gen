@@ -1,4 +1,4 @@
-import { Factory, Get, IType, Prop, ReferenceObject, Res, T, Type } from './internal.js';
+import { Factory, Get, IType, Param, Prop, ReferenceObject, Res, T, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';
@@ -39,7 +39,7 @@ export class Composed extends Type {
     trace(context, '-> [composed:visit]', 'in: ' + (this.name == null ? '[object]' : this.name));
 
     // If not in the context of a Composed or Param, log the composed schema.
-    if (!context.inContextOf('Composed', this) && !context.inContextOf('Param', this)) {
+    if (!context.inContextOf(Composed, this) && !context.inContextOf(Param, this)) {
       trace(context, '[comp]', '   in composed schema: ' + this.name);
     }
 
@@ -73,7 +73,7 @@ export class Composed extends Type {
     context.enter(this);
     trace(context, '-> [comp::generate]', `-> in: ${this.name}`);
 
-    if (context.inContextOf('Res', this)) {
+    if (context.inContextOf(Res, this)) {
       writer.write(Naming.genTypeName(this.name));
       return;
     }

@@ -1,4 +1,4 @@
-import { Arr, Factory, IType, Type, T, Scalar } from './internal.js';
+import { Arr, Factory, IType, Res, Type, T, Scalar } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -53,7 +53,7 @@ export class Map extends Type {
       return;
     }
 
-    if (context.inContextOf('Res', this)) {
+    if (context.inContextOf(Res, this)) {
       writer.write(Naming.genTypeName(this.name));
       return;
     }

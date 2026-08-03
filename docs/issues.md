@@ -2678,3 +2678,79 @@ real element, the invariant every call site already assumed. Same as #46.
 `src/oas/nodes/propArray.ts` (`getValue`, `select`/`needsBrackets` — unchanged, they work once the
 invariant holds). Related: #46 (the `$ref` form of the same defect), #50 (which made slack's union
 non-empty and so exposed this), #4 (the implied-array rule this deliberately does not mirror).
+
+## 53 · A bundled build asks "where am I?" by class name, so every context check answers no — ✅ Fixed (working tree)
+
+**Symptom:** an enum-typed query parameter is written as a whole enum *definition* inside the
+argument list — invalid GraphQL. Reported from the web tool on petstore `get:/pet/findByStatus`.
+The same spec run from Node is correct, which is why the whole suite stayed green.
+
+**OAS** — an ordinary enum query param:
+```yaml
+parameters:
+  - name: status
+    in: query
+    schema:
+      type: string
+      enum: [available, pending, sold]
+      default: available
+```
+
+**Example**:
+```graphql
+# before, in any bundled build
+petFindByStatus(status: enum Enum { available, pending, sold} = "available"): [Pet]   # ✗
+
+# after (and in an unbundled build all along)
+petFindByStatus(status: String = "available"): [Pet]
+```
+
+**Cause:**
+- A node asks whether it is being visited from inside another with
+  `context.inContextOf('Param', this)`.
+- That compared **the class's runtime name**: `this.stack[i].constructor.name === 'Param'`.
+- Bundlers rename classes. `Param` becomes `t`, so the comparison is false and the check answers
+  "no" — silently, with no error anywhere.
+- `En.generate` then takes its non-param branch and writes the enum definition instead of the
+  scalar an argument needs. The name `Enum` is the giveaway: a param's enum node is built as
+  `new En(parent, 'enum', …)`, and `genTypeName('enum')` is `Enum`.
+- **All 14 call sites were affected**, not just this one — `union.ts` (4), `comp.ts` (3), `en.ts`
+  (3), `obj.ts` (2), `map.ts`, `ref.ts`. The inline enum was simply the most visible of them.
+  Anything that bundles the package — the web app's production build, the desktop build, any
+  consuming app — got quietly wrong SDL.
+
+Proven by mangling the real sources with esbuild and running the real fixture:
+```
+unbundled:            petFindByStatus(status: String = "available"): [Pet]
+minified identifiers: petFindByStatus(status: enum Enum {
+```
+
+**Fix:** pass the class instead of its name and test with `instanceof`, which survives renaming:
+```ts
+public inContextOf<T extends IType>(type: new (...args: never[]) => T, node: IType): boolean
+```
+`instanceof` is already how the rest of the code identifies nodes (`T.isLeaf`,
+`Union.isTopLevelResponse`, `allOfBase.ts`), so the call sites read `inContextOf(Param, this)`. A
+mistyped class is now a compile error rather than a silent `false`. Only four classes are ever
+asked for (`Param`, `Res`, `Composed`, `Union`); each of the six files already value-imports the
+node barrel, so no new module edges and no cycle. `instanceof` also matches subclasses where the
+name check was exact — none of the four is extended, so behaviour is unchanged (the corpus sweep
+confirms it).
+
+**Also removed:** `oasGen.ts`'s `constructor.name === 'Webhook'` guard. It had the same defect but
+was dead: `visit()` only reads `getPaths()`, which yields operations only — webhooks come from
+`getWebhooks()`, never called here. It was pretending to reject webhooks when they are ignored.
+
+**Tests:** `tests/all/bundled.test.ts` — builds its own esbuild bundle from `src/` with
+`minifyIdentifiers` (`packages: 'external'`, so only our code is renamed and `oas-normalize`'s
+dynamic requires stay out of it), imports it, and asserts the argument is `String`. It builds its
+own artifact so it works on a bare checkout and can never silently skip. Restoring the name
+comparison fails it while every unbundled test stays green — no other test can see this class of
+bug. Plus, unbundled: `test_enum_query_param_is_a_scalar_argument` pins the intended output, and
+`test_webhooks_are_ignored_not_generated` (`tests/resources/oas/webhooks.yaml`) asserts the parser
+really does carry a webhook *and* that only `get:/ping` is collected.
+
+**AST:** none — no node shape or id changes; only how the context stack is interrogated.
+**Refs:** `src/oas/oasContext.ts` (`inContextOf`), `src/oas/nodes/en.ts` (`En.generate`, the visible
+symptom), plus the call sites in `union.ts`, `comp.ts`, `obj.ts`, `map.ts`, `ref.ts`, and
+`src/oas/oasGen.ts` (`visitPath`, dead guard removed).
