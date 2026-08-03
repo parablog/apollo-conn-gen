@@ -81,9 +81,10 @@ export class TypesCollector {
     // but the connector selection is assembled from ALL routes: it can ask for a field the
     // written node doesn't have, and composition fails (SELECTED_FIELD_NOT_FOUND).
     //
-    // e.g. (confluence, one op): `Space` is reached twice —
-    //   via Content: its `history` field was removed (history loops back to Content)
-    //   via Results: `history` kept — and that route's selection asks for it
+    // e.g. confluence `get:/wiki/rest/api/content/{id}/restriction`: `Space` is reached twice —
+    //   via `content`:      that route goes through Content, so Space's `homepage` was removed
+    //   via `restrictions`: it doesn't, so `homepage` is kept — and that route's selection asks for it
+    // both routes are written out in full in the issue entry.
     //
     // The routes are already spelled out in `expanded`, so for each removed field we look for a
     // selection path carrying the real field under the same type id, walk that path to its node,
@@ -270,13 +271,10 @@ class PathsCollector {
           // SDL and the selection) instead of silently dropped. see docs/issues.md #10
           newSelection.add(child.path());
         } else if (child instanceof Scalar && child.parent instanceof Res) {
-          // a response that resolves directly to a bare scalar (no property/array/map wrapper) is
-          // a leaf too — e.g. a write op that just returns `true` (adobe commerce) or a bare token
-          // string (petstore `/user/login`). Without this the op has nothing selectable and is
-          // dropped from the schema entirely (not degraded — silently absent). Res.select already
-          // emits `$` for it; only the leaf-detection here was missing the case. Scoped to a direct
-          // Res child on purpose — a bare scalar nested deeper (e.g. inside a Map's value) has its
-          // own separate, unrelated selection gaps; this fix doesn't touch those.
+          // a response that is just a value, no object around it — a write answering `true` (adobe
+          // commerce), or a token string (petstore `/user/login`):
+          //   responses: { '200': { schema: { type: boolean } } }
+          // Nothing to pick apart, so the value itself is the leaf. see docs/issues.md #32
           newSelection.add(child.path());
         } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
           // the case above with a list around it — a response that is just an array of values,

@@ -465,6 +465,19 @@ emitted (first wins):   type Space { # history … }     selection (path B): …
                         → SELECTED_FIELD_NOT_FOUND     goal: emitted Space = union → history survives
 ```
 
+**The two routes** (`get:/wiki/rest/api/content/{id}/restriction`, re-checked 2026-07-30). They part
+company at `ContentRestriction`, and only the first one travels through `Content` — which is what
+makes `homepage` loop back and get cut there:
+```
+… >obj:type:#/c/s/ContentRestriction>prop:obj:content>obj:type:#/c/s/Content>prop:obj:history> …
+  … >obj:type:#/c/s/User>prop:obj:personalSpace>obj:type:#/c/s/Space>prop:circular-ref:#homepage
+… >obj:type:#/c/s/ContentRestriction>prop:obj:restrictions> … >obj:type:#/c/s/UserArray
+  >prop:array:#results>obj:type:#/c/s/User>prop:obj:personalSpace>obj:type:#/c/s/Space>prop:obj:homepage
+```
+The field it bites **today** is `homepage`: across all 65 confluence GET ops, `Space.homepage` is cut
+351 times and `Space.history` never — `history` keeps its slot and the cut inside it lands on
+`history.createdBy`. The June symptom above quotes `history`; same mechanism, different field.
+
 **Cause:**
 - #10's cycle cut is **per expansion path**: `Space` under a `Content` ancestor has `history`/`homepage`
   cut; a `Space` instance on a path without that ancestor keeps them.
