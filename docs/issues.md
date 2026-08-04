@@ -2754,3 +2754,73 @@ really does carry a webhook *and* that only `get:/ping` is collected.
 **Refs:** `src/oas/oasContext.ts` (`inContextOf`), `src/oas/nodes/en.ts` (`En.generate`, the visible
 symptom), plus the call sites in `union.ts`, `comp.ts`, `obj.ts`, `map.ts`, `ref.ts`, and
 `src/oas/oasGen.ts` (`visitPath`, dead guard removed).
+
+## 58 · A discriminated `oneOf` whose members share an `allOf` base emits an orphan base type — ✅ Fixed (working tree)
+
+**Symptom:** composition fails with one `CONNECTORS_UNRESOLVED_FIELD` per base field. The base is
+emitted as a concrete `type` that no field or union member references, so nothing resolves it.
+Interface promotion — which exists for exactly this shape — silently did not fire.
+
+**OAS:**
+```yaml
+PageBase:     { type: object, required: [_id], properties: { _id: …, _type: …, title: … } }
+ResourcePage: { allOf: [ { $ref: '…/PageBase' }, { properties: { discipline: … } } ] }
+OwnerPage:    { allOf: [ { $ref: '…/PageBase' }, { properties: { templateVariant: … } } ] }
+AnyPage:
+  oneOf: [ { $ref: '…/ResourcePage' }, { $ref: '…/OwnerPage' } ]
+  discriminator: { propertyName: _type, mapping: { resourcePage: …, ownerPage: … } }
+```
+Response is `[AnyPage]` — top level, so the union is *not* flattened by #38.
+
+**Example:**
+```graphql
+# now
+union AnyPage = ResourcePage | OwnerPage
+type PageBase { id: String!  type: String  title: String }   # ✗ orphan, nothing selects it
+# -> CONNECTORS_UNRESOLVED_FIELD: PageBase.id / .type / .title
+
+# wanted (either)
+interface PageBase { … }                       # promotion fires
+type ResourcePage implements PageBase { … }
+# or: no PageBase type at all, base flattened into each member as it is without the oneOf
+```
+
+**Cause:** the response is a **list** of the union, and promotion only ever looked at the whole
+answer. `candidateUnions` (`src/oas/nodes/allOfBase.ts`) read the response node and asked
+`node instanceof Union`; for `[AnyPage]` that node is the array, so the union one level below was
+never a candidate. None of the three rules ran — which is why nothing was logged, rule 3 being the
+only one that warns. (The earlier guess here, "rules 1 or 2 rejected silently", was wrong.)
+
+The generator already disagreed with itself about this: `Union.isTopLevelResponse`
+(`src/oas/nodes/union.ts`) walks *through* an array on purpose — "the op's response (optionally
+under a bare array)" — and `r2-union-nested-in-list.yaml` marks its array-of-union responses "this
+must stay a real union". Only `candidateUnions` treated `[Union]` as not-a-union.
+
+The same blind spot sat in rule 3 itself, with the opposite effect. `baseUsedExternally` part (a)
+says "any op whose result type unwraps directly to the base" but did no unwrapping, so an op
+answering `[PageBase]` did not count as concrete use. Fixing the first half alone would have made
+that reachable: the base gets promoted anyway and that op returns a list of an interface with no
+`__typename` to match on. Both halves had to move together.
+
+**Fix:** added `T.responseItemType` (`src/oas/nodes/typeUtils.ts`) — the response with any list
+wrappers taken off, as a node — and used it at both sites. The walk already existed inside
+`responseItemSchema`; it now lives in one place and `responseItemSchema` delegates to it (#54).
+Rules 1 and 2 also got a `trace` line on rejection, since their silence is what made the original
+diagnosis point at the wrong rule.
+
+Note plain `allOf` inheritance **without** a `oneOf` is correct: the base is flattened into each
+member, no orphan is emitted, and it composes.
+
+**Tests:** `test_R2_interface_promotes_when_the_union_is_returned_in_a_list` (fixture
+`tests/resources/oas/r2-interface-oneof-list.yaml`) and
+`test_R2_interface_skips_when_the_base_is_returned_in_a_list` (fixture
+`r2-interface-base-in-list.yaml`), both in `tests/all/r2-abstract.test.ts`. Revert-checked one half
+at a time: reverting `candidateUnions` fails both, reverting only `baseUsedExternally` fails the
+second. The second asserts the rule-3 warning, so it pins that rule 3 *ran and rejected* rather than
+just that no interface appeared.
+
+**AST:** no change. Promotion is id-neutral by design (`emitAsInterface` on `Obj`, not a `kind`
+change), and this only alters which unions reach it.
+**Refs:** #38 (nested unions flatten; this one is top-level so it does not), and
+`test_R2_interface_oneof_promotes_and_composes` / `test_R2_interface_skips_when_base_used_concretely`
+in `tests/all/r2-abstract.test.ts` (the promotion path that should have applied).

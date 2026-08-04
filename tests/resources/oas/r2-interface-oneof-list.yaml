@@ -1,0 +1,59 @@
+openapi: "3.0.1"
+info:
+  title: Pages API (interface via oneOf + shared allOf base, returned as a list)
+  version: "1.0.0"
+# see docs/issues.md #58
+# Same shape as r2-interface-oneof.yaml, except the operation answers with a LIST of the union.
+# The list is what broke it: promotion only looked at the response node itself, saw an array rather
+# than a union, and never considered it — so PageBase was emitted as a concrete type nothing
+# referenced and composition failed with CONNECTORS_UNRESOLVED_FIELD per base field.
+paths:
+  /pages:
+    get:
+      summary: List pages, each of which is one of several kinds.
+      responses:
+        '200':
+          description: The pages.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnyPage'
+components:
+  schemas:
+    AnyPage:
+      oneOf:
+        - $ref: '#/components/schemas/ResourcePage'
+        - $ref: '#/components/schemas/OwnerPage'
+      discriminator:
+        propertyName: pageType
+        mapping:
+          resourcePage: '#/components/schemas/ResourcePage'
+          ownerPage: '#/components/schemas/OwnerPage'
+    PageBase:
+      type: object
+      properties:
+        id:
+          type: string
+        pageType:
+          type: string
+        title:
+          type: string
+      required: [id, pageType]
+    ResourcePage:
+      allOf:
+        - $ref: '#/components/schemas/PageBase'
+        - type: object
+          properties:
+            discipline:
+              type: string
+          required: [discipline]
+    OwnerPage:
+      allOf:
+        - $ref: '#/components/schemas/PageBase'
+        - type: object
+          properties:
+            templateVariant:
+              type: string
+          required: [templateVariant]

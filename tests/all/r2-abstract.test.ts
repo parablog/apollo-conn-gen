@@ -96,6 +96,51 @@ test('test_R2_interface_skips_when_base_used_concretely', async () => {
   );
 });
 
+test('test_R2_interface_promotes_when_the_union_is_returned_in_a_list', async () => {
+  // The same shape as test_R2_interface_oneof_promotes_and_composes, except the op answers with a
+  // LIST of the union. The list used to hide it: promotion looked at the response node itself, saw
+  // an array rather than a union, and never considered it — so PageBase was emitted as a concrete
+  // type nothing referenced and composition failed. see docs/issues.md #58
+  const schema = await runOasTest('r2-interface-oneof-list.yaml', ['get:/pages>**'], 1, 4, false, false, undefined, false, false, {
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.14',
+    composeFederationVersion: '2.14.1',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('interface PageBase'), 'shared base promoted to an interface');
+  assert.ok(!/^type PageBase\b/m.test(schema!), 'no orphan concrete base type');
+  assert.ok(schema!.includes('type ResourcePage implements PageBase'), 'ResourcePage implements the interface');
+  assert.ok(schema!.includes('type OwnerPage implements PageBase'), 'OwnerPage implements the interface');
+  assert.ok(/pages: \[PageBase\]/.test(schema!), 'field returns a list of the interface');
+  assert.ok(!/\bunion \w+ =/.test(schema!), 'no union type is emitted');
+  assert.ok(schema!.includes('... pageType->match('), 'abstract-type ->match selection');
+});
+
+test('test_R2_interface_skips_when_the_base_is_returned_in_a_list', async () => {
+  // Rule 3's twin: the base is used concretely by another op, but as `[PageBase]` rather than on
+  // its own. The scan that answers "is the base returned anywhere" has to take the list off too,
+  // or promotion goes ahead and that op returns a list of an interface with nothing to match on.
+  // see docs/issues.md #58
+  let schema: string | undefined;
+  const warnings = await captureWarnings(async () => {
+    const gen = await OasGen.fromFile(`${oasBasePath}/r2-interface-base-in-list.yaml`, {
+      skipValidation: false,
+      showParentInSelections: false,
+      connectorSpecVersion: 'v0.4',
+      federationVersion: 'v2.14',
+    });
+    await gen.visit();
+    schema = gen.generateSchema(['get:/pages>**', 'get:/page-bases>**']);
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(!/interface PageBase/.test(schema!), 'base returned in a list must NOT be promoted');
+  assert.ok(/union AnyPage = ResourcePage \| OwnerPage/.test(schema!), 'the un-promoted union lists its members');
+  assert.ok(
+    warnings.some((w) => /not promoting .*PageBase.* concrete/.test(w)),
+    `expected a rule-3 skip warning, got: ${warnings.join(' | ')}`,
+  );
+});
+
 test('test_R2_union_without_discriminator_degrades_to_merged_object', async () => {
   // No tag field means `->match` has nothing to dispatch on, so a real union cannot be selected.
   // The abstract pass degrades to the same merged-object form the default pass emits — SDL and

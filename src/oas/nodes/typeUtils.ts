@@ -11,6 +11,7 @@ import {
   PropEn,
   PropScalar,
   ReferenceObject,
+  Res,
   Scalar,
 } from './internal.js';
 import _ from 'lodash';
@@ -122,6 +123,33 @@ export class T {
 
   public static isScalarArray(type: IType) {
     return type instanceof Arr && type.itemsType instanceof Scalar;
+  }
+
+  // What the operation gives back, with the response wrapper removed. A list stays a list.
+  // e.g. (petstore) get:/pet/findByStatus returns a list of pets:
+  //   responses: { '200': { schema: { type: array, items: { $ref: '#/c/s/Pet' } } } }
+  //   get:/pet/findByStatus
+  //    └─ res:r
+  //        └─ array:#/components/schemas/Pet        <- this is what comes back
+  //            └─ obj:type:#/components/schemas/Pet
+  // This is the shape of the whole answer. Callers that want one item use responseItemType.
+  public static responseType(op: Op): IType | undefined {
+    const node: IType | undefined = op.resultType;
+    return node instanceof Res ? node.response : node;
+  }
+
+  // One item of what the operation gives back, with any list wrappers taken off. A list of pages,
+  // each of which is one of several kinds, answers "a page":
+  //   get:/pages
+  //    └─ res:r
+  //        └─ array:#/components/schemas/AnyPage
+  //            └─ union:#/components/schemas/AnyPage    <- this
+  public static responseItemType(op: Op): IType | undefined {
+    let node = T.responseType(op);
+    while (node instanceof Arr) {
+      node = node.itemsType;
+    }
+    return node;
   }
 
   // The occupant is the type already stored under our name: a different shape collides (rename,
