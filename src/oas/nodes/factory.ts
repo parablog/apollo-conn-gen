@@ -248,6 +248,15 @@ export class Factory {
     );
   }
 
+  // What a list holds. An object with no fields becomes JSON — an empty type would take the whole
+  // field with it. e.g. archivedChannels: { type: array, items: { type: object } } -> [JSON]. #56
+  public static fromArrayItems(context: OasContext, parent: IType, items: SchemaObject): IType {
+    if (Factory.isShapelessObject(items)) {
+      return new Scalar(parent, 'JSON', items);
+    }
+    return Factory.fromSchema(context, parent, items);
+  }
+
   private static createArrayType(parent: IType | Res, schema: SchemaObject | null, context: OasContext) {
     // Array schema case.
     let parentName = parent.name;
@@ -261,7 +270,7 @@ export class Factory {
     arr.items = items as ArraySchemaObject;
 
     // TODO: check this
-    arr.itemsType = Factory.fromSchema(context, arr, items);
+    arr.itemsType = Factory.fromArrayItems(context, arr, items);
     arr.add(arr.itemsType); // add it to the children
 
     return arr;
@@ -339,7 +348,7 @@ export class Factory {
 
         const itemsSchema = Factory.unwrapRedundantArrayItems(context, _.get(schemaObj, 'items') as ArraySchemaObject);
         // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
-        const itemsType = Factory.fromSchema(context, array, itemsSchema);
+        const itemsType = Factory.fromArrayItems(context, array, itemsSchema);
 
         array.setItems(itemsType);
         prop = array;

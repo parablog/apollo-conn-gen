@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { OasGen } from '../../src/index.js';
+import { T } from '../../src/oas/nodes/internal.js';
 import './_setup.js';
 
 /// OAS TESTS
@@ -842,6 +843,16 @@ test('test_shapeless_object_schema_becomes_json_scalar', async () => {
   assert.ok(/publicChannels: \[JSON\]/.test(schema!), 'empty {} items -> [JSON]');
 });
 
+test('test_typeless_object_items_degrade_to_json', async () => {
+  // `items: { type: object }` — an object with a declared type but no properties — degrades to
+  // [JSON] exactly like `items: {}` and `additionalProperties: false` in the test above. It used to
+  // be dropped from the emitted type entirely. Same fixture, `archivedChannels`.
+  // see docs/issues.md #56
+  const schema = await runOasTest('shapeless-object.yaml', ['get:/messages>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/archivedChannels: \[JSON\]/.test(schema!), 'items:{type:object} should degrade to [JSON]');
+});
+
 test('test_response_allof_snake_path_def_ref_names_converge', async () => {
   // A response-root allOf on a snake_case path synthesizes a name carrying the `_`
   // (`v2…Billing_historyResponse`); the definition (Composed.generate) used upperFirst(getRefName)
@@ -1288,3 +1299,9 @@ test('test_http_block_layout_with_all_members', async () => {
   assert.ok(/\n {6}\}\n/.test(http), 'http closing brace at indent 6 (aligned under http:)');
   assert.ok(!/,\n/.test(http), 'no commas between http members');
 });
+
+
+// A list response and a single-object response, through the response helpers. They answer different
+// questions and both are needed: `responseType` is the shape of the whole answer, `responseItemType`
+// and `responseItemSchema` are the shape of one item. Anything asking "what kind of thing does this
+// op return" wants the item — reading the whole answer instead is what hid #58 for a list of unions.

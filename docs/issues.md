@@ -2755,6 +2755,51 @@ really does carry a webhook *and* that only `get:/ping` is collected.
 symptom), plus the call sites in `union.ts`, `comp.ts`, `obj.ts`, `map.ts`, `ref.ts`, and
 `src/oas/oasGen.ts` (`visitPath`, dead guard removed).
 
+## 56 · `items: { type: object }` drops the field instead of degrading to `[JSON]` — ✅ Fixed (working tree)
+
+**Symptom:** the field is absent from the emitted type. Valid OpenAPI, no warning, missing field. Its
+two neighbours in the same family both degrade honestly: `items: {}` and
+`items: { additionalProperties: false }` each give `[JSON]` (#19). Only `type: object` with no
+properties is dropped.
+
+**OAS:**
+```yaml
+typedObjs:  { type: array, items: { $ref: '#/components/schemas/Small' } }   # -> [Small]
+emptyObjs:  { type: array, items: {} }                                      # -> [JSON]
+bareObjs:   { type: array, items: { type: object } }                        # -> field vanishes
+```
+
+**Example:**
+```graphql
+# now
+type Thing { emptyObjs: [JSON]  id: String!  typedObjs: [Small] }   # bareObjs gone
+# wanted
+type Thing { bareObjs: [JSON]  emptyObjs: [JSON]  id: String!  typedObjs: [Small] }
+```
+
+**Cause:** the order of the checks in `Factory.fromSchema`. The `type === 'object'` check runs before
+the shapeless-object one, so the schema goes to `createContainerType` and becomes an `Obj` with no
+fields — which is skipped when the schema is written, and never put in the selection either. The
+other two spellings have no `type` at all, fall past that check, and reach the JSON fallback; that
+is why only this one broke. Exactly what #19's **Care** note warned about.
+
+**Fix:** `Factory.fromArrayItems` — what a list holds, sending an object with no fields to the JSON
+scalar and everything else to `fromSchema`. Called from the only two places array items are built
+(`createArrayType`, and `fromProp`'s array branch).
+
+Deliberately narrow. Moving the shapeless check up inside `fromSchema` would look tidier, but that
+function is called from 13 places, and the same empty object is harmless in most of them — inside
+an `allOf`/`oneOf` list it would become a scalar where a container is expected. Only in array items
+does it cost the whole field.
+
+**Tests:** `test_typeless_object_items_degrade_to_json` in `tests/all/oas-core.test.ts`, fixture
+`tests/resources/oas/shapeless-object.yaml` (property `archivedChannels`, alongside the existing
+`privateChannels` / `publicChannels` cases). The `todo` marker is dropped.
+
+**AST:** the same shape as #19 — a `Scalar` (JSON) in place of an empty `Obj`.
+**Refs:** #19 (the shapeless-object family this belongs to). Found the same way as #55: a nested object
+emitted as bare `type: object` loses its field with no signal.
+
 ## 58 · A discriminated `oneOf` whose members share an `allOf` base emits an orphan base type — ✅ Fixed (working tree)
 
 **Symptom:** composition fails with one `CONNECTORS_UNRESOLVED_FIELD` per base field. The base is
@@ -2824,3 +2869,4 @@ change), and this only alters which unions reach it.
 **Refs:** #38 (nested unions flatten; this one is top-level so it does not), and
 `test_R2_interface_oneof_promotes_and_composes` / `test_R2_interface_skips_when_base_used_concretely`
 in `tests/all/r2-abstract.test.ts` (the promotion path that should have applied).
+
