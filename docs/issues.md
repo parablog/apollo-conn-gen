@@ -2755,6 +2755,66 @@ really does carry a webhook *and* that only `get:/ping` is collected.
 symptom), plus the call sites in `union.ts`, `comp.ts`, `obj.ts`, `map.ts`, `ref.ts`, and
 `src/oas/oasGen.ts` (`visitPath`, dead guard removed).
 
+## 55 · A field that is both `required` and `nullable: true` is emitted non-null — ✅ Fixed (working tree)
+
+**Symptom:** the router errors on a legitimately-null value. In OpenAPI `required` and `nullable` are
+orthogonal — `required` says the key is present, `nullable: true` says the value may be null — so a
+field that is both must be **nullable** in GraphQL. `required` currently wins and `nullable` is ignored.
+
+**OAS:**
+```yaml
+Thing:
+  type: object
+  required: [reqPlain, reqNullable]
+  properties:
+    reqPlain:    { type: string }
+    reqNullable: { type: string, nullable: true }   # key always present, value may be null
+```
+
+**Example:**
+```graphql
+# now
+reqNullable: String!      # ✗ router errors when the API returns null
+# wanted
+reqNullable: String
+```
+
+**Cause:** the `!` decision read only the parent's `required` list — nothing anywhere read
+`nullable`. For the 3.1 spelling it was worse: `normalizeTypeArray` (#23) took the `'null'` out of
+`type: [string, "null"]` and threw that fact away, so by the time `required` was applied the schema
+looked plainly non-null.
+
+**Fix:** three lines, no new state.
+- `normalizeTypeArray` (`factory.ts`) marks the schema `nullable: true` when it strips a `'null'` —
+  the 3.1 spelling becomes the 3.0 keyword, on the shared schema instance, so every later reader
+  and every later visit sees it.
+- The one place `Prop.required` is set (`obj.ts`) skips a property whose schema says
+  `nullable: true`. The schema on the prop is the resolved one, so a `$ref` to a nullable
+  component works the same way.
+- The parameter `!` (`param.ts`) takes the same guard. This one is a deliberate tradeoff: GraphQL
+  cannot say "must be sent, may be null" — an argument either has `!` (must be sent, never null) or
+  neither guarantee. Keeping `!` rejects null, which the API explicitly allows; dropping it means a
+  *missing* parameter is no longer caught by GraphQL and instead comes back as the API's own
+  missing-parameter error. Null wins because rejecting allowed usage is the reported defect.
+
+`?` in selections is a different tool for a different job (it silences a missing-or-null step in a
+path, per the router's mapping README) and is not part of this fix; emitting it is #16, still parked
+until composition 2.15 ships. `Prop.required` now means "key present and value never null" — which
+is also the right trigger for `?` when #16 lands.
+
+**Not fixed here:** `oneOf: [{type: string}, {type: 'null'}]`, the third spelling. That field is
+dropped from the type entirely today — a different defect in different code, filed as #60.
+
+**Tests:** `test_required_and_nullable_emits_a_nullable_field` (todo dropped; the two `\b`
+assertions tightened to `String\n` so they can actually fail; new assertions for the `$ref` and
+parameter cases) and `test_required_and_nullable_31_type_array` (new fixture
+`required-nullable-31.yaml`, whose `refA`/`refB` share one component so the second visit proves the
+in-place rewrite is order-independent). Every touch point revert-checked one at a time — each
+reverts to exactly its own test failing.
+
+**AST:** no change — a field-level `!` decision, not a node-shape change.
+**Refs:** #23, #33 (3.1 nullability forms), #16 (parked `?` emission), #60 (the oneOf spelling).
+
 ## 56 · `items: { type: object }` drops the field instead of degrading to `[JSON]` — ✅ Fixed (working tree)
 
 **Symptom:** the field is absent from the emitted type. Valid OpenAPI, no warning, missing field. Its

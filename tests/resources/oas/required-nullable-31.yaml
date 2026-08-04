@@ -1,0 +1,39 @@
+openapi: 3.1.0
+info:
+  title: required vs nullable, OAS 3.1 spelling
+  version: 1.0.0
+# see docs/issues.md #55
+# OAS 3.1 writes "the value may be null" as a type array. A required field spelled this way must
+# come out nullable, exactly like the 3.0 `nullable: true` keyword.
+# refA and refB point at the SAME component on purpose: the second visit finds the component
+# already rewritten by the first, and must reach the same answer.
+servers:
+  - url: https://example.com
+paths:
+  /thing:
+    get:
+      operationId: getThing31
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing31"
+components:
+  schemas:
+    Thing31:
+      type: object
+      required:
+        - reqTypeArray
+        - refA
+        - refB
+      properties:
+        reqTypeArray:
+          type: [string, "null"]
+        refA:
+          $ref: "#/components/schemas/NullableString"
+        refB:
+          $ref: "#/components/schemas/NullableString"
+    NullableString:
+      type: [string, "null"]

@@ -1,0 +1,55 @@
+openapi: 3.0.0
+info:
+  title: required vs nullable are orthogonal in OpenAPI
+  version: 1.0.0
+# see docs/issues.md #55
+# `required` says the key is present; `nullable: true` says the value may be null. A field that is
+# both must be nullable in GraphQL — a non-null field erroring on a legitimately-null value is worse
+# than a nullable one. Currently `required` wins and `nullable` is ignored.
+servers:
+  - url: https://example.com
+paths:
+  /thing:
+    get:
+      operationId: getThing
+      parameters:
+        # you must send it, and null is an acceptable value -> the argument cannot take `!`
+        - name: since
+          in: query
+          required: true
+          schema:
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing"
+components:
+  schemas:
+    Thing:
+      type: object
+      required:
+        - reqPlain
+        - reqNullable
+        - reqRefNullable
+      properties:
+        reqPlain:
+          type: string
+        # required AND nullable -> the key is always present, the value may be null
+        reqNullable:
+          type: string
+          nullable: true
+        # the nullability lives on the referenced component, not on the property
+        reqRefNullable:
+          $ref: "#/components/schemas/NullableName"
+        optPlain:
+          type: string
+        optNullable:
+          type: string
+          nullable: true
+    NullableName:
+      type: string
+      nullable: true

@@ -55,7 +55,9 @@ export class Param extends Type {
 
     this.resultType.generate(context, writer, selection);
 
-    if (this.required) {
+    // A required argument whose value may be null cannot take `!` — GraphQL cannot say "must be
+    // sent, may be null". e.g. since: { required: true, schema: { type: string, nullable: true } }. #55
+    if (this.required && this.schema?.nullable !== true) {
       writer.write('!');
     }
 

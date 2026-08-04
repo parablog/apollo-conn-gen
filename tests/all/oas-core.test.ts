@@ -832,6 +832,32 @@ test('test_param_default_boolean_emits_literal', async () => {
   assert.ok(!/=\s*[,)]/.test(schema!), 'no dangling = remains');
 });
 
+test('test_required_and_nullable_emits_a_nullable_field', async () => {
+  // In OpenAPI `required` and `nullable` are orthogonal: `required` says the key is present,
+  // `nullable: true` says the value may be null. A field that is both must be NULLABLE in GraphQL —
+  // `String!` makes the router error on a legitimately-null value. see docs/issues.md #55
+  const schema = await runOasTest('required-nullable.yaml', ['get:/thing>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/reqPlain: String!/.test(schema!), 'required + non-nullable -> String!');
+  assert.ok(/optPlain: String\n/.test(schema!), 'optional -> nullable');
+  assert.ok(/optNullable: String\n/.test(schema!), 'optional + nullable -> nullable');
+  assert.ok(/reqNullable: String\n/.test(schema!), 'required + nullable must be nullable, not String!');
+  assert.ok(/reqRefNullable: String\n/.test(schema!), 'nullability on the referenced component counts too');
+  // a required argument whose value may be null cannot take `!` either — GraphQL has no way to say
+  // "must be sent, may be null", so null wins and a missing parameter is the API's own error
+  assert.ok(/since: String[^!]/.test(schema!), 'required + nullable parameter -> no !');
+});
+
+test('test_required_and_nullable_31_type_array', async () => {
+  // The OAS 3.1 spelling of the same thing: `type: [string, 'null']`. refA and refB share one
+  // component, so the second visit sees it already rewritten and must agree. see docs/issues.md #55
+  const schema = await runOasTest('required-nullable-31.yaml', ['get:/thing>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/reqTypeArray: String\n/.test(schema!), 'required + type [string, null] -> nullable');
+  assert.ok(/refA: String\n/.test(schema!), 'first visit through the shared component');
+  assert.ok(/refB: String\n/.test(schema!), 'second visit must agree with the first');
+});
+
 test('test_shapeless_object_schema_becomes_json_scalar', async () => {
   // `{}` / `{ additionalProperties: false }` schemas (Slack shares pattern) used to throw
   // "Cannot handle schema" when reached via fromSchema (array items, members). They are objects
@@ -1300,8 +1326,3 @@ test('test_http_block_layout_with_all_members', async () => {
   assert.ok(!/,\n/.test(http), 'no commas between http members');
 });
 
-
-// A list response and a single-object response, through the response helpers. They answer different
-// questions and both are needed: `responseType` is the shape of the whole answer, `responseItemType`
-// and `responseItemSchema` are the shape of one item. Anything asking "what kind of thing does this
-// op return" wants the item — reading the whole answer instead is what hid #58 for a list of unions.

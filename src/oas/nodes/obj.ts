@@ -273,10 +273,12 @@ export class Obj extends Type {
       }
     }
 
+    // The key is always there, but the value may still be null — that field stays nullable.
+    // e.g. required: [reqNullable], reqNullable: { type: string, nullable: true } -> String. #55
     if (_.isArray(this.schema.required)) {
       this.schema.required.forEach((name) => {
         const prop = this.props.get(name);
-        if (prop) prop!.required = true;
+        if (prop && prop.schema?.nullable !== true) prop.required = true;
       });
     }
 

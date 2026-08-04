@@ -112,16 +112,15 @@ export class Factory {
     return result;
   }
 
-  /**
-   * OAS 3.1 type arrays (`type: ["string","null"]`) collapse to their first non-null entry:
-   * GraphQL fields are nullable by default, so the "null" disjunct adds nothing. Normalized
-   * in place (idempotent; `lookupRef` shares schema instances, so every reader sees it).
-   * see docs/issues.md #23
-   */
+  // OAS 3.1 spells "may be null" as a type array. Keep the first real type and mark the schema the
+  // 3.0 way: { type: [string, 'null'] } -> { type: string, nullable: true }. see #23, #55
   private static normalizeTypeArray(schema: SchemaObject): void {
     const s = schema as Record<string, unknown>;
     if (Array.isArray(s.type)) {
       const real = (s.type as unknown[]).filter((t) => t && t !== 'null');
+      if (real.length < (s.type as unknown[]).length) {
+        s.nullable = true;
+      }
       s.type = real[0];
     }
   }
