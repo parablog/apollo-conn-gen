@@ -848,6 +848,33 @@ test('test_required_and_nullable_emits_a_nullable_field', async () => {
   assert.ok(/since: String[^!]/.test(schema!), 'required + nullable parameter -> no !');
 });
 
+test('test_required_nested_array_bang_stays_on_the_line', { todo: 'the ! lands on its own line' }, async () => {
+  // A required list of lists writes its own line ending before the `!` is added, so the `!` lands
+  // alone on the next line. Parses fine (line breaks are ignored), reads wrong. The field is only
+  // reachable by naming its path — under `>**` a list of lists has no leaf and is dropped.
+  // Marked todo: asserts the wanted output, fails today. see docs/issues.md #59
+  const schema = await runOasTest(
+    'required-nested-array.yaml',
+    ['get:/matrix>res:r>obj:type:matrixResponse>prop:array:#processes', 'get:/matrix>res:r>obj:type:matrixResponse>prop:array:#titles'],
+    1,
+    1,
+    false,
+    true,
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/processes: \[\[String\]\]!/.test(schema!), 'the ! belongs on the same line as the field');
+});
+
+test('test_required_oneof_null_field_is_kept', { todo: 'the field is dropped from the type' }, async () => {
+  // The third way a spec says "may be null": a oneOf with a null branch. The null branch is
+  // skipped, but skipping it currently loses the whole field — it should stay, as a nullable
+  // String, exactly like the other two spellings in the tests above.
+  // Marked todo: asserts the wanted output, fails today. see docs/issues.md #60
+  const schema = await runOasTest('required-nullable-oneof.yaml', ['get:/thing>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/reqOneOf: String\n/.test(schema!), 'oneOf [string, null] must keep the field, nullable');
+});
+
 test('test_required_and_nullable_31_type_array', async () => {
   // The OAS 3.1 spelling of the same thing: `type: [string, 'null']`. refA and refB share one
   // component, so the second visit sees it already rewritten and must agree. see docs/issues.md #55

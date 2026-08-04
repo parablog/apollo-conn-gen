@@ -2930,3 +2930,75 @@ change), and this only alters which unions reach it.
 `test_R2_interface_oneof_promotes_and_composes` / `test_R2_interface_skips_when_base_used_concretely`
 in `tests/all/r2-abstract.test.ts` (the promotion path that should have applied).
 
+## 59 · A required list of lists writes its `!` on the next line — ⬜ Open
+
+**Symptom:** the non-null marker lands alone on the line after the field. The schema still parses —
+line breaks mean nothing to GraphQL — but it reads wrong, and any tool comparing schemas line by
+line sees a phantom difference.
+
+**OAS:**
+```yaml
+required: [processes]
+processes: { type: array, items: { type: array, items: { type: string } } }
+```
+
+**Example:**
+```graphql
+# now
+processes: [[String]]
+!
+# wanted
+processes: [[String]]!
+```
+
+**Cause:** a list of lists of scalars writes its own line ending after the closing bracket
+(`propArray.ts`, the `T.isScalarArray` branch writes `']\n'`), and the `!` for a required field is
+written after the value (`prop.ts`) — so it lands on the fresh line. A plain `[String]` takes the
+other branch and is fine.
+
+Hard to hit today: under `>**` a list of lists has no leaf to select, so the field is dropped and
+only an explicitly named path reaches it. Which is also why it went unnoticed.
+
+**Tests:** `test_required_nested_array_bang_stays_on_the_line` in `tests/all/oas-core.test.ts`,
+fixture `tests/resources/oas/required-nested-array.yaml`, selecting the field by its full path.
+Marked `todo` — asserts the wanted output, fails today.
+
+**AST:** no change expected — a writer fix, not a node-shape change.
+**Refs:** #55 (found while fixing it; the `!` writer is the same line of `prop.ts`).
+
+## 60 · A required `oneOf [string, null]` property loses its field entirely — ⬜ Open
+
+**Symptom:** the field is missing from the emitted type. The other two ways a spec says "may be
+null" now come out as a nullable field (#55); this third spelling silently loses the field — worse,
+and easy to mistake for #55 until the type is read closely.
+
+**OAS:**
+```yaml
+required: [reqOneOf]
+reqOneOf:
+  oneOf:
+    - type: string
+    - type: "null"
+```
+
+**Example:**
+```graphql
+# now
+type ThingOneOf { plain: String }          # reqOneOf gone
+# wanted
+type ThingOneOf { plain: String  reqOneOf: String }
+```
+
+**Cause:** partially diagnosed. The union builder skips a `{ type: "null" }` member (`union.ts`,
+the #33 skip), which is right — but what remains is a union of one `String`, and somewhere between
+that and the emitted type the field disappears rather than collapsing to the single member. The
+first fix attempt collapsed one-member unions inside `Factory` and broke the TMF637 recursion test,
+so the collapse belongs later than schema-build time; diagnose before re-attempting.
+
+**Tests:** `test_required_oneof_null_field_is_kept` in `tests/all/oas-core.test.ts`, fixture
+`tests/resources/oas/required-nullable-oneof.yaml`. Marked `todo` — asserts the wanted output,
+fails today.
+
+**AST:** to be decided by the diagnosis — likely the single member's node in place of the union.
+**Refs:** #55 (the other two spellings, fixed), #33 (the null-member skip this builds on), #25
+(discriminator-less unions degrade — the machinery a one-member collapse has to respect).

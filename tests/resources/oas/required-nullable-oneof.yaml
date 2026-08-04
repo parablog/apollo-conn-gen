@@ -1,0 +1,33 @@
+openapi: 3.1.0
+info:
+  title: required vs nullable, the oneOf spelling
+  version: 1.0.0
+# see docs/issues.md #60
+# The third way a spec says "the value may be null": a oneOf with a null branch. Today the whole
+# field disappears from the emitted type — worse than #55, where it at least appeared (as non-null).
+servers:
+  - url: https://example.com
+paths:
+  /thing:
+    get:
+      operationId: getOneOfThing
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThingOneOf"
+components:
+  schemas:
+    ThingOneOf:
+      type: object
+      required:
+        - reqOneOf
+      properties:
+        reqOneOf:
+          oneOf:
+            - type: string
+            - type: "null"
+        plain:
+          type: string
