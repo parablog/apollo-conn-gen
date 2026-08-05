@@ -31,3 +31,11 @@ paths:
                       publicChannels:
                         type: array
                         items: {}
+                      # see docs/issues.md #56
+                      # `type: object` with no properties — NOT the same as `{}` above. This one is
+                      # dropped from the emitted type entirely rather than degrading to JSON, so a
+                      # generator that emits nested objects this way loses the field with no warning.
+                      archivedChannels:
+                        type: array
+                        items:
+                          type: object

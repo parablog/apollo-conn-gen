@@ -150,7 +150,7 @@ test('test_057_oas_test_petstore_with_transform_rules', async () => {
     'get:/user/logout>**',
   ];
 
-  await runOasTest('petstore.yaml', paths, 19, 6, false, false, mapper);
+  await runOasTest('petstore.yaml', paths, 19, 8, false, false, mapper);
 });
 
 test('test_058_oas_test_mb_cc_with_transform_rules', async () => {

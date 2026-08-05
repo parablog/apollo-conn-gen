@@ -36,6 +36,7 @@ import { warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { GqlUtils } from '../utils/gql.js';
 import { Naming } from '../utils/naming.js';
+import { Nullability } from '../utils/nullability.js';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
 export class Factory {
@@ -58,7 +59,7 @@ export class Factory {
     if (!schema) throw new Error('Unknown or undefined schema');
     const schemaObj: SchemaObject = schema as SchemaObject;
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
-    this.normalizeTypeArray(schemaObj);
+    Nullability.normalize(schemaObj);
 
     // Cycle cut (see docs/issues.md #10): a recursive schema can only close through a component `$ref`,
     // and `lookupRef` returns the same `SchemaObject` instance for a given ref. So if this resolved ref's
@@ -110,20 +111,6 @@ export class Factory {
     }
 
     return result;
-  }
-
-  /**
-   * OAS 3.1 type arrays (`type: ["string","null"]`) collapse to their first non-null entry:
-   * GraphQL fields are nullable by default, so the "null" disjunct adds nothing. Normalized
-   * in place (idempotent; `lookupRef` shares schema instances, so every reader sees it).
-   * see docs/issues.md #23
-   */
-  private static normalizeTypeArray(schema: SchemaObject): void {
-    const s = schema as Record<string, unknown>;
-    if (Array.isArray(s.type)) {
-      const real = (s.type as unknown[]).filter((t) => t && t !== 'null');
-      s.type = real[0];
-    }
   }
 
   // every member is a legal GraphQL enum value once trimmed (TMF637 ships `'aborted '`): a bare
@@ -248,6 +235,15 @@ export class Factory {
     );
   }
 
+  // What a list holds. An object with no fields becomes JSON — an empty type would take the whole
+  // field with it. e.g. archivedChannels: { type: array, items: { type: object } } -> [JSON]. #56
+  public static fromArrayItems(context: OasContext, parent: IType, items: SchemaObject): IType {
+    if (Factory.isShapelessObject(items)) {
+      return new Scalar(parent, 'JSON', items);
+    }
+    return Factory.fromSchema(context, parent, items);
+  }
+
   private static createArrayType(parent: IType | Res, schema: SchemaObject | null, context: OasContext) {
     // Array schema case.
     let parentName = parent.name;
@@ -261,7 +257,7 @@ export class Factory {
     arr.items = items as ArraySchemaObject;
 
     // TODO: check this
-    arr.itemsType = Factory.fromSchema(context, arr, items);
+    arr.itemsType = Factory.fromArrayItems(context, arr, items);
     arr.add(arr.itemsType); // add it to the children
 
     return arr;
@@ -328,7 +324,7 @@ export class Factory {
     // uses the type of the schema to find out what kind of property it is
     const schemaObj = schema as SchemaObject;
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
-    this.normalizeTypeArray(schemaObj);
+    Nullability.normalize(schemaObj);
     const type = schemaObj.type;
 
     if (type) {
@@ -339,7 +335,7 @@ export class Factory {
 
         const itemsSchema = Factory.unwrapRedundantArrayItems(context, _.get(schemaObj, 'items') as ArraySchemaObject);
         // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
-        const itemsType = Factory.fromSchema(context, array, itemsSchema);
+        const itemsType = Factory.fromArrayItems(context, array, itemsSchema);
 
         array.setItems(itemsType);
         prop = array;
@@ -384,15 +380,17 @@ export class Factory {
           const propType: IType = new Obj(parent, ref || propName, schemaObj);
           prop = new PropObj(parent, propName, schemaObj, propType);
         }
-      } else if (ref && schemaObj?.enum) {
+      } else if (schemaObj?.enum) {
         if (this.isGqlEnum(schemaObj)) {
+          // an inline enum starts under its field's name; En.visit gives it the owning type's name
+          // in front: (petstore.yaml) Order's `status` -> OrderStatus. see docs/issues.md #57
           const en: En = new En(
             parent,
-            ref,
+            ref ?? propName,
             schemaObj,
             (schemaObj.enum as string[]).map((v) => v.trim()),
           );
-          prop = new PropEn(parent, propName, ref, schemaObj);
+          prop = new PropEn(parent, propName, en, schemaObj);
           prop.add(en);
         } else {
           // No GraphQL enum form for this one — degrade to the base scalar instead of emitting

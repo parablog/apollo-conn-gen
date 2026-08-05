@@ -23,6 +23,13 @@ paths:
                     $ref: "#/components/schemas/State"
                   reaction:
                     $ref: "#/components/schemas/Reaction"
+                  # Same value set as State, but declared inline on the property rather than as a
+                  # named component. A generator emitting enums this way loses them silently.
+                  inlineState:
+                    type: string
+                    enum:
+                      - active
+                      - terminated
                   "+1":
                     type: integer
                   "-1":

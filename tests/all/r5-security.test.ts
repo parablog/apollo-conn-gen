@@ -135,7 +135,7 @@ test('test_R5_security_per_op_apikey_emits_on_connect', async () => {
 test('test_R5_security_per_op_bearer_emits_on_connect', async () => {
   // time-series-1.0.28 has a global bearer requirement AND the op declares the same -> per-op
   // mode: @source headerless, the op's @connect carries Authorization: Bearer.
-  const schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 9);
+  const schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 15);
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),

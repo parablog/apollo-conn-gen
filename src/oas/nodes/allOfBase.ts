@@ -1,7 +1,8 @@
-import { Composed, IType, Obj, Res, T, Union } from './internal.js';
+import { Composed, IType, Obj, T, Union } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
+import { trace } from '../log/trace.js';
 
 /**
  * R2 (Scenario B): promote a discriminated `oneOf` whose members all share one `allOf` base into a
@@ -37,15 +38,25 @@ export function promoteAllOfBase(
   _selection: string[],
 ): void {
   for (const union of candidateUnions(gen)) {
-    if (!union.discriminator) continue;
+    if (!union.discriminator) {
+      skipped(context, union, 'it has no discriminator');
+      continue;
+    }
     // isFlat(): input position, no discriminator, or nested under a field rather than being the
     // op's own response (#38) — already downgraded to one merged type, not an interface candidate.
-    if (union.isFlat()) continue;
+    if (union.isFlat()) {
+      skipped(context, union, 'it is already flattened to one merged type');
+      continue;
+    }
 
     const members = union.children;
-    if (members.length === 0) continue;
+    if (members.length === 0) {
+      skipped(context, union, 'it has no members');
+      continue;
+    }
     // Rule 1: every member is an allOf Composed.
     if (!members.every((m) => m instanceof Composed && Array.isArray((m as Composed).schema.allOf))) {
+      skipped(context, union, 'not every member is built from allOf');
       continue;
     }
     const composedMembers = members as Composed[];
@@ -54,6 +65,7 @@ export function promoteAllOfBase(
     const refSets = composedMembers.map((m) => new Set(allOfRefs(m)));
     const common = [...refSets[0]].filter((ref) => refSets.every((s) => s.has(ref)));
     if (common.length !== 1) {
+      skipped(context, union, `its members share ${common.length} bases, not one`);
       continue;
     }
     const baseRef = common[0];
@@ -89,13 +101,25 @@ export function promoteAllOfBase(
   }
 }
 
-/** Union instances reachable as a GET/op response (the ones whose return type the writer emits). */
+// Why a union stayed a union. Rule 3 warns because the user can act on it; these are ordinary
+// "this shape is not an interface" answers, so they only go to the trace — but they have to go
+// somewhere. Their silence is what made #58 look like a rule 1/2 rejection when in fact the union
+// never reached any rule at all.
+function skipped(context: OasContext, union: Union, why: string): void {
+  trace(context, '   [interface]', `${union.name} stays a union: ${why}`);
+}
+
+/**
+ * Union instances reachable as a GET/op response (the ones whose return type the writer emits).
+ * A list of unions counts: `[AnyPage]` is still an op answering with one of several kinds, and
+ * `Union.isTopLevelResponse` already reads it that way. Missing that was #58 — the union was never
+ * a candidate, so not one of the rules below ever ran and nothing was logged.
+ */
 function candidateUnions(gen: OasGen): Union[] {
   const out: Union[] = [];
   for (const op of gen.paths.values()) {
     if (!T.isOp(op)) continue;
-    let node: IType | undefined = op.resultType;
-    if (node instanceof Res) node = node.response;
+    const node = T.responseItemType(op);
     if (node instanceof Union) out.push(node);
   }
   return out;
@@ -125,11 +149,12 @@ function baseUsedExternally(
   let structural = false;
   let reason = '';
 
-  // (a) any op whose result type unwraps directly to the base.
+  // (a) any op whose result type unwraps directly to the base. A list counts: an op answering
+  // `[PageBase]` uses the base concretely just as much as one answering `PageBase`, and promoting
+  // it would leave that op returning a list of an interface with no `__typename`. see #58
   for (const op of gen.paths.values()) {
     if (!T.isOp(op)) continue;
-    let node: IType | undefined = op.resultType;
-    if (node instanceof Res) node = node.response;
+    const node = T.responseItemType(op);
     if (node && (node instanceof Obj || node instanceof Composed) && node.name === baseRef) {
       structural = true;
       reason = `returned directly by ${op.id}`;

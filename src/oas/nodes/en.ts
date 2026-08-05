@@ -1,4 +1,4 @@
-import { IType, Param, Type, Union } from './internal.js';
+import { IType, Param, T, Type, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -29,6 +29,10 @@ export class En extends Type {
     trace(context, '-> [enum:visit]', 'in: ' + this.items.toString());
 
     if (!context.inContextOf(Param, this)) {
+      // rename an inline enum, i.e: status: { type: string, enum: [placed, approved, delivered] }   # -> enum OrderStatus
+      if (!T.isRef(this.name) && this.name !== 'enum') {
+        T.resolveNameConflict(this, context);
+      }
       context.store(this.name, this);
     }
 

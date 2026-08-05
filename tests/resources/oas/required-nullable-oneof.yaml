@@ -1,0 +1,91 @@
+openapi: 3.1.0
+info:
+  title: required vs nullable, the oneOf spelling
+  version: 1.0.0
+# see docs/issues.md #60
+# The third way a spec says "the value may be null": a oneOf with a null branch. Today the whole
+# field disappears from the emitted type — worse than #55, where it at least appeared (as non-null).
+servers:
+  - url: https://example.com
+paths:
+  /thing:
+    get:
+      operationId: getOneOfThing
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThingOneOf"
+components:
+  schemas:
+    ThingOneOf:
+      type: object
+      required:
+        - reqOneOf
+        - reqChoice
+      properties:
+        reqOneOf:
+          oneOf:
+            - type: string
+            - type: "null"
+        plain:
+          type: string
+        # a choice of an enum or null: the null goes into `nullable`, the enum is promoted (#57)
+        optEnumChoice:
+          oneOf:
+            - type: string
+              enum: [fast, slow]
+            - type: "null"
+        # the anyOf spelling of the same thing
+        optAnyOf:
+          anyOf:
+            - type: string
+            - type: "null"
+        # two real choices stay a choice; the null only takes the ! away
+        reqChoice:
+          oneOf:
+            - $ref: "#/components/schemas/Card"
+            - $ref: "#/components/schemas/Wallet"
+            - type: "null"
+        # a real object as the one choice — kept as it is, its fields survive
+        optObjChoice:
+          oneOf:
+            - type: object
+              properties:
+                label:
+                  type: string
+            - type: "null"
+        # a list as the one choice
+        optArr:
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: "null"
+        # only null is allowed: nothing to build a type from, degrades to JSON
+        nullOnly:
+          oneOf:
+            - type: "null"
+        # two null choices cancel out under oneOf (null would match both) — left alone
+        doubleNull:
+          oneOf:
+            - type: "null"
+            - type: "null"
+        # `type: string` beside the choice list ANDs with it, so null is rejected — left alone
+        constrained:
+          type: string
+          oneOf:
+            - type: string
+            - type: "null"
+    Card:
+      type: object
+      properties:
+        pan:
+          type: string
+    Wallet:
+      type: object
+      properties:
+        provider:
+          type: string

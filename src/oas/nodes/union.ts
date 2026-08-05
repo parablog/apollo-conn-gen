@@ -248,6 +248,12 @@ export class Union extends Type {
   // the writer may promote to an interface — R2); a merged one needs its flat fields instead
   dependencies(context: OasContext, selection: string[]): IType[] {
     if (this.isFlat()) {
+      // consolidate first, like generateMergedObject does: merging picks which member's copy of a
+      // shared field is kept, so reading the fields before the merge can name a different type than
+      // the writer emits — box collected enum WebLinkBaseType but wrote `type: FileBaseType!`. #57
+      if (!this.consolidated) {
+        this.consolidate(selection).forEach((type) => context.decRefCount(type.name));
+      }
       return this.dedupedSelectedProps(selection);
     }
     // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the

@@ -1,0 +1,76 @@
+openapi: 3.0.0
+info:
+  title: made-up enum names that fight over the same name
+  version: 1.0.0
+# see docs/issues.md #57
+# Order.itemStatus and OrderItem.status both come out as OrderItemStatus (a split collision), and
+# User's fields land on names the UserRole component already owns. Distinct value sets everywhere,
+# so the same-definition dedup cannot hide a collision.
+servers:
+  - url: https://example.com
+paths:
+  /orders:
+    get:
+      operationId: getOrders
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+  /items:
+    get:
+      operationId: getItems
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderItem" }
+  /users:
+    get:
+      operationId: getUsers
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+  /roles:
+    get:
+      operationId: getRoles
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserRole" }
+components:
+  schemas:
+    Order:
+      type: object
+      properties:
+        itemStatus:
+          type: string
+          enum: [open, closed]
+    OrderItem:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [packed, shipped]
+    User:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [admin, member]
+        # already spells the parent's name — must still be qualified, never kept as-is
+        userRole:
+          type: string
+          enum: [primary, secondary]
+    UserRole:
+      type: object
+      properties:
+        title:
+          type: string

@@ -1,0 +1,72 @@
+openapi: "3.0.1"
+info:
+  title: Pages API (shared base returned as a list -> no promotion)
+  version: "1.0.0"
+# see docs/issues.md #58
+# The twin of r2-interface-shared-base.yaml: the base is used concretely, but as a LIST rather than
+# on its own. Rule 3 has to catch this the same way. It nearly did not: the "is the base returned
+# anywhere" scan read the response node without taking the list off, so `[PageBase]` looked like no
+# use at all and promotion would have gone ahead — leaving /page-bases returning a list of an
+# interface with no __typename to match on.
+paths:
+  /pages:
+    get:
+      summary: List pages, each of which is one of several kinds.
+      responses:
+        '200':
+          description: The pages.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnyPage'
+  /page-bases:
+    get:
+      summary: List bare page bases (base type, used concretely, inside a list).
+      responses:
+        '200':
+          description: The page bases.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PageBase'
+components:
+  schemas:
+    AnyPage:
+      oneOf:
+        - $ref: '#/components/schemas/ResourcePage'
+        - $ref: '#/components/schemas/OwnerPage'
+      discriminator:
+        propertyName: pageType
+        mapping:
+          resourcePage: '#/components/schemas/ResourcePage'
+          ownerPage: '#/components/schemas/OwnerPage'
+    PageBase:
+      type: object
+      properties:
+        id:
+          type: string
+        pageType:
+          type: string
+        title:
+          type: string
+      required: [id, pageType]
+    ResourcePage:
+      allOf:
+        - $ref: '#/components/schemas/PageBase'
+        - type: object
+          properties:
+            discipline:
+              type: string
+          required: [discipline]
+    OwnerPage:
+      allOf:
+        - $ref: '#/components/schemas/PageBase'
+        - type: object
+          properties:
+            templateVariant:
+              type: string
+          required: [templateVariant]

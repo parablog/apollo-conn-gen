@@ -161,10 +161,9 @@ export class TypesCollector {
       if (visited.has(node)) {
         continue;
       }
-      // every container was expanded by the collect loop before this walk — an unvisited one
-      // means a missed reference, and writing it would silently truncate the schema. Enums are
-      // exempt: they are complete at construction and their visit() only registers the name.
-      // dependencies() implementations must stay read-only: no visit(), no context stack. #26
+      // every container was expanded by the collect loop before this walk — an unvisited one means
+      // a missed reference that would silently truncate the schema. Enums are exempt: visited via
+      // their own field (#57). dependencies() stays read-only: no visit(), no context stack. #26
       if (!node.visited && T.isContainer(node)) {
         throw new Error(`collectReachable: unvisited type ${node.id} — the collect walk missed a reference`);
       }

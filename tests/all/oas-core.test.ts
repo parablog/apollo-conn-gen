@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { OasGen } from '../../src/index.js';
+import { T } from '../../src/oas/nodes/internal.js';
 import './_setup.js';
 
 /// OAS TESTS
@@ -22,14 +23,14 @@ test('test_002_oas_test minimal petstore 02', async () => {
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:name',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:array:#photoUrls',
-    'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:status',
+    'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:enum:status',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:obj:category>obj:type:#/c/s/Category>prop:scalar:id',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:obj:category>obj:type:#/c/s/Category>prop:scalar:name',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:id',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:name',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 3);
+  await runOasTest(`petstore.yaml`, paths, 19, 4);
 });
 
 test('test_003_oas_test minimal petstore 03 array', async () => {
@@ -50,7 +51,7 @@ test('test_004_oas_test minimal petstore 03 all GETs', async () => {
     'get:/user/logout>**',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 6);
+  await runOasTest(`petstore.yaml`, paths, 19, 8);
 });
 
 test('test_005_oas_test full get petstore', async () => {
@@ -65,7 +66,7 @@ test('test_005_oas_test full get petstore', async () => {
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:name',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:array:#photoUrls',
-    'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:status',
+    'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:enum:status',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:id',
     'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:name',
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:obj:category>obj:type:#/c/s/Category>prop:scalar:id',
@@ -73,7 +74,7 @@ test('test_005_oas_test full get petstore', async () => {
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:id',
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:name',
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:array:#photoUrls',
-    'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:status',
+    'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:enum:status',
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:id',
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:name',
     'get:/pet/findByTags>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:obj:category>obj:type:#/c/s/Category>prop:scalar:id',
@@ -81,7 +82,7 @@ test('test_005_oas_test full get petstore', async () => {
     'get:/pet/findByTags>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:id',
     'get:/pet/findByTags>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:name',
     'get:/pet/findByTags>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:array:#photoUrls',
-    'get:/pet/findByTags>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:status',
+    'get:/pet/findByTags>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:enum:status',
     'get:/pet/findByTags>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:id',
     'get:/pet/findByTags>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:name',
     'get:/store/order/{orderId}>res:r>obj:type:#/c/s/Order>prop:scalar:complete',
@@ -89,7 +90,7 @@ test('test_005_oas_test full get petstore', async () => {
     'get:/store/order/{orderId}>res:r>obj:type:#/c/s/Order>prop:scalar:petId',
     'get:/store/order/{orderId}>res:r>obj:type:#/c/s/Order>prop:scalar:quantity',
     'get:/store/order/{orderId}>res:r>obj:type:#/c/s/Order>prop:scalar:shipDate',
-    'get:/store/order/{orderId}>res:r>obj:type:#/c/s/Order>prop:scalar:status',
+    'get:/store/order/{orderId}>res:r>obj:type:#/c/s/Order>prop:enum:status',
     'get:/user/{username}>res:r>obj:type:#/c/s/User>prop:scalar:email',
     'get:/user/{username}>res:r>obj:type:#/c/s/User>prop:scalar:firstName',
     'get:/user/{username}>res:r>obj:type:#/c/s/User>prop:scalar:id',
@@ -100,7 +101,7 @@ test('test_005_oas_test full get petstore', async () => {
     'get:/user/{username}>res:r>obj:type:#/c/s/User>prop:scalar:userStatus',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 5);
+  await runOasTest(`petstore.yaml`, paths, 19, 7);
 });
 
 test('test_006_oas_test_003_testConsumerJourney', async () => {
@@ -194,10 +195,10 @@ test('test_013_oas_test_005_testHomepageProductSelector 02', async () => {
     'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:scalar:serviceId',
     'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:scalar:speed',
     'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:scalar:status',
-    'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:scalar:type',
+    'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:enum:type',
   ];
 
-  await runOasTest('js-mva-homepage-product-selector_v3.yaml', paths, 3, 1);
+  await runOasTest('js-mva-homepage-product-selector_v3.yaml', paths, 3, 2);
 });
 
 test('test_014_oas_test_006_testHomepageProductSelectorInlineArray', async () => {
@@ -209,11 +210,11 @@ test('test_014_oas_test_006_testHomepageProductSelectorInlineArray', async () =>
     'get:/productSelectorItemDetails>res:r>obj:type:#/c/s/productSelectorItemDetails>prop:array:#usageConsumption>obj:type:UsageConsumptionItem>prop:array:#usageSummary>obj:type:UsageSummaryItem>prop:scalar:totalValue',
     'get:/productSelectorItemDetails>res:r>obj:type:#/c/s/productSelectorItemDetails>prop:array:#usageConsumption>obj:type:UsageConsumptionItem>prop:array:#usageSummary>obj:type:UsageSummaryItem>prop:scalar:type',
     'get:/productSelectorItemDetails>res:r>obj:type:#/c/s/productSelectorItemDetails>prop:array:#usageConsumption>obj:type:UsageConsumptionItem>prop:array:#usageSummary>obj:type:UsageSummaryItem>prop:scalar:unit',
-    'get:/productSelectorItemDetails>res:r>obj:type:#/c/s/productSelectorItemDetails>prop:array:#usageConsumption>obj:type:UsageConsumptionItem>prop:array:#usageSummary>obj:type:UsageSummaryItem>prop:scalar:usageType',
+    'get:/productSelectorItemDetails>res:r>obj:type:#/c/s/productSelectorItemDetails>prop:array:#usageConsumption>obj:type:UsageConsumptionItem>prop:array:#usageSummary>obj:type:UsageSummaryItem>prop:enum:usageType',
     'get:/productSelectorItemDetails>res:r>obj:type:#/c/s/productSelectorItemDetails>prop:array:#usageConsumption>obj:type:UsageConsumptionItem>prop:array:#usageSummary>obj:type:UsageSummaryItem>prop:scalar:usedValue',
     'get:/productSelectorItemDetails>res:r>obj:type:#/c/s/productSelectorItemDetails>prop:array:#usageConsumption>obj:type:UsageConsumptionItem>prop:array:#usageSummary>obj:type:UsageSummaryItem>prop:scalar:validFor',
   ];
-  await runOasTest('js-mva-homepage-product-selector_v3.yaml', paths, 3, 3);
+  await runOasTest('js-mva-homepage-product-selector_v3.yaml', paths, 3, 4);
 });
 
 test('test_015_oas_test_008_testHomepageProductSelectorAnonymousObject', async () => {
@@ -228,9 +229,9 @@ test('test_016_oas_test_008_testHomepageProductSelectorAnonymousObject 02', asyn
     'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:array:#productRelationship>obj:type:#/c/s/productRelationship>prop:scalar:relationshipType',
     'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:array:#productRelationship>obj:type:#/c/s/productRelationship>prop:obj:product>obj:type:product>prop:scalar:id',
     'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:array:#productRelationship>obj:type:#/c/s/productRelationship>prop:obj:product>obj:type:product>prop:scalar:name',
-    'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:array:#productRelationship>obj:type:#/c/s/productRelationship>prop:obj:product>obj:type:product>prop:scalar:type',
+    'get:/productSelectorItems>res:r>array:ProductSelectorItemsItem>obj:type:ProductSelectorItemsItem>prop:array:#productRelationship>obj:type:#/c/s/productRelationship>prop:obj:product>obj:type:product>prop:enum:type',
   ];
-  await runOasTest('js-mva-homepage-product-selector_v3.yaml', paths, 3, 3);
+  await runOasTest('js-mva-homepage-product-selector_v3.yaml', paths, 3, 4);
 });
 
 test('test_017_oas_test_009_Customer360_ScalarsOnly', async () => {
@@ -533,7 +534,7 @@ test('test_041_oas_test_026_petstore-paths', async () => {
     'get:/user/logout>**',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 6);
+  await runOasTest(`petstore.yaml`, paths, 19, 8);
 });
 
 // TODO: we should have a proper Enum status here
@@ -542,16 +543,16 @@ test('test_042_oas_test_026_petstore-status-enum', async () => {
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:id',
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:name',
     'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:array:#photoUrls',
-    'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:scalar:status',
+    'get:/pet/findByStatus>res:r>array:#/c/s/Pet>obj:type:#/c/s/Pet>prop:enum:status',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 1);
+  await runOasTest(`petstore.yaml`, paths, 19, 2);
 });
 
 test('test_043_oas_test_027_petstore-simple-post', async () => {
   const paths = ['post:/pet>**'];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 6);
+  await runOasTest(`petstore.yaml`, paths, 19, 7);
 });
 
 test('test_044_oas_test_028_post-with-no-body', async () => {
@@ -565,18 +566,18 @@ test('test_045_oas_test_029_post-simple-body-selection', async () => {
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:scalar:id',
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:scalar:name',
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:array:#photoUrls',
-    'post:/pet>body:b>obj:input:#/c/s/Pet>prop:scalar:status',
+    'post:/pet>body:b>obj:input:#/c/s/Pet>prop:enum:status',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:scalar:id',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:scalar:name',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:array:#photoUrls',
-    'post:/pet>res:r>obj:type:#/c/s/Pet>prop:scalar:status',
+    'post:/pet>res:r>obj:type:#/c/s/Pet>prop:enum:status',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:obj:category>obj:type:#/c/s/Category>prop:scalar:id',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:obj:category>obj:type:#/c/s/Category>prop:scalar:name',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:id',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:array:#tags>obj:type:#/c/s/Tag>prop:scalar:name',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 4);
+  await runOasTest(`petstore.yaml`, paths, 19, 5);
 });
 
 test('test_046_oas_test_029_post-complex-body-selection', async () => {
@@ -584,7 +585,7 @@ test('test_046_oas_test_029_post-complex-body-selection', async () => {
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:scalar:id',
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:scalar:name',
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:array:#photoUrls',
-    'post:/pet>body:b>obj:input:#/c/s/Pet>prop:scalar:status',
+    'post:/pet>body:b>obj:input:#/c/s/Pet>prop:enum:status',
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:obj:category>obj:input:#/c/s/Category>prop:scalar:id',
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:obj:category>obj:input:#/c/s/Category>prop:scalar:name',
     'post:/pet>body:b>obj:input:#/c/s/Pet>prop:array:#tags>obj:input:#/c/s/Tag>prop:scalar:id',
@@ -592,10 +593,10 @@ test('test_046_oas_test_029_post-complex-body-selection', async () => {
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:scalar:id',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:scalar:name',
     'post:/pet>res:r>obj:type:#/c/s/Pet>prop:array:#photoUrls',
-    'post:/pet>res:r>obj:type:#/c/s/Pet>prop:scalar:status',
+    'post:/pet>res:r>obj:type:#/c/s/Pet>prop:enum:status',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 4);
+  await runOasTest(`petstore.yaml`, paths, 19, 5);
 });
 
 test('test_047_oas_test_030_post-body-allOf', async () => {
@@ -613,7 +614,7 @@ test('test_047_oas_test_030_post-body-allOf', async () => {
 test('test_048_oas_test_031_post-body-oneOf', async () => {
   const paths = ['post:/event>**'];
 
-  await runOasTest(`post-sample.yaml`, paths, 3, 2);
+  await runOasTest(`post-sample.yaml`, paths, 3, 3);
 });
 
 test('test_049_oas_test_032_mindbody-JSON', async () => {
@@ -626,7 +627,7 @@ test('test_049_oas_test_032_mindbody-JSON', async () => {
 test('test_050_oas_test_033_initial-support-for-put', async () => {
   const paths = ['put:/pet>**'];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 6, false, true);
+  await runOasTest(`petstore.yaml`, paths, 19, 7, false, true);
 });
 
 test('test_051_oas_test_034_simple-delete', async () => {
@@ -641,7 +642,7 @@ test('test_052_oas_test_035_adobe-commerce-delete-address', async () => {
 
 test('test_053_oas_test_036_time-series', async () => {
   const paths = ['post:/market-data-services/time-series/search>**'];
-  await runOasTest('time-series-1.0.28.yaml', paths, 1, 9);
+  await runOasTest('time-series-1.0.28.yaml', paths, 1, 15);
 });
 
 test('test_054_oas_test-better-naming', async () => {
@@ -831,6 +832,157 @@ test('test_param_default_boolean_emits_literal', async () => {
   assert.ok(!/=\s*[,)]/.test(schema!), 'no dangling = remains');
 });
 
+
+// --- #57: made-up enum names — collisions, ordering, and cross-selection stability -----------
+
+test('test_57_split_collision_first_visited_keeps_the_base_name', async () => {
+  // Order.itemStatus and OrderItem.status both want OrderItemStatus; whoever is visited first
+  // keeps it, the other bumps to 2 — driven by selection order, never broken by it.
+  const schema = await runOasTest('enum-collisions.yaml', ['get:/orders>**', 'get:/items>**'], 4, 4, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/enum OrderItemStatus \{\s+open/.test(schema!), "Order's enum keeps the base name");
+  assert.ok(/enum OrderItemStatus2 \{\s+packed/.test(schema!), "OrderItem's bumps to 2");
+  assert.ok(/itemStatus: OrderItemStatus\n/.test(schema!), 'field reads its own enum');
+  assert.ok(/status: OrderItemStatus2\n/.test(schema!), 'field reads the bumped enum');
+});
+
+test('test_57_split_collision_reversed_order_swaps_the_names', async () => {
+  const schema = await runOasTest('enum-collisions.yaml', ['get:/items>**', 'get:/orders>**'], 4, 4, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/enum OrderItemStatus \{\s+packed/.test(schema!), "OrderItem's enum keeps the base name");
+  assert.ok(/enum OrderItemStatus2 \{\s+open/.test(schema!), "Order's bumps to 2");
+});
+
+test('test_57_no_coselection_no_collision', async () => {
+  const one = await runOasTest('enum-collisions.yaml', ['get:/orders>**'], 4, 2, false, true);
+  const two = await runOasTest('enum-collisions.yaml', ['get:/items>**'], 4, 2, false, true);
+  assert.ok(/enum OrderItemStatus \{/.test(one!) && !/OrderItemStatus2/.test(one!), 'stable name alone');
+  assert.ok(/enum OrderItemStatus \{/.test(two!) && !/OrderItemStatus2/.test(two!), 'stable name alone');
+});
+
+test('test_57_component_name_is_reserved_in_both_visit_orders', async () => {
+  // the UserRole component owns its name whether it is stored first or never visited at all
+  for (const paths of [['get:/roles>**', 'get:/users>**'], ['get:/users>**', 'get:/roles>**']]) {
+    const schema = await runOasTest('enum-collisions.yaml', paths, 4, 4, false, true);
+    assert.ok(schema !== undefined);
+    assert.ok(/type UserRole \{/.test(schema!), 'the component keeps its name');
+    assert.ok(/enum UserRole2 \{/.test(schema!), "User.role bumps past the component");
+    assert.ok(/role: UserRole2\n/.test(schema!), 'field reads the bumped enum');
+    assert.ok(/enum UserUserRole \{/.test(schema!), 'userRole is qualified, never kept as-is');
+    assert.ok(!/UserUserRole2/.test(schema!), 'no double-qualified name anywhere');
+  }
+});
+
+test('test_57_reserved_names_count_even_when_never_stored', async () => {
+  // /users alone: UserRole is reserved but never stored — the bump must still walk past it
+  const schema = await runOasTest('enum-collisions.yaml', ['get:/users>**'], 4, 3, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/enum UserRole2 \{/.test(schema!), 'bump consults the spec, not just stored types');
+  assert.ok((schema!.match(/enum UserRole2 \{/g) ?? []).length === 1, 'defined exactly once');
+});
+
+test('test_57_bump_walks_past_every_reserved_component', async () => {
+  // UserRole AND UserRole2 are components; the made-up name has to reach 3
+  const schema = await runOasTest('enum-collisions-deep.yaml', ['get:/users>**'], 1, 2, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/enum UserRole3 \{/.test(schema!), 'both reserved names skipped');
+  assert.ok(/role: UserRole3\n/.test(schema!), 'field reads the final name');
+});
+
+test('test_57_same_field_names_its_enum_the_same_in_both_selection_styles', async () => {
+  // the gap PropEn.visit closed: an explicit path used to skip the rename. see #57
+  const gen1 = await OasGen.fromFile(`${oasBasePath}/js-mva-homepage-product-selector_v3.yaml`, { skipValidation: true, showParentInSelections: false } as never);
+  await gen1.visit();
+  const wide = gen1.generateSchema(['get:/productSelectorItemDetails>**']);
+  const gen2 = await OasGen.fromFile(`${oasBasePath}/js-mva-homepage-product-selector_v3.yaml`, { skipValidation: true, showParentInSelections: false } as never);
+  await gen2.visit();
+  const narrow = gen2.generateSchema([
+    'get:/productSelectorItemDetails>res:r>obj:type:#/c/s/productSelectorItemDetails>prop:array:#usageConsumption>obj:type:UsageConsumptionItem>prop:array:#usageSummary>obj:type:UsageSummaryItem>prop:enum:usageType',
+  ]);
+  const name = (sdl: string) => (sdl.match(/enum (\w*UsageType\w*) \{/) ?? [])[1];
+  assert.equal(name(wide!), name(narrow!), 'one field, one enum name, regardless of selection style');
+  assert.equal(name(narrow!), 'UsageSummaryItemUsageType', 'and it is the qualified one');
+});
+
+test('test_57_merged_union_defines_the_enum_it_references', async () => {
+  // box's item choice (file | folder | web_link, no discriminator) is merged into one object. It
+  // folded its members only at write time, after the reachability walk — the walk collected the
+  // web_link member's `type` enum while the writer emitted the file member's: `type: FileBaseType!`
+  // with no `enum FileBaseType`, INVALID_GRAPHQL on compose. see #57
+  const schema = await runOasTest('box.yaml', ['get:/collaborations>**'], 258, 36);
+  assert.ok(schema !== undefined);
+  assert.ok(/enum FileBaseType \{/.test(schema!), 'the emitted field type has a definition');
+});
+
+test('test_required_and_nullable_emits_a_nullable_field', async () => {
+  // In OpenAPI `required` and `nullable` are orthogonal: `required` says the key is present,
+  // `nullable: true` says the value may be null. A field that is both must be NULLABLE in GraphQL —
+  // `String!` makes the router error on a legitimately-null value. see docs/issues.md #55
+  const schema = await runOasTest('required-nullable.yaml', ['get:/thing>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/reqPlain: String!/.test(schema!), 'required + non-nullable -> String!');
+  assert.ok(/optPlain: String\n/.test(schema!), 'optional -> nullable');
+  assert.ok(/optNullable: String\n/.test(schema!), 'optional + nullable -> nullable');
+  assert.ok(/reqNullable: String\n/.test(schema!), 'required + nullable must be nullable, not String!');
+  assert.ok(/reqRefNullable: String\n/.test(schema!), 'nullability on the referenced component counts too');
+  // a required argument whose value may be null cannot take `!` either — GraphQL has no way to say
+  // "must be sent, may be null", so null wins and a missing parameter is the API's own error
+  assert.ok(/since: String[^!]/.test(schema!), 'required + nullable parameter -> no !');
+});
+
+test('test_required_nested_array_bang_stays_on_the_line', { todo: 'the ! lands on its own line' }, async () => {
+  // A required list of lists writes its own line ending before the `!` is added, so the `!` lands
+  // alone on the next line. Parses fine (line breaks are ignored), reads wrong. The field is only
+  // reachable by naming its path — under `>**` a list of lists has no leaf and is dropped.
+  // Marked todo: asserts the wanted output, fails today. see docs/issues.md #59
+  const schema = await runOasTest(
+    'required-nested-array.yaml',
+    ['get:/matrix>res:r>obj:type:matrixResponse>prop:array:#processes', 'get:/matrix>res:r>obj:type:matrixResponse>prop:array:#titles'],
+    1,
+    1,
+    false,
+    true,
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/processes: \[\[String\]\]!/.test(schema!), 'the ! belongs on the same line as the field');
+});
+
+test('test_61_sanitised_at_type_must_not_collide', { todo: 'both fields emit as `type`' }, async () => {
+  // TMF objects carry `@type` (from the Extensible base) next to a business field literally named
+  // `type`. Sanitising strips the `@`, nothing checks the result against the sibling names, and
+  // the written type ends up with two `type:` lines. see docs/issues.md #61
+  const schema = await runOasTest('TMF717_Customer360-v5.0.0.oas.yaml', ['get:/customer360>**'], 8, 56, false, true);
+  assert.ok(schema !== undefined);
+});
+
+test('test_required_oneof_null_field_is_kept', async () => {
+  // The third way a spec says "may be null": a choice list with a null arm. The null arm comes out
+  // and the schema is marked nullable instead; the field used to disappear. see docs/issues.md #60
+  const schema = await runOasTest('required-nullable-oneof.yaml', ['get:/thing>**'], 1, 4, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/reqOneOf: String\n/.test(schema!), 'oneOf [string, null] keeps the field, nullable');
+  assert.ok(/optAnyOf: String\n/.test(schema!), 'the anyOf spelling takes the same path');
+  assert.ok(/reqChoice: \w+\n/.test(schema!), 'two real choices stay a choice, the null takes the ! away');
+  assert.ok(/optObjChoice: \w+\n/.test(schema!), 'an object as the one choice keeps its own shape');
+  assert.ok(/optArr: \[String\]\n/.test(schema!), 'a list as the one choice becomes the list');
+  assert.ok(/nullOnly: JSON\n/.test(schema!), 'only-null degrades to JSON rather than disappearing');
+  // the two guards: left exactly as they were, which today means dropped
+  assert.ok(/optEnumChoice: ThingOneOfOptEnumChoice\n/.test(schema!), 'enum-or-null promotes AND stays nullable');
+  assert.ok(/enum ThingOneOfOptEnumChoice \{/.test(schema!), 'the promoted enum definition is emitted');
+  assert.ok(!/doubleNull/.test(schema!), 'two null choices cancel out under oneOf — untouched');
+  assert.ok(!/constrained/.test(schema!), 'a type beside the choice list combines with it — untouched');
+});
+
+test('test_required_and_nullable_31_type_array', async () => {
+  // The OAS 3.1 spelling of the same thing: `type: [string, 'null']`. refA and refB share one
+  // component, so the second visit sees it already rewritten and must agree. see docs/issues.md #55
+  const schema = await runOasTest('required-nullable-31.yaml', ['get:/thing>**'], 1, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/reqTypeArray: String\n/.test(schema!), 'required + type [string, null] -> nullable');
+  assert.ok(/refA: String\n/.test(schema!), 'first visit through the shared component');
+  assert.ok(/refB: String\n/.test(schema!), 'second visit must agree with the first');
+});
+
 test('test_shapeless_object_schema_becomes_json_scalar', async () => {
   // `{}` / `{ additionalProperties: false }` schemas (Slack shares pattern) used to throw
   // "Cannot handle schema" when reached via fromSchema (array items, members). They are objects
@@ -840,6 +992,16 @@ test('test_shapeless_object_schema_becomes_json_scalar', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/privateChannels: \[JSON\]/.test(schema!), 'additionalProperties:false items -> [JSON]');
   assert.ok(/publicChannels: \[JSON\]/.test(schema!), 'empty {} items -> [JSON]');
+});
+
+test('test_typeless_object_items_degrade_to_json', async () => {
+  // `items: { type: object }` — an object with a declared type but no properties — degrades to
+  // [JSON] exactly like `items: {}` and `additionalProperties: false` in the test above. It used to
+  // be dropped from the emitted type entirely. Same fixture, `archivedChannels`.
+  // see docs/issues.md #56
+  const schema = await runOasTest('shapeless-object.yaml', ['get:/messages>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/archivedChannels: \[JSON\]/.test(schema!), 'items:{type:object} should degrade to [JSON]');
 });
 
 test('test_response_allof_snake_path_def_ref_names_converge', async () => {
@@ -986,7 +1148,7 @@ test('test_enum_query_param_is_a_scalar_argument', async () => {
   // An argument can only be a plain value, so petstore's `status` is written as `String`:
   //   status: { in: query, schema: { type: string, enum: [available, pending, sold] } }
   // The list of allowed values must never be written inside the argument. see docs/issues.md #53
-  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 3, false, true);
+  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/petFindByStatus\(status: String/.test(schema!), 'the enum param is a scalar argument');
   assert.ok(!/enum Enum \{/.test(schema!), 'no enum definition inside the argument list');
@@ -1141,9 +1303,9 @@ test('test_map_field_key_aliasing_not_duplicated', async () => {
   });
   await gen.visit();
   const sdl = gen.generateSchema(['get:/coupons>**']);
-  const occurrences = (sdl.match(/currencyOptions: "currency_options"/g) ?? []).length;
+  const occurrences = (sdl.match(/currencyOptions: currency_options/g) ?? []).length;
   assert.strictEqual(occurrences, 1, 'the alias must be written exactly once');
-  assert.match(sdl, /currencyOptions: "currency_options"->entries \{/);
+  assert.match(sdl, /currencyOptions: currency_options->entries \{/);
 });
 
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
@@ -1160,7 +1322,7 @@ test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
 test('test_enum_fields_selected_and_degraded', async () => {
   // `>**` expansion must include enum props (slack's ok-only stubs collapsed to zero types), and
   // enums without a GraphQL form degrade honestly. see docs/issues.md #24
-  const schema = await runOasTest('enum-fields.yaml', ['get:/status>**'], 1, 2, false, true);
+  const schema = await runOasTest('enum-fields.yaml', ['get:/status>**'], 1, 3, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/ok: Boolean!/.test(schema!), 'boolean enum degrades to Boolean');
   assert.ok(/state: State\b/.test(schema!), 'valid string enum keeps its enum type');
@@ -1168,7 +1330,13 @@ test('test_enum_fields_selected_and_degraded', async () => {
   assert.ok(/\bsuspended\b/.test(schema!) && !/suspended /.test(schema!), 'sloppy value trimmed');
   assert.ok(/reaction: String\b/.test(schema!), 'non-identifier enum values degrade to String');
   assert.ok(/plus1: Int/.test(schema!) && /minus1: Int/.test(schema!), 'signed fields disambiguated');
-  assert.ok(/plus1: "\+1"/.test(schema!) && /minus1: "-1"/.test(schema!), 'selection aliases keep raw keys');
+  assert.ok(/plus1: \$\."\+1"/.test(schema!) && /minus1: \$\."-1"/.test(schema!), 'selection aliases keep raw keys');
+  // Declaration site decides whether an enum survives: `inlineState` carries the same value set as
+  // `state` but is declared on the property instead of as a named component, and degrades to String
+  // with no warning. Generators targeting this tool must hoist enums to components. see #57
+  assert.ok(/inlineState: StatusResponseInlineState\b/.test(schema!), 'inline enum promoted, named after type + field');
+  assert.ok(/enum StatusResponseInlineState \{/.test(schema!), 'the promoted enum definition is emitted');
+  assert.ok(!/enum InlineState\b/.test(schema!), 'no enum type is emitted for an inline enum');
 });
 
 test('test_mutation_params_and_body_share_one_argument_list', async () => {
@@ -1288,3 +1456,4 @@ test('test_http_block_layout_with_all_members', async () => {
   assert.ok(/\n {6}\}\n/.test(http), 'http closing brace at indent 6 (aligned under http:)');
   assert.ok(!/,\n/.test(http), 'no commas between http members');
 });
+

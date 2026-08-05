@@ -29,7 +29,7 @@ test('test_corpus_mut_digitalocean', async () => {
 });
 
 test('test_corpus_mut_box', async () => {
-  await runOasTest('box.yaml', ['post:/collaboration_whitelist_entries>**'], 258, 3);
+  await runOasTest('box.yaml', ['post:/collaboration_whitelist_entries>**'], 258, 7);
 });
 
 test('test_corpus_mut_openai', async () => {
@@ -37,11 +37,11 @@ test('test_corpus_mut_openai', async () => {
 });
 
 test('test_corpus_mut_asana', async () => {
-  await runOasTest('asana.yaml', ['post:/attachments>**'], 167, 3);
+  await runOasTest('asana.yaml', ['post:/attachments>**'], 167, 4);
 });
 
 test('test_corpus_mut_sendgrid', async () => {
-  await runOasTest('sendgrid.yaml', ['post:/alerts>**'], 334, 2);
+  await runOasTest('sendgrid.yaml', ['post:/alerts>**'], 334, 3);
 });
 
 test('test_corpus_mut_github', async () => {
@@ -53,5 +53,5 @@ test('test_corpus_mut_omni', async () => {
 });
 
 test('test_corpus_mut_confluence', async () => {
-  await runOasTest('confluence.json', ['put:/wiki/rest/api/audit/retention>**'], 130, 2);
+  await runOasTest('confluence.json', ['put:/wiki/rest/api/audit/retention>**'], 130, 3);
 });

@@ -57,10 +57,22 @@ export function sanitiseFieldForSelect(name: string): string {
   if (sanitised === name && !isProtected(name)) {
     return sanitised;
   }
-  // Alias: safe GraphQL field <- original JSON key, always quoted (it is not a bare
-  // identifier — covers spaces, `$`, `%`, leading digits, etc.).
+  // Alias: safe GraphQL field <- original JSON key, bare when it is an identifier, `$."key"` when
+  // not — a plain quoted key after an alias is a string LITERAL under connect/v0.4. see #62
+  // e.g. (stats/fixtures) `ko_time` -> `koTime: ko_time`, not `koTime: "ko_time"`
   const original = name.startsWith('@') ? name : fieldName;
-  return `${sanitised}: "${original}"`;
+  // the router's own `Identifier ::= [a-zA-Z_] NO_SPACE [0-9a-zA-Z_]*` (json_selection/README.md);
+  // `true`/`false`/`null` pass it but read as literals in value position, so they take the path form
+  const isBareKey = /^[_A-Za-z][_0-9A-Za-z]*$/.test(original) && !/^(true|false|null)$/.test(original);
+  const key = isBareKey ? original : `$."${escapeSelectionKey(original)}"`;
+  return `${sanitised}: ${key}`;
+}
+
+// Escape for the router's string literal: backslash escapes the next char, `\n` is newline,
+// every other escaped char maps to itself. NOT JSON escaping — `\t` would read as a bare `t`.
+// e.g. a `say "hi"` key -> `$."say \"hi\""`, `back\slash` -> `$."back\\slash"`
+function escapeSelectionKey(key: string): string {
+  return key.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 }
 
 export function upperFirst(s: string): string {

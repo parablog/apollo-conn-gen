@@ -14,6 +14,7 @@ import {
   PropObj,
   PropScalar,
   ReferenceObject,
+  Res,
   Scalar,
   Union,
 } from './internal.js';
@@ -294,6 +295,33 @@ export class T {
     }
   }
 
+  // What the operation gives back, with the response wrapper removed. A list stays a list.
+  // e.g. (petstore) get:/pet/findByStatus returns a list of pets:
+  //   responses: { '200': { schema: { type: array, items: { $ref: '#/c/s/Pet' } } } }
+  //   get:/pet/findByStatus
+  //    └─ res:r
+  //        └─ array:#/components/schemas/Pet        <- this is what comes back
+  //            └─ obj:type:#/components/schemas/Pet
+  // This is the shape of the whole answer. Callers that want one item use responseItemType.
+  public static responseType(op: Op): IType | undefined {
+    const node: IType | undefined = op.resultType;
+    return node instanceof Res ? node.response : node;
+  }
+
+  // One item of what the operation gives back, with any list wrappers taken off. A list of pages,
+  // each of which is one of several kinds, answers "a page":
+  //   get:/pages
+  //    └─ res:r
+  //        └─ array:#/components/schemas/AnyPage
+  //            └─ union:#/components/schemas/AnyPage    <- this
+  public static responseItemType(op: Op): IType | undefined {
+    let node = T.responseType(op);
+    while (node instanceof Arr) {
+      node = node.itemsType;
+    }
+    return node;
+  }
+
   // The occupant is the type already stored under our name: a different shape collides (rename,
   // see #9/#12); a same-schema occupant dedups instead — renaming it would orphan it (see #18).
   // e.g. (googlebooks):
@@ -371,15 +399,18 @@ export class T {
     return !!occupant && occupant.constructor !== node.constructor;
   }
 
-  // Qualify a colliding inline name with its container (nearest non-prop ancestor), e.g. `listPrice`
-  // under `offersItem` -> `OffersItemListPrice`, bumping `2`, `3`… until free. Both parts go through
-  // genTypeName so the result is always a valid identifier (the container name may itself be an
-  // `[inline:…]` placeholder) and is idempotent under emission. see docs/issues.md #9
+  // Qualify a colliding inline name with its container, bumping `2`, `3`… until free.
+  // e.g. (googlebooks.yaml) `listPrice` under `offersItem` -> `OffersItemListPrice`. Both parts go
+  // through genTypeName so the result is always a valid identifier. see docs/issues.md #9
   public static resolveNameConflict(node: IType, context: OasContext): void {
     const base = Naming.genTypeName(T.findNonPropParent(node.parent!).name) + Naming.genTypeName(node.name);
+    // a made-up enum name must also stay off component names that are never visited — the
+    // component cannot rename itself. e.g. (petstore.yaml) `Category` is taken in every op. #57
+    const schemas = node instanceof En ? context.resolvePointer('#/components/schemas') : undefined;
+    const reserved = new Set(Object.keys((schemas as Record<string, unknown>) ?? {}).map(Naming.genTypeName));
     let candidate = base;
-    for (let n = 2; context.types.has(candidate); n++) {
-      if (T.canConvergeOn(node, context.types.get(candidate), candidate)) {
+    for (let n = 2; context.types.has(candidate) || reserved.has(candidate); n++) {
+      if (context.types.has(candidate) && T.canConvergeOn(node, context.types.get(candidate), candidate)) {
         break;
       }
       candidate = `${base}${n}`;
