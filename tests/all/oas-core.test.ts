@@ -1353,3 +1353,37 @@ test('test_http_block_layout_with_all_members', async () => {
   assert.ok(!/,\n/.test(http), 'no commas between http members');
 });
 
+
+// A list response and a single-object response, through the response helpers. They answer different
+// questions and both are needed: `responseType` is the shape of the whole answer, `responseItemType`
+// and `responseItemSchema` are the shape of one item. Anything asking "what kind of thing does this
+// op return" wants the item — reading the whole answer instead is what hid #58 for a list of unions.
+test('test_oas_responseType_keeps_the_list_wrapper', async () => {
+  const gen = await OasGen.fromFile(`${oasBasePath}/petstore.yaml`, {} as never);
+  await gen.visit();
+  // resultType is filled in while generating, not while visiting
+  gen.generateSchema(['get:/pet/findByStatus>**', 'get:/pet/{petId}>**']);
+
+  const list = gen.paths.get('get:/pet/findByStatus')!;
+  const single = gen.paths.get('get:/pet/{petId}')!;
+  assert.ok(T.isOp(list) && T.isOp(single));
+
+  // `[Pet]` stays an array here
+  assert.equal(T.responseType(list)!.id.startsWith('array:'), true);
+  // ... but the schema behind it is Pet's, because the selection maps each element
+  assert.deepEqual(Object.keys(T.responseItemSchema(list)?.properties ?? {}).sort(), [
+    'category',
+    'id',
+    'name',
+    'photoUrls',
+    'status',
+    'tags',
+  ]);
+
+  // a single object answers the same schema through both
+  assert.equal(T.responseType(single)!.id.startsWith('obj:'), true);
+  assert.deepEqual(
+    Object.keys(T.responseItemSchema(single)?.properties ?? {}).sort(),
+    Object.keys(T.responseItemSchema(list)?.properties ?? {}).sort(),
+  );
+});
