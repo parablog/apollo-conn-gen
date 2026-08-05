@@ -24,10 +24,62 @@ components:
       type: object
       required:
         - reqOneOf
+        - reqChoice
       properties:
         reqOneOf:
           oneOf:
             - type: string
             - type: "null"
         plain:
+          type: string
+        # the anyOf spelling of the same thing
+        optAnyOf:
+          anyOf:
+            - type: string
+            - type: "null"
+        # two real choices stay a choice; the null only takes the ! away
+        reqChoice:
+          oneOf:
+            - $ref: "#/components/schemas/Card"
+            - $ref: "#/components/schemas/Wallet"
+            - type: "null"
+        # a real object as the one choice — kept as it is, its fields survive
+        optObjChoice:
+          oneOf:
+            - type: object
+              properties:
+                label:
+                  type: string
+            - type: "null"
+        # a list as the one choice
+        optArr:
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: "null"
+        # only null is allowed: nothing to build a type from, degrades to JSON
+        nullOnly:
+          oneOf:
+            - type: "null"
+        # two null choices cancel out under oneOf (null would match both) — left alone
+        doubleNull:
+          oneOf:
+            - type: "null"
+            - type: "null"
+        # `type: string` beside the choice list ANDs with it, so null is rejected — left alone
+        constrained:
+          type: string
+          oneOf:
+            - type: string
+            - type: "null"
+    Card:
+      type: object
+      properties:
+        pan:
+          type: string
+    Wallet:
+      type: object
+      properties:
+        provider:
           type: string

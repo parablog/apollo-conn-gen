@@ -36,6 +36,7 @@ import { warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { GqlUtils } from '../utils/gql.js';
 import { Naming } from '../utils/naming.js';
+import { Nullability } from '../utils/nullability.js';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
 export class Factory {
@@ -58,7 +59,7 @@ export class Factory {
     if (!schema) throw new Error('Unknown or undefined schema');
     const schemaObj: SchemaObject = schema as SchemaObject;
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
-    this.normalizeTypeArray(schemaObj);
+    Nullability.normalize(schemaObj);
 
     // Cycle cut (see docs/issues.md #10): a recursive schema can only close through a component `$ref`,
     // and `lookupRef` returns the same `SchemaObject` instance for a given ref. So if this resolved ref's
@@ -110,19 +111,6 @@ export class Factory {
     }
 
     return result;
-  }
-
-  // OAS 3.1 spells "may be null" as a type array. Keep the first real type and mark the schema the
-  // 3.0 way: { type: [string, 'null'] } -> { type: string, nullable: true }. see #23, #55
-  private static normalizeTypeArray(schema: SchemaObject): void {
-    const s = schema as Record<string, unknown>;
-    if (Array.isArray(s.type)) {
-      const real = (s.type as unknown[]).filter((t) => t && t !== 'null');
-      if (real.length < (s.type as unknown[]).length) {
-        s.nullable = true;
-      }
-      s.type = real[0];
-    }
   }
 
   // every member is a legal GraphQL enum value once trimmed (TMF637 ships `'aborted '`): a bare
@@ -336,7 +324,7 @@ export class Factory {
     // uses the type of the schema to find out what kind of property it is
     const schemaObj = schema as SchemaObject;
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
-    this.normalizeTypeArray(schemaObj);
+    Nullability.normalize(schemaObj);
     const type = schemaObj.type;
 
     if (type) {

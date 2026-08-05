@@ -2966,7 +2966,7 @@ Marked `todo` — asserts the wanted output, fails today.
 **AST:** no change expected — a writer fix, not a node-shape change.
 **Refs:** #55 (found while fixing it; the `!` writer is the same line of `prop.ts`).
 
-## 60 · A required `oneOf [string, null]` property loses its field entirely — ⬜ Open
+## 60 · A required `oneOf [string, null]` property loses its field entirely — ✅ Fixed (working tree)
 
 **Symptom:** the field is missing from the emitted type. The other two ways a spec says "may be
 null" now come out as a nullable field (#55); this third spelling silently loses the field — worse,
@@ -2989,11 +2989,40 @@ type ThingOneOf { plain: String }          # reqOneOf gone
 type ThingOneOf { plain: String  reqOneOf: String }
 ```
 
-**Cause:** partially diagnosed. The union builder skips a `{ type: "null" }` member (`union.ts`,
-the #33 skip), which is right — but what remains is a union of one `String`, and somewhere between
-that and the emitted type the field disappears rather than collapsing to the single member. The
-first fix attempt collapsed one-member unions inside `Factory` and broke the TMF637 recursion test,
-so the collapse belongs later than schema-build time; diagnose before re-attempting.
+**Cause:** the union builder skips a `{ type: "null" }` member (`union.ts`, the #33 skip), leaving
+a one-member union with nothing to pick a branch by, so #25 merges member fields — and a plain
+string has none, so the merged type is empty and dropped, the same way #56's empty object was.
+
+**Fix:** `Nullability.normalize` (`src/oas/utils/nullability.ts`, grown out of the #23/#55
+rewrite; `Factory` calls it once per schema) takes the null choice out of a `oneOf`/`anyOf` and
+marks the schema `nullable: true` — the 3.0 keyword the `!` guards already read. Runs before any
+node is built, in place on the shared schema, safe to run twice. What is left decides the shape:
+two or more choices stay a choice (now without the `!`); one plain value
+(string/number/boolean/list) becomes the value itself; nothing left degrades to JSON.
+
+Decisions taken, in order of importance:
+- **Two guards protect everything pre-existing.** A schema with a shape of its own beside the
+  choice list (`type: string` next to the `oneOf`) is left byte-identical — both apply at once, so
+  null is not actually allowed there. And only a list with **exactly one** null choice is touched:
+  two cancel out under `oneOf` (null would match both), and zero means there is nothing to do. The
+  first fix attempt broke `test_024` (TMF637's `PartyOrPartyRole: oneOf [$ref]`, one member, no
+  null) precisely because it had no such guard — the missing piece was the guard, not a different
+  layer.
+- **`oneOf [X, null]` is read as the author's "X or null"**, even though a remaining choice might
+  itself allow null (a strict reading then says the null choice can never match). `$ref`s are not
+  resolved at this layer so the strict reading cannot be checked, and for output types the nullable
+  direction is the safe error: a dropped `!` never fails at runtime, a kept one does.
+- **Only plain values collapse.** A single `$ref` or inline object keeps its choice list — that
+  list is byte-identical to what the #33 skip already produced, so nothing about unions, names or
+  selection paths moves. A one-choice list whose choice turns out to have no fields (a `$ref` to a
+  scalar, `properties: {}`) still drops today, as it did before — out of scope, none in the corpus.
+- **`oneOf: [{type: 'null'}]` degrades to a nullable `JSON`** rather than disappearing — lossy on
+  purpose (GraphQL has no only-null type), pinned by its own test case.
+
+**Tests:** `test_required_oneof_null_field_is_kept` (todo dropped) now covers eight shapes in
+`required-nullable-oneof.yaml`: both spellings, the kept two-arm choice, the kept object arm, the
+collapsed list arm, the only-null degrade, and one pin per guard (`doubleNull`, `constrained` —
+both asserted absent, exactly as today). `test_024` pins the protected TMF637 shape.
 
 **Tests:** `test_required_oneof_null_field_is_kept` in `tests/all/oas-core.test.ts`, fixture
 `tests/resources/oas/required-nullable-oneof.yaml`. Marked `todo` — asserts the wanted output,

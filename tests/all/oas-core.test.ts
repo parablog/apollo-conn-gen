@@ -865,14 +865,20 @@ test('test_required_nested_array_bang_stays_on_the_line', { todo: 'the ! lands o
   assert.ok(/processes: \[\[String\]\]!/.test(schema!), 'the ! belongs on the same line as the field');
 });
 
-test('test_required_oneof_null_field_is_kept', { todo: 'the field is dropped from the type' }, async () => {
-  // The third way a spec says "may be null": a oneOf with a null branch. The null branch is
-  // skipped, but skipping it currently loses the whole field — it should stay, as a nullable
-  // String, exactly like the other two spellings in the tests above.
-  // Marked todo: asserts the wanted output, fails today. see docs/issues.md #60
-  const schema = await runOasTest('required-nullable-oneof.yaml', ['get:/thing>**'], 1, 1, false, true);
+test('test_required_oneof_null_field_is_kept', async () => {
+  // The third way a spec says "may be null": a choice list with a null arm. The null arm comes out
+  // and the schema is marked nullable instead; the field used to disappear. see docs/issues.md #60
+  const schema = await runOasTest('required-nullable-oneof.yaml', ['get:/thing>**'], 1, 3, false, true);
   assert.ok(schema !== undefined);
-  assert.ok(/reqOneOf: String\n/.test(schema!), 'oneOf [string, null] must keep the field, nullable');
+  assert.ok(/reqOneOf: String\n/.test(schema!), 'oneOf [string, null] keeps the field, nullable');
+  assert.ok(/optAnyOf: String\n/.test(schema!), 'the anyOf spelling takes the same path');
+  assert.ok(/reqChoice: \w+\n/.test(schema!), 'two real choices stay a choice, the null takes the ! away');
+  assert.ok(/optObjChoice: \w+\n/.test(schema!), 'an object as the one choice keeps its own shape');
+  assert.ok(/optArr: \[String\]\n/.test(schema!), 'a list as the one choice becomes the list');
+  assert.ok(/nullOnly: JSON\n/.test(schema!), 'only-null degrades to JSON rather than disappearing');
+  // the two guards: left exactly as they were, which today means dropped
+  assert.ok(!/doubleNull/.test(schema!), 'two null choices cancel out under oneOf — untouched');
+  assert.ok(!/constrained/.test(schema!), 'a type beside the choice list combines with it — untouched');
 });
 
 test('test_required_and_nullable_31_type_array', async () => {
