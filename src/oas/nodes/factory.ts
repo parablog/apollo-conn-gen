@@ -380,15 +380,17 @@ export class Factory {
           const propType: IType = new Obj(parent, ref || propName, schemaObj);
           prop = new PropObj(parent, propName, schemaObj, propType);
         }
-      } else if (ref && schemaObj?.enum) {
+      } else if (schemaObj?.enum) {
         if (this.isGqlEnum(schemaObj)) {
+          // an inline enum starts under its field's name; En.visit gives it the owning type's name
+          // in front: (petstore.yaml) Order's `status` -> OrderStatus. see docs/issues.md #57
           const en: En = new En(
             parent,
-            ref,
+            ref ?? propName,
             schemaObj,
             (schemaObj.enum as string[]).map((v) => v.trim()),
           );
-          prop = new PropEn(parent, propName, ref, schemaObj);
+          prop = new PropEn(parent, propName, en, schemaObj);
           prop.add(en);
         } else {
           // No GraphQL enum form for this one — degrade to the base scalar instead of emitting

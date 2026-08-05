@@ -1,0 +1,37 @@
+openapi: 3.0.0
+info:
+  title: every bump candidate is a component that never gets visited
+  version: 1.0.0
+# see docs/issues.md #57
+# User.role wants UserRole, then UserRole2 — both are components, neither selected. The made-up
+# name must keep bumping past names the spec owns, not just past names already stored.
+servers:
+  - url: https://example.com
+paths:
+  /users:
+    get:
+      operationId: getUsers
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [admin, member]
+    UserRole:
+      type: object
+      properties:
+        title:
+          type: string
+    UserRole2:
+      type: object
+      properties:
+        label:
+          type: string

@@ -32,6 +32,12 @@ components:
             - type: "null"
         plain:
           type: string
+        # a choice of an enum or null: the null goes into `nullable`, the enum is promoted (#57)
+        optEnumChoice:
+          oneOf:
+            - type: string
+              enum: [fast, slow]
+            - type: "null"
         # the anyOf spelling of the same thing
         optAnyOf:
           anyOf:

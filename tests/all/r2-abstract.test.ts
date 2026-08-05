@@ -11,7 +11,7 @@ test('test_R2_union_discriminator_emits_typename_match_and_composes', async () =
   // mapping: { book: Book, movie: Movie } }. With real unions + connect v0.4, the
   // connector must emit a real `union` and a `...->match` selection that sets a string-literal
   // __typename per member. Composes only at fed 2.14.
-  const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 3, false, false, undefined, false, false, {
+  const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 5, false, false, undefined, false, false, {
     connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.14',
     composeFederationVersion: '2.14.1',
@@ -34,11 +34,11 @@ test('test_R2_union_partial_selection_omits_unselected_member', async () => {
   // lists only Book. Union.dependencies() must mirror generate()/->match (selectedMembers). see #36
   const paths = [
     'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:scalar:id',
-    'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:scalar:type',
+    'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:enum:type',
     'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:scalar:title',
     'get:/item>res:r>union:type:itemResponse>obj:type:#/c/s/Book>prop:scalar:author',
   ];
-  const schema = await runOasTest('simple-oneOf-example.yaml', paths, 1, 2, false, false, undefined, false, false, {
+  const schema = await runOasTest('simple-oneOf-example.yaml', paths, 1, 3, false, false, undefined, false, false, {
     connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.14',
     composeFederationVersion: '2.14.1',
@@ -185,7 +185,7 @@ test('test_R2_union_discriminator_no_mapping_uses_bare_refname', async () => {
     'r2-discriminator-no-mapping.yaml',
     ['get:/item>**'],
     1,
-    3,
+    5,
     false,
     false,
     undefined,
@@ -223,7 +223,7 @@ test('test_R2_input_union_consolidated_kind_is_intentional (C6 investigation)', 
     'r2-input-union-consolidated.yaml',
     ['post:/create>**'],
     1,
-    2,
+    3,
     false,
     false,
     undefined,
