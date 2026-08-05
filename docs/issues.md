@@ -3081,7 +3081,41 @@ fails today.
 **Refs:** #55 (the other two spellings, fixed), #33 (the null-member skip this builds on), #25
 (discriminator-less unions degrade — the machinery a one-member collapse has to respect).
 
-## 62 · Every aliased response key is a string literal under connect/v0.4 — ✅ Fixed (working tree)
+## 61 · `@type` and `type` on the same object both emit as `type` — ⬜ Open
+
+**Symptom:** composition fails with `INVALID_GRAPHQL: Field type already exists on
+Customer360PromotionVO`. The written type carries two `type` fields.
+
+**OAS:** (TMF717) every entity extends `Extensible`, whose tag field is `@type`; the promotion
+object also has a business field literally named `type`:
+
+```yaml
+Extensible:
+  properties:
+    "@type": { type: string }        # "the sub-class Extensible name"
+Customer360PromotionVO:
+  allOf:
+    - $ref: '#/components/schemas/Entity'   # Entity -> Extensible -> @type
+    - type: object
+      properties:
+        type: { type: string }       # "Type of promotion. The basic type is Award/Discount/…"
+```
+
+**Cause:** `@type` is sanitised to `type` for GraphQL (the selection keeps the raw key through an
+alias, `type: "@type"`), but nothing checks the sanitised name against the object's other fields.
+The allOf fold then puts both props on one type and each writes its own `type:` line — the
+selection duplicates the same way.
+
+- `@baseType`/`@schemaLocation` sanitise cleanly (no plain `baseType` field beside them), so only
+  `@type` + `type` collides
+- accounts for the corpus's only 2 remaining `INVALID_GRAPHQL` ops (both TMF717 customer360 reads)
+- pre-existing: reproduced identically on the pre-#57 baseline
+
+**Test:** `test_61_sanitised_at_type_must_not_collide` in `tests/all/oas-core.test.ts`, failing as
+todo — asserts the op composes.
+**Refs:** #42 (the alias machinery involved), #57 (whose corpus sweep surfaced it).
+
+## 62 · Every aliased response key is a string literal under connect/v0.4 — ✅ Fixed
 
 **Symptom:** a field whose JSON key needed an alias resolves to **the name of the key** instead of its
 value. Composition is clean, the request is correct, the response is correct — the value is then thrown

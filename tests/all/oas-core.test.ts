@@ -947,6 +947,14 @@ test('test_required_nested_array_bang_stays_on_the_line', { todo: 'the ! lands o
   assert.ok(/processes: \[\[String\]\]!/.test(schema!), 'the ! belongs on the same line as the field');
 });
 
+test('test_61_sanitised_at_type_must_not_collide', { todo: 'both fields emit as `type`' }, async () => {
+  // TMF objects carry `@type` (from the Extensible base) next to a business field literally named
+  // `type`. Sanitising strips the `@`, nothing checks the result against the sibling names, and
+  // the written type ends up with two `type:` lines. see docs/issues.md #61
+  const schema = await runOasTest('TMF717_Customer360-v5.0.0.oas.yaml', ['get:/customer360>**'], 8, 56, false, true);
+  assert.ok(schema !== undefined);
+});
+
 test('test_required_oneof_null_field_is_kept', async () => {
   // The third way a spec says "may be null": a choice list with a null arm. The null arm comes out
   // and the schema is marked nullable instead; the field used to disappear. see docs/issues.md #60
