@@ -196,10 +196,22 @@ export class Naming {
       return key + ': ' + sanitised;
     }
 
-    // Response direction: safe GraphQL field <- original JSON key, always quoted (the key
-    // is not a bare identifier — covers spaces, `$`, `%`, leading digits, etc.).
+    // Response direction: safe GraphQL field <- original JSON key. Write the key bare when it is
+    // one; otherwise as the path step `$."key"` — after an alias a plain quoted string is a string
+    // LITERAL under connect/v0.4, returning the key's own name as the value. see #62
     const original = name.startsWith('@') ? name : fieldName;
-    return `${sanitised}: "${original}"`;
+    // the router's own `Identifier ::= [a-zA-Z_] NO_SPACE [0-9a-zA-Z_]*` (json_selection/README.md);
+    // `true`/`false`/`null` pass it but read as literals in value position, so they take the path form
+    const isBareKey = /^[_A-Za-z][_0-9A-Za-z]*$/.test(original) && !/^(true|false|null)$/.test(original);
+    const key = isBareKey ? original : `$."${Naming.escapeSelectionKey(original)}"`;
+    return `${sanitised}: ${key}`;
+  }
+
+  // Escape for the router's string literal: backslash escapes the next char, `\n` is newline,
+  // every other escaped char maps to itself. NOT JSON escaping — `\t` would read as a bare `t`.
+  // e.g. (r3-edge-cases.yaml) `say "hi"` -> `$."say \"hi\""`, `back\slash` -> `$."back\\slash"`
+  private static escapeSelectionKey(key: string): string {
+    return key.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
   }
 
   public static genOperationName(path: string, operation: Operation): string {

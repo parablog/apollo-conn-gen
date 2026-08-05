@@ -1295,9 +1295,9 @@ test('test_map_field_key_aliasing_not_duplicated', async () => {
   });
   await gen.visit();
   const sdl = gen.generateSchema(['get:/coupons>**']);
-  const occurrences = (sdl.match(/currencyOptions: "currency_options"/g) ?? []).length;
+  const occurrences = (sdl.match(/currencyOptions: currency_options/g) ?? []).length;
   assert.strictEqual(occurrences, 1, 'the alias must be written exactly once');
-  assert.match(sdl, /currencyOptions: "currency_options"->entries \{/);
+  assert.match(sdl, /currencyOptions: currency_options->entries \{/);
 });
 
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
@@ -1322,7 +1322,7 @@ test('test_enum_fields_selected_and_degraded', async () => {
   assert.ok(/\bsuspended\b/.test(schema!) && !/suspended /.test(schema!), 'sloppy value trimmed');
   assert.ok(/reaction: String\b/.test(schema!), 'non-identifier enum values degrade to String');
   assert.ok(/plus1: Int/.test(schema!) && /minus1: Int/.test(schema!), 'signed fields disambiguated');
-  assert.ok(/plus1: "\+1"/.test(schema!) && /minus1: "-1"/.test(schema!), 'selection aliases keep raw keys');
+  assert.ok(/plus1: \$\."\+1"/.test(schema!) && /minus1: \$\."-1"/.test(schema!), 'selection aliases keep raw keys');
   // Declaration site decides whether an enum survives: `inlineState` carries the same value set as
   // `state` but is declared on the property instead of as a named component, and degrades to String
   // with no warning. Generators targeting this tool must hoist enums to components. see #57

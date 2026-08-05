@@ -38,12 +38,16 @@ test('test_R3_oas_sanitiseFieldForSelect_aliases', () => {
   // Already-valid keys pass through bare (no alias).
   assert.strictEqual(Naming.sanitiseFieldForSelect('id'), 'id');
   assert.strictEqual(Naming.sanitiseFieldForSelect('userName'), 'userName');
-  // Everything else aliases the safe field back to the original (quoted) JSON key.
-  assert.strictEqual(Naming.sanitiseFieldForSelect('created_at'), 'createdAt: "created_at"');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('media-metadata'), 'mediaMetadata: "media-metadata"');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('2fa_enabled'), '_2faEnabled: "2fa_enabled"');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('full name'), 'fullName: "full name"');
-  assert.strictEqual(Naming.sanitiseFieldForSelect('cost$'), 'cost: "cost$"');
+  // Everything else aliases the safe field back to the original key: bare when it is an
+  // identifier, the `$."key"` path step when not — a quoted key would be a literal (#62).
+  assert.strictEqual(Naming.sanitiseFieldForSelect('created_at'), 'createdAt: created_at');
+  assert.strictEqual(Naming.sanitiseFieldForSelect('_id'), 'id: _id');
+  assert.strictEqual(Naming.sanitiseFieldForSelect('media-metadata'), 'mediaMetadata: $."media-metadata"');
+  assert.strictEqual(Naming.sanitiseFieldForSelect('2fa_enabled'), '_2faEnabled: $."2fa_enabled"');
+  assert.strictEqual(Naming.sanitiseFieldForSelect('full name'), 'fullName: $."full name"');
+  assert.strictEqual(Naming.sanitiseFieldForSelect('cost$'), 'cost: $."cost$"');
+  assert.strictEqual(Naming.sanitiseFieldForSelect('say "hi"'), 'sayHi: $."say \\"hi\\""');
+  assert.strictEqual(Naming.sanitiseFieldForSelect('back\\slash'), 'backSlash: $."back\\\\slash"');
 });
 
 test('test_R3_json_walker_naming_edge_cases', () => {
@@ -55,20 +59,38 @@ test('test_R3_json_walker_naming_edge_cases', () => {
     assert.ok(GQL_IDENTIFIER.test(jsonGenParamName(k)), `not a valid identifier: ${JSON.stringify(k)}`);
   }
   assert.strictEqual(jsonSanitiseForSelect('id'), 'id');
-  assert.strictEqual(jsonSanitiseForSelect('full name'), 'fullName: "full name"');
-  assert.strictEqual(jsonSanitiseForSelect('cost$'), 'cost: "cost$"');
+  assert.strictEqual(jsonSanitiseForSelect('full name'), 'fullName: $."full name"');
+  assert.strictEqual(jsonSanitiseForSelect('cost$'), 'cost: $."cost$"');
+  assert.strictEqual(jsonSanitiseForSelect('_id'), 'id: _id');
+  assert.strictEqual(jsonSanitiseForSelect('say "hi"'), 'sayHi: $."say \\"hi\\""');
+  assert.strictEqual(jsonSanitiseForSelect('back\\slash'), 'backSlash: $."back\\\\slash"');
 });
 
 test('test_R3_oas_edge_fixture_composes_with_safe_names', async () => {
   // End-to-end: a schema full of awkward JSON keys must produce valid, composable GraphQL
   // with each safe field aliased back to its original key. runOasTest composes via rover,
   // so an invalid identifier here would fail composition.
-  const schema = await runOasTest('r3-edge-cases.yaml', ['get:/things>**'], 1, 1);
+  const schema = await runOasTest('r3-edge-cases.yaml', ['get:/things>**'], 1, 3);
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('_2faEnabled: "2fa_enabled"'), 'leading-digit field aliased');
-  assert.ok(schema!.includes('cost: "cost$"'), 'dollar-sign field aliased');
-  assert.ok(schema!.includes('fullName: "full name"'), 'space field aliased');
-  assert.ok(schema!.includes('createdAt: "created_at"'), 'snake_case field aliased');
+  // path-step form for non-identifier keys; a quoted key after an alias is a literal (#62)
+  assert.ok(schema!.includes('_2faEnabled: $."2fa_enabled"'), 'leading-digit field aliased');
+  assert.ok(schema!.includes('cost: $."cost$"'), 'dollar-sign field aliased');
+  assert.ok(schema!.includes('fullName: $."full name"'), 'space field aliased');
+  // renamed-but-valid keys reference the key bare
+  assert.ok(schema!.includes('createdAt: created_at'), 'snake_case key referenced bare');
+  assert.ok(schema!.includes('id: _id'), 'renamed identifier key referenced bare');
+  assert.ok(!schema!.includes(': "_id"') && !schema!.includes(': "created_at"'), 'no literal alias left');
+});
+
+test('test_R3_aliased_container_and_escaped_keys_compose', async () => {
+  // The `$."key"` spelling on containers (`pageInfo: $."page info" { count }`) and the two
+  // escaping cases the router grammar allows: `\"` and `\\`. see docs/issues.md #62
+  const schema = await runOasTest('r3-edge-cases.yaml', ['get:/things>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('pageInfo: $."page info" {'), 'object under a non-identifier key');
+  assert.ok(schema!.includes('itemList: $."item list" {'), 'array under a non-identifier key');
+  assert.ok(schema!.includes('sayHi: $."say \\"hi\\""'), 'double quote escaped in the key');
+  assert.ok(schema!.includes('backSlash: $."back\\\\slash"'), 'backslash escaped in the key');
 });
 
 test('test_R3_type_name_leading_digit_is_sanitised', async () => {

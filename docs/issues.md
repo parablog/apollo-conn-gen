@@ -3080,3 +3080,128 @@ fails today.
 **AST:** to be decided by the diagnosis — likely the single member's node in place of the union.
 **Refs:** #55 (the other two spellings, fixed), #33 (the null-member skip this builds on), #25
 (discriminator-less unions degrade — the machinery a one-member collapse has to respect).
+
+## 62 · Every aliased response key is a string literal under connect/v0.4 — ✅ Fixed (working tree)
+
+**Symptom:** a field whose JSON key needed an alias resolves to **the name of the key** instead of its
+value. Composition is clean, the request is correct, the response is correct — the value is then thrown
+away. Found by running a generated connector through a router: `id` came back as the string `"_id"`.
+
+- **Affects the default output.** `connect/v0.4` is what gen emits with no `--spec`; the router parses
+  v0.4 and v0.5 with the same function, so both are affected and only v0.3 is not.
+- **This is #1's mechanism.** #1 introduced `alias: "original"` to map a safe GraphQL field back to a
+  non-identifier JSON key — and its own example, `_2faEnabled: "2fa_enabled"`, is now a literal.
+- Invisible to every check gen has: composition sees a `String` selected by something of type `String`.
+
+**OAS:** any key gen aliases — whether it *repairs* an invalid identifier or merely *renames* a valid one:
+```yaml
+properties:
+  _id:         { type: string }    # already a valid identifier — should never have been quoted
+  full name:   { type: string }    # genuinely needs quoting
+  2fa_enabled: { type: boolean }
+```
+
+**Example:**
+```graphql
+# now
+selection: """ id: "_id"   fullName: "full name" """
+# -> { "id": "_id", "fullName": "full name" }                  ✗ key names, returned as data
+
+# wanted
+selection: """ id: _id   fullName: $."full name" """
+# -> { "id": "seed-contact-alex", "fullName": "Alex Rivera" }
+```
+
+**Cause:** one half in gen, one half in the spec.
+
+- `Naming.sanitiseFieldForSelect` (`src/oas/utils/naming.ts`) quotes the key **unconditionally** in the
+  response direction. Its comment claims "the key is not a bare identifier", which is false whenever the
+  converter renames rather than repairs: `_id` sanitises to `id`, so `sanitised !== name` and it falls
+  into the quoted branch even though `_id` is a valid identifier. The request direction, four lines
+  above, already tests `/^[_A-Za-z][_0-9A-Za-z]*$/` before quoting.
+- The selection grammar changed meaning at v0.4:
+  ```ebnf
+  NamedSelection ::= "..." LitExpr | Alias LitExpr | PathSelection
+  Key            ::= Identifier | LitString
+  ```
+  Alternatives are tried left to right, so after an alias a quoted string matches `LitExpr` → `LitString`
+  — a literal. That arm was added in v0.4 on purpose, to make `__typename: "Book"` expressible. Under
+  v0.3 the only post-alias arm was `Alias PathSelection`, where a `LitString` **is** a `Key`, so the same
+  text was a key reference. In the router: `parse_v0_3` calls `PathSelection::parse` after the alias,
+  `parse_v0_4` calls `LitExpr::parse`.
+
+**Measured**, on two builds of one connector differing **only** in the `@link` URL:
+
+| `@link` | `id: "_id"` returns |
+|---|---|
+| `connect/v0.3` | `"seed-contact-alex"` — the value |
+| `connect/v0.4` | `"_id"` — the key's name |
+
+Both compose on stock rover 0.40 at fed 2.14.1, with no warning either way.
+
+**Renaming is still possible under v0.4 — the escape hatch just moved.** `Key ::= Identifier | LitString`
+still holds *inside a path step*, so a quoted string is a key there; only in the value position after an
+alias is it reinterpreted as a literal. Measured against a live router on v0.4, one payload, every
+spelling in one selection:
+
+| Written | Returns | |
+|---|---|---|
+| `fullName: "full name"` | the literal `"full name"` | ✗ |
+| `fullName: $."full name"` | the value | ✓ |
+| `fullName: @."full name"` | the value | ✓ |
+| `cost: $."cost$"` | the value | ✓ |
+| `twofa: $."2fa_enabled"` | the value | ✓ (leading digit) |
+| `id: "_id"` | the literal `"_id"` | ✗ |
+| `id: _id` | the value | ✓ |
+| `id: $."_id"` | the value | ✓ |
+
+**`$` is scope-local, so this nests correctly.** It is bound to "the value received by the closest
+enclosing `SubSelection`" (router `json_selection/README.md`), *not* the document root — verified: a
+`$."full name"` inside `nest { … }` returns the nested value, not the top-level one. `@` behaves the same
+here and differs only inside `->` method arguments. This is the part most likely to be got wrong on a
+first reading of the grammar, and it is what makes a blanket rewrite safe.
+
+**Fix:** the response direction gets the guard the request direction already has, and a path step for
+the keys that fail it — in BOTH copies of `sanitiseFieldForSelect` (`src/oas/utils/naming.ts` and the
+JSON walker's `src/json/walker/naming.ts`, deliberately siloed, so the same few lines twice):
+```ts
+const key = isBareKey ? original : `$."${escapeSelectionKey(original)}"`;
+return `${sanitised}: ${key}`;
+```
+Bare where the key is already an identifier (the `_id` class, which should never have been quoted), and
+`$."…"` for the keys #1 exists to handle (spaces, `$`, leading digits). Details settled while landing:
+- **Keys named `true`/`false`/`null` are excluded from the bare form** — in value position they parse
+  as literals, the same trap one step further. Unreachable today (such a key sanitises to itself and
+  never aliases), kept as a guard on the invariant.
+- **Escaping is the router's, not JSON's.** `parse_string_literal` maps `\n` to newline and every
+  other escaped char to itself — so `JSON.stringify` would corrupt keys (`\t` becomes a bare `t`).
+  `escapeSelectionKey` emits only the safe escapes: `\\`, `\"`, `\n`. Control characters other than
+  newline have no escaped spelling in the grammar — a key carrying one is unrepresentable; it was
+  already broken under the quoted form. A grammar ceiling, not ours.
+- **The container spelling composes.** `pageInfo: $."page info" { count }` and the array form pass
+  rover; the entry's runtime table did not cover it, so the live-router spot-check on the Sanity
+  connector is the remaining confirmation.
+
+**Care:** this rewrites every response selection gen emits, so it wants a corpus sweep rather than unit
+tests alone — the blast radius is #1's, which is most specs. Unmeasured here; the one datapoint is 992
+affected entries in a single Sanity connector.
+
+**Not the request direction (#28).** Bodies map `json key <- input field` and quote the key on the
+**left**, where a `LitString` key is still a key. Only the response direction is wrong.
+
+**Tests:** `r3-edge-cases.yaml` gained `_id`, an object and an array under non-identifier keys, and the
+two escaping keys (`say "hi"`, `back\slash`). `test_R3_oas_sanitiseFieldForSelect_aliases` and
+`test_R3_json_walker_naming_edge_cases` pin both copies at the unit level;
+`test_R3_oas_edge_fixture_composes_with_safe_names` and
+`test_R3_aliased_container_and_escaped_keys_compose` assert the emitted text and rover-compose it.
+Churn: the #42 map alias (`currencyOptions: currency_options->entries`) and the #24 signed enum
+aliases (`plus1: $."+1"`) flipped to the new forms. Asserting on the emitted text is the only option:
+composition cannot distinguish a literal from a key reference, which is the whole point — the runtime
+half is pinned by the table above.
+
+**AST:** none expected — emission-only, like #28/#29.
+**Refs:** #1 (introduced the quoted alias; its example is now wrong for v0.4), #42 (alias machinery),
+#28 (the request direction, unaffected), `src/oas/utils/naming.ts` (`sanitiseFieldForSelect`). Router
+side: `apollo-federation/src/connectors/json_selection/README.md` (grammar) and `parser.rs`
+(`parse_v0_3` / `parse_v0_4`). Found while building the Sanity connector, whose
+`sanity/issues.md #10` carries a post-process that un-quotes as a workaround.

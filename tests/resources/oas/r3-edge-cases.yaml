@@ -34,3 +34,24 @@ components:
           type: number
         "__typename":
           type: string
+        # renamed but already a valid identifier -- must reference bare, never quoted (#62)
+        _id:
+          type: string
+        # non-identifier keys on containers: the `$."key" { ... }` spelling must compose (#62)
+        "page info":
+          type: object
+          properties:
+            count:
+              type: integer
+        "item list":
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+        # keys the router string literal must escape: a double quote and a backslash (#62)
+        'say "hi"':
+          type: string
+        'back\slash':
+          type: string
