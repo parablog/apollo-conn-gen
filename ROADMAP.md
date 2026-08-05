@@ -147,6 +147,7 @@ inside the consuming items.
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
 | R8. `path`/`queryParams` JSONSelection | ✅ Done | serialization joins (inferred) + per-op `overrides` for path/queryParams (user intent) |
 | R9. Computed / literal bodies | ✅ Done | inferred `$args.input { … }` + `overrides[opId].body` raw JSONSelection (replace/drop) |
+| R14. Manual `@tag` declarations | ⬜ Idea | let the user declare tags on ops (types too?) that survive regeneration — overrides key, post-processing, or linter-assisted; shape undecided |
 
 ### Foundation (must precede version-sensitive items)
 
@@ -512,6 +513,28 @@ add the spec-surface row when it merges.
 
 **Files:** `src/oas/nodes/typeUtils.ts`, `propArray.ts`/`propComp.ts`/`propObj.ts`,
 `src/oas/io/writer.ts`, `src/versions.ts`. (gate: v0.5)
+
+### R14. Manual `@tag` declarations — ⬜ Idea (shape undecided)
+
+**Why:** governance. Contracts filter the supergraph by `@tag`, and which operations (or types)
+belong to which audience is pure user intent — OAS carries no signal for it, so gen cannot infer
+it. Today a hand-added `@tag` does not survive regeneration; the user needs a way to declare
+"this op / this type is tagged X" that is durable across regenerations, the same way per-op
+`overrides` are for paths/params/bodies.
+
+**Open questions (deliberately unsettled):**
+- **Granularity** — operations first (the concrete ask); types may follow, but tagging a shared
+  type has fan-out that op-level tags don't, so they may want different mechanisms.
+- **Mechanism** — candidates, not exclusive: a `tags: […]` key on the per-op `overrides` entry
+  (the R13 `selectionRoot` pattern: user intent in the existing file, emitted at generation);
+  a post-processing step (the Sanity converter's pattern — keeps gen's core tag-unaware);
+  or linter-assisted — the R11 selection linter already walks emitted ops/selections, so it could
+  verify declared tags against the schema (unknown op, tag on a dropped field) or even carry the
+  declarations.
+- **Emission** — `@tag` needs the federation `@link` import wired only when used, and tags on a
+  shared type must compose across every op that reaches it.
+
+Decide the shape when the first real consumer (a contracts-using customer) pins the requirements.
 
 ---
 
