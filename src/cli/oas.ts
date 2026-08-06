@@ -83,7 +83,9 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
   }
 
   if (opts.grep !== '*') {
-    const regex = new RegExp(opts.grep, 'ig');
+    // no `g` flag: a global regex keeps lastIndex across .test() calls, silently skipping
+    // the path right after every match (petstore: post:/pet/{petId} vanished from --grep "{\w+}$")
+    const regex = new RegExp(opts.grep, 'i');
     pathSet = pathSet.filter((p) => regex.test(p.path()));
   }
 

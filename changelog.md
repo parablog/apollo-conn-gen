@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.17.0]
+
+### Fixed
+- A field that is both `required` and `nullable: true` was emitted non-null, so the router errored
+  on a legitimately-null value; it now stays nullable, arguments included. Issue #55.
+- `items: { type: object }` dropped the field instead of degrading to `[JSON]`. Issue #56.
+- An inline (non-`$ref`) enum silently degraded to `String`; it is now promoted to a real enum,
+  named after its owning type and field (`Order.status` -> `OrderStatus`), bumping past stored
+  types and reserved component names. Enum query parameters stay `String` as before. Issue #57.
+- A discriminated `oneOf` whose members share an `allOf` base emitted the base as an orphan
+  concrete type when the union came back inside a list, failing composition; the base is promoted
+  to an interface there too. Issue #58.
+- A required property spelled `oneOf: [string, null]` lost its field entirely; the null arm now
+  folds into nullability and the field is kept. Issue #60.
+- Every aliased response key was written as a quoted string — which `connect/v0.4` reads as a
+  string literal, so the router returned the key's own name as the field value. Aliased keys are
+  now bare identifiers (`id: _id`) or path steps (`fullName: $."full name"`). Issue #62.
+
 ## [0.16.1]
 
 ### Fixed

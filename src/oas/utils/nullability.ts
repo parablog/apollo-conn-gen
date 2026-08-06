@@ -57,11 +57,13 @@ export class Nullability {
   private static removeNullChoice(schema: Record<string, unknown>, key: 'oneOf' | 'anyOf'): void {
     const choices = schema[key];
 
-    if (!Array.isArray(choices)) { // not an array? bail.
+    if (!Array.isArray(choices)) {
+      // not an array? bail.
       return;
     }
 
-    if (Nullability.SHAPE_KEYWORDS.some((shape) => shape !== key && schema[shape] != null)) { // one of the shapes above? bail.
+    if (Nullability.SHAPE_KEYWORDS.some((shape) => shape !== key && schema[shape] != null)) {
+      // one of the shapes above? bail.
       return;
     }
 
@@ -87,7 +89,7 @@ export class Nullability {
       delete schema[key];
       return;
     }
-    
+
     schema[key] = kept;
   }
 

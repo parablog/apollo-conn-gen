@@ -1,3 +1,3 @@
 [
-  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>*"
+  "get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>*"
 ]
