@@ -1,6 +1,6 @@
 [
-  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:scalar:id",
-  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:scalar:name",
-  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:array:#photoUrls",
-  "get:/pet/{petId}>res:r>ref:#/c/s/Pet>obj:#/c/s/Pet>prop:scalar:status"
+  "get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id",
+  "get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:name",
+  "get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:array:#photoUrls",
+  "get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:enum:status"
 ]
