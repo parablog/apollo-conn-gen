@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.18.0]
+
+### Added
+- New `--directives` option to apply directives to types, queries or mutations in the generated
+  schema. Format details in README.md. Note that a declaration that matches nothing stops the run.
+- Every connector selection is now checked against what the API really returns, reporting
+  mismatches at generation time instead of in the router (`lintSelections` for editors).
+
+### Changed
+- **Breaking**: `RequestOverride` type is now called `OverrideEntry`.
+- Config files passed in the CLI that cannot be read stop the run instead of being quietly ignored.
+
 ## [0.17.0]
 
 ### Fixed
