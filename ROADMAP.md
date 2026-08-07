@@ -147,7 +147,8 @@ inside the consuming items.
 | R7. Richer JSONSelection | 🟡 Partial | `??` coalesced defaults (connect v0.4 + fed v2.14, both directions); envelope unwrap/spreads/chaining have no OAS signal |
 | R8. `path`/`queryParams` JSONSelection | ✅ Done | serialization joins (inferred) + per-op `overrides` for path/queryParams (user intent) |
 | R9. Computed / literal bodies | ✅ Done | inferred `$args.input { … }` + `overrides[opId].body` raw JSONSelection (replace/drop) |
-| R14. Manual `@tag` declarations | ⬜ Idea | let the user declare tags on ops (types too?) that survive regeneration — overrides key, post-processing, or linter-assisted; shape undecided |
+| R12. OAS folder input | ⬜ Parked | accept a folder of independent OAS specs (OAS mode only): per-file normalize, merge into one OASDocument pre-parse; fail on collisions, sniff+skip non-OAS files |
+| R14. Manual directive declarations | ✅ Done | `--directives` file: `Type` / `Type.field` selectors (field part globs) -> verbatim directive strings, added over the parsed output; federation directives join the `@link` import; a selector that names nothing throws |
 
 ### Foundation (must precede version-sensitive items)
 
@@ -514,7 +515,36 @@ add the spec-surface row when it merges.
 **Files:** `src/oas/nodes/typeUtils.ts`, `propArray.ts`/`propComp.ts`/`propObj.ts`,
 `src/oas/io/writer.ts`, `src/versions.ts`. (gate: v0.5)
 
-### R14. Manual `@tag` declarations — ⬜ Idea (shape undecided)
+### R12. OAS folder input — ⬜ Parked
+
+**Why:** JSON mode already accepts `<file|folder>` (`src/cli/json.ts`), but OAS mode is
+single-file. Real APIs publish multiple independent OAS documents in one folder (e.g.
+Sanity's query + mutation specs). `oas-normalize` and `oas`'s `Oas` class are strictly
+single-document, so folder support means merging the docs into one `OASDocument` before
+parsing — nothing downstream changes.
+
+**Shape (designed, approved, parked):** `OasGen.fromFolder` (per-file normalize via the
+existing `fromFile` pipeline) + a merge helper in `src/oas/utils/` + CLI stat-dispatch on
+the `<source>` arg. Compatibility gate (same 3.x minor, deep-equal `servers` and
+`jsonSchemaDialect`), root-`security` push-down onto operations before merging, any
+collision (paths, components, operationIds) is a hard error naming both files, non-OAS
+files sniffed (`openapi`/`swagger` root key) and skipped with a warning. Tests run off
+small committed fixtures under `tests/resources/oas/folder/`.
+
+**Detailed plan:** `/Users/fernando/.claude-personal/specs/loop-JNRpnSgn/plan.md`
+
+### R14. Manual directive declarations — ✅ Done
+
+**Landed** (`feat/r14-directives`, merged with the R11 linter): generalised from `@tag` to *any*
+directive. A `--directives` JSON file (library: `GenerateOptions.directives`) maps selectors to
+verbatim directive strings — `"Mutation.*"`, `"User.email"`, or a bare `"User"` for the type line.
+`Directives.apply` (`src/oas/lint/directives.ts`) runs over the parsed output — the same document
+the linter reads — so the writers stay directive-unaware and every other byte is untouched.
+Federation-spec directives join the federation `@link` import automatically; unknown ones are
+written as-is. A declaration that names nothing, or a file that does not parse, stops the run.
+Example: `tests/resources/oas/r14-directives.json`.
+
+The original idea and the evidence that shaped it:
 
 **Why:** governance. Contracts filter the supergraph by `@tag`, and which operations (or types)
 belong to which audience is pure user intent — OAS carries no signal for it, so gen cannot infer
@@ -535,6 +565,36 @@ it. Today a hand-added `@tag` does not survive regeneration; the user needs a wa
   shared type must compose across every op that reaches it.
 
 Decide the shape when the first real consumer (a contracts-using customer) pins the requirements.
+
+**A real consumer now exists, and it has already answered most of the open questions above.**
+`mdg-private/constellation-registry`'s service-catalog is a governance product built on `@tag`, and its
+sibling generator (`tools/connect-gen`, OpenAPI → catalog entry, Rust) emits them from a declarative
+manifest. Measured across its 11 published connectors:
+
+| Evidence | Value |
+|---|---|
+| Connectors carrying `@tag` | **10 of 11** (github 252, slack 176, ashby 147, gong 130, omni 103, confluence 82, hubspot 81, pagerduty 51, incidentio 40) |
+| Vocabulary in use | `require-approval` ×984, `pii-high` ×39, `sensitive-readable` ×16, `sensitivity-high` ×10, `approval-gated` ×10, `managers-only` ×8, `pii-medium` ×7, `sensitivity-low` ×5 |
+| Declaration shape | `manifest.yaml` → `tags: [{ selector, tags }]`, selector globs: `Query.*`, `Mutation.*`, `Type.field*`, or exact |
+
+What that settles:
+
+- **Granularity** — one selector syntax covers operations *and* type fields, so they do not need
+  different mechanisms. The bulk usage is op-level (`Mutation.*` → `require-approval`, 984 of 1109 tags);
+  the field-level usage is PII on leaf scalars (`name`, `email` → `pii-high`).
+- **Mechanism** — declarative config consumed at generation, i.e. the `overrides`-key candidate rather
+  than post-processing. A glob selector is what makes it tolerable to write: `Mutation.*` is one line for
+  what would otherwise be hundreds of per-op entries.
+- **Emission** — worth noting the consumer *strips* `@tag` from the SDL at publish and stores the
+  `coordinate -> tags` map as catalog defaults, so gen's obligation is only that the tagged SDL composes.
+
+**Why it is not cosmetic:** that registry's policy reconciler validates rules against the classifications
+actually tagged in a service's published schema, and rejects unknown ones. A connector that emits no tags
+cannot have *any* classification policy applied to it — so for a governance consumer, untagged output is
+not a missing nicety, it is an unusable artifact.
+
+Observed while building the Sanity connector, which needed exactly this and had to hand-roll it: see
+`constellation-connectors/sources/sanity`.
 
 ---
 

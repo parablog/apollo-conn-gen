@@ -223,8 +223,9 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 | `baseURL` | `string` | `servers[0]` from the spec | Override the `@source` base URL. |
 | `federationVersion` | `string` | `v2.14` | Federation version for the `@link` URL (`>= v2.13`). |
 | `connectorSpecVersion` | `string` | `v0.4` | Connector spec version (only `v0.4` is supported). |
-| `overrides` | `Record<string, RequestOverride>` | — | Per-operation request rewiring, keyed by op id. See [Request overrides](#request-overrides). |
+| `overrides` | `OverridesConfig` | — | Per-operation request rewiring, keyed by op id. See [Request overrides](#request-overrides). |
 | `batch` | `BatchConfig` | — | Batch endpoints, keyed by op id. See [Batch endpoints](#batch-endpoints). |
+| `directives` | `DirectivesConfig` | — | Directives declared by hand, keyed by the type or field they belong on. See [Manual directives](#manual-directives). |
 | `mapper` | `Mapper` | — | Operation name mapper. See [Transform Rules](#transform-rules). |
 | `skipOptionalArgs` | `boolean` | `false` | Omit optional query parameters from generated operations. |
 | `inferEntityResolvers` | `boolean` | `false` | Infer entity resolvers and emit `@key` / `entity: true`. |
@@ -446,6 +447,7 @@ Note the `api_key` header: petstore declares an `apiKey` security scheme, which 
 - `--base-url <url>`: Override the `@source` base URL (default: `servers[0]` from the spec).
 - `--overrides <file>`: Load per-operation request overrides from a JSON file, keyed by op id. See [Request overrides](#request-overrides).
 - `--batch <file>`: Load batch endpoints (op id -> `{ maxSize? }`) from a JSON file. See [Batch endpoints](#batch-endpoints).
+- `--directives <file>`: Load directives (`Type` or `Type.field` -> `["@…"]`) from a JSON file. See [Manual directives](#manual-directives).
 - `--infer-entity-resolvers`: Infer entity resolvers and emit `@key` / `entity: true` (default: `false`).
 - `--skip-auth`: Omit all auth — no headers on `@source`, no auth on `@connect` (default: `false`).
 
@@ -488,6 +490,35 @@ An override key that matches no operation is ignored with a warning.
 ```
 
 A batch endpoint is emitted as a type-level `@connect` using `$batch`, letting the router resolve N entities in one request instead of N.
+
+### Manual directives
+
+`--directives <file>` (library: the `directives` option) adds directives the user declares by hand
+to the generated schema — `@tag` for contracts and governance, `@authenticated`, or anything else.
+The file maps a selector to verbatim directive strings:
+
+```json
+{
+  "Mutation.*": ["@tag(name: \"require-approval\")"],
+  "Query.admin*": ["@tag(name: \"admin\")"],
+  "User.email": ["@tag(name: \"pii-high\")", "@authenticated"],
+  "AdminUser": ["@tag(name: \"internal\")"]
+}
+```
+
+- `Type.field` puts the directives on that field; `*` in the field part covers many fields, and
+  the whole name has to match (`admin*` covers `adminUsers`, not `notadminUsers`).
+- A bare `Type` puts them on the type line itself (`type User @tag(…) {`). Request-body input
+  types are addressed by their written name, e.g. `CreateUserInput`.
+- Federation-spec directives (`@tag`, `@authenticated`, `@requiresScopes`, …) are added to the
+  federation `@link` import automatically. Anything else is written as-is; declaring it is up to
+  you.
+- A selector that names nothing in the generated schema stops the run with an error, as does a
+  file that does not parse — the schema is never generated quietly missing its declarations.
+
+The directives are added after generation, over the parsed output, so regenerating from a changed
+spec keeps them as long as the declared names still exist. A working example lives at
+`tests/resources/oas/r14-directives.json`.
 
 ### Entity inference
 
