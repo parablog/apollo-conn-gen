@@ -71,7 +71,10 @@ export class Directives {
     // add from the end of the document backwards, so earlier positions stay valid
     return additions
       .sort((a, b) => b.position - a.position)
-      .reduce((text, addition) => text.slice(0, addition.position) + addition.text + text.slice(addition.position), sdl);
+      .reduce(
+        (text, addition) => text.slice(0, addition.position) + addition.text + text.slice(addition.position),
+        sdl,
+      );
   }
 
   private static parseDeclaration(selector: string, directives: string[]): Declaration {
@@ -105,11 +108,7 @@ export class Directives {
     return new RegExp(`^${escaped}$`);
   }
 
-  private static collectAdditions(
-    definition: DefinitionNode,
-    declared: Declaration[],
-    additions: Addition[],
-  ): void {
+  private static collectAdditions(definition: DefinitionNode, declared: Declaration[], additions: Addition[]): void {
     if (!('name' in definition) || definition.name === undefined || definition.kind === Kind.DIRECTIVE_DEFINITION) {
       return;
     }
@@ -140,10 +139,7 @@ export class Directives {
   }
 
   // Every declaration that applies contributes its directives; the same string is written once.
-  private static directivesFor(
-    declared: Declaration[],
-    applies: (entry: Declaration) => boolean,
-  ): string[] {
+  private static directivesFor(declared: Declaration[], applies: (entry: Declaration) => boolean): string[] {
     const collected = new Set<string>();
     for (const entry of declared) {
       if (applies(entry)) {

@@ -76,7 +76,8 @@ export class SchemaReader {
       }
     }
     merged.hasMapping = merged.hasMapping || mapping !== undefined;
-    merged.hasSelection = merged.hasSelection || (mapping !== undefined && SchemaReader.selectionArg(mapping) !== undefined);
+    merged.hasSelection =
+      merged.hasSelection || (mapping !== undefined && SchemaReader.selectionArg(mapping) !== undefined);
     types.set(name, merged);
   }
 

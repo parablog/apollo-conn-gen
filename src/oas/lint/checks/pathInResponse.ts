@@ -38,9 +38,10 @@ export class PathInResponseCheck {
   ): void {
     for (const field of SelectedFields.readable(fields)) {
       // `$` and `@` are the object itself; only a named path can be missing from it
-      const reached = field.readsFrom.pathParts.length > 0
-        ? PathInResponseCheck.followPath(field, response, selection, found)
-        : response;
+      const reached =
+        field.readsFrom.pathParts.length > 0
+          ? PathInResponseCheck.followPath(field, response, selection, found)
+          : response;
 
       if (field.nested) {
         PathInResponseCheck.checkFields(field.nested, reached, selection, found);
