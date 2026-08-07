@@ -87,6 +87,9 @@ export interface Selection {
   ownerType: string;
   /** the field the @connect sits on; absent for a type-level @mapping */
   ownerField?: string;
+  // The declared type of that field, which is the shape the selection is written against:
+  // `pets: [Pet] @connect(selection: "id name")` selects Pet's fields, not Query's.
+  ownerFieldType?: SchemaField;
   directive: 'mapping' | 'connect';
   /**
    * For a @connect, the operation it calls, spelled the way the generator keys its `paths` map:

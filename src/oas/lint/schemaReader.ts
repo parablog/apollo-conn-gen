@@ -107,6 +107,7 @@ export class SchemaReader {
       selections.push({
         ownerType: definition.name.value,
         ownerField: field.name.value,
+        ownerFieldType: SchemaReader.toField(field),
         directive: 'connect',
         operationKey: SchemaReader.operationKey(connect),
         fields: SelectionReader.read(text, 'connectSelection'),

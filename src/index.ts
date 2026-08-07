@@ -8,5 +8,6 @@ export type {
   OverrideEntry,
   OverridesConfig,
 } from './oas/oasContext.js';
-export { lintSelections } from './oas/lint/index.js';
-export type { LintDiagnostic, LintFix, Severity } from './oas/lint/index.js';
+export { lintSelections, ArrowMethods, SchemaReader, Directives } from './oas/lint/index.js';
+export type { LintDiagnostic, LintFix, Severity, ParsedSchema } from './oas/lint/index.js';
+export type { SchemaField, SchemaType } from './oas/lint/types.js';
