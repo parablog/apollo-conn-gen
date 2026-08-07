@@ -237,6 +237,19 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 
 When the spec declares `securitySchemes` (API key, HTTP bearer/basic, OAuth2), the generator maps them to connector auth automatically: headers or query params with `{$config.*}` placeholders, emitted on `@source` when the whole spec shares the same security, or per-operation on `@connect` when it varies. Pass `skipAuth: true` (CLI: `--skip-auth`) to omit all of it.
 
+### Linting selections
+
+The library can check the selections in a connector schema — every rule the generator follows when writing them:
+
+```typescript
+import { lintSelections } from 'apollo-conn-gen';
+
+const findings = lintSelections(sdl);      // [{ code, message, from, to, severity, … }]
+const withSpec = lintSelections(sdl, gen); // pass a loaded OasGen to also check paths against the API's real responses
+```
+
+Positions are offsets into the SDL string, so editors can underline findings directly. The generator runs the same checks on its own output.
+
 ### JsonGen Library Usage Examples
 
 ```typescript
