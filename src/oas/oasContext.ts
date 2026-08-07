@@ -7,16 +7,22 @@ import { Naming } from './utils/naming.js';
 import { IType } from './nodes/internal.js';
 
 import { Mapper } from './mapper/index.js';
+import { DirectivesConfig } from './lint/directives.js';
+
+export type { DirectivesConfig };
 
 // per-operation request rewiring, keyed by op id (`get:/pets/{id}`): replace the HTTP path,
 // query params (raw JSONSelection values, e.g. `$('2024-01')`), headers (string templates,
 // e.g. `{$config.key}`) and/or the whole body mapping; null drops one, unknown keys append
-export type RequestOverride = {
+export type OverrideEntry = {
   path?: string;
   queryParams?: Record<string, string | null>;
   headers?: Record<string, string | null>;
   body?: string | null;
 };
+
+// request overrides, keyed by op id. e.g. { "get:/pets/{id}": { path: "/v2/pets/{id}" } }
+export type OverridesConfig = Record<string, OverrideEntry>;
 
 // R6: per-batch-endpoint settings. The only knob is the size cap; everything else
 // (entity, key, request, selection) is inferred. `{}`/`null` = defaults.
@@ -27,7 +33,7 @@ export type BatchConfig = Record<string, BatchEntry | null>;
 
 export type GenerateOptions = {
   baseURL?: string;
-  overrides?: Record<string, RequestOverride>;
+  overrides?: OverridesConfig;
   batch?: BatchConfig;
   showParentInSelections: boolean;
   federationVersion?: string;
@@ -37,6 +43,9 @@ export type GenerateOptions = {
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   skipAuth?: boolean;
+  // R14: directives declared by hand, keyed by the type or field they belong on; `*` covers many fields.
+  // e.g. (r14-directives) { "Mutation.*": ["@tag(name: \"require-approval\")"], "User.email": ["@authenticated"] }
+  directives?: DirectivesConfig;
 };
 
 // Max nested $ref hops resolvePointer will follow before giving up (guards against ref cycles).

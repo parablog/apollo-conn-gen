@@ -6,18 +6,19 @@ import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
 import { DEFAULT_VERSIONS, validateVersionOptions } from '../versions.js';
-import { BatchConfig, GenerateOptions, OasContext, RequestOverride } from './oasContext.js';
+import { BatchConfig, GenerateOptions, OasContext, OverridesConfig } from './oasContext.js';
 import { Factory, IType } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
 import { TypesCollector } from './generator/typesCollector.js';
 import { Mapper } from './mapper/types.js';
 import { Naming } from './utils/naming.js';
+import { Directives, DirectivesConfig } from './lint/directives.js';
 
 interface IGenOptions {
   skipValidation?: boolean;
   baseURL?: string;
-  overrides?: Record<string, RequestOverride>;
+  overrides?: OverridesConfig;
   batch?: BatchConfig;
   showParentInSelections: boolean;
   federationVersion?: string;
@@ -27,6 +28,7 @@ interface IGenOptions {
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   skipAuth?: boolean;
+  directives?: DirectivesConfig;
 }
 
 export class OasGen {
@@ -168,7 +170,9 @@ export class OasGen {
     const writer: Writer = new Writer(this);
     this.selections = writer.generateWith(this.collector.types, this.collector.expanded);
 
-    return writer.flush();
+    const schema = writer.flush();
+    // R14: directives the user declared go in after generation, over the finished document
+    return this.options.directives ? Directives.apply(schema, this.options.directives) : schema;
   }
 
   public async visit(): Promise<void> {

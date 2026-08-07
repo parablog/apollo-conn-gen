@@ -3,7 +3,7 @@ import { Command, OptionValues } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
-import { BatchConfig, RequestOverride } from '../oas/oasContext.js';
+import { BatchConfig, DirectivesConfig, OverridesConfig } from '../oas/oasContext.js';
 import { RulesLoader, OpNameMapper, MapRules, Mapper } from '../oas/mapper/index.js';
 
 const originalConsole = Object.assign(
@@ -13,6 +13,7 @@ const originalConsole = Object.assign(
   console,
 );
 
+// Every loader below stops the run on an unreadable file — carrying on would generate without it.
 function loadRules(opts: OptionValues): Mapper | undefined {
   let mapper;
   if (opts.transformRules) {
@@ -21,14 +22,14 @@ function loadRules(opts: OptionValues): Mapper | undefined {
       mapper = OpNameMapper.fromRules(rules);
     } catch (error) {
       console.error(`Error loading transform rules: ${error}`);
-      return undefined;
+      process.exit(1);
     }
   }
 
   return mapper;
 }
 
-function loadOverrides(opts: OptionValues): Record<string, RequestOverride> | undefined {
+function loadOverrides(opts: OptionValues): OverridesConfig | undefined {
   if (!opts.overrides) {
     return undefined;
   }
@@ -36,7 +37,7 @@ function loadOverrides(opts: OptionValues): Record<string, RequestOverride> | un
     return JSON.parse(fs.readFileSync(opts.overrides, 'utf-8'));
   } catch (error) {
     console.error(`Error loading overrides: ${error}`);
-    return undefined;
+    process.exit(1);
   }
 }
 
@@ -48,7 +49,19 @@ function loadBatch(opts: OptionValues): BatchConfig | undefined {
     return JSON.parse(fs.readFileSync(opts.batch, 'utf-8'));
   } catch (error) {
     console.error(`Error loading batch file: ${error}`);
+    process.exit(1);
+  }
+}
+
+function loadDirectives(opts: OptionValues): DirectivesConfig | undefined {
+  if (!opts.directives) {
     return undefined;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(opts.directives, 'utf-8'));
+  } catch (error) {
+    console.error(`Error loading directives: ${error}`);
+    process.exit(1);
   }
 }
 
@@ -58,12 +71,14 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
   const mapper = loadRules(opts);
   const overrides = loadOverrides(opts);
   const batch = loadBatch(opts);
+  const directives = loadDirectives(opts);
 
   const gen = await OasGen.fromFile(sourceFile, {
     ...opts,
     baseURL: opts.baseUrl,
     overrides,
     batch,
+    directives,
     showParentInSelections: false,
     federationVersion: opts.federationVersion,
     connectorSpecVersion: opts.connectorSpecVersion,
@@ -128,6 +143,7 @@ program
   .option('--base-url <url>', 'Override the @source base URL (default: servers[0] from the spec)')
   .option('--overrides <file>', 'Load per-operation path/queryParams overrides from a JSON file')
   .option('--batch <file>', 'Load batch endpoints (op id -> { maxSize? }) from a JSON file')
+  .option('--directives <file>', 'Load directives (Type or Type.field -> ["@…"]) from a JSON file')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
   .option('--skip-auth', 'Omit all auth (no headers on @source, no auth on @connect)', false)

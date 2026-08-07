@@ -17,6 +17,8 @@ export type {
 export { SchemaReader } from './schemaReader.js';
 export { ArrowMethods } from './arrowMethods.js';
 export { ResponseShape } from './responseShape.js';
+export { Directives } from './directives.js';
+export type { DirectivesConfig } from './directives.js';
 
 /** A check reads the schema and says what is wrong with it. */
 type Check = (schema: ParsedSchema, gen?: OasGen) => LintDiagnostic[];
