@@ -3,7 +3,7 @@ import fs from 'fs';
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
-import { OasGen } from '../../src/index.js';
+import { DirectivesConfig, OasGen } from '../../src/index.js';
 import { T } from '../../src/oas/nodes/internal.js';
 import './_setup.js';
 
@@ -1457,3 +1457,180 @@ test('test_http_block_layout_with_all_members', async () => {
   assert.ok(!/,\n/.test(http), 'no commas between http members');
 });
 
+
+// A list response and a single-object response, through the response helpers. They answer different
+// questions and both are needed: `responseType` is the shape of the whole answer, `responseItemType`
+// and `responseItemSchema` are the shape of one item. Anything asking "what kind of thing does this
+// op return" wants the item — reading the whole answer instead is what hid #58 for a list of unions.
+test('test_oas_responseType_keeps_the_list_wrapper', async () => {
+  const gen = await OasGen.fromFile(`${oasBasePath}/petstore.yaml`, {} as never);
+  await gen.visit();
+  // resultType is filled in while generating, not while visiting
+  gen.generateSchema(['get:/pet/findByStatus>**', 'get:/pet/{petId}>**']);
+
+  const list = gen.paths.get('get:/pet/findByStatus')!;
+  const single = gen.paths.get('get:/pet/{petId}')!;
+  assert.ok(T.isOp(list) && T.isOp(single));
+
+  // `[Pet]` stays an array here
+  assert.equal(T.responseType(list)!.id.startsWith('array:'), true);
+  // ... but the schema behind it is Pet's, because the selection maps each element
+  assert.deepEqual(Object.keys(T.responseItemSchema(list)?.properties ?? {}).sort(), [
+    'category',
+    'id',
+    'name',
+    'photoUrls',
+    'status',
+    'tags',
+  ]);
+
+  // a single object answers the same schema through both
+  assert.equal(T.responseType(single)!.id.startsWith('obj:'), true);
+  assert.deepEqual(
+    Object.keys(T.responseItemSchema(single)?.properties ?? {}).sort(),
+    Object.keys(T.responseItemSchema(list)?.properties ?? {}).sort(),
+  );
+});
+
+test('test_directives_cover_fields_and_join_the_import', async () => {
+  // R14: declared directives land on the types and fields they name; the federation ones join the
+  // @link import. Near-miss names stay clean: `notadminUsers` is not `admin*`, `emailAddress`
+  // is not `email`, and the same directive declared twice for `createUsers` is written once.
+  const all = ['get:/admin/users>**', 'get:/admin/teams>**', 'get:/notadmin/users>**', 'post:/users>**'];
+  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, false, true, undefined, false, false, {
+    directives: {
+      'Mutation.*': ['@tag(name: "require-approval")'],
+      'Mutation.createUsers': ['@tag(name: "require-approval")'],
+      'Query.admin*': ['@tag(name: "admin")'],
+      'User.email': ['@tag(name: "pii-high")', '@authenticated'],
+    },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/adminUsers: \[AdminUser\] @tag\(name: "admin"\)\n/.test(schema!), 'glob covers adminUsers');
+  assert.ok(/adminTeams: \[Team\] @tag\(name: "admin"\)\n/.test(schema!), 'glob covers adminTeams');
+  assert.ok(/email: String @tag\(name: "pii-high"\) @authenticated\n/.test(schema!), 'field declaration applied');
+  assert.ok(/import: \["@key", "@authenticated", "@tag"\]/.test(schema!), 'federation directives imported');
+
+  assert.ok(/notadminUsers: \[User\]\n/.test(schema!), 'the whole field name must match admin*');
+  assert.ok(/emailAddress: String\n/.test(schema!), 'email does not cover emailAddress');
+  const approvals = schema!.match(/@tag\(name: "require-approval"\)/g) ?? [];
+  assert.equal(approvals.length, 1, 'both createUsers declarations write the directive once');
+});
+
+test('test_directives_on_the_type_line_and_input_fields', async () => {
+  // R14: a selector with no field part goes on the type line itself; request-body types are
+  // declared by their written name, e.g. `CreateUserInput`, not the spec's `CreateUser`
+  const all = ['get:/admin/users>**', 'get:/admin/teams>**', 'get:/notadmin/users>**', 'post:/users>**'];
+  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, false, true, undefined, false, false, {
+    directives: {
+      User: ['@tag(name: "pii")'],
+      CreateUserInput: ['@tag(name: "pii")'],
+      'CreateUserInput.email': ['@tag(name: "pii-high")'],
+    },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/type User @tag\(name: "pii"\) \{/.test(schema!), 'on the type line');
+  assert.ok(/input CreateUserInput @tag\(name: "pii"\) \{/.test(schema!), 'on the input line');
+  assert.ok(/email: String @tag\(name: "pii-high"\)\n/.test(schema!), 'on the input field');
+  const piiHigh = schema!.match(/@tag\(name: "pii-high"\)/g) ?? [];
+  assert.equal(piiHigh.length, 1, 'User.email stays clean, only the input field is declared');
+});
+
+test('test_directives_on_an_allof_type', async () => {
+  // R14: an allOf type is written by its own path (comp, not obj) — the declaration still lands
+  const all = ['get:/admin/users>**'];
+  const schema = await runOasTest('r14-directives.yaml', all, 4, 1, false, true, undefined, false, false, {
+    directives: { AdminUser: ['@tag(name: "internal")'] },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/type AdminUser @tag\(name: "internal"\) \{/.test(schema!), 'on the allOf type line');
+});
+
+test('test_directives_unknown_directive_written_as_is', async () => {
+  // R14: a directive gen does not know is written untouched and does not join the federation
+  // import — declaring it is up to the user, so this schema is not composed here
+  const gen = await OasGen.fromFile(`${oasBasePath}/r14-directives.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+    directives: { 'Query.adminUsers': ['@cacheControl(maxAge: 60)'] },
+  });
+  await gen.visit();
+  const schema = gen.generateSchema(['get:/admin/users>**']);
+  assert.ok(/adminUsers: \[AdminUser\] @cacheControl\(maxAge: 60\)\n/.test(schema), 'written as declared');
+  assert.ok(/import: \["@key"\]\)/.test(schema), 'the federation import is unchanged');
+});
+
+test('test_directives_bad_declarations_throw', async () => {
+  // R14: a declaration that names nothing, or one that is not a directive, stops the run —
+  // warning past it would ship the schema looking governed when it is not
+  const gen = await OasGen.fromFile(`${oasBasePath}/r14-directives.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+    directives: { 'User.nope': ['@tag(name: "x")'] },
+  });
+  await gen.visit();
+  assert.throws(() => gen.generateSchema(['get:/notadmin/users>**']), /User\.nope/);
+
+  gen.options.directives = { User: ['tag'] };
+  assert.throws(() => gen.generateSchema(['get:/notadmin/users>**']), /must map to directive strings/);
+});
+
+test('test_directives_file_from_disk_applies', async () => {
+  // R14: the checked-in example file is the one the CLI would load with
+  // `--directives tests/resources/oas/r14-directives.json` — reading it here keeps it working
+  const config = JSON.parse(fs.readFileSync(`${oasBasePath}/r14-directives.json`, 'utf-8'));
+  const all = ['get:/admin/users>**', 'get:/admin/teams>**', 'get:/notadmin/users>**', 'post:/users>**'];
+  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, false, true, undefined, false, false, {
+    directives: config,
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/createUsers\(input: CreateUserInput!\): User @tag\(name: "require-approval"\)\n/.test(schema!));
+  assert.ok(/adminUsers: \[AdminUser\] @tag\(name: "admin"\)\n/.test(schema!));
+  assert.ok(/email: String @tag\(name: "pii-high"\) @authenticated\n/.test(schema!));
+  assert.ok(/type AdminUser @tag\(name: "internal"\) \{/.test(schema!));
+  assert.ok(/import: \["@key", "@authenticated", "@tag"\]/.test(schema!));
+});
+
+test('test_config_broken_json_file_does_not_parse', () => {
+  // a config file that does not parse must stop the run — every CLI loader (--directives,
+  // --overrides, --batch, --transform-rules) exits instead of generating without the file
+  assert.throws(() => JSON.parse(fs.readFileSync(`${oasBasePath}/broken-config.json`, 'utf-8')), SyntaxError);
+});
+
+test('test_overrides_file_from_disk_applies', async () => {
+  // the checked-in example file is the one the CLI would load with
+  // `--overrides tests/resources/oas/r9-overrides.json` — reading it here keeps it working
+  const config = JSON.parse(fs.readFileSync(`${oasBasePath}/r9-overrides.json`, 'utf-8'));
+  const schema = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, false, true, undefined, false, false, {
+    overrides: config,
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/POST: "\/v2\/things"/.test(schema!), 'path replaced');
+  assert.ok(/name: \$args\.input\.name/.test(schema!), 'computed body emitted');
+  assert.ok(!/\$args\.input \{/.test(schema!), 'inferred mapping replaced');
+  assert.ok(/\{ name: "X-Api-Key", value: "\{\$config\.apiKey\}" \}/.test(schema!), 'header appended');
+});
+
+test('test_directives_wrong_shapes_throw', async () => {
+  // R14: the config usually comes straight from JSON.parse, so every wrong shape a valid JSON
+  // file can carry gets its own clear error instead of a TypeError mid-run
+  const gen = await OasGen.fromFile(`${oasBasePath}/r14-directives.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const generate = (directives: unknown) => {
+    gen.options.directives = directives as DirectivesConfig;
+    return () => gen.generateSchema(['get:/notadmin/users>**']);
+  };
+
+  assert.throws(generate([]), /must be an object/, 'top level is a list');
+  assert.throws(generate('User'), /must be an object/, 'top level is a string');
+  assert.throws(generate({ User: 'not-a-list' }), /must map to directive strings/, 'value is not a list');
+  assert.throws(generate({ User: [] }), /must map to directive strings/, 'value is empty');
+  assert.throws(generate({ User: ['@tag(name: "x")', 42] }), /must map to directive strings/, 'value mixes in a number');
+  assert.throws(generate({ 'User.email.domain': ['@tag(name: "x")'] }), /expected "Type" or "Type\.field"/, 'three segments');
+  assert.throws(generate({ '.email': ['@tag(name: "x")'] }), /expected "Type" or "Type\.field"/, 'empty type part');
+  assert.throws(generate({ 'User.': ['@tag(name: "x")'] }), /expected "Type" or "Type\.field"/, 'empty field part');
+  assert.throws(generate({ 'Us*r.email': ['@tag(name: "x")'] }), /only the field part may use/, 'glob in the type part');
+});

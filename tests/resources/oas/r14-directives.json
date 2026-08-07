@@ -1,0 +1,6 @@
+{
+  "Mutation.*": ["@tag(name: \"require-approval\")"],
+  "Query.admin*": ["@tag(name: \"admin\")"],
+  "User.email": ["@tag(name: \"pii-high\")", "@authenticated"],
+  "AdminUser": ["@tag(name: \"internal\")"]
+}

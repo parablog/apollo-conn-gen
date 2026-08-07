@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { ParameterObject } from 'oas/types';
-import { OasContext, RequestOverride } from '../oasContext.js';
+import { OasContext, OverrideEntry } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Body, IType, Op, Param, T } from '../nodes/internal.js';
 import { Naming } from '../utils/naming.js';
@@ -126,7 +126,7 @@ export class OperationWriter {
 
   // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
   // an override path may already template (`{$args.id}`, `{$config.v}`) — leave `$` segments alone
-  private templatedPath(op: Op, override?: RequestOverride): string {
+  private templatedPath(op: Op, override?: OverrideEntry): string {
     return (override?.path ?? op.operation.path).replace(/\{([^}]+)\}/g, (m, name) =>
       name.startsWith('$') ? m : `{$args.${Naming.genParamName(name)}}`,
     );
@@ -138,7 +138,7 @@ export class OperationWriter {
   private queryParamsBlock(
     context: OasContext,
     op: Op,
-    override: RequestOverride | undefined,
+    override: OverrideEntry | undefined,
     auth: NameValue | null,
   ): string | null {
     // we now include all query params, not just required ones. if they are not set,
@@ -184,7 +184,7 @@ export class OperationWriter {
 
   // the op's headers block (a self-contained string ending in a newline), or null when there are
   // no headers to send. `auth` is the op's resolved auth header (or null) — see requestMethod.
-  private headersBlock(op: Op, override: RequestOverride | undefined, auth: NameValue | null): string | null {
+  private headersBlock(op: Op, override: OverrideEntry | undefined, auth: NameValue | null): string | null {
     // OAS `header` params, with user overrides merged in (string replaces, null drops)
     const headers = op.operation.getParameters().filter((p) => p.in && p.in.toLowerCase() === 'header');
     let entries = this.mergeOverrides(headers, override?.headers ?? {}, (p) => this.headerExample(p));

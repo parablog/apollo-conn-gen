@@ -1,0 +1,3 @@
+{
+  "Mutation.*": ["@tag(name: "require-approval")"],
+}

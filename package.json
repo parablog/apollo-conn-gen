@@ -54,6 +54,7 @@
     "@inquirer/core": "^10.1.7",
     "@inquirer/prompts": "^7.3.1",
     "commander": "^13.1.0",
+    "graphql": "^16.14.2",
     "lodash": "^4.17.21",
     "oas": "^25.3.0",
     "oas-normalize": "^12.1.0",

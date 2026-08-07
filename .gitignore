@@ -24,6 +24,8 @@ KNOWN_ISSUES.md
 # only — not committed. The coverage harness + corpus tests run against them locally.
 /COVERAGE.md
 /COVERAGE-*.md
+/LINT-CORPUS.md
+/LINT-CORPUS-*.md
 /TEST_CORPUS.md
 /tests/all/corpus.test.ts
 /tests/resources/oas/googlebooks.yaml

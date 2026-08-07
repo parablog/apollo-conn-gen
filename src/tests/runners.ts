@@ -1,4 +1,4 @@
-import { BatchConfig, JsonGen, OasGen, RequestOverride } from '../index.js';
+import { BatchConfig, JsonGen, DirectivesConfig, OasGen, OverridesConfig } from '../index.js';
 import { JsonContext, JsonType } from '../json/index.js';
 import assert from 'node:assert';
 import path from 'path';
@@ -26,13 +26,14 @@ export async function runOasTest(
   // 2.14, real unions); pass connectorSpecVersion/federationVersion/composeFederationVersion to vary.
   opts: {
     baseURL?: string;
-    overrides?: Record<string, RequestOverride>;
+    overrides?: OverridesConfig;
     batch?: BatchConfig;
     connectorSpecVersion?: string;
     federationVersion?: string;
     composeFederationVersion?: string;
     emitConnectorErrors?: boolean;
     skipAuth?: boolean;
+    directives?: DirectivesConfig;
   } = {},
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
@@ -40,6 +41,7 @@ export async function runOasTest(
     baseURL: opts.baseURL,
     overrides: opts.overrides,
     batch: opts.batch,
+    directives: opts.directives,
     showParentInSelections: false,
     mapper,
     skipOptionalArgs,
