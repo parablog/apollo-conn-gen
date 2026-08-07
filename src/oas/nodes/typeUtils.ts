@@ -322,6 +322,15 @@ export class T {
     return node;
   }
 
+  // The part of the response a selection is written against. A list answers the shape of one item,
+  // because the selection is written once and used for every item. e.g. (petstore) both give Pet:
+  //   get:/pet/{petId}       -> { id, name, category, photoUrls, tags, status }
+  //   get:/pet/findByStatus  -> { id, name, category, photoUrls, tags, status }
+  public static responseItemSchema(op: Op): SchemaObject | undefined {
+    const node = T.responseItemType(op);
+    return node instanceof Obj || node instanceof Composed ? node.schema : undefined;
+  }
+
   // The occupant is the type already stored under our name: a different shape collides (rename,
   // see #9/#12); a same-schema occupant dedups instead — renaming it would orphan it (see #18).
   // e.g. (googlebooks):

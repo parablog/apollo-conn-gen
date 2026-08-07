@@ -1,0 +1,7 @@
+{
+  "post:/things": {
+    "path": "/v2/things",
+    "body": "name: $args.input.name\nsource: $(\"web\")",
+    "headers": { "X-Api-Key": "{$config.apiKey}" }
+  }
+}

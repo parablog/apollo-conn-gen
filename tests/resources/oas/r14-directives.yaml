@@ -1,0 +1,88 @@
+openapi: 3.0.0
+info:
+  title: R14 manual directives
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /admin/users:
+    get:
+      responses:
+        '200':
+          description: admin view of the users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUser'
+  /admin/teams:
+    get:
+      responses:
+        '200':
+          description: admin view of the teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Team'
+  /notadmin/users:
+    get:
+      responses:
+        '200':
+          description: the public users list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+  /users:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUser'
+      responses:
+        '200':
+          description: the created user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        emailAddress:
+          type: string
+        name:
+          type: string
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    AdminUser:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            role:
+              type: string
+    CreateUser:
+      type: object
+      properties:
+        email:
+          type: string
+        name:
+          type: string

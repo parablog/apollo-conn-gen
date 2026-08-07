@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import fs from 'fs';
 import assert from 'node:assert';
 import { BatchConfig, OasGen } from '../../src/index.js';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
@@ -125,3 +126,12 @@ test('test_R6_batch_skips_when_no_r1_key', async () => {
 
 // (removed test_R6_batch_below_v0_2_downgrades: the v0.2 batch gate is unreachable now that the connector
 // spec is floored at v0.4 — connect < v0.4 is rejected at the entrypoint, covered by versions.test.ts.)
+
+test('test_R6_batch_file_from_disk_applies', async () => {
+  // the checked-in example file is the one the CLI would load with
+  // `--batch tests/resources/oas/r6-batch.json` — reading it here keeps it working
+  const config = JSON.parse(fs.readFileSync(`${oasBasePath}/r6-batch.json`, 'utf-8'));
+  const schema = await run([PRODUCT, 'get:/products>**', 'post:/products/batch>**'], config, 2);
+  assert.ok(schema!.includes('batch: { maxSize: 50 }'), 'file overrides maxSize');
+  assert.ok(schema!.includes('ids: $batch.id'), 'body batch endpoint wired');
+});
