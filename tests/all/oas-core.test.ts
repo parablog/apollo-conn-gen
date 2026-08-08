@@ -1634,3 +1634,16 @@ test('test_directives_wrong_shapes_throw', async () => {
   assert.throws(generate({ 'User.': ['@tag(name: "x")'] }), /expected "Type" or "Type\.field"/, 'empty field part');
   assert.throws(generate({ 'Us*r.email': ['@tag(name: "x")'] }), /only the field part may use/, 'glob in the type part');
 });
+
+test('test_63_inline_wrapper_must_not_steal_component_name', async () => {
+  // #63: the inline `Parent.body` gets the made-up name `ParentBody` — a real component's name.
+  // The made-up name now bumps to `ParentBody2`, so `type ParentBody` is written once.
+  const schema = await runOasTest('inline-wrapper-steals-component-name.yaml', ['post:/things>**'], 1, 6, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/body: ParentBody2\n/.test(schema!), 'the wrapper field uses the bumped name');
+  assert.ok(/type ParentBody2 \{/.test(schema!), 'the wrapper is defined under the bumped name');
+  assert.ok(/type ParentBody \{/.test(schema!), 'the component keeps its own name');
+  const typeNames = [...schema!.matchAll(/^type (\w+)/gm)].map((m) => m[1]);
+  const duplicates = [...new Set(typeNames.filter((n, i, a) => a.indexOf(n) !== i))];
+  assert.deepEqual(duplicates, [], 'no type is defined twice');
+});

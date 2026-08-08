@@ -244,9 +244,10 @@ export class T {
   // through genTypeName so the result is always a valid identifier. see docs/issues.md #9
   public static resolveNameConflict(node: IType, context: OasContext): void {
     const base = Naming.genTypeName(T.findNonPropParent(node.parent!).name) + Naming.genTypeName(node.name);
-    // a made-up enum name must also stay off component names that are never visited — the
-    // component cannot rename itself. e.g. (petstore.yaml) `Category` is taken in every op. #57
-    const schemas = node instanceof En ? context.resolvePointer('#/components/schemas') : undefined;
+    // a made-up name must also stay off component names, visited or not — the component cannot
+    // rename itself, so a wrapper that mints its name first steals it and `type X` emits twice.
+    // e.g. (confluence) `Content.body` minted `ContentBody` before the component was reached. #57 #63
+    const schemas = context.resolvePointer('#/components/schemas');
     const reserved = new Set(Object.keys((schemas as Record<string, unknown>) ?? {}).map(Naming.genTypeName));
     let candidate = base;
     for (let n = 2; context.types.has(candidate) || reserved.has(candidate); n++) {

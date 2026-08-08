@@ -3239,3 +3239,58 @@ half is pinned by the table above.
 side: `apollo-federation/src/connectors/json_selection/README.md` (grammar) and `parser.rs`
 (`parse_v0_3` / `parse_v0_4`). Found while building the Sanity connector, whose
 `sanity/issues.md #10` carries a post-process that un-quotes as a workaround.
+## 63 · An inline wrapper's minted name steals a component's name, writing `type X` twice — ✅ Fixed
+
+**Symptom:** the schema defines `type ContentBody` twice — once for the real component, once for an
+inline object that was *renamed into* the same name. Rover rejects the op:
+`CIRCULAR_REFERENCE: type ContentBody appears more than once in …body.anonymousExportView` — the
+selection path crosses the shared name twice. The v0.5 lint sees the same op as
+`ARROW_TYPE_MISMATCH` (the twin `@mapping`s disagree with the field types).
+
+**OAS** (confluence, `post:/wiki/rest/api/content/{id}/copy`) — `Content.body` is inline and its
+props point at the component of the same natural name:
+
+```yaml
+Content:
+  properties:
+    body:                       # inline, no $ref — needs a made-up name
+      type: object
+      properties:
+        view:                  { $ref: '#/components/schemas/ContentBody' }
+        anonymous_export_view: { $ref: '#/components/schemas/ContentBody' }
+        # …9 more siblings, all ContentBody
+ContentBody:                    # the real component
+  properties:
+    value: { type: string }
+```
+
+**Cause:**
+- the request body (walked first) has its own inline `body` prop, occupying the name `body`
+- the response-side inline `Content.body` collides with it and gets a made-up name:
+  container + prop = `ContentBody`
+- at that moment the real `ContentBody` component has not been visited — it is only reached
+  *through this wrapper's own props*, and the rename runs before they are walked
+- so the wrapper takes the component's name; both survive to the writer (different node ids)
+  and both are written
+- the #37 guard compares the wrapper's *pre-rename* name against contained refs, so it never sees
+  the minted candidate; the writer's emit-once name key only covers `$ref`-named types
+
+**Fix:** made-up names now stay off *all* component names, exactly as #57 already did for enums —
+`resolveNameConflict` reserves every `#/components/schemas` name for every rename, not just enum
+renames. The wrapper bumps to `ContentBody2`, the component keeps `ContentBody`, and the two
+`_expandable` children stop deriving the same base (`ContentBody2Expandable` /
+`ContentBodyExpandable` — no more `2`-suffix drift on the children).
+
+Churn: a renamed wrapper changes its node id (`obj:type:ContentBody` → `obj:type:ContentBody2`),
+so selection paths through affected ops change — same consumer impact class as #37. No test in the
+suite churned; the corpus sweep quantifies the rest.
+
+**Test:** `test_63_inline_wrapper_must_not_steal_component_name` in `tests/all/oas-core.test.ts`,
+fixture `tests/resources/oas/inline-wrapper-steals-component-name.yaml` — asserts `ParentBody2`
+(wrapper) + `ParentBody` (component), no duplicated type definitions, and composes.
+
+**AST:** rename-only — affected wrappers change name and id; no shape change.
+**Refs:** #9/#12 (the renamer), #37 (the contained-component guard this slips past), #57 (the enum
+form of the same fix), #18 (same-schema convergence, untouched), `src/oas/nodes/typeUtils.ts`
+(`resolveNameConflict`). Found by the R11 mutations lint (`ARROW_TYPE_MISMATCH` on the copy op) —
+its only corpus finding.
