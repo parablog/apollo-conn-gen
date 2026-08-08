@@ -399,3 +399,16 @@ test('test_R11_a_fallback_is_not_looked_up_in_the_response', async () => {
   assert.notEqual(withFallback, sdl);
   assert.deepEqual(lintSelections(withFallback, gen), []);
 });
+
+test('test_R11_escaped_quoted_keys_resolve_to_their_json_key', async () => {
+  // `$."back\\slash"` names the JSON key `back\slash` — the quotes carry escapes the key itself
+  // does not have, so the response lookup must unescape before comparing. see #64
+  const gen = await OasGen.fromFile(`${oasBasePath}/r3-edge-cases.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/things>**']);
+  assert.ok(sdl.includes('backSlash: $."back\\\\slash"'), 'the escaped key is in the selection');
+  assert.deepEqual(lintSelections(sdl, gen), []);
+});

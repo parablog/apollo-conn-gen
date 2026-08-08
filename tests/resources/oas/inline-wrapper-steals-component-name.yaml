@@ -1,0 +1,51 @@
+openapi: 3.0.0
+info:
+  title: inline wrapper steals a component's name (63)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /things:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: object
+                  properties:
+                    note:
+                      type: string
+      responses:
+        '200':
+          description: the created thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Parent'
+components:
+  schemas:
+    Parent:
+      type: object
+      properties:
+        id:
+          type: string
+        body:
+          type: object
+          properties:
+            view:
+              $ref: '#/components/schemas/ParentBody'
+            raw:
+              $ref: '#/components/schemas/ParentBody'
+    ParentBody:
+      type: object
+      properties:
+        value:
+          type: string
+        _expandable:
+          type: object
+          properties:
+            content:
+              type: string
