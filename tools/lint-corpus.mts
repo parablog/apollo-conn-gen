@@ -43,9 +43,12 @@ const MUTATION_PREFIXES = ['post:', 'put:', 'patch:', 'del:'];
 const wanted = (key: string): boolean =>
   verbs === 'get' ? key.startsWith('get:') : verbs === 'mutations' ? MUTATION_PREFIXES.some((p) => key.startsWith(p)) : true;
 
-// the generator traces unconditionally through console.log; silence it or the sweep writes 400 MB
+// the generator traces through console.log and warns through console.error; silence both or the
+// sweep floods the console. e.g. (FHIR-baseR4) thousands of shapeless-body warns across its mutations
 const trace = console.log;
 console.log = () => {};
+console.warn = () => {};
+console.error = () => {};
 const say = (line: string): void => void process.stderr.write(line + '\n');
 
 function genOptions(skipValidation: boolean) {
