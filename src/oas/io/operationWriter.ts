@@ -266,18 +266,13 @@ export class OperationWriter {
   private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
     context.indent = 6;
 
-    // R10: in reusable-mappings mode the @connect selection invokes the result type's @mapping —
-    // its field body lives in the type's own @mapping. Wrapper structure (a `data { … }`
-    // response object, array nesting) is preserved: the wrapper type is invoked here and carries
-    // the inner structure in its mapping. Scalar/JSON/union/map roots fall back to inline.
-    //
-    // `$` is the whole response body at this position (nothing has entered a `{ … }` block yet,
-    // so `$` and `@` coincide); `$` matches the documented idiom for a connector root.
+    // R10: the whole @connect selection becomes one call into the result type's @mapping;
+    // scalar/JSON/union/map results keep the inline form. see R10_STATUS.md for the `$` note
+    // e.g. (petstore) `$->Pet`
     if (context.generateOptions.reusableMappings) {
-      const root = type instanceof Res ? type.response : type;
-      const spread = T.mappingSpreadName(root, selection);
-      if (spread) {
-        writer.write(' '.repeat(6)).write(`$->${spread}\n`);
+      const mappingCall = T.mappingCallName(T.unwrapRes(type), selection);
+      if (mappingCall) {
+        writer.write(' '.repeat(6)).write(`$->${mappingCall}\n`);
         return;
       }
     }

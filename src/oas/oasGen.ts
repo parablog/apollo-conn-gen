@@ -32,8 +32,7 @@ interface IGenOptions {
   directives?: DirectivesConfig;
 }
 
-// --reusable-mappings emits @mapping, a connect v0.5 construct — reject lower targets
-// explicitly rather than auto-bumping or emitting a directive the target cannot parse.
+// --reusable-mappings emits @mapping, a connect v0.5 construct — anything lower is rejected.
 function validateReusableMappings(options: IGenOptions): void {
   if (options.reusableMappings) {
     requireConnectVersion(

@@ -9,12 +9,15 @@
 
 // Authoritative list of connect spec identifiers we will emit. Floored at v0.4: real unions/interfaces
 // need v0.4, and the pre-v0.4 consolidate downgrade was removed, so anything below v0.4 is rejected.
-// v0.5 is the preview that carries `@mapping`; it is opt-in, never the default (see LATEST below).
+// v0.5 is the preview that carries `@mapping`; it is opt-in, never the default (see PREVIEW below).
 export const SUPPORTED_CONNECT_VERSIONS = ['v0.4', 'v0.5'] as const;
 export type ConnectVersion = (typeof SUPPORTED_CONNECT_VERSIONS)[number];
 
-// The newest version we can emit — and the default: no version asked for means LATEST.
-export const LATEST_CONNECT_VERSION: ConnectVersion = SUPPORTED_CONNECT_VERSIONS[SUPPORTED_CONNECT_VERSIONS.length - 2];
+// The default when no version is asked for. v0.5 exists but never becomes the default.
+export const LATEST_CONNECT_VERSION: ConnectVersion = 'v0.4';
+
+// The opt-in preview that carries @mapping (--reusable-mappings).
+export const PREVIEW_CONNECT_VERSION: ConnectVersion = 'v0.5';
 
 export const DEFAULT_VERSIONS = {
   // LATEST released federation (2.15 is unreleased); connect v0.4 needs >= v2.13 so this
@@ -84,9 +87,9 @@ export function requireConnectVersion(feature: string, target: string, min: stri
   }
 }
 
-/** Non-blocking heads-up that v0.5 is experimental and needs router opt-in. */
+// Non-blocking heads-up that v0.5 is experimental and needs router opt-in.
 export function warnIfExperimentalConnectVersion(v: string): void {
-  if (v === 'v0.5') {
+  if (v === PREVIEW_CONNECT_VERSION) {
     console.warn(
       'Warning: connect v0.5 is experimental (preview). Composition and the router ' +
         'must support the @mapping preview; released builds reject connect v0.5.',

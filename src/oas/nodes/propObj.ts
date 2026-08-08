@@ -5,6 +5,7 @@ import { trace } from '../log/trace.js';
 import { Composed } from './comp.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { writeMappingCall } from '../io/mappingWriter.js';
 import { Naming } from '../utils/naming.js';
 
 export class PropObj extends Prop {
@@ -72,26 +73,12 @@ export class PropObj extends Prop {
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
-    // R10: reusable-mappings mode collapses the child body to its @mapping spread — the full
-    // field prefix above is preserved, only the inlined block is replaced. A spread that closes
-    // a cycle (pre-computed back edge) renders its subtree fully inline instead, with deeper
-    // spreads suppressed via inlineFallbackDepth. see typeUtils.computeInlinedMappingEdges
-    if (context.generateOptions.reusableMappings && context.inlineFallbackDepth === 0) {
-      const spread = T.mappingSpreadName(this.obj, selection);
-      if (spread) {
-        if (T.isInlinedBackEdge(this, spread, context, selection)) {
-          context.inlineFallbackDepth++;
-          try {
-            this.selectBody(context, writer, selection);
-          } finally {
-            context.inlineFallbackDepth--;
-          }
-        } else {
-          writer.write(T.mappingSpreadSuffix(sanitised, spread)).write('\n');
-        }
-        trace(context, '<- [prop-obj:select]', 'out (mapped) ' + this.name);
-        return;
-      }
+    // R10: the field calls the child type's @mapping instead of writing its block inline.
+    // e.g. (petstore) `category: category->Category`
+    const inline = () => this.selectBody(context, writer, selection);
+    if (writeMappingCall(this, this.obj, sanitised, context, writer, selection, inline)) {
+      trace(context, '<- [prop-obj:select]', 'out (mapped) ' + this.name);
+      return;
     }
 
     this.selectBody(context, writer, selection);

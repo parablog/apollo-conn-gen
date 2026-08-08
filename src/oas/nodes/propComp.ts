@@ -5,6 +5,7 @@ import { trace } from '../log/trace.js';
 import { Composed } from './comp.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { writeMappingCall } from '../io/mappingWriter.js';
 import { Naming } from '../utils/naming.js';
 
 export class PropComp extends Prop {
@@ -63,24 +64,13 @@ export class PropComp extends Prop {
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
-    // R10: composed (allOf) children collapse to their @mapping spread; unions stay inline;
-    // back edges render fully inline. see typeUtils.computeInlinedMappingEdges
-    if (context.generateOptions.reusableMappings && context.inlineFallbackDepth === 0) {
-      const spread = T.mappingSpreadName(comp, selection);
-      if (spread) {
-        if (T.isInlinedBackEdge(this, spread, context, selection)) {
-          context.inlineFallbackDepth++;
-          try {
-            this.selectBody(context, writer, selection);
-          } finally {
-            context.inlineFallbackDepth--;
-          }
-        } else {
-          writer.write(T.mappingSpreadSuffix(sanitised, spread)).write('\n');
-        }
-        trace(context, '<- [prop-comp:select]', 'out (mapped) ' + this.name);
-        return;
-      }
+    // R10: an allOf field calls the composed type's @mapping instead of writing its block inline;
+    // unions never get a call name, so they always stay inline.
+    // e.g. (response-allof-snake-path) `billingHistory: billing_history->BillingHistoryItem`
+    const inline = () => this.selectBody(context, writer, selection);
+    if (writeMappingCall(this, comp, sanitised, context, writer, selection, inline)) {
+      trace(context, '<- [prop-comp:select]', 'out (mapped) ' + this.name);
+      return;
     }
 
     this.selectBody(context, writer, selection);

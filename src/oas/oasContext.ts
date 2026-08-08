@@ -24,6 +24,9 @@ export type OverrideEntry = {
 // request overrides, keyed by op id. e.g. { "get:/pets/{id}": { path: "/v2/pets/{id}" } }
 export type OverridesConfig = Record<string, OverrideEntry>;
 
+// R10: one edge of the @mapping call graph, written "Parent|Child" with the emitted type names.
+export type MappingEdge = string;
+
 // R6: per-batch-endpoint settings. The only knob is the size cap; everything else
 // (entity, key, request, selection) is inferred. `{}`/`null` = defaults.
 export type BatchEntry = { maxSize?: number };
@@ -76,10 +79,9 @@ export class OasContext {
   public generatedSet: Set<string> = new Set();
   public indent: number;
 
-  // R10: mapping back edges ("Parent|Child" spread names) pre-computed before emission; a spread
-  // on one of these edges renders its subtree fully inline instead (no spreads at any depth, via
-  // inlineFallbackDepth) so the emitted @mapping graph stays acyclic for the router expander.
-  public inlinedMappingEdges: Set<string> = new Set();
+  // R10: the mapping calls that would make the @mapping graph loop; those spots render inline,
+  // and inlineFallbackDepth > 0 keeps calls out of everything written under them. see R10_STATUS.md
+  public inlinedMappingEdges: Set<MappingEdge> = new Set();
   public inlineFallbackDepth: number = 0;
 
   // #13: SDL-only prop replacements, keyed by the emitted instance. When same-id instances

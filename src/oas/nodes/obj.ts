@@ -4,6 +4,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import type { EntityResolver } from './entity.js';
 import { Writer } from '../io/writer.js';
+import { writeMappingDirective } from '../io/mappingWriter.js';
 import { Naming } from '../utils/naming.js';
 
 import _ from 'lodash';
@@ -96,7 +97,7 @@ export class Obj extends Type {
         writer.write(` @key(fields: "${key}")`);
       }
       // directive order: @key -> @mapping -> @connect (matches the connect v0.5 reference shape)
-      T.writeMappingDirective(this, context, writer, selection);
+      writeMappingDirective(this, context, writer, selection);
       for (const resolver of resolvers) {
         if (resolver.batch) {
           this.writeBatchConnector(context, writer, resolver, selection);
@@ -106,7 +107,7 @@ export class Obj extends Type {
       }
       writer.write('\n{\n');
     } else {
-      T.writeMappingDirective(this, context, writer, selection);
+      writeMappingDirective(this, context, writer, selection);
       writer.write(' {\n');
     }
 
@@ -175,11 +176,11 @@ export class Obj extends Type {
       .write(i6)
       .write('selection: """\n');
 
-    // R10: in reusable-mappings mode the entity selection is just this type's own spread —
-    // the field body lives in its @mapping.
-    const spread = context.generateOptions.reusableMappings ? T.mappingSpreadName(this, selection) : undefined;
-    if (spread) {
-      writer.write(i6).write(`$->${spread}\n`);
+    // R10: the entity selection is one call into this type's own @mapping.
+    // e.g. (petstore) `$->User` under `type User @key(fields: "username")`
+    const mappingCall = context.generateOptions.reusableMappings ? T.mappingCallName(this, selection) : undefined;
+    if (mappingCall) {
+      writer.write(i6).write(`$->${mappingCall}\n`);
     } else {
       // Base the selection at 6 spaces like a Query connector. `select` adds
       // `context.stack.length` (this object is mid-generation on the stack), so subtract it.

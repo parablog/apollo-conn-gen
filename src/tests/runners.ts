@@ -81,15 +81,7 @@ export async function runOasTest(
 
   const [result, output] = compose(schemaFile, sampleFile, opts.composeFederationVersion);
 
-  // connect v0.5 (@mapping) is preview-only: released supergraph builds reject it with
-  // UNKNOWN_CONNECTORS_VERSION. When the local composer doesn't know v0.5, gate the compose
-  // assertion off (loudly) instead of failing — a v0.5-aware build on PATH re-enables it.
-  if (
-    !result &&
-    !shouldFail &&
-    opts.connectorSpecVersion === 'v0.5' &&
-    String(output).includes('UNKNOWN_CONNECTORS_VERSION')
-  ) {
+  if (!shouldFail && composerLacksV05(result, output, opts.connectorSpecVersion)) {
     console.warn('[runOasTest] composer does not support connect v0.5 — compose assertion skipped');
     return schema;
   }
@@ -182,6 +174,13 @@ export async function runJsonTest(
   // writer.clear();
 }
 
+
+// The composer at hand predates connect v0.5: skip the compose assertion (loudly) instead of
+// failing — a v0.5-aware build on PATH re-enables it.
+function composerLacksV05(result: boolean, output: string | undefined, connectorSpecVersion?: string): boolean {
+  return !result && connectorSpecVersion === 'v0.5' && String(output).includes('UNKNOWN_CONNECTORS_VERSION');
+}
+
 /// rover checks
 function isRoverAvailable(command: string): [boolean, string?] {
   const cmd = os.platform() === 'win32' ? 'where' : 'which';
@@ -192,7 +191,7 @@ function isRoverAvailable(command: string): [boolean, string?] {
 
 // connect v0.4 `->entries` (maps) don't compose on stock rover yet — the #14 fix is unreleased (v0.5
 // `@mapping` likewise). When the local patched build is present (gitignored), compose through it.
-// `OAS_TEST_COMPOSER` overrides the resolved path. Ported from the feat/r10-reusable-mappings branch.
+// `OAS_TEST_COMPOSER` overrides the resolved path.
 function localComposer(): string | undefined {
   const override = process.env.OAS_TEST_COMPOSER;
   if (override) {

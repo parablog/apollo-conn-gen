@@ -4,6 +4,7 @@ import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { writeMappingDirective } from '../io/mappingWriter.js';
 import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
 
@@ -94,7 +95,7 @@ export class Composed extends Type {
         if (this.implementsInterface) {
           writer.write(` implements ${this.implementsInterface}`);
         }
-        T.writeMappingDirective(this, context, writer, selection);
+        writeMappingDirective(this, context, writer, selection);
         writer.write(' {\n');
 
         for (const prop of selected) {

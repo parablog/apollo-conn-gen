@@ -2,6 +2,7 @@ import { Arr, IType, Prop, T, Type } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { writeMappingCall } from '../io/mappingWriter.js';
 import { Naming } from '../utils/naming.js';
 
 export class PropArray extends Prop {
@@ -77,24 +78,12 @@ export class PropArray extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
-    // R10: array-of-object items collapse to the item type's @mapping spread (prefix preserved);
-    // back edges render fully inline. see typeUtils.computeInlinedMappingEdges
-    if (context.generateOptions.reusableMappings && context.inlineFallbackDepth === 0) {
-      const spread = T.mappingSpreadName(this.items, selection);
-      if (spread) {
-        if (T.isInlinedBackEdge(this, spread, context, selection)) {
-          context.inlineFallbackDepth++;
-          try {
-            this.selectBody(context, writer, selection);
-          } finally {
-            context.inlineFallbackDepth--;
-          }
-        } else {
-          writer.write(T.mappingSpreadSuffix(sanitised, spread)).write('\n');
-        }
-        trace(context, '<- [prop:array:select]', 'out (mapped) ' + this.name);
-        return;
-      }
+    // R10: the list field calls the item type's @mapping instead of writing its block inline.
+    // e.g. (petstore) `tags: tags->Tag`
+    const inline = () => this.selectBody(context, writer, selection);
+    if (writeMappingCall(this, this.items, sanitised, context, writer, selection, inline)) {
+      trace(context, '<- [prop:array:select]', 'out (mapped) ' + this.name);
+      return;
     }
 
     this.selectBody(context, writer, selection);

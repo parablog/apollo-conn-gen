@@ -36,7 +36,8 @@ test('test_R10_mapping_added_to_connect_import', async () => {
 test('test_R10_nested_type_gets_explicit_mapping_with_spreads', async () => {
   // Pet nests Category/Tag: the leaves auto-map; Pet gets the explicit @mapping(selection:)
   // whose body is one level deep with child bodies collapsed to `field: field->Child`.
-  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 3, false, true, undefined, false, false, V05);
+  // 4 types since #57: petstore's inline `status` enum promotes to a real `PetStatus` enum
+  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, false, true, undefined, false, false, V05);
   assert.ok(schema !== undefined);
   assert.ok(/type Category @mapping \{/.test(schema!), 'Category is a leaf -> auto-map');
   assert.ok(/type Tag @mapping \{/.test(schema!), 'Tag is a leaf -> auto-map');
@@ -118,4 +119,14 @@ test('test_R10_requires_connect_v05', async () => {
     /requires connect v0\.5/,
     'reusable mappings below v0.5 must be rejected',
   );
+});
+
+test('test_R10_aliased_field_forces_explicit_mapping', async () => {
+  // an aliased body line (`billingHistory: billing_history`) is not just the SDL field names, so
+  // the type takes `@mapping(selection: """…""")`; its all-scalar item stays bare `@mapping {`
+  const schema = await runOasTest('response-allof-snake-path.yaml', ['get:/billing_history>**'], 1, 2, false, true, undefined, false, false, V05);
+  assert.ok(schema !== undefined);
+  assert.ok(/type BillingHistoryResponse @mapping\(selection: """/.test(schema!), 'aliased type takes the explicit form');
+  assert.ok(/billingHistory: billing_history->BillingHistoryItem/.test(schema!), 'alias kept inside the mapping');
+  assert.ok(/type BillingHistoryItem @mapping \{/.test(schema!), 'plain type stays bare');
 });

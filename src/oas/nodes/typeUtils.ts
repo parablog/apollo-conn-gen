@@ -24,6 +24,9 @@ import type { OasContext } from '../oasContext.js';
 import type { Writer } from '../io/writer.js';
 import type { SchemaObject } from 'oas/types';
 
+// where the R10 loop walk stands with a type: currently on the path being walked, or done
+type VisitState = 'visiting' | 'finished';
+
 export class T {
   public static isLeaf(type: IType): boolean {
     return (
@@ -130,13 +133,12 @@ export class T {
     return type instanceof Arr && type.itemsType instanceof Scalar;
   }
 
-  // R10: the bare GraphQL name a `...Type` spread must reference — the exact name the type's
-  // own definition emits (genTypeName + nameSuffix; any drift breaks composition). Returns
-  // undefined when the child carries no @mapping to spread: inputs, promoted interfaces,
-  // free-form JSON (no props), unions (->match stays co-located) and maps (->entries).
-  public static mappingSpreadName(input: IType | undefined, selection: string[]): string | undefined {
-    // unwrap array nesting: the spread targets the item type's @mapping
-    let type = input;
+  // R10: the type name a `->Type` mapping call must use — exactly what the definition line emits;
+  // undefined when the child has no @mapping of its own (inputs, interfaces, unions, maps, free JSON).
+  // e.g. (petstore) `Pet.category` -> `Category`
+  public static mappingCallName(child: IType | undefined, selection: string[]): string | undefined {
+    // a list calls its item type's @mapping
+    let type = child;
     while (type instanceof Arr) {
       type = type.itemsType;
     }
@@ -146,153 +148,92 @@ export class T {
     if (type instanceof Composed && type.schema.allOf != null && !type.consolidated) {
       type.consolidate(selection);
     }
-    const target =
-      type instanceof Obj && !type.emitAsInterface
-        ? type
-        : type instanceof Composed && type.schema.allOf != null
-          ? type
-          : undefined;
-    if (!target || _.isEmpty(target.props)) {
+    if (!T.hasOwnMapping(type) || _.isEmpty((type as Obj | Composed).props)) {
       return undefined;
     }
+    const target = type as Obj | Composed;
     return Naming.genTypeName(target.name) + target.nameSuffix();
   }
 
-  // R10: how a field hands its value to the child's @mapping. The form is always
-  // `alias: path->Type`, so a plain field repeats its own name: `category: category->Category`.
-  // An already-aliased field just gets the arrow: `photo: "photo-url"` -> `photo: "photo-url"->Photo`.
-  public static mappingSpreadSuffix(sanitised: string, spread: string): string {
-    return sanitised.includes(': ') ? `->${spread}` : `: ${sanitised}->${spread}`;
+  // a plain object or an allOf type carries its own @mapping; interfaces and everything else do not
+  private static hasOwnMapping(type: IType): boolean {
+    if (type instanceof Obj) {
+      return !type.emitAsInterface;
+    }
+    return type instanceof Composed && type.schema.allOf != null;
   }
 
-  // R10: the child type a prop's selection would spread to, or undefined for scalar/enum/etc.
-  private static spreadChildOf(prop: Prop): IType | undefined {
+  // R10: the child type a field's mapping call goes to, or undefined for scalar/enum/etc.
+  public static mappingCallChild(prop: Prop): IType | undefined {
     if (prop instanceof PropObj) return prop.obj;
     if (prop instanceof PropArray) return prop.items;
     if (prop instanceof PropComp) return prop.comp;
     return undefined;
   }
 
-  // R10: whether a prop lands on an object/interface/union GraphQL field — the exact set the
-  // router refuses to auto-derive a mapping for. Array nesting is unwrapped, so a scalar list is
-  // not object-typed; an `emitAsInterface` Obj still is (it becomes a GraphQL interface).
-  private static isObjectTypedProp(prop: Prop): boolean {
-    let child = T.spreadChildOf(prop);
+  // R10: whether the field's GraphQL type is an object/interface/union — those must not take the
+  // bare @mapping form. e.g. (petstore) `Pet.category` is; `Pet.photoUrls` (`[String]`) is not.
+  public static isObjectTypedProp(prop: Prop): boolean {
+    let child = T.mappingCallChild(prop);
     while (child instanceof Arr) {
       child = child.itemsType;
     }
     return child instanceof Obj || child instanceof Composed || child instanceof Union;
   }
 
-  // R10 cycle pre-pass: a per-type emission stack cannot catch multi-type cycles (each @mapping
-  // body is rendered from its own emitted instance), so before any body is emitted, build the
-  // spread graph over the *emitted* instances and mark every DFS back edge "Parent|Child" for
-  // inline fallback. Only back edges are marked — the minimum set that breaks each cycle.
+  // R10: mark the mapping calls that would make the @mapping graph loop; those spots render the
+  // child inline. e.g. (r10-recursive) A -> B -> A: the B -> A call is marked. see R10_STATUS.md
   public static computeInlinedMappingEdges(
     types: Map<string, IType>,
     selection: string[],
     context: OasContext,
   ): void {
-    const adjacency = new Map<string, Set<string>>();
+    const callsOf = new Map<string, Set<string>>();
 
     types.forEach((type) => {
-      const name = T.mappingSpreadName(type, selection);
-      if (!name || adjacency.has(name)) {
+      const name = T.mappingCallName(type, selection);
+      if (!name || callsOf.has(name)) {
         return;
       }
-      const edges = new Set<string>();
+      const calls = new Set<string>();
       for (const prop of (type as Obj | Composed).selectedProps(selection)) {
-        const childName = T.mappingSpreadName(T.spreadChildOf(prop), selection);
+        const childName = T.mappingCallName(T.mappingCallChild(prop), selection);
         if (childName) {
-          edges.add(childName);
+          calls.add(childName);
         }
       }
-      adjacency.set(name, edges);
+      callsOf.set(name, calls);
     });
 
-    const backEdges = new Set<string>();
-    const colour = new Map<string, 'grey' | 'black'>();
+    const loopClosers = new Set<string>();
+    const state = new Map<string, VisitState>();
+    const stillToVisit = (typeName: string) => state.get(typeName) !== 'finished' && callsOf.has(typeName);
 
-    const visit = (node: string): void => {
-      colour.set(node, 'grey');
-      for (const child of adjacency.get(node) ?? []) {
-        if (colour.get(child) === 'grey') {
-          backEdges.add(`${node}|${child}`);
-        } else if (colour.get(child) !== 'black' && adjacency.has(child)) {
-          visit(child);
+    const visit = (typeName: string): void => {
+      state.set(typeName, 'visiting');
+      for (const called of callsOf.get(typeName) ?? []) {
+        if (state.get(called) === 'visiting') {
+          loopClosers.add(`${typeName}|${called}`);
+        } else if (stillToVisit(called)) {
+          visit(called);
         }
       }
-      colour.set(node, 'black');
+      state.set(typeName, 'finished');
     };
 
-    for (const node of adjacency.keys()) {
-      if (!colour.has(node)) {
-        visit(node);
+    for (const typeName of callsOf.keys()) {
+      if (!state.has(typeName)) {
+        visit(typeName);
       }
     }
 
-    context.inlinedMappingEdges = backEdges;
+    context.inlinedMappingEdges = loopClosers;
   }
 
-  // R10: true when this prop's spread closes a cycle (a pre-computed back edge) — the caller
-  // must render the child subtree fully inline instead of spreading.
-  public static isInlinedBackEdge(prop: Prop, spreadName: string, context: OasContext, selection: string[]): boolean {
-    const owner = T.mappingSpreadName(T.findNonPropParent(prop.parent!), selection);
-    return !!owner && context.inlinedMappingEdges.has(`${owner}|${spreadName}`);
-  }
-
-  // R10: emit the type's @mapping directive (connect v0.5). The body is the type's own selection
-  // rendered in reusable mode (nested fields collapse to `field { ...Child }` spreads). When the
-  // body is exactly the SDL field names, the auto-map form (bare `@mapping`) maps 1:1 by name;
-  // anything aliased, defaulted or nested needs the explicit `@mapping(selection: """…""")`.
-  public static writeMappingDirective(
-    type: Obj | Composed,
-    context: OasContext,
-    writer: Writer,
-    selection: string[],
-  ): void {
-    if (!context.generateOptions.reusableMappings || type.kind === 'input') {
-      return;
-    }
-    if (type instanceof Obj && type.emitAsInterface) {
-      return;
-    }
-
-    const body = writer.capture(() => {
-      const saved = context.indent;
-      // `select` indents by `context.indent + stack.length`; this type is mid-generation (on
-      // the stack), so offset to land the body lines at column 2 (the reference format).
-      context.indent = 2 - context.stack.length;
-      type.select(context, writer, selection);
-      context.indent = saved;
-    });
-
-    const lines = body
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-    if (lines.length === 0) {
-      return;
-    }
-
-    const selected = type.selectedProps(selection);
-    const fields = selected.map((prop) => Naming.sanitiseField(prop.name));
-    // The bare form asks the router to derive the mapping from the SDL field list, and it refuses
-    // to do that for a type with any object/interface/union field — a check it makes against the
-    // *field types*, not against this body. Deciding it from the body alone would agree only by
-    // coincidence (nested props render as `field { … }`, never a bare name), so gate on the field
-    // types directly and let anything object-shaped take the explicit form.
-    const autoMap =
-      lines.length === fields.length &&
-      lines.every((line, i) => line === fields[i]) &&
-      !selected.some((prop) => T.isObjectTypedProp(prop));
-
-    if (autoMap) {
-      writer.write(' @mapping');
-    } else {
-      // close at the body's column (2) so the directive reads as one aligned block, like @connect
-      writer.write(' @mapping(selection: """\n').write(body).write('  """)');
-    }
+  // R10: true when this field's mapping call is one of the marked loop-closers.
+  public static isInlinedBackEdge(prop: Prop, callName: string, context: OasContext, selection: string[]): boolean {
+    const owner = T.mappingCallName(T.findNonPropParent(prop.parent!), selection);
+    return !!owner && context.inlinedMappingEdges.has(`${owner}|${callName}`);
   }
 
   // What the operation gives back, with the response wrapper removed. A list stays a list.
@@ -304,7 +245,11 @@ export class T {
   //            └─ obj:type:#/components/schemas/Pet
   // This is the shape of the whole answer. Callers that want one item use responseItemType.
   public static responseType(op: Op): IType | undefined {
-    const node: IType | undefined = op.resultType;
+    return T.unwrapRes(op.resultType);
+  }
+
+  // the node behind the response wrapper, or the node itself when there is no wrapper
+  public static unwrapRes(node: IType | undefined): IType | undefined {
     return node instanceof Res ? node.response : node;
   }
 

@@ -22,8 +22,8 @@ export class SchemaWriter {
     const federationVersion = this.gen.options.federationVersion || DEFAULT_VERSIONS.federationVersion;
     const connectorSpecVersion = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;
     const authHeader = this.security.sourceHeader();
-    // R10: @mapping joins the connect import only in reusable-mappings mode; the federation
-    // import stays ["@key"] (no @shareable — deliberate, revisit only if composition demands it).
+    // R10: @mapping joins the connect import only in reusable-mappings mode.
+    // see R10_STATUS.md for why the federation import stays ["@key"]
     const connectImports = this.gen.options.reusableMappings
       ? '["@connect", "@source", "@mapping"]'
       : '["@connect", "@source"]';

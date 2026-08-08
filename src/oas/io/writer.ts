@@ -34,7 +34,7 @@ export class Writer {
     return this.buffer.join('');
   }
 
-  /** Run `fn` against a fresh buffer and return what it wrote, restoring the original buffer. */
+  // Runs `fn` against a fresh buffer and returns what it wrote; the original buffer comes back after.
   public capture(fn: () => void): string {
     const saved = this.buffer;
     this.buffer = [];
@@ -77,8 +77,8 @@ export class Writer {
     // no-op unless a qualifying discriminated output union exists). Same `types` map.
     promoteAllOfBase(context, this.gen, types, selection);
 
-    // R10: before any @mapping body is emitted, mark the spread-graph back edges that must
-    // render inline — recursive schemas would otherwise produce a cyclic @mapping graph.
+    // R10: before any @mapping body is written, mark the mapping calls that would make the
+    // @mapping graph loop — those spots render inline instead. see computeInlinedMappingEdges
     if (context.generateOptions.reusableMappings) {
       T.computeInlinedMappingEdges(types, selection, context);
     }
