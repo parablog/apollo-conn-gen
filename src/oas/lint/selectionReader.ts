@@ -240,7 +240,11 @@ export class SelectionReader {
       return null; // never closed
     }
     this.at += 1;
-    return { name: this.text.slice(start + 1, this.at - 1), from: start, to: this.at };
+    // the quotes carry escapes the key itself does not have: `$."back\\slash"` names the JSON key
+    // `back\slash`. Read them the way the router does — `\n` is a newline, any other `\x` is `x`.
+    const raw = this.text.slice(start + 1, this.at - 1);
+    const name = raw.replace(/\\(.)/g, (_, escaped: string) => (escaped === 'n' ? '\n' : escaped));
+    return { name, from: start, to: this.at };
   }
 
   /** Skip a bracketed run, minding nesting and quotes. False when it never closes. */

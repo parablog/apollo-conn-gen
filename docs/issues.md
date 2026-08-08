@@ -3294,3 +3294,23 @@ fixture `tests/resources/oas/inline-wrapper-steals-component-name.yaml` — asse
 form of the same fix), #18 (same-schema convergence, untouched), `src/oas/nodes/typeUtils.ts`
 (`resolveNameConflict`). Found by the R11 mutations lint (`ARROW_TYPE_MISMATCH` on the copy op) —
 its only corpus finding.
+## 64 · The lint reader compares a quoted key with its escapes still on — ✅ Fixed
+
+**Symptom:** the first `make coverage-all` on main stopped at the GET lint gate with two
+`PATH_NOT_IN_RESPONSE` warnings on `r3-edge-cases.yaml` — both false: the selection reads real,
+documented keys.
+
+**Example:** the #62 emitter writes `backSlash: $."back\\slash"` for the JSON key `back\slash`.
+The lint's reader returned the quoted name with its escapes still on (`back\\slash`), so the
+lookup against the spec's properties missed.
+
+**Fix:** `readQuotedName` (`src/oas/lint/selectionReader.ts`) now unescapes the way the router
+reads the escapes — `\n` is a newline, any other `\x` is `x`. Applied to the gen.rm working copy
+of the reader too, so the next merge does not resurrect the warning.
+
+**Test:** `test_R11_escaped_quoted_keys_resolve_to_their_json_key` in `tests/all/r11-lint.test.ts`
+— lints the generated `r3-edge-cases` op with the spec loaded, expects no findings.
+
+**AST:** none — lint-only.
+**Refs:** #62 (the escaping this reads back), `escapeSelectionKey` in `src/oas/utils/naming.ts`
+(the writer side of the same rules). Found by running the R11 lint over the corpus on main.
