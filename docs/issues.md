@@ -520,7 +520,7 @@ passes). box's 9 INTERNAL_ERROR ops confirmed a *different* mechanism (reference
 `src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override
 lookup).
 
-## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ⏸ Parked (upstream fix accepted, pending router release)
+## 14 · connect v0.4 composition doesn't credit `->entries` sub-selections — ✅ Fixed (supergraph plugin ≥ 2.15.0)
 **Symptom:** 26/43 Mercedes CCS ops fail the abstract pass with
 `CONNECTORS_UNRESOLVED_FIELD: AlternativesEntry.key / .value` — yet the selection selects both.
 CCS default pass: 100%.
@@ -591,6 +591,15 @@ generator-side — this closes on its own once a router release ships with the p
 Mercedes CCS row of the corpus sweep (`COVERAGE.md`) against a released rover that includes it to
 confirm, then flip this entry to ✅ Fixed. Until then, stock rover still hits the same
 `CONNECTORS_UNRESOLVED_FIELD` on `->entries` — don't re-investigate this as a new bug.
+
+**Status update (2026-08-10) — closed.** The fix shipped upstream as `5b4afe1066` (router #9619) and
+is in the published **supergraph plugin 2.15.0+**, which stock rover 0.40 downloads fine. The harness
+pins moved `=2.14.1 → =2.15.1` (`tools/coverage-spec.mts`, `tools/vet-spec.mts`, the `compose()`
+default in `src/tests/runners.ts`); the full GET sweep confirms:
+- Mercedes CCS **39.5% → 100%** (43/43) — the 26 `->entries` ops all compose.
+- Corpus-wide **+83 ops** (2218 → 2301 of 2318): stripe +37, CCS +26, github +7, docker-engine +6,
+  incident.io +4, square +2, omni +1.
+- The `CONNECTORS_UNRESOLVED_FIELD` bucket collapsed **89 → 4** (a github residue, separate shape).
 
 ## 15 · Composed/Union definition and reference emit divergent names — ✅ Fixed (`44b628d`)
 **Symptom:** the dominant compose failure after #14 — **143 ops** in the abstract sweep (DO, box,
@@ -2755,6 +2764,48 @@ really does carry a webhook *and* that only `get:/ping` is collected.
 symptom), plus the call sites in `union.ts`, `comp.ts`, `obj.ts`, `map.ts`, `ref.ts`, and
 `src/oas/oasGen.ts` (`visitPath`, dead guard removed).
 
+## 54 · The same "what does this operation give back" walk is written four times — 📋 Noted, not fixed
+
+**Symptom:** four places walk the operation's result node the same way, each with its own copy of
+the unwrap. They agree today, but nothing keeps them in step.
+
+| Where | Unwraps to | Extra it does |
+|---|---|---|
+| `typeUtils.ts` `T.responseType` | the response node, list kept | — |
+| `typeUtils.ts` `T.responseItemSchema` | the item's OAS schema | takes lists off |
+| `batch.ts` `responseItem` | the item object | also handles a `{ results: [Product] }` wrapper, returns a `BatchTarget` |
+| `entity.ts` (around :49) | the response node | reads it for entity resolvers |
+
+**OAS** — the two shapes they all have to cope with, e.g. (petstore) and (R6 fixtures):
+```yaml
+# a plain list
+responses: { '200': { schema: { type: array, items: { $ref: '#/c/s/Pet' } } } }
+# a wrapped list
+responses: { '200': { schema: { properties: { results: { type: array, items: { $ref: '#/c/s/Product' } } } } } }
+```
+
+**The node graph they walk:**
+```
+get:/pet/findByStatus
+ └─ res:r
+     └─ array:#/components/schemas/Pet
+         └─ obj:type:#/components/schemas/Pet
+```
+
+**Cause:** the walk grew where it was first needed and was copied each time another pass wanted it.
+`allOfBase.ts` had two copies of its own; those now call `T.responseType`, which is what surfaced
+the rest.
+
+**Why it is worth fixing:** the four differ in how far they unwrap, and that difference is load-bearing.
+`allOfBase` asks whether an operation gives back a union, so it must NOT see through a list; the linter
+asks what shape one item has, so it must. Folding them together carelessly changes which unions R2
+promotes — that near-miss is pinned by `test_oas_responseType_keeps_the_list_wrapper` in
+`tests/all/oas-core.test.ts`.
+
+**Not done because:** `responseItem` returns a `BatchTarget` with the wrapper field name attached, so
+it is a bigger change than the `allOfBase` swap, and it is working code on the R6 batch path. Left for
+a quieter moment.
+
 ## 55 · A field that is both `required` and `nullable: true` is emitted non-null — ✅ Fixed
 
 **Symptom:** the router errors on a legitimately-null value. In OpenAPI `required` and `nullable` are
@@ -3239,6 +3290,7 @@ half is pinned by the table above.
 side: `apollo-federation/src/connectors/json_selection/README.md` (grammar) and `parser.rs`
 (`parse_v0_3` / `parse_v0_4`). Found while building the Sanity connector, whose
 `sanity/issues.md #10` carries a post-process that un-quotes as a workaround.
+
 ## 63 · An inline wrapper's minted name steals a component's name, writing `type X` twice — ✅ Fixed
 
 **Symptom:** the schema defines `type ContentBody` twice — once for the real component, once for an
@@ -3294,6 +3346,7 @@ fixture `tests/resources/oas/inline-wrapper-steals-component-name.yaml` — asse
 form of the same fix), #18 (same-schema convergence, untouched), `src/oas/nodes/typeUtils.ts`
 (`resolveNameConflict`). Found by the R11 mutations lint (`ARROW_TYPE_MISMATCH` on the copy op) —
 its only corpus finding.
+
 ## 64 · The lint reader compares a quoted key with its escapes still on — ✅ Fixed
 
 **Symptom:** the first `make coverage-all` on main stopped at the GET lint gate with two

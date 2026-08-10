@@ -606,36 +606,51 @@ triaged **generator-bug vs input-quality**. (The harness, `COVERAGE.md`, and the
 specs are kept **local-only** — gitignored — because the published specs embed example secrets that
 block pushes; this section is the committed summary of what they showed.)
 
-**Corpus status (re-measured 2026-07-04, post `#40` — connect v0.4 / fed 2.14.1, stock rover 0.40):**
+**Corpus status (re-measured 2026-08-10, full `make coverage` sweep — connect v0.4 / fed 2.15.1,
+stock rover 0.40; the fed pin moved off 2.14.1 because the #14 `->entries` fix ships in the
+supergraph plugin from 2.15.0):**
 
 | Spec | GET ops | pass-rate |
 |---|--:|--:|
 | googlebooks | 30 | 100.0% |
+| slack | 80 | 98.8% |
+| digitalocean | 145 | 99.3% |
+| box | 114 | 100.0% |
+| openai | 10 | 100.0% |
 | asana | 79 | 100.0% |
-| digitalocean | 145 | 97.9% |
-| slack | 80 | 96.3% |
-| sendgrid | 154 | 98.7% |
-| github | 444 | 95.7% |
-| adobe commerce | 242 | 97.9% |
-| launch library | 116 | 98.3% |
+| sendgrid | 154 | 100.0% |
+| github | 444 | 98.9% |
+| 1password connect/events | 12 | 100.0% |
+| ably control | 7 | 100.0% |
+| amadeus flight offers | 1 | 100.0% |
+| docker engine | 43 | 100.0% |
+| nasa / nytimes / openfigi / visualcrossing | 14 | 100.0% |
+| spotify | 58 | 100.0% |
+| square | 84 | 100.0% |
+| stripe | 210 | 99.0% |
+| trello | 143 | 100.0% |
+| quickbooks online | 8 | 100.0% |
+| adobe commerce | 242 | 100.0% |
+| launch library | 116 | 99.1% |
 | common room core † | 9 | 100.0% |
 | mindbody † | 8 | 100.0% |
-| TMF632 party | 4 | 0.0% |
-| TMF637 inventory | 2 | 0.0% |
+| TMF632 party | 4 | 100.0% |
+| TMF637 inventory | 2 | 100.0% |
 | TMF666 account | 14 | 100.0% |
 | TMF680 recommendation | 2 | 100.0% |
-| TMF717 customer360 | 3 | 33.3% |
+| TMF717 customer360 | 3 | 33.3% (#61) |
 | js-mva consumer/product-selector | 4 | 100.0% |
 | most popular product | 4 | 100.0% |
-| omni † | 54 | 90.7% |
-| openai | 10 | 100.0% |
-| box | 114 | 100.0% |
-| confluence † | 65 | 93.8% |
-| mercedes CCS | 43 | **39.5%** (#14, upstream fix accepted — pending router release) |
+| omni † | 54 | 98.1% |
+| confluence | 65 | 93.8% |
+| mercedes CCS | 43 | 100.0% |
+| incident.io | 101 | 100.0% |
+| sanity projects † | 11 | 100.0% |
 
-Overall GET: **95.3% OK (1549/1626)** (launch library's +14 and box's +2 applied to the last
-full-corpus total; other rows unchanged since the `#38` re-measurement below — this pass only
-re-ran launch library and box, scoped via `--spec`, not a full `make coverage` sweep).
+Overall GET: **99.3% OK (2301/2318)**. The fed 2.15.1 bump alone recovered **+83 ops** (stripe +37,
+CCS +26, github +7, docker-engine +6, incident.io +4, square +2, omni +1) by closing the
+`CONNECTORS_UNRESOLVED_FIELD` bucket (89 → 4, github residue). Top remaining category is GEN-EMPTY
+(4 ops).
 
 > **`#40` re-measurement (2026-07-04):** box **98.2% → 100.0% (+1 op, `get:/search`)** — an
 > object-typed (array-of-`$ref`-object) query param was emitted as a full `type X { ... }` body
@@ -693,41 +708,55 @@ re-ran launch library and box, scoped via `--spec`, not a full `make coverage` s
 > pre-realignment v0.3 baseline; see git history.
 
 
-**Mutations corpus (post:/put:/patch:/del:, expanded tracked-real-fixture sweep — re-measured
-2026-07-04, post `#38`; sweep via `--verbs mutations`; fast guard:
-`tests/all/corpus-mutations.test.ts`):**
+**Mutations corpus (post:/put:/patch:/del:, full sweep re-measured 2026-08-10 at fed 2.15.1;
+sweep via `--verbs mutations`; fast guard: `tests/all/corpus-mutations.test.ts`):**
 
 | Spec | mutation ops | pass-rate |
 |---|--:|--:|
 | googlebooks | 21 | 100.0% |
 | slack | 94 | 100.0% |
-| digitalocean | 145 | 92.4% |
-| box | 144 | 91.7% |
+| digitalocean | 145 | 98.6% |
+| box | 144 | 93.8% |
 | openai | 18 | 100.0% |
-| asana | 88 | 83.0% |
-| sendgrid | 180 | 95.6% |
-| github | 401 | 97.3% |
-| adobe commerce | 344 | 99.1% |
-| common room core † | 13 | 69.2% |
+| asana | 88 | 100.0% |
+| sendgrid | 180 | 96.7% |
+| github | 401 | 98.5% |
+| 1password connect/events | 6 | 83.3% |
+| ably control | 15 | 100.0% |
+| amadeus flight offers | 1 | 100.0% |
+| docker engine | 61 | 96.7% |
+| openfigi | 1 | 0.0% |
+| plaid | 198 | 99.5% |
+| spotify | 30 | 100.0% |
+| square | 116 | 96.6% |
+| stripe | 236 | 97.9% |
+| trello | 181 | 98.9% |
+| quickbooks online | 7 | 100.0% |
+| adobe commerce | 344 | 100.0% |
+| common room core † | 13 | 76.9% |
 | mindbody † | 3 | 66.7% |
-| TMF632 party | 16 | 87.5% |
-| TMF637 inventory | 10 | 90.0% |
+| TMF632 party | 16 | 100.0% |
+| TMF637 inventory | 10 | 100.0% |
 | TMF666 account | 51 | 100.0% |
 | TMF680 recommendation | 6 | 100.0% |
 | TMF717 customer360 | 5 | 100.0% |
 | omni † | 92 | 92.4% |
-| confluence | 65 | 84.6% |
+| confluence | 65 | 90.8% |
 | mercedes CCS | 1 | 100.0% |
+| incident.io | 112 | 95.5% |
+| sanity projects † | 18 | 100.0% |
 
-Overall mutations: **95.0% OK (1612/1697)**.
+Overall mutations: **97.7% OK (2618/2679)** — up from 96.2% (2451/2549) at fed 2.14.1: the fed bump
+recovered +42 legacy ops and the two new specs added 125/130. `CONNECTORS_UNRESOLVED_FIELD` is down
+to 1 op (confluence); the leading buckets are now `INVALID_GRAPHQL` (29) and `INVALID_BODY` (19).
 
 > **`#38` re-measurement (2026-07-04):** `#38` is GET-only (launch library, the only spec it touches,
 > has 0 mutation ops). adobe commerce 54.9%→99.1% (+152) and TMF666 92.2%→100.0% (+4) are `df783ed`
 > ("stop dropping ops whose response is a bare scalar", already committed), not `#38` — same as the
 > GET-table note above.
 
-(launch library, js-mva ×2, most popular product have 0 mutation ops — read-only spec surfaces,
-not a gap.)
+(launch library, js-mva ×2, most popular product, nasa, nytimes ×2, and visualcrossing have 0
+mutation ops — read-only spec surfaces, not a gap.)
 
 Mutations overall: **85.8% OK (1456/1697)**. Not comparable 1:1 to the prior 1249-op snapshot
 below — the corpus grew to match the GET sweep's expanded spec list (adobe commerce +344,
