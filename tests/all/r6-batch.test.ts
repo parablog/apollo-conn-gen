@@ -79,7 +79,7 @@ test('test_R6_16_batch_selection_keeps_key_plain', async () => {
   // #16: both entity connectors ($this and $batch) reuse Product's fields with the key `id` plain
   // and `name?` marked; the list op's own selection marks `id?` like any response field.
   const schema = await run([PRODUCT, 'get:/products>**'], { 'get:/products': {} }, 1);
-  const plainKeyBlocks = (schema!.match(/"""\n      id\n      name\?/g) ?? []).length;
+  const plainKeyBlocks = (schema!.match(/"""\n {6}id\n {6}name\?/g) ?? []).length;
   assert.strictEqual(plainKeyBlocks, 2, 'the $this and the $batch selection both keep the key plain');
   assert.ok(schema!.includes('"""\n      id?\n      name?'), 'the list selection marks the same prop');
 });
