@@ -88,7 +88,7 @@ export class PropRef extends Prop {
     trace(context, '-> [prop-ref:select]', 'in ' + this.name + ', ref: ' + this.ref);
     const fieldName = this.name;
     const sanitised = Naming.sanitiseFieldForSelect(fieldName);
-    
+
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
     if (this.isOptionalInSelection(context)) {
       writer.write('?');
