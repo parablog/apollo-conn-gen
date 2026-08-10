@@ -62,3 +62,4 @@ KNOWN_ISSUES.md
 /docs/
 **/.DS_Store
 LINT-CORPUS.md
+COVERAGE_v*.md
