@@ -1,19 +1,7 @@
-.PHONY: publish-patch publish-minor publish-major coverage coverage-mutations lint-corpus lint-corpus-mutations coverage-all
+.PHONY: coverage coverage-mutations lint-corpus lint-corpus-mutations coverage-all
 
 # Each coverage run gets its own tmp dir (mkdtemp in tools/coverage-spec.mts), so the GET and
 # mutations sweeps are safe to run at the same time — coverage-all does exactly that.
-
-publish-patch:
-	npm version patch
-	npm publish
-
-publish-minor:
-	npm version minor
-	npm publish
-
-publish-major:
-	npm version major
-	npm publish
 
 # Corpus coverage harness (tools/coverage-spec.mts): generates + rover-composes every op of the
 # local, gitignored vendor corpus and regenerates COVERAGE.md. See ROADMAP.md "Coverage findings".
