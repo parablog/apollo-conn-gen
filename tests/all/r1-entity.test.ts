@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { runOasTest } from '../../src/tests/runners.js';
+import { OasGen } from '../../src/index.js';
+import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import './_setup.js';
 
 // --- R1: entity-resolver inference (inferEntityResolvers, type-level @connect) ---
@@ -64,6 +65,37 @@ test('test_R1_entity_op_scoping_only_qualifying_op_resolves', async () => {
   const resolverCount = schema!.split('{$this.').length - 1;
   assert.strictEqual(resolverCount, 1, `exactly one $this resolver expected, got ${resolverCount}`);
   assert.ok(!schema!.includes('entity: true'), 'must not emit entity: true');
+});
+
+test('test_R1_16_entity_selection_keeps_key_plain', async () => {
+  // #16: the same Widget props emit `id` plain inside the entity's own @connect (a key that may
+  // be absent is not a key) and `id?` in the Query selections; the optional `name?` marks both.
+  const paths = [
+    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:id',
+    'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:name',
+    'get:/widgets>res:r>array:#/c/s/Widget>obj:type:#/c/s/Widget>prop:scalar:id',
+    'get:/widgets>res:r>array:#/c/s/Widget>obj:type:#/c/s/Widget>prop:scalar:name',
+  ];
+
+  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, true);
+  assert.ok(schema!.includes('"""\n      id\n      name?'), 'key plain, optional sibling marked, in the entity selection');
+  assert.ok(schema!.includes('"""\n      id?\n      name?'), 'the same prop takes ? in the Query selections');
+});
+
+test('test_R1_16_aliased_optional_key_plain_only_in_entity_selection', async () => {
+  // #16 spots a key by Prop identity, not by name — the aliased `widgetId: widget_id` stays plain
+  // in the entity selection and takes `?` in the list selection. Writer-level only: @key still
+  // writes the raw OAS name (see docs/issues.md #65), so this schema does not compose yet.
+  const gen = await OasGen.fromFile(`${oasBasePath}/entity-aliased-key.yaml`, {
+    skipValidation: false,
+    showParentInSelections: false,
+    inferEntityResolvers: true,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/widgets/{widget_id}>**', 'get:/widgets>**']);
+  assert.ok(sdl.includes('@key(fields: "widget_id")'), 'entity resolver inferred for the aliased key');
+  assert.ok(sdl.includes('name?\n      widgetId: widget_id\n'), 'aliased key plain in the entity selection');
+  assert.ok(sdl.includes('name?\n      widgetId: widget_id?'), 'aliased key marked in the list selection');
 });
 
 test('test_R1_entity_multi_key_two_resolvers_sorted', async () => {

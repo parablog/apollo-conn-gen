@@ -167,9 +167,23 @@ test('test_R11_a_parameterized_operation_is_checked_too', async () => {
   assert.equal(found[0].code, 'PATH_NOT_IN_RESPONSE');
 });
 
+test('test_R11_16_optional_markers_read_clean', async () => {
+  // #16 writes `?` in every position — plain (`id?`), before a block (`category? {`), on an
+  // aliased key (`amountOff: amount_off?`) and mid-path (`currency_options?->entries`). The
+  // reader must take them all without a diagnostic.
+  const gen = await OasGen.fromFile(`${oasBasePath}/map-key-aliasing.yaml`, {
+    skipValidation: false,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/coupons>**']);
+  assert.match(sdl, /currency_options\?->entries \{/, 'the marker sits before ->entries, not after');
+  assert.deepEqual(codes(sdl), [], 'a fully marked generated schema lints clean');
+});
+
 test('test_R11_unknown_nested_path_is_reported', async () => {
   const { gen, sdl } = await petstoreSchema();
-  const broken = sdl.replace('category {', 'category: catgory {');
+  const broken = sdl.replace('category? {', 'category: catgory? {');
   const found = lintSelections(broken, gen);
   assert.equal(found.length, 1);
   assert.equal(broken.slice(found[0].from, found[0].to), 'catgory');
@@ -227,7 +241,7 @@ test('test_R11_every_check_fires_on_a_broken_generated_schema', async () => {
     ['a misspelt method', sdl.replace('      photoUrls\n', '      photoUrls->fist\n'), 'UNKNOWN_ARROW_TARGET'],
     ['an arrow to a type with no @mapping', sdl.replace('      photoUrls\n', '      photoUrls->Category\n'), 'TARGET_HAS_NO_MAPPING'],
     ['a path the response does not have', sdl.replace('      photoUrls\n', '      photoUrls: photoUrlz\n'), 'PATH_NOT_IN_RESPONSE'],
-    ['a nested path the response does not have', sdl.replace('category {', 'category: catgory {'), 'PATH_NOT_IN_RESPONSE'],
+    ['a nested path the response does not have', sdl.replace('category? {', 'category: catgory? {'), 'PATH_NOT_IN_RESPONSE'],
   ];
 
   for (const [what, broken, code] of breakages) {

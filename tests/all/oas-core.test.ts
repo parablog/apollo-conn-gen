@@ -1041,7 +1041,7 @@ test('test_array_item_ref_to_array_typed_schema_unwraps_redundant_nesting', asyn
   assert.ok(/widgets: \[WidgetsItem\]/.test(schema!), 'field type matches the emitted object definition');
   assert.ok(schema!.includes('type WidgetsItem {'), 'the real object is emitted under that name');
   assert.ok(!/WidgetList/.test(schema!), 'the redundant array-typed component name must not leak in');
-  assert.ok(/widgets \{\n\s*count\n\s*name\n\s*\}/.test(schema!), 'the selection nests inside braces, not flattened');
+  assert.ok(/widgets\? \{\n\s*count\?\n\s*name\?\n\s*\}/.test(schema!), 'the selection nests inside braces, not flattened');
 });
 
 test('test_inline_renamed_when_colliding_with_component_emitted_name', async () => {
@@ -1154,6 +1154,19 @@ test('test_enum_query_param_is_a_scalar_argument', async () => {
   assert.ok(!/enum Enum \{/.test(schema!), 'no enum definition inside the argument list');
 });
 
+test('test_16_optional_response_fields_marked_in_selection', async () => {
+  // #16 (petstore /pet/findByStatus): fields outside Pet's `required` list take `?` so an absent
+  // key stops warning at runtime; required name/photoUrls stay plain so real gaps still warn.
+  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/\n\s+id\?\n/.test(schema!), 'optional id is marked');
+  assert.ok(schema!.includes('\n      name\n'), 'required name stays plain');
+  assert.ok(schema!.includes('\n      photoUrls\n'), 'required photoUrls stays plain');
+  assert.ok(schema!.includes('category? {'), 'optional object field is marked before its block');
+  assert.ok(schema!.includes('tags? {'), 'optional array field is marked before its block');
+  assert.ok(/\n\s+status\?\n/.test(schema!), 'optional enum-ish scalar is marked');
+});
+
 test('test_webhooks_are_ignored_not_generated', async () => {
   // A spec can list `webhooks:` next to `paths:`. We only ever read the paths, so a webhook is
   // skipped rather than refused. see docs/issues.md #53
@@ -1193,7 +1206,7 @@ test('test_empty_response_alongside_a_selectable_body', async () => {
   );
   assert.ok(schema !== undefined);
   assert.ok(/\bdata: JSON\b/.test(schema!), 'the empty response object degrades to JSON');
-  assert.ok(/selection: """\s*data\s*"""/.test(schema!), 'the selection asks for the field');
+  assert.ok(/selection: """\s*data\?\s*"""/.test(schema!), 'the selection asks for the field');
   assert.ok(!/type \w+Response \{\s*\}/.test(schema!), 'no empty response type is written');
 });
 
@@ -1207,7 +1220,7 @@ test('test_inline_array_wrapping_another_array_unwraps_to_the_real_element', asy
   assert.ok(schema !== undefined);
   assert.ok(/messages: \[MessagesUnion\]/.test(schema!), 'the field names the type that is defined');
   assert.ok(/^type MessagesUnion /m.test(schema!), 'that type is emitted');
-  assert.ok(/messages \{/.test(schema!), 'the element nests inside braces in the selection');
+  assert.ok(/messages\? \{/.test(schema!), 'the element nests inside braces in the selection');
 });
 
 test('test_genuine_array_of_arrays_stays_nested', async () => {
@@ -1305,7 +1318,7 @@ test('test_map_field_key_aliasing_not_duplicated', async () => {
   const sdl = gen.generateSchema(['get:/coupons>**']);
   const occurrences = (sdl.match(/currencyOptions: currency_options/g) ?? []).length;
   assert.strictEqual(occurrences, 1, 'the alias must be written exactly once');
-  assert.match(sdl, /currencyOptions: currency_options->entries \{/);
+  assert.match(sdl, /currencyOptions: currency_options\?->entries \{/);
 });
 
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
@@ -1437,6 +1450,11 @@ test('test_R7_default_coalesces_R8_array_params_join', async () => {
   const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/tag: tag \?\? \$\("latest"\)/.test(schema!), 'default coalesces instead of replacing');
+  // #16 regression (digitalocean apps_list_alerts): a defaulted-items array must not also take
+  // the marker — `emails?: emails ?? $("")` is unreadable, the fallback alone handles absence
+  assert.ok(/emails: emails \?\? \$\(""\)/.test(schema!), 'array items default coalesces, unmarked');
+  assert.ok(!/emails\?/.test(schema!), 'no marker on the defaulted array');
+  assert.ok(/name\?/.test(schema!), 'the plain optional sibling still marks');
   assert.ok(/"ids": ids->joinNotNull\(","\)/.test(schema!), 'form/explode:false joins with comma');
   assert.ok(/"tags": tags->joinNotNull\("\|"\)/.test(schema!), 'pipeDelimited joins with |');
   assert.ok(/"page": page\n/.test(schema!), 'plain params unchanged');

@@ -71,6 +71,9 @@ export class PropObj extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
+    if (this.isOptionalInSelection(context)) {
+      writer.write('?');
+    }
 
     if (this.needsBrackets(this.obj!)) {
       writer.write(' {').write('\n');

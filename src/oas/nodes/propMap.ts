@@ -68,6 +68,9 @@ export class PropMap extends Prop {
     if (sanitised === fieldName) {
       writer.write(': ').write(sanitised);
     }
+    if (this.isOptionalInSelection(context)) {
+      writer.write('?');
+    }
     writer.write('->entries {').write('\n');
     context.enter(this);
 

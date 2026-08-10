@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Widget Service
+  title: Aliased Key Service
   version: 1.0.0
 servers:
   - url: https://api.example.com
@@ -18,12 +18,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Widget'
-  /widgets/{id}:
+  /widgets/{widget_id}:
     get:
       operationId: getWidget
       summary: Get a widget by id
       parameters:
-        - name: id
+        - name: widget_id
           in: path
           required: true
           schema:
@@ -39,15 +39,10 @@ components:
   schemas:
     Widget:
       type: object
-      # no `required` list, deliberately: the optional key `id` pins the #16 entity-key
-      # suppression (plain `id` in the entity selection, `id?` everywhere else)
+      # widget_id is optional and needs sanitising (widgetId: widget_id) — pins the #16
+      # by-identity key suppression on an aliased key
       properties:
-        id:
+        widget_id:
           type: string
-          description: Unique identifier of the widget
         name:
           type: string
-          description: Display name of the widget
-        sku:
-          type: string
-          description: Stock keeping unit

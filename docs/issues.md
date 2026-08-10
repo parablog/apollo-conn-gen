@@ -647,7 +647,7 @@ camelize every path segment (`v2CustomersMyBilling_history` — legal GraphQL, c
 **Refs:** `src/oas/nodes/comp.ts` (`generate`), `union.ts` (`generate`). Fixture
 `response-allof-snake-path.yaml`, test `test_response_allof_snake_path_def_ref_names_converge`.
 
-## 16 · Selections don't mark OAS-optional fields with `?` — ⏸ Parked (until composition ≥ 2.15 ships)
+## 16 · Selections don't mark OAS-optional fields with `?` — ✅ Fixed (needs composition ≥ 2.15)
 **Parked (2026-06-10):** emitting `?` today would break composition for anyone on the released
 toolchain — supergraph plugins 2.13/2.14 don't credit `?`-groups (2.15 fixes it but is unreleased,
 confirmed 404). Users upgrading from fed 2.11 onwards would hit a hard regression. Revisit when a
@@ -696,6 +696,39 @@ tags {                tags? {
   independent of our #14 patch).
 - Nuance: seen-fields are unioned **across all connectors**, so a `?`-group composes on 2.13 *if* another
   op selects the same type's fields plainly — which is why a manual petstore test can pass.
+
+**Status update (2026-08-10) — done.** Composition 2.15 shipped (see #14's closure) and the repo
+composes at 2.15.1, so the park expired. As proposed: `Prop.optionalMarker` (`src/oas/nodes/prop.ts`)
+emits `?` iff the prop is outside the OAS `required` list, and every prop writer appends it —
+`propScalar` (skipped when the `?? $(default)` fallback already handles absence), `propObj`,
+`propArray` (also skipped when its *items* scalar carries the default — digitalocean's
+`emails: emails ?? $("")` would otherwise become the unreadable `emails?: emails ?? $("")`;
+caught by the corpus lint sweep's blind counter, pinned in `test_R7_default_coalesces…`),
+`propComp`, `propRef`, `propEn`, and `propMap`, where the marker sits on the key
+*before* the method — `currency_options?->entries`, never `->entries?` (which would mark the
+result instead).
+
+Two exclusions:
+- **request/body selections** (`parent.kind === 'input'`) — those reference GraphQL fields, not
+  response keys;
+- **entity keys** — a key that may be absent is not a key, so the same `Widget.id` writes `id?` in
+  a Query selection and plain `id` inside the entity's own `@connect`. No new state: a prop is a
+  key iff its owner sits mid-generation on `context.stack` (the same fact `writeEntityConnector`
+  leans on for indent — true only while the type's own connector is written) and one of the
+  owner's `entityResolvers` names it in `keyFields`. A nested object's own `id` has a different
+  owner, so it still gets `?`. Both sides of the name check are raw OAS names today; the #65 fix
+  must move them together, and `test_R1_16_aliased_optional_key_plain_only_in_entity_selection`
+  fails loudly if they drift. Composition 2.15 *accepts* `id?` on a key (probed) — the
+  suppression is semantic, not a compose requirement.
+
+The published minimum to compose the output is now **composition 2.15** (plugin `=2.15.1`
+everywhere in the repo), the same kind of floor v0.4 set at fed 2.13. The lint reader already
+tokenized `?` at every step, so linted schemas stay clean.
+
+**Tests:** `test_16_optional_response_fields_marked_in_selection` (petstore before/after),
+`test_R1_16_entity_selection_keeps_key_plain`, `test_R1_16_aliased_optional_key_plain_only_in_entity_selection`,
+`test_R6_16_batch_selection_keeps_key_plain`, `test_R6_16_composite_key_both_parts_plain`,
+`test_R11_16_optional_markers_read_clean` (`?->entries` placement + lint-clean).
 
 **AST:** untouched — emission-only (`select()` in the `Prop` subclasses appends `?` from
 `prop.required`). Care points: aliased keys (`safe: "raw key"?`), arrays (`tags? {`), method chains
@@ -3367,3 +3400,47 @@ of the reader too, so the next merge does not resurrect the warning.
 **AST:** none — lint-only.
 **Refs:** #62 (the escaping this reads back), `escapeSelectionKey` in `src/oas/utils/naming.ts`
 (the writer side of the same rules). Found by running the R11 lint over the corpus on main.
+
+## 65 · An entity key whose OAS name is not a clean GraphQL name breaks R1 emission — ⬜ Open
+
+**Symptom:** an entity keyed on a property like `widget_id` emits a connector that references names
+nobody defines. Two separate leaks, same root:
+- `@key(fields: "widget_id")` writes the **raw OAS name**, but the type's field is the sanitised
+  `widgetId` — composition rejects the `@key`.
+- the resolver URL never gets its `$this`: the rewrite regex `\{([a-zA-Z0-9]+)\}` (`obj.ts`,
+  `writeEntityConnector`) does not match `_`, so the path stays `GET: "/widgets/{widget_id}"`.
+
+**OAS** — any by-id endpoint whose path param needs sanitising, e.g. (entity-aliased-key):
+```yaml
+/widgets/{widget_id}:
+  get:
+    parameters: [{ name: widget_id, in: path, required: true }]
+Widget:
+  properties: { widget_id: { type: string }, name: { type: string } }
+```
+
+**Example:**
+```graphql
+# now — @key names a field Widget does not have, and the URL kept the bare param
+type Widget @key(fields: "widget_id")
+    @connect(http: { GET: "/widgets/{widget_id}" } ...)
+{ widgetId: String ... }
+# wanted
+type Widget @key(fields: "widgetId")
+    @connect(http: { GET: "/widgets/{$this.widgetId}" } ...)
+```
+
+**Cause:** `keyFields` carries raw path-param names (`entity.ts`), `@key` writes them unsanitised
+(`obj.ts`), and the `$this` rewrite regex predates non-identifier param names. The selection side is
+already correct — `widgetId: widget_id` — and #16 spots the key by Prop identity, so neither fix
+changes selections.
+
+**Tests:** `test_R1_16_aliased_optional_key_plain_only_in_entity_selection` in
+`tests/all/r1-entity.test.ts` generates this shape writer-level only; it must start composing once
+this is fixed (then move it onto `runOasTest`).
+
+**AST:** no change expected — an emission fix in `obj.ts` (sanitise `@key` fields, widen the
+rewrite) plus keeping `$this.<sanitised>` consistent with the `@key`.
+**Refs:** #16 (found while planning it — its key suppression matches `keyFields` against
+`Prop.name`, both raw OAS names today; sanitising `keyFields` for `@key` must keep that check in
+step, and the test above fails if it does not), `Naming.sanitiseField`.

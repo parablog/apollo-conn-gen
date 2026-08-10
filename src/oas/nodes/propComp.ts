@@ -62,6 +62,9 @@ export class PropComp extends Prop {
     const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
+    if (this.isOptionalInSelection(context)) {
+      writer.write('?');
+    }
 
     if (this.needsBrackets(comp)) {
       writer.write(' {').write('\n');

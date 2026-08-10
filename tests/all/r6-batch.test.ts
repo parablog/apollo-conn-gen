@@ -75,6 +75,32 @@ test('test_R6_batch_petstore_findByNames', async () => {
   assert.ok(schema!.includes('batch: { maxSize: 100 }'), 'default maxSize emitted');
 });
 
+test('test_R6_16_batch_selection_keeps_key_plain', async () => {
+  // #16: both entity connectors ($this and $batch) reuse Product's fields with the key `id` plain
+  // and `name?` marked; the list op's own selection marks `id?` like any response field.
+  const schema = await run([PRODUCT, 'get:/products>**'], { 'get:/products': {} }, 1);
+  const plainKeyBlocks = (schema!.match(/"""\n      id\n      name\?/g) ?? []).length;
+  assert.strictEqual(plainKeyBlocks, 2, 'the $this and the $batch selection both keep the key plain');
+  assert.ok(schema!.includes('"""\n      id?\n      name?'), 'the list selection marks the same prop');
+});
+
+test('test_R6_16_composite_key_both_parts_plain', async () => {
+  // #16 with a two-part key: `storeId` and `sku` both stay plain in the entity selection.
+  const schema = await runOasTest(
+    'r6-batch.yaml',
+    ['get:/stores/{storeId}/items/{sku}>**'],
+    9,
+    1,
+    false,
+    false,
+    undefined,
+    false,
+    true,
+  );
+  assert.ok(schema!.includes('@key(fields: "storeId sku")'), 'composite @key emitted');
+  assert.ok(schema!.includes('name?\n      sku\n      storeId\n'), 'both key parts plain, the optional field marked');
+});
+
 // --- skips: every ambiguity warns and emits nothing, never guesses ---
 
 async function expectSkip(paths: string[], batch: BatchConfig, why: RegExp, typesSize: number) {

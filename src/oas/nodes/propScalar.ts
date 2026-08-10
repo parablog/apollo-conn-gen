@@ -58,10 +58,14 @@ export class PropScalar extends Prop {
     // we can only write the default value if and only if the name is the same as the sanitised name,
     // otherwise we'll end up with an expression like "someField: some_field: $(value)" which is not legal.
     // `!= null`, not truthiness — `default: 0` and `default: false` are real defaults. see #29
-    if (sanitised === this.name && this.schema.default != null) {
+    const writesDefaultFallback = sanitised === this.name && this.schema.default != null;
+    if (writesDefaultFallback) {
       for (const child of this.children) {
         child.select(context, writer, selection);
       }
+    } else if (this.isOptionalInSelection(context)) {
+      // the default branch above already covers a missing key with `??` — no `?` on top
+      writer.write('?');
     }
 
     if (context.generateOptions.showParentInSelections) {

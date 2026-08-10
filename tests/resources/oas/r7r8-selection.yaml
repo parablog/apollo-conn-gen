@@ -51,3 +51,9 @@ paths:
                   tag:
                     type: string
                     default: latest
+                  # items default (digitalocean's `emails` shape): the ?? fallback replaces the #16 marker
+                  emails:
+                    type: array
+                    items:
+                      type: string
+                      default: ""

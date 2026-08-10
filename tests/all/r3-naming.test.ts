@@ -87,8 +87,8 @@ test('test_R3_aliased_container_and_escaped_keys_compose', async () => {
   // escaping cases the router grammar allows: `\"` and `\\`. see docs/issues.md #62
   const schema = await runOasTest('r3-edge-cases.yaml', ['get:/things>**'], 1, 3);
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('pageInfo: $."page info" {'), 'object under a non-identifier key');
-  assert.ok(schema!.includes('itemList: $."item list" {'), 'array under a non-identifier key');
+  assert.ok(schema!.includes('pageInfo: $."page info"? {'), 'object under a non-identifier key');
+  assert.ok(schema!.includes('itemList: $."item list"? {'), 'array under a non-identifier key');
   assert.ok(schema!.includes('sayHi: $."say \\"hi\\""'), 'double quote escaped in the key');
   assert.ok(schema!.includes('backSlash: $."back\\\\slash"'), 'backslash escaped in the key');
 });

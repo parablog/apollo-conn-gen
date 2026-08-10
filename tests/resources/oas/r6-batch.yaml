@@ -220,6 +220,8 @@ components:
   schemas:
     Product:
       type: object
+      # no `required` list, deliberately: the optional key `id` pins the #16 entity-key
+      # suppression on both the $this and the $batch selection
       properties:
         id:
           type: string

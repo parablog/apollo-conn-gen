@@ -54,6 +54,9 @@ export class PropEn extends Prop {
     trace(context, '   [prop:select]', this.name);
     const sanitised = Naming.sanitiseFieldForSelect(this.name, this.parent?.kind === 'input');
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
+    if (this.isOptionalInSelection(context)) {
+      writer.write('?');
+    }
 
     if (context.generateOptions.showParentInSelections) {
       writer.write(' # ').write(Naming.getRefName(this.parent!.name));

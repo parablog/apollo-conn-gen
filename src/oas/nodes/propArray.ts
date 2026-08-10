@@ -1,4 +1,4 @@
-import { Arr, IType, Prop, T, Type } from './internal.js';
+import { Arr, IType, Prop, Scalar, T, Type } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
@@ -76,6 +76,13 @@ export class PropArray extends Prop {
     const fieldName = this.name;
     const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
+
+    // #16: items with a default already cover a missing key, e.g. (r7r8-selection)
+    // `emails: emails ?? $("")` — adding `?` on top would make the line invalid
+    const itemsHaveDefault = this.items instanceof Scalar && this.items.schema.default != null;
+    if (!itemsHaveDefault && this.isOptionalInSelection(context)) {
+      writer.write('?');
+    }
 
     if (this.needsBrackets(this.items!)) {
       writer.write(' {');

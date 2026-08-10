@@ -29,6 +29,8 @@ The generator emits `connect/v0.4` schemas (the only supported connector spec ve
 
 Note: connect v0.4 is experimental. The router must enable `connectors: preview_connect_v0_4: true` and use federation `>= v2.13` — the CLI prints a reminder on every run.
 
+Selections mark OAS-optional fields with the mapping language's `?` (`name?`, `category? { … }`), so a key the API legitimately omits stops triggering the router's missing-property warnings; required fields stay plain, and entity keys are never marked. Composing schemas with these markers needs **composition 2.15 or newer** (`federation_version: =2.15.1` in a supergraph config) — older composition versions fail them with `CONNECTORS_UNRESOLVED_FIELD`.
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) version 18 or higher.
