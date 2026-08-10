@@ -118,8 +118,9 @@ const TRACE = !!process.env.COV_TRACE;
 const COMPOSE_TIMEOUT_MS = Number(process.env.COV_COMPOSE_TIMEOUT) || 30_000;
 // Above this SDL size we compose one at a time — eight rovers on a 300K schema each is what ate 60 GB.
 const BIG_SCHEMA_BYTES = 200_000;
-const tmp = path.join(os.tmpdir(), 'oas-coverage');
-fs.mkdirSync(tmp, { recursive: true });
+// A fresh dir per run (same reason as runners.ts): the GET and mutations sweeps name their files
+// by index, so a shared dir would swap schemas between them when the two passes run concurrently.
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'oas-coverage-'));
 fs.writeFileSync(path.join(tmp, 'sample.graphql'), 'type Query { hello: String }');
 
 // ---- helpers --------------------------------------------------------------

@@ -1,9 +1,7 @@
 .PHONY: publish-patch publish-minor publish-major coverage coverage-mutations lint-corpus lint-corpus-mutations coverage-all
 
-# The two coverage passes share one tmp dir (os.tmpdir()/oas-coverage) and name their files by
-# index, so running them at the same time silently swaps their schemas and scores the wrong ops.
-# Never let make run these in parallel, whatever -j the caller passes.
-.NOTPARALLEL:
+# Each coverage run gets its own tmp dir (mkdtemp in tools/coverage-spec.mts), so the GET and
+# mutations sweeps are safe to run at the same time — coverage-all does exactly that.
 
 publish-patch:
 	npm version patch
@@ -34,8 +32,9 @@ lint-corpus:
 lint-corpus-mutations:
 	node --import tsx/esm ./tools/lint-corpus.mts --verbs mutations
 
-# Everything, one after another. The two lint passes come first: they take minutes rather than the
-# best part of an hour, and a schema the linter rejects is not worth composing. Any pass that fails
-# stops the rest, so a green run means all four were green.
-coverage-all: lint-corpus lint-corpus-mutations coverage coverage-mutations
+# The two lint passes come first: they take minutes rather than the best part of an hour, and a
+# schema the linter rejects is not worth composing. The two compose sweeps then run TOGETHER
+# (-j2, up to 16 rovers at peak); a pass that fails still fails the whole run.
+coverage-all: lint-corpus lint-corpus-mutations
+	$(MAKE) -j2 coverage coverage-mutations
 
