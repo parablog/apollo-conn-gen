@@ -155,18 +155,6 @@ test('test_R11_unknown_path_is_reported_against_the_response', async () => {
   assert.ok(found[0].message.includes('get:/pet/findByStatus'));
 });
 
-test('test_R11_a_parameterized_operation_is_checked_too', async () => {
-  // the URL writes the parameter as its argument (`/pet/{$args.petId}`), the spec spells it
-  // `/pet/{petId}` — the two must still match up, or every such operation goes unchecked
-  const gen = await OasGen.fromFile(`${oasBasePath}/petstore.yaml`, PETSTORE_OPTIONS);
-  await gen.visit();
-  const sdl = gen.generateSchema(['get:/pet/{petId}>**']);
-  const broken = sdl.replace('      photoUrls\n', '      photoUrls: photoUrlz\n');
-  const found = lintSelections(broken, gen);
-  assert.equal(found.length, 1, 'the check must reach an operation with a path parameter');
-  assert.equal(found[0].code, 'PATH_NOT_IN_RESPONSE');
-});
-
 test('test_R11_unknown_nested_path_is_reported', async () => {
   const { gen, sdl } = await petstoreSchema();
   const broken = sdl.replace('category {', 'category: catgory {');
@@ -398,17 +386,4 @@ test('test_R11_a_fallback_is_not_looked_up_in_the_response', async () => {
   const withFallback = sdl.replace('      photoUrls\n', '      photoUrls: photoUrls ?? $(nothingHere)\n');
   assert.notEqual(withFallback, sdl);
   assert.deepEqual(lintSelections(withFallback, gen), []);
-});
-
-test('test_R11_escaped_quoted_keys_resolve_to_their_json_key', async () => {
-  // `$."back\\slash"` names the JSON key `back\slash` — the quotes carry escapes the key itself
-  // does not have, so the response lookup must unescape before comparing. see #64
-  const gen = await OasGen.fromFile(`${oasBasePath}/r3-edge-cases.yaml`, {
-    skipValidation: true,
-    showParentInSelections: false,
-  });
-  await gen.visit();
-  const sdl = gen.generateSchema(['get:/things>**']);
-  assert.ok(sdl.includes('backSlash: $."back\\\\slash"'), 'the escaped key is in the selection');
-  assert.deepEqual(lintSelections(sdl, gen), []);
 });

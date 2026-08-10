@@ -272,7 +272,10 @@ export class T {
   //   get:/pet/{petId}       -> { id, name, category, photoUrls, tags, status }
   //   get:/pet/findByStatus  -> { id, name, category, photoUrls, tags, status }
   public static responseItemSchema(op: Op): SchemaObject | undefined {
-    const node = T.responseItemType(op);
+    let node = T.responseType(op);
+    while (node instanceof Arr) {
+      node = node.itemsType;
+    }
     return node instanceof Obj || node instanceof Composed ? node.schema : undefined;
   }
 

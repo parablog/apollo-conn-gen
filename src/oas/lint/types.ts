@@ -52,6 +52,9 @@ export interface ValueSource {
   startsAt: 'dollar' | 'atSign' | 'fieldName' | 'nothing';
   /** the dotted steps after the start; quotes are stripped from `"odd-key"` */
   pathParts: NamedSpan[];
+  /** where the whole thing sits in the SDL, so a fix can replace `$` with a field name */
+  from: number;
+  to: number;
 }
 
 /** A name and where it sits in the SDL, so a diagnostic can point straight at it. */
@@ -61,14 +64,27 @@ export interface NamedSpan {
   to: number;
 }
 
-// One field of a selection, e.g. `category: category->Category`. `outputName` is the alias, or the
-// field's own name; absent for `...@->Other`, which merges a shape in without naming it. Each entry
-// of `methods` is one `->name` call, e.g. the `first` of `photoUrls->first`.
+/** One `->name(...)` call, e.g. the `first` of `photoUrls->first`. */
+export interface MethodCall {
+  name: string;
+  from: number;
+  to: number;
+  hasBrackets: boolean;
+  bracketsFrom?: number;
+  bracketsTo?: number;
+}
+
+/**
+ * One field of a selection, e.g. `category: category->Category`.
+ *
+ * `outputName` is the name the field gets in the response — the alias when there is one, otherwise
+ * the field's own name. It is absent for `...@->Other`, which merges a shape in without naming it.
+ */
 export interface SelectedField {
   outputName?: NamedSpan;
   isMerge: boolean;
   readsFrom: ValueSource;
-  methods: NamedSpan[];
+  methods: MethodCall[];
   place: SelectionPlace;
   /** the fields inside `{ ... }`, when the field has a block */
   nested?: SelectedField[];
@@ -87,8 +103,10 @@ export interface Selection {
   ownerType: string;
   /** the field the @connect sits on; absent for a type-level @mapping */
   ownerField?: string;
-  // The declared type of that field, which is the shape the selection is written against:
-  // `pets: [Pet] @connect(selection: "id name")` selects Pet's fields, not Query's.
+  /**
+   * The declared type of that field, which is the shape the selection is written against:
+   * `pets: [Pet] @connect(selection: "id name")` selects Pet's fields, not Query's.
+   */
   ownerFieldType?: SchemaField;
   directive: 'mapping' | 'connect';
   /**
@@ -116,6 +134,8 @@ export interface SchemaType {
   hasMapping: boolean;
   /** the `@mapping` spells its fields out, rather than the bare `@mapping` that works them out */
   hasSelection: boolean;
+  /** where the `@mapping` itself is written, so a diagnostic can point at the directive */
+  mappingSpan?: NamedSpan;
 }
 
 /** Everything the checks read: the SDL's types, and every selection in it. */

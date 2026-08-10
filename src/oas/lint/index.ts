@@ -2,7 +2,11 @@ import type { OasGen } from '../oasGen.js';
 import type { LintDiagnostic, ParsedSchema } from './types.js';
 import { SchemaReader } from './schemaReader.js';
 import { ArrowTargetCheck } from './checks/arrowTarget.js';
+import { ArrowTypeCheck } from './checks/arrowType.js';
+import { BareMappingCheck } from './checks/bareMapping.js';
+import { MappingCycleCheck } from './checks/mappingCycle.js';
 import { PathInResponseCheck } from './checks/pathInResponse.js';
+import { ReceiverIsParentCheck } from './checks/receiverIsParent.js';
 import { trace } from '../log/trace.js';
 
 export type {
@@ -10,6 +14,8 @@ export type {
   LintFix,
   Severity,
   ParsedSchema,
+  SchemaField,
+  SchemaType,
   Selection,
   SelectedField,
   SelectionPlace,
@@ -23,9 +29,17 @@ export type { DirectivesConfig } from './directives.js';
 /** A check reads the schema and says what is wrong with it. */
 type Check = (schema: ParsedSchema, gen?: OasGen) => LintDiagnostic[];
 
-// Checks that apply to any connector selection. The v0.5 branch adds its @mapping checks to this
-// list; keeping the list in one place is what lets that merge come down without a conflict.
-const CHECKS: Check[] = [ArrowTargetCheck.run, PathInResponseCheck.run];
+// The first two apply to any connector selection and are shared with main; the rest only have
+// anything to say about a v0.5 `@mapping`, which is what this branch generates. Keeping the list in
+// one place is what lets main's half merge down without a conflict.
+const CHECKS: Check[] = [
+  ArrowTargetCheck.run,
+  PathInResponseCheck.run,
+  ArrowTypeCheck.run,
+  BareMappingCheck.run,
+  MappingCycleCheck.run,
+  ReceiverIsParentCheck.run,
+];
 
 /**
  * Check the connector selections in an SDL document, e.g. the `id name category { id name }` inside

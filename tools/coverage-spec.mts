@@ -1,5 +1,5 @@
 // Corpus coverage harness. For each vendor spec, iterate every selected op (GET by default,
-// --verbs mutations/all) and try to generate + rover-compose it, at the current shipping versions
+// --verbs mutations/all) and try to generate + compose it, at connect v0.5 with reusable @mapping
 // (connect v0.4 / fed 2.14). Classifies each outcome and writes a report (per-spec pass-rates + a
 // global failure histogram = prioritized gap list) — COVERAGE.md for the GET sweep,
 // COVERAGE-<verbs>.md otherwise, so different sweeps don't clobber each other.
@@ -78,8 +78,11 @@ const ALL_SPECS = [
 
 // One pass at the current shipping versions (connect v0.4 / fed v2.14, per DEFAULT_VERSIONS): real
 // unions/interfaces — the only behaviour now that the consolidate downgrade was removed.
+// This branch exists to exercise connect v0.5 with reusable `@mapping`, so that is what it
+// generates and composes. Released rover rejects the v0.5 preview, so composition goes through
+// tools/local/apollo-federation-cli — see localComposer() below.
 const PASSES = {
-  abstract: { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', fed: '2.14.1' },
+  v05: { connectorSpecVersion: 'v0.5', federationVersion: 'v2.14', fed: '2.14.1', reusableMappings: true },
 };
 
 // ---- args -----------------------------------------------------------------
@@ -96,7 +99,7 @@ const verbsSel = getArg('--verbs', 'get'); // get | mutations | all
 const opsLabel = verbsSel === 'get' ? 'GET' : verbsSel === 'mutations' ? 'mutation' : 'all';
 const outFile = verbsSel === 'get' ? 'COVERAGE.md' : `COVERAGE-${verbsSel}.md`;
 const specs = onlySpec ? [onlySpec] : ALL_SPECS;
-const passKeys = ['abstract'] as (keyof typeof PASSES)[];
+const passKeys = ['v05'] as (keyof typeof PASSES)[];
 
 // Whole (spec, pass) combinations that infinite-loop the generator — skipped so the sweep can
 // complete, reported as "not measurable" with the reason. Currently empty: the Confluence abstract
@@ -127,6 +130,7 @@ function genOptions(passKey: keyof typeof PASSES, skipValidation: boolean) {
     showParentInSelections: false,
     connectorSpecVersion: p.connectorSpecVersion,
     federationVersion: p.federationVersion,
+    reusableMappings: p.reusableMappings,
     mapper: undefined,
     skipOptionalArgs: false,
   };
@@ -135,7 +139,7 @@ function genOptions(passKey: keyof typeof PASSES, skipValidation: boolean) {
 async function loadBase(file: string): Promise<{ gen: OasGen; skip: boolean } | null> {
   for (const skip of [false, true]) {
     try {
-      const gen = await OasGen.fromFile(`${base}/${file}`, genOptions('abstract', skip));
+      const gen = await OasGen.fromFile(`${base}/${file}`, genOptions('v05', skip));
       await gen.visit();
       return { gen, skip };
     } catch {
@@ -154,16 +158,25 @@ async function compose(op: string, schema: string, fed: string, idx: number): Pr
     sgFile,
     `federation_version: =${fed}\nsubgraphs:\n  test_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${schemaFile}\n  sample_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${path.join(tmp, 'sample.graphql')}\n`,
   );
-  const running = exec(`rover supergraph compose --config ${sgFile} --elv2-license accept`, {
+  // Released rover answers UNKNOWN_CONNECTORS_VERSION for connect v0.5, so every op would be scored
+  // a compose failure. Resolution matches src/tests/runners.ts::localComposer, so the tests and this
+  // sweep always agree on what is under test. A missing binary is a hard stop, not a red sweep.
+  const composer = process.env.OAS_TEST_COMPOSER ?? path.join(process.cwd(), 'tools', 'local', 'apollo-federation-cli');
+  if (!fs.existsSync(composer)) {
+    throw new Error(
+      `connect v0.5 needs a composer that understands it, and ${composer} is missing.\n` +
+        `Build one from the router checkout, or point OAS_TEST_COMPOSER at it.`,
+    );
+  }
+  const running = exec(`${composer} compose --config ${sgFile}`, {
     maxBuffer: 64 * 1024 * 1024,
   });
   // rover can still exit 0 once its child is gone, so remember that we killed it rather than
   // reading the exit status.
   let timedOut = false;
-  // `rover` is only a launcher: the composing runs in a `supergraph-<version>` child of it, and that
-  // is what grows (16 GB in 45s on confluence's attachment PUT). Kill that child FIRST — once rover
-  // is gone the child is reparented to launchd and we can no longer find it by parent, so it keeps
-  // running and keeps growing.
+  // Left over from composing with rover, which was only a launcher: the work ran in a child that had
+  // to be killed first. apollo-federation-cli does the work itself, so this finds no children and the
+  // SIGKILL below is what stops it. Harmless, and still correct if we ever go back to a launcher.
   const deadline = setTimeout(() => {
     timedOut = true;
     try {
@@ -376,15 +389,15 @@ function writeReport(): void {
   const md = `# Corpus coverage — generate-and-compose pass-rate per spec
 
 Generated by \`tools/coverage-spec.mts --verbs ${verbsSel}\`. For each vendor spec, **every ${opsLabel} op**
-is generated and rover-composed once (real unions, the shipping default). **† = loaded with
+is generated and composed once (real unions, connect v0.5 with reusable @mapping). **† = loaded with
 \`skipValidation\`** (patched fixture; see TEST_CORPUS.md).
 
-- Real unions/interfaces at connect ${PASSES.abstract.connectorSpecVersion}, composed at fed ${PASSES.abstract.fed}.
+- Real unions/interfaces at connect ${PASSES.v05.connectorSpecVersion} with reusable @mapping, composed at fed ${PASSES.v05.fed} by tools/local/apollo-federation-cli.
 
 Buckets: **OK** generated + composed · **DEGRADED** retired (was the consolidate downgrade — now 0) ·
 **GEN-empty** no types produced · **GEN-throw** generator threw
 (incl. GEN-HANG, a sync infinite loop) · **COMPOSE-fail** rover rejected the schema. pass-rate = OK / ${opsLabel} ops.
-\n## Coverage (real unions, connect ${PASSES.abstract.connectorSpecVersion}, fed ${PASSES.abstract.fed})\n\n${passTable('abstract')}\n
+\n## Coverage (real unions, connect ${PASSES.v05.connectorSpecVersion} + @mapping, fed ${PASSES.v05.fed})\n\n${passTable('v05')}\n
 ## Gap histogram (all specs, all selected passes)
 
 Failure/degradation categories ranked by frequency — the prioritized robustness gap list. \`example\`

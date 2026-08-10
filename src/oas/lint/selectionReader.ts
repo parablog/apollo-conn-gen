@@ -1,5 +1,5 @@
 import type { DirectiveText } from './directiveText.js';
-import type { NamedSpan, SelectedField, SelectionPlace, ValueSource } from './types.js';
+import type { MethodCall, NamedSpan, SelectedField, SelectionPlace, ValueSource } from './types.js';
 
 /**
  * Reads the text inside a `selection:` argument into the fields it selects.
@@ -67,45 +67,93 @@ export class SelectionReader {
     }
   }
 
-  // Every form is one shape: maybe a name, then a value, then methods, fallbacks and a block.
-  //   id      photoUrls->first      category: category->Category      ...@->Category      $->Pet
   private readField(place: SelectionPlace): SelectedField {
     const start = this.at;
-    const isMerge = this.text.startsWith('...', this.at);
-    if (isMerge) {
+
+    // `...@->Category` merges another shape in without giving it a name
+    if (this.text.startsWith('...', this.at)) {
       this.at += 3;
       this.skipBlanks();
+      const readsFrom = this.readValueSource();
+      const methods = this.readMethods();
+      if (!readsFrom || !methods || !this.skipFallbacks()) {
+        return this.unreadableField(place, start);
+      }
+      return this.field({ isMerge: true, readsFrom, methods, place, start });
     }
-    const alias = isMerge ? undefined : this.readAlias();
-    const readsFrom = this.readValueSource();
+
+    // `$->Pet` or `@->Pet` on its own: the whole selection is one value, with no name of its own.
+    // This is what a v0.5 `@connect(selection: "$->Pet")` looks like.
+    if (this.peek() === '$' || this.peek() === '@') {
+      const readsFrom = this.readValueSource();
+      const methods = readsFrom ? this.readMethods() : null;
+      if (!readsFrom || !methods || !this.skipFallbacks()) {
+        return this.unreadableField(place, start);
+      }
+      const nested = this.readBlock();
+      if (nested === null) {
+        return this.unreadableField(place, start);
+      }
+      return this.field({ isMerge: false, readsFrom, methods, place, nested, start });
+    }
+
+    const firstName = this.readAnyName();
+    if (!firstName) {
+      return this.unreadableField(place, start);
+    }
+    this.skipBlanks();
+
+    // `category: category->Category` — a name, a colon, then what it reads from
+    if (this.peek() === ':') {
+      this.at += 1;
+      this.skipBlanks();
+      const readsFrom = this.readValueSource();
+      if (!readsFrom) {
+        return this.unreadableField(place, start);
+      }
+      const methods = this.readMethods();
+      if (!methods || !this.skipFallbacks()) {
+        return this.unreadableField(place, start);
+      }
+      const nested = this.readBlock();
+      if (nested === null) {
+        return this.unreadableField(place, start);
+      }
+      return this.field({
+        outputName: this.toSdl(firstName),
+        isMerge: false,
+        readsFrom,
+        methods,
+        place,
+        nested,
+        start,
+      });
+    }
+
+    // `id`, `photoUrls->first`, `category { ... }` — the name is also what it reads from
+    this.at = firstName.to;
+    const readsFrom = this.valueSource('fieldName', this.readPathRest([firstName]), firstName.from);
     const methods = readsFrom ? this.readMethods() : null;
     if (!readsFrom || !methods || !this.skipFallbacks()) {
       return this.unreadableField(place, start);
     }
-    const nested = isMerge ? undefined : this.readBlock();
+    const nested = this.readBlock();
     if (nested === null) {
       return this.unreadableField(place, start);
     }
-    // a bare `id` is named by the first step of its own path; `...` and a bare `$`/`@` have no name
-    const outputName = alias ?? (readsFrom.startsAt === 'fieldName' ? readsFrom.pathParts[0] : undefined);
-    return this.field({ outputName, isMerge, readsFrom, methods, place, nested, start });
-  }
-
-  // the `category:` of `category: category->Category`, or nothing — a bare name is left unread
-  private readAlias(): NamedSpan | undefined {
-    const before = this.at;
-    const name = this.readAnyName();
-    this.skipBlanks();
-    if (name && this.peek() === ':') {
-      this.at += 1;
-      this.skipBlanks();
-      return this.toSdl(name);
-    }
-    this.at = before;
-    return undefined;
+    return this.field({
+      outputName: this.toSdl(firstName),
+      isMerge: false,
+      readsFrom,
+      methods,
+      place,
+      nested,
+      start,
+    });
   }
 
   private readValueSource(): ValueSource | null {
+    const start = this.at;
     if (this.peek() === '$') {
       this.at += 1;
       // `$(true)` wraps a value written out in full; `$args`/`$this` name one the router supplies.
@@ -117,20 +165,29 @@ export class SelectionReader {
       } else {
         this.readName();
       }
-      const pathParts = this.readPathRest([]);
-      return pathParts ? { startsAt: 'dollar', pathParts: pathParts.map((part) => this.toSdl(part)) } : null;
+      return this.valueSource('dollar', this.readPathRest([]), start);
     }
     if (this.peek() === '@') {
       this.at += 1;
-      const pathParts = this.readPathRest([]);
-      return pathParts ? { startsAt: 'atSign', pathParts: pathParts.map((part) => this.toSdl(part)) } : null;
+      return this.valueSource('atSign', this.readPathRest([]), start);
     }
     const head = this.readAnyName();
     if (!head) {
       return null;
     }
-    const pathParts = this.readPathRest([head]);
-    return pathParts ? { startsAt: 'fieldName', pathParts: pathParts.map((part) => this.toSdl(part)) } : null;
+    return this.valueSource('fieldName', this.readPathRest([head]), start);
+  }
+
+  private valueSource(startsAt: ValueSource['startsAt'], pathParts: NamedSpan[] | null, start: number): ValueSource | null {
+    if (!pathParts) {
+      return null;
+    }
+    return {
+      startsAt,
+      pathParts: pathParts.map((part) => this.toSdl(part)),
+      from: this.sdlPosition(start),
+      to: this.sdlPosition(this.at),
+    };
   }
 
   // `a ?? b` uses b when a is missing, `a ?! b` when a is null. The fallback is a value in its own
@@ -176,18 +233,25 @@ export class SelectionReader {
   }
 
   // `->first`, or `->map(@->Tag)` with its brackets skipped over rather than read
-  private readMethods(): NamedSpan[] | null {
-    const methods: NamedSpan[] = [];
+  private readMethods(): MethodCall[] | null {
+    const methods: MethodCall[] = [];
     while (this.text.startsWith('->', this.at)) {
       this.at += 2;
       const name = this.readName();
       if (!name) {
         return null;
       }
-      if (this.peek() === '(' && !this.skipBrackets('(', ')')) {
-        return null;
+      const call: MethodCall = { ...this.toSdl(name), hasBrackets: false };
+      if (this.peek() === '(') {
+        const bracketsFrom = this.at;
+        if (!this.skipBrackets('(', ')')) {
+          return null;
+        }
+        call.hasBrackets = true;
+        call.bracketsFrom = this.sdlPosition(bracketsFrom);
+        call.bracketsTo = this.sdlPosition(this.at);
       }
-      methods.push(this.toSdl(name));
+      methods.push(call);
     }
     return methods;
   }
@@ -304,7 +368,12 @@ export class SelectionReader {
     this.skipToNextField();
     return {
       isMerge: false,
-      readsFrom: { startsAt: 'nothing', pathParts: [] },
+      readsFrom: {
+        startsAt: 'nothing',
+        pathParts: [],
+        from: this.sdlPosition(start),
+        to: this.sdlPosition(this.at),
+      },
       methods: [],
       place,
       from: this.sdlPosition(start),
@@ -317,7 +386,7 @@ export class SelectionReader {
     outputName?: NamedSpan;
     isMerge: boolean;
     readsFrom: ValueSource;
-    methods: NamedSpan[];
+    methods: MethodCall[];
     place: SelectionPlace;
     nested?: SelectedField[];
     start: number;

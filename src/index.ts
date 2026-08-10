@@ -9,5 +9,5 @@ export type {
   OverridesConfig,
 } from './oas/oasContext.js';
 export { lintSelections, ArrowMethods, SchemaReader, Directives } from './oas/lint/index.js';
-export type { LintDiagnostic, LintFix, Severity, ParsedSchema } from './oas/lint/index.js';
+export type { LintDiagnostic, LintFix, Severity, ParsedSchema, Selection } from './oas/lint/index.js';
 export type { SchemaField, SchemaType } from './oas/lint/types.js';

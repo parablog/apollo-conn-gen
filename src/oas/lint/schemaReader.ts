@@ -9,7 +9,7 @@ import type {
   StringValueNode,
   TypeNode,
 } from 'graphql';
-import type { ParsedSchema, SchemaField, SchemaType, Selection } from './types.js';
+import type { NamedSpan, ParsedSchema, SchemaField, SchemaType, Selection } from './types.js';
 import { DirectiveTextReader } from './directiveText.js';
 import { SelectionReader } from './selectionReader.js';
 import _ from 'lodash';
@@ -45,8 +45,26 @@ export class SchemaReader {
       SchemaReader.collectMappingSelection(sdl, definition, selections);
       SchemaReader.collectConnectSelections(sdl, definition, selections);
     }
+    SchemaReader.collectUnions(document, types);
 
     return { types, selections, unreadable: false };
+  }
+
+  // A union has no fields of its own, but a field whose type is a union still holds an object, not a
+  // scalar — the checks tell the two apart by asking whether the type name is in this map:
+  //   union Result = Pet | Error
+  //   type Response @mapping { result: Result }   <- `result` is object-typed
+  private static collectUnions(document: DocumentNode, types: Map<string, SchemaType>): void {
+    for (const definition of document.definitions) {
+      if (definition.kind === Kind.UNION_TYPE_DEFINITION && !types.has(definition.name.value)) {
+        types.set(definition.name.value, {
+          name: definition.name.value,
+          fields: [],
+          hasMapping: false,
+          hasSelection: false,
+        });
+      }
+    }
   }
 
   private static typeDefinitions(document: DocumentNode): TypeDefinition[] {
@@ -76,8 +94,8 @@ export class SchemaReader {
       }
     }
     merged.hasMapping = merged.hasMapping || mapping !== undefined;
-    merged.hasSelection =
-      merged.hasSelection || (mapping !== undefined && SchemaReader.selectionArg(mapping) !== undefined);
+    merged.hasSelection = merged.hasSelection || (mapping !== undefined && SchemaReader.selectionArg(mapping) !== undefined);
+    merged.mappingSpan = merged.mappingSpan ?? SchemaReader.span(mapping);
     types.set(name, merged);
   }
 
@@ -139,6 +157,13 @@ export class SchemaReader {
       }
     }
     return undefined;
+  }
+
+  // where a directive is written in the SDL, taken straight from the parser
+  private static span(directive: DirectiveNode | undefined): NamedSpan | undefined {
+    return directive?.loc
+      ? { name: directive.name.value, from: directive.loc.start, to: directive.loc.end }
+      : undefined;
   }
 
   private static directive(directives: readonly DirectiveNode[] | undefined, name: string): DirectiveNode | undefined {
