@@ -74,12 +74,15 @@ const ALL_SPECS = [
   // Mercedes-Benz Car Configurator Service: union/shared-$ref heavy. 100% default;
   // abstract pass fails with CONNECTORS_UNRESOLVED_FIELD across 26/43 ops (under investigation).
   'openapi.car_configurator_service_(ccs)_int-10.210.0.yaml',
+  'incidentio.json',
+  'sanity-projects.json',
 ];
 
 // One pass at the current shipping versions (connect v0.4 / fed v2.14, per DEFAULT_VERSIONS): real
 // unions/interfaces — the only behaviour now that the consolidate downgrade was removed.
 const PASSES = {
-  abstract: { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', fed: '2.14.1' },
+  // fed 2.15.1: first published supergraph plugin with the #14 `->entries` crediting fix
+  abstract: { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', fed: '2.15.1' },
 };
 
 // ---- args -----------------------------------------------------------------

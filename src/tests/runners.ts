@@ -186,7 +186,7 @@ function localComposer(): string | undefined {
   return fs.existsSync(cli) ? cli : undefined;
 }
 
-function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.14.1'): [boolean, string?] {
+function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.15.1'): [boolean, string?] {
   console.info('schemaPath', schemaPath);
 
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');

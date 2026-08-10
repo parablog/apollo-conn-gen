@@ -1,5 +1,7 @@
 // Temporary corpus-vetting harness (not committed). Finds the RICHEST selection (max typesSize)
-// that both generates and composes (rover, fed 2.12, consolidateUnions default).
+// that both generates and composes (rover, fed 2.15.1 — the first supergraph plugin with the #14
+// `->entries` crediting fix; connect v0.4 needs >= fed 2.13, see DEFAULT_VERSIONS in
+// src/versions.ts and the compose() default in src/tests/runners.ts).
 // Usage: node --import tsx/esm ./vet.mts <specFileInResourcesOas>
 import { OasGen } from '../src/index.js';
 import fs from 'fs';
@@ -20,7 +22,7 @@ function compose(schema: string): boolean {
   fs.writeFileSync(sampleFile, 'type Query { hello: String }');
   fs.writeFileSync(
     sg,
-    `federation_version: =2.12.0\nsubgraphs:\n  test_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${schemaFile}\n  sample_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${sampleFile}\n`,
+    `federation_version: =2.15.1\nsubgraphs:\n  test_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${schemaFile}\n  sample_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${sampleFile}\n`,
   );
   try {
     execSync(`rover supergraph compose --config ${sg} --elv2-license accept`, { stdio: 'pipe' });
