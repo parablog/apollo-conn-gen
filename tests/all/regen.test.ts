@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { OasGen } from '../../src/index.js';
+import { IType } from '../../src/oas/nodes/internal.js';
 import { oasBasePath } from '../../src/tests/runners.js';
 import './_setup.js';
 
@@ -72,6 +73,56 @@ test('test_71_failed_generation_restores_tree_state', async () => {
   const after = gen.generateSchema(['get:/pet/{petId}>**']);
   const fresh = await freshGen('petstore.yaml');
   assert.strictEqual(after, fresh.generateSchema(['get:/pet/{petId}>**']), 'the next generation is unharmed');
+});
+
+// mimic the web tree: expand a node and everything under it, the way clicks would
+function deepExpand(gen: OasGen, node: IType, depth = 0): void {
+  if (depth > 12) return;
+  for (const child of gen.expand(node)) deepExpand(gen, child, depth + 1);
+}
+
+// the first leaf under the op whose path crosses the given marker
+function mintPath(gen: OasGen, op: IType, marker: string): string | undefined {
+  if (op.id.startsWith('prop:scalar:') && op.path().includes(marker)) return op.path();
+  for (const child of op.children ?? []) {
+    const found = mintPath(gen, child, marker);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+test('test_72_browse_minted_path_resolves', async () => {
+  // #72: browsing /v2/apps first renames the deployments subtree, so the tree mints a path saying
+  // inlinev2AppsDeploymentsResponseActiveDeployment where a fresh run says ActiveDeployment.
+  // The walker recovers it from the position: that segment is the list's only item type.
+  const gen = await freshGen('digitalocean.yaml');
+  deepExpand(gen, gen.paths.get('get:/v2/apps')!);
+  const deployments = gen.paths.get('get:/v2/apps/{app_id}/deployments')!;
+  deepExpand(gen, deployments);
+
+  const minted = mintPath(gen, deployments, 'ActiveDeployment')!;
+  assert.ok(minted.includes('inlinev2AppsDeploymentsResponseActiveDeployment'), 'the browsed tree minted the drifted name');
+
+  const drifted = gen.generateSchema([minted]);
+  const fresh = await freshGen('digitalocean.yaml');
+  const straight = fresh.generateSchema([minted.replace('inlinev2AppsDeploymentsResponseActiveDeployment', 'ActiveDeployment')]);
+  assert.strictEqual(drifted, straight, 'the drifted path generates what the fresh spelling does');
+});
+
+test('test_72_recovery_never_guesses_among_siblings', async () => {
+  const gen = await freshGen('petstore.yaml');
+  // a made-up field: Pet has several props, so nothing may stand in for it
+  assert.throws(
+    () => gen.generateSchema(['get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:doesNotExist']),
+    /Could not find type/,
+    'a bogus field must throw, not bind to some other field',
+  );
+  // the right name under the wrong kind: the response holds an obj, not a comp
+  assert.throws(
+    () => gen.generateSchema(['get:/pet/{petId}>res:r>comp:type:#/c/s/Pet>prop:scalar:name']),
+    /Could not find type/,
+    'a segment of the wrong kind must throw',
+  );
 });
 
 test('test_71_same_selection_is_idempotent', async () => {

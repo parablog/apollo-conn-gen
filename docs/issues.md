@@ -3754,7 +3754,7 @@ tree keeps its `paths`/`context` objects untouched. `reset()` is no longer neede
 make stale `context.types` visible), #13 (cycle-cut divergence, same shared-node mutation family).
 Tests `tests/all/regen.test.ts`.
 
-## 72 · A selection path minted while browsing may not resolve against generation's forest — ⬜ Open
+## 72 · A selection path minted while browsing may not resolve against generation's forest — ✅ Fixed
 
 **Symptom:** generation throws `Could not find type: obj:type:<name> …` (the web shows it as a
 toast) for a selection path that the tree itself handed out — or, worse, the path silently matches
@@ -3776,17 +3776,61 @@ get:/v2/apps/{app_id}/deployments>res:r>obj:type:ActiveDeployment>…
   #71 the same mismatch existed only across a page reload (persisted selections in localStorage).
 - The failure is per-path and at lookup — nothing stops building or generating.
 
-**Fix direction** (designed, reviewed, deliberately split out of #71 to keep that diff small):
-- members of an `allOf`/`oneOf` get a position-based inline name at construction, so no member
-  carries a drift-prone name;
-- the two selection walkers resolve a drifted segment structurally — by the parent's single
-  target field where there is one, by member position inside an `allOf`/`oneOf` — and never by
-  guessing among same-class siblings; anything unresolvable still throws.
-- The deeper cure — ids that do not embed emitted names — is a redesign with a migration for
-  persisted selections; file separately if #72's containment proves insufficient.
+**Fix:** the two selection walkers match a segment by id as before, and when that misses, take
+the ONE node the parent can possibly mean — the field that holds its single target
+(`PropObj.obj`, `PropArray.items`, `PropComp.comp`, `PropMap.map`, `Arr.itemsType`, the sole
+child of `Res`/`Body`), same kind of node only (`SelectionPath.resolveSegment`,
+`src/oas/utils/selectionPath.ts`). A position with several candidates still throws — picking
+among them could silently bind the wrong one
+(`test_72_recovery_never_guesses_among_siblings`). This covers the reproduced failure: the
+drifted digitalocean segment sits where a list holds one item type.
 
-**AST:** node ids for `allOf`/`oneOf` members change shape (position-based inline names) — pinned
-selection paths in tests must not move for anything outside member lists.
-**Refs:** `src/oas/generator/typesCollector.ts` (both walkers), `src/oas/nodes/comp.ts` /
-`union.ts` (`add`), `src/oas/nodes/arr.ts` (`id`), #71 (what exposed it), #12/#22 (the renames),
-web `useSpecTree.ts` (where paths are minted).
+A larger design (renaming `allOf`/`oneOf` members at construction, a throw-first check, recovery
+by member position) was reviewed and REJECTED on measurement:
+- the members it would rename are not rare — digitalocean has 300, box 55, and the names are
+  emitted GraphQL type names, so the rename would rewrite schemas wholesale;
+- a member's name shape is itself visit-order-dependent (the same schema member shows a `$ref`
+  name, a minted name, or an `[inline:…]` name depending on order — ~130 of ~415 digitalocean
+  member edges differ between two browse orders), so counting "the k-th inline-named member"
+  does not identify the same member in two runs.
+Paths through those member lists that actually drift stay unresolved (they throw, as before) —
+the honest cure is #73.
+
+**AST:** none — ids are unchanged; only how a stale id is looked up changed.
+**Refs:** `src/oas/utils/selectionPath.ts`, `src/oas/generator/typesCollector.ts` (both walkers),
+#71 (what exposed it), #12/#22 (the renames), #73 (the id redesign), web `useSpecTree.ts`
+(where paths are minted). Tests `test_72_*` in `tests/all/regen.test.ts`.
+
+## 73 · Node ids embed emitted names, so visit order changes selection identity — ⬜ Open
+
+**Symptom:** the same schema node gets a different id depending on what was expanded before it —
+so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
+only catches the positions with a single possible target. Measured on digitalocean: of ~415
+`allOf`/`oneOf` member edges, ~130-150 differ between two browse orders, three ways at once —
+`Inline2`-style minted names appear or not, the same member is reached through different `$ref`
+pointers, and `[inline:…]` names shift because the PARENT's name shifted.
+
+**Example** (digitalocean — one member, three identities):
+```
+comp:type:Jobs -> obj:type:#/paths/…/services/items/allOf/0     # one browse order
+comp:type:Jobs -> obj:type:JobsServices                          # another
+comp:type:SpecServices -> obj:type:[inline:SpecServices]:2       # the parent renamed too
+```
+
+**Cause:**
+- An id is `class:kind:<name>`, and `<name>` is whatever the node ended up called — collision
+  renames (#12/#22) and minted inline names both depend on what was visited first.
+- Selection paths are built from ids, persisted (web localStorage) and pinned (tests), so
+  identity leaks out of a single run. #71 made runs deterministic; order across the browsed tree
+  and the generation run still differs.
+
+**Fix direction:** an id built from the schema's own coordinates (the `$ref` or the position in
+the parent — field key, member index) instead of the emitted name, plus a migration for persisted
+selections. A real redesign: every pinned selection path in the suite moves with it. Rejected as
+a patchwork three times (#66/#68's name agreements, #72's scoped recovery) — do it once,
+deliberately, or live with #72's floor.
+
+**AST:** the id scheme itself changes — this is THE node-identity issue; nothing else should
+touch ids until it lands.
+**Refs:** `src/oas/nodes/*.ts` (`get id()` per class), `src/oas/generator/typesCollector.ts`,
+#72 (the scoped recovery and its measurements), #12/#22/#9 (the rename machinery).
