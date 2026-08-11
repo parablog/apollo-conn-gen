@@ -3698,7 +3698,7 @@ whose value is a scalar as its own leaf.
 list-of-lists spelling), #68 (where it surfaced). Fixture `tests/resources/oas/map-input-suffix.yaml`
 (`labels`, `tags`).
 
-## 71 · Generating twice on one `OasGen` changes the output — `reset()` forgets most state — ⬜ Open
+## 71 · Generating twice on one `OasGen` changes the output — `reset()` forgets most state — ✅ Fixed
 
 **Symptom:** the same op generates DIFFERENT schemas depending on what was generated before it on
 the same instance. Reproduced on digitalocean: generate three `/v2/apps` ops, then
@@ -3733,6 +3733,60 @@ type Inlinev2AppsDeploymentsResponseActiveDeployment { … }
 state is out of its reach) or the API enforces one-generation-per-instance (e.g. `generateSchema`
 rebuilds from the kept parser+options, or refuses a second call). The second matches what every
 caller already does.
-**Refs:** `src/oas/oasContext.ts` (`reset`), `src/oas/oasGen.ts` (`generateSchema`, `getContext`),
-`tools/coverage-spec.mts` (the fresh-instance workaround), #12/#22 (the renames that make stale
-`context.types` visible), #13 (cycle-cut divergence, same shared-node mutation family).
+
+**Fix:** `generateSchema`/`getTypes`/`expanded` each run against a fresh context and a fresh op
+forest built from the kept parser, then put the browse-time ones back (`isolatedRun` +
+`buildForest` in `oasGen.ts`). Every call now equals a fresh instance byte-for-byte; the web's
+tree keeps its `paths`/`context` objects untouched. `reset()` is no longer needed by generation.
+- Two readers used to get `resultType` filled as a generation side effect — the lint's response
+  check (`responseShape.ts`) and one test; both now expand the op and its response child
+  themselves.
+- Speed, full-spec selection: stripe repeat runs went 414s -> ~60s (the polluted context was
+  making every later run slower); digitalocean repeat runs went 9s -> 22s, the same as the first
+  run a page reload already pays.
+- The parser document is shared across runs; its in-place rewrites (#55) were audited and pinned
+  as write-once: a second generation changes nothing (`test_71_parser_document_reaches_a_fixpoint`).
+- Known limitation, filed as #72: a selection path minted from the browsed tree can spell a name
+  the fresh forest spells differently.
+
+**Refs:** `src/oas/oasContext.ts` (`reset`), `src/oas/oasGen.ts` (`isolatedRun`, `buildForest`),
+`tools/coverage-spec.mts` (the fresh-instance workaround this replaces), #12/#22 (the renames that
+make stale `context.types` visible), #13 (cycle-cut divergence, same shared-node mutation family).
+Tests `tests/all/regen.test.ts`.
+
+## 72 · A selection path minted while browsing may not resolve against generation's forest — ⬜ Open
+
+**Symptom:** generation throws `Could not find type: obj:type:<name> …` (the web shows it as a
+toast) for a selection path that the tree itself handed out — or, worse, the path silently matches
+a DIFFERENT sibling whose name the drift lands on. Needs three things at once: a spec whose inline
+names collide (digitalocean), a fine-grained selection (not `op>**`), and browse order differing
+from generation's own expansion order.
+
+**Example** (digitalocean — the same type, named by who got there first):
+```
+# the tree, expanded by hand in click order, mints:
+get:/v2/apps/{app_id}/deployments>res:r>obj:type:Inlinev2AppsDeploymentsResponseActiveDeployment>…
+# generation's fresh forest (selection order) spells the same node:
+get:/v2/apps/{app_id}/deployments>res:r>obj:type:ActiveDeployment>…
+```
+
+**Cause:**
+- Node ids embed names (`obj:type:<name>`), and collision renames (#12/#22) depend on visit order.
+- Since #71 generation expands its own fresh forest, so the two orders routinely differ; before
+  #71 the same mismatch existed only across a page reload (persisted selections in localStorage).
+- The failure is per-path and at lookup — nothing stops building or generating.
+
+**Fix direction** (designed, reviewed, deliberately split out of #71 to keep that diff small):
+- members of an `allOf`/`oneOf` get a position-based inline name at construction, so no member
+  carries a drift-prone name;
+- the two selection walkers resolve a drifted segment structurally — by the parent's single
+  target field where there is one, by member position inside an `allOf`/`oneOf` — and never by
+  guessing among same-class siblings; anything unresolvable still throws.
+- The deeper cure — ids that do not embed emitted names — is a redesign with a migration for
+  persisted selections; file separately if #72's containment proves insufficient.
+
+**AST:** node ids for `allOf`/`oneOf` members change shape (position-based inline names) — pinned
+selection paths in tests must not move for anything outside member lists.
+**Refs:** `src/oas/generator/typesCollector.ts` (both walkers), `src/oas/nodes/comp.ts` /
+`union.ts` (`add`), `src/oas/nodes/arr.ts` (`id`), #71 (what exposed it), #12/#22 (the renames),
+web `useSpecTree.ts` (where paths are minted).

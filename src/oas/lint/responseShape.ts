@@ -16,10 +16,18 @@ export type KeyLookup =
 
 /** Looks up selection paths in the response the operation actually returns. */
 export class ResponseShape {
-  /** The response object a @connect selection reads, or undefined when it cannot be worked out. */
+  // The response object a @connect selection reads, or undefined when it cannot be worked out.
   public static forOperation(gen: OasGen, operationKey: string): SchemaObject | undefined {
     const operation = gen.paths.get(operationKey);
-    return operation && T.isOp(operation) ? T.responseItemSchema(operation) : undefined;
+    if (!operation || !T.isOp(operation)) {
+      return undefined;
+    }
+    // resultType is only set once the op and its response child are visited. Generation visits
+    // its own copy of the nodes since #71, so the ones the linter reads are visited here.
+    for (const child of gen.expand(operation)) {
+      gen.expand(child);
+    }
+    return T.responseItemSchema(operation);
   }
 
   /**

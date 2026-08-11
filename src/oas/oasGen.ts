@@ -138,67 +138,69 @@ export class OasGen {
   }
 
   public expanded(paths: string[]): string[] {
-    this.collector.collect(paths);
-    return this.collector.expanded;
+    return this.isolatedRun(() => {
+      this.collector.collect(paths);
+      return this.collector.expanded;
+    });
   }
 
   public getTypes(paths: string[]): Map<string, IType> {
-    // make sure we pass the latest options to our context for the generation
-    const context = this.getContext();
-    context.generateOptions = this.options;
-
-    this.collector.collect(paths);
-
-    return this.collector.types;
+    return this.isolatedRun(() => {
+      this.collector.collect(paths);
+      return this.collector.types;
+    });
   }
 
   public generateSchema(paths: string[]): string {
-    // typo guard: an override key that matches no operation would silently do nothing
-    for (const key of Object.keys(this.options.overrides ?? {})) {
-      if (!this.paths.has(key)) {
-        console.warn(`[overrides] no operation matches "${key}" — override ignored.`);
+    return this.isolatedRun(() => {
+      // typo guard: an override key that matches no operation would silently do nothing
+      for (const key of Object.keys(this.options.overrides ?? {})) {
+        if (!this.paths.has(key)) {
+          console.warn(`[overrides] no operation matches "${key}" — override ignored.`);
+        }
       }
+
+      this.collector.collect(paths);
+
+      const writer: Writer = new Writer(this);
+      this.selections = writer.generateWith(this.collector.types, this.collector.expanded);
+
+      const schema = writer.flush();
+      // R14: directives the user declared go in after generation, over the finished document
+      return this.options.directives ? Directives.apply(schema, this.options.directives) : schema;
+    });
+  }
+
+  // Runs a generation on a fresh context and fresh path nodes, then puts back the ones the web's
+  // tree is holding — names stored by earlier calls made free names look taken.
+  // e.g. (digitalocean.yaml) ActiveDeployment came out as Inlinev2AppsDeploymentsResponseActiveDeployment. #71
+  private isolatedRun<T>(fn: () => T): T {
+    const treeContext = this.context;
+    const treePaths = this.paths;
+    try {
+      this.context = new OasContext(this.parser, this.options);
+      this.paths = this.buildPaths();
+      return fn();
+    } finally {
+      this.context = treeContext;
+      this.paths = treePaths;
     }
-
-    // make sure we pass the latest options to our context for the generation
-    const context = this.getContext();
-    context.reset();
-    context.generateOptions = this.options;
-
-    this.collector.collect(paths);
-
-    const writer: Writer = new Writer(this);
-    this.selections = writer.generateWith(this.collector.types, this.collector.expanded);
-
-    const schema = writer.flush();
-    // R14: directives the user declared go in after generation, over the finished document
-    return this.options.directives ? Directives.apply(schema, this.options.directives) : schema;
   }
 
   public async visit(): Promise<void> {
-    const parser = this.parser;
-    const context = this.getContext();
-
-    const paths = parser.getPaths();
-    const filtered = Object.entries(paths)
-      .filter(([_key, pathItem]) => this.isSupported(pathItem))
-      .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
-
-    const collected = new Map<string, IType>();
-    for (const [key, pathItem] of filtered) {
-      this.visitPath(context, key, pathItem).forEach((type) => collected.set(type.id, type));
-    }
-
-    this.paths = collected;
+    this.paths = this.buildPaths();
   }
 
   public visitSync(): void {
     if (this.visited) return;
+    this.paths = this.buildPaths();
+  }
 
-    const parser = this.parser;
+  // One op node per supported path — its fields and types are built later, when a selection walks in.
+  private buildPaths(): Map<string, IType> {
     const context = this.getContext();
 
-    const paths = parser.getPaths();
+    const paths = this.parser.getPaths();
     const filtered = Object.entries(paths)
       .filter(([_key, pathItem]) => this.isSupported(pathItem))
       .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
@@ -208,7 +210,7 @@ export class OasGen {
       this.visitPath(context, key, pathItem).forEach((type) => collected.set(type.id, type));
     }
 
-    this.paths = collected;
+    return collected;
   }
 
   private isSupported(pathItem: Record<HttpMethods, Webhook | Operation>) {
