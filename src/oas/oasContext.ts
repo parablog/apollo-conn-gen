@@ -103,12 +103,6 @@ export class OasContext {
     };
   }
 
-  // No longer needed by generation — each run gets a whole fresh context (isolatedRun, #71).
-  public reset(): void {
-    this.generatedSet?.clear();
-    this.sdlPropOverrides.clear();
-  }
-
   public enter(type: IType): void {
     this.stack.push(type);
     trace(this, '-> [context::enter]', type.id);

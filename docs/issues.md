@@ -3801,7 +3801,7 @@ the honest cure is #73.
 #71 (what exposed it), #12/#22 (the renames), #73 (the id redesign), web `useSpecTree.ts`
 (where paths are minted). Tests `test_72_*` in `tests/all/regen.test.ts`.
 
-## 73 · Node ids embed emitted names, so visit order changes selection identity — ⬜ Open
+## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —
 so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
@@ -3824,13 +3824,22 @@ comp:type:SpecServices -> obj:type:[inline:SpecServices]:2       # the parent re
   identity leaks out of a single run. #71 made runs deterministic; order across the browsed tree
   and the generation run still differs.
 
-**Fix direction:** an id built from the schema's own coordinates (the `$ref` or the position in
-the parent — field key, member index) instead of the emitted name, plus a migration for persisted
-selections. A real redesign: every pinned selection path in the suite moves with it. Rejected as
-a patchwork three times (#66/#68's name agreements, #72's scoped recovery) — do it once,
-deliberately, or live with #72's floor.
+**Parked (2026-08-11), after sizing both cures.** The shipped floor (#71 fresh state per
+generation, #72 single-target recovery) covers every failure actually observed. Both full cures
+were designed, measured, and set aside:
+- **Structural ids** (position-based): zero emitted churn, but a stored path becomes positional
+  at every step, so it needs a version tag, a spec hash and per-step staleness data — plus a
+  coordinated web release. The machinery outweighs the problem.
+- **Deterministic naming** (a name with several shapes never wins the short form): a first slice
+  over property keys was implemented and measured — box drift fell 378 -> 297 name families, but
+  digitalocean's did NOT move (1,486 -> 1,519). Bucketing the drifting names showed why: 84% are
+  cascade renames whose roots are array-item names, `allOf` member minting and the DEDUP order
+  itself (two browse orders build 2,111 vs 2,320 nodes). Making all of that order-independent is
+  a rewrite of the naming policy with heavy, user-visible renames (530+ families, concentrated in
+  stripe/github). Slice reverted.
 
-**AST:** the id scheme itself changes — this is THE node-identity issue; nothing else should
-touch ids until it lands.
+**Wake this issue when** a member-list selection actually breaks in real web use — then pick the
+cure knowing which cost hurts less in practice.
+
 **Refs:** `src/oas/nodes/*.ts` (`get id()` per class), `src/oas/generator/typesCollector.ts`,
-#72 (the scoped recovery and its measurements), #12/#22/#9 (the rename machinery).
+#71/#72 (the shipped floor), #12/#22/#9 (the rename machinery).
