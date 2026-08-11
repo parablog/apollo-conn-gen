@@ -3,6 +3,7 @@ import { Composed } from '../nodes/comp.js';
 import { Arr, IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Res, Scalar, T } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
+import { SelectionPath } from '../utils/selectionPath.js';
 
 export class TypesCollector {
   types: Map<string, IType> = new Map();
@@ -40,7 +41,7 @@ export class TypesCollector {
           break;
         }
 
-        current = collection.find((t) => t.id === part);
+        current = SelectionPath.resolveSegment(last, collection, part);
         if (!current) {
           const tree = T.print(last!.ancestors()[0]);
 
@@ -230,7 +231,7 @@ class PathsCollector {
     do {
       const part = Naming.expandRef(parts[i]);
 
-      current = collection.find((t) => t.id === part);
+      current = SelectionPath.resolveSegment(last, collection, part);
       if (!current) {
         throw new Error('Could not find type: ' + part + ' from ' + path + ', last: ' + last?.pathToRoot());
       }

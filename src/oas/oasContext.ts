@@ -103,11 +103,6 @@ export class OasContext {
     };
   }
 
-  public reset(): void {
-    this.generatedSet?.clear();
-    this.sdlPropOverrides.clear();
-  }
-
   public enter(type: IType): void {
     this.stack.push(type);
     trace(this, '-> [context::enter]', type.id);

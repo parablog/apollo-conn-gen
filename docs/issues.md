@@ -3698,7 +3698,7 @@ whose value is a scalar as its own leaf.
 list-of-lists spelling), #68 (where it surfaced). Fixture `tests/resources/oas/map-input-suffix.yaml`
 (`labels`, `tags`).
 
-## 71 · Generating twice on one `OasGen` changes the output — `reset()` forgets most state — ⬜ Open
+## 71 · Generating twice on one `OasGen` changes the output — `reset()` forgets most state — ✅ Fixed
 
 **Symptom:** the same op generates DIFFERENT schemas depending on what was generated before it on
 the same instance. Reproduced on digitalocean: generate three `/v2/apps` ops, then
@@ -3733,6 +3733,113 @@ type Inlinev2AppsDeploymentsResponseActiveDeployment { … }
 state is out of its reach) or the API enforces one-generation-per-instance (e.g. `generateSchema`
 rebuilds from the kept parser+options, or refuses a second call). The second matches what every
 caller already does.
-**Refs:** `src/oas/oasContext.ts` (`reset`), `src/oas/oasGen.ts` (`generateSchema`, `getContext`),
-`tools/coverage-spec.mts` (the fresh-instance workaround), #12/#22 (the renames that make stale
-`context.types` visible), #13 (cycle-cut divergence, same shared-node mutation family).
+
+**Fix:** `generateSchema`/`getTypes`/`expanded` each run against a fresh context and a fresh op
+forest built from the kept parser, then put the browse-time ones back (`isolatedRun` +
+`buildForest` in `oasGen.ts`). Every call now equals a fresh instance byte-for-byte; the web's
+tree keeps its `paths`/`context` objects untouched. `reset()` is no longer needed by generation.
+- Two readers used to get `resultType` filled as a generation side effect — the lint's response
+  check (`responseShape.ts`) and one test; both now expand the op and its response child
+  themselves.
+- Speed, full-spec selection: stripe repeat runs went 414s -> ~60s (the polluted context was
+  making every later run slower); digitalocean repeat runs went 9s -> 22s, the same as the first
+  run a page reload already pays.
+- The parser document is shared across runs; its in-place rewrites (#55) were audited and pinned
+  as write-once: a second generation changes nothing (`test_71_parser_document_reaches_a_fixpoint`).
+- Known limitation, filed as #72: a selection path minted from the browsed tree can spell a name
+  the fresh forest spells differently.
+
+**Refs:** `src/oas/oasContext.ts` (`reset`), `src/oas/oasGen.ts` (`isolatedRun`, `buildForest`),
+`tools/coverage-spec.mts` (the fresh-instance workaround this replaces), #12/#22 (the renames that
+make stale `context.types` visible), #13 (cycle-cut divergence, same shared-node mutation family).
+Tests `tests/all/regen.test.ts`.
+
+## 72 · A selection path minted while browsing may not resolve against generation's forest — ✅ Fixed
+
+**Symptom:** generation throws `Could not find type: obj:type:<name> …` (the web shows it as a
+toast) for a selection path that the tree itself handed out — or, worse, the path silently matches
+a DIFFERENT sibling whose name the drift lands on. Needs three things at once: a spec whose inline
+names collide (digitalocean), a fine-grained selection (not `op>**`), and browse order differing
+from generation's own expansion order.
+
+**Example** (digitalocean — the same type, named by who got there first):
+```
+# the tree, expanded by hand in click order, mints:
+get:/v2/apps/{app_id}/deployments>res:r>obj:type:Inlinev2AppsDeploymentsResponseActiveDeployment>…
+# generation's fresh forest (selection order) spells the same node:
+get:/v2/apps/{app_id}/deployments>res:r>obj:type:ActiveDeployment>…
+```
+
+**Cause:**
+- Node ids embed names (`obj:type:<name>`), and collision renames (#12/#22) depend on visit order.
+- Since #71 generation expands its own fresh forest, so the two orders routinely differ; before
+  #71 the same mismatch existed only across a page reload (persisted selections in localStorage).
+- The failure is per-path and at lookup — nothing stops building or generating.
+
+**Fix:** the two selection walkers match a segment by id as before, and when that misses, take
+the ONE node the parent can possibly mean — the field that holds its single target
+(`PropObj.obj`, `PropArray.items`, `PropComp.comp`, `PropMap.map`, `Arr.itemsType`, the sole
+child of `Res`/`Body`), same kind of node only (`SelectionPath.resolveSegment`,
+`src/oas/utils/selectionPath.ts`). A position with several candidates still throws — picking
+among them could silently bind the wrong one
+(`test_72_recovery_never_guesses_among_siblings`). This covers the reproduced failure: the
+drifted digitalocean segment sits where a list holds one item type.
+
+A larger design (renaming `allOf`/`oneOf` members at construction, a throw-first check, recovery
+by member position) was reviewed and REJECTED on measurement:
+- the members it would rename are not rare — digitalocean has 300, box 55, and the names are
+  emitted GraphQL type names, so the rename would rewrite schemas wholesale;
+- a member's name shape is itself visit-order-dependent (the same schema member shows a `$ref`
+  name, a minted name, or an `[inline:…]` name depending on order — ~130 of ~415 digitalocean
+  member edges differ between two browse orders), so counting "the k-th inline-named member"
+  does not identify the same member in two runs.
+Paths through those member lists that actually drift stay unresolved (they throw, as before) —
+the honest cure is #73.
+
+**AST:** none — ids are unchanged; only how a stale id is looked up changed.
+**Refs:** `src/oas/utils/selectionPath.ts`, `src/oas/generator/typesCollector.ts` (both walkers),
+#71 (what exposed it), #12/#22 (the renames), #73 (the id redesign), web `useSpecTree.ts`
+(where paths are minted). Tests `test_72_*` in `tests/all/regen.test.ts`.
+
+## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked
+
+**Symptom:** the same schema node gets a different id depending on what was expanded before it —
+so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
+only catches the positions with a single possible target. Measured on digitalocean: of ~415
+`allOf`/`oneOf` member edges, ~130-150 differ between two browse orders, three ways at once —
+`Inline2`-style minted names appear or not, the same member is reached through different `$ref`
+pointers, and `[inline:…]` names shift because the PARENT's name shifted.
+
+**Example** (digitalocean — one member, three identities):
+```
+comp:type:Jobs -> obj:type:#/paths/…/services/items/allOf/0     # one browse order
+comp:type:Jobs -> obj:type:JobsServices                          # another
+comp:type:SpecServices -> obj:type:[inline:SpecServices]:2       # the parent renamed too
+```
+
+**Cause:**
+- An id is `class:kind:<name>`, and `<name>` is whatever the node ended up called — collision
+  renames (#12/#22) and minted inline names both depend on what was visited first.
+- Selection paths are built from ids, persisted (web localStorage) and pinned (tests), so
+  identity leaks out of a single run. #71 made runs deterministic; order across the browsed tree
+  and the generation run still differs.
+
+**Parked (2026-08-11), after sizing both cures.** The shipped floor (#71 fresh state per
+generation, #72 single-target recovery) covers every failure actually observed. Both full cures
+were designed, measured, and set aside:
+- **Structural ids** (position-based): zero emitted churn, but a stored path becomes positional
+  at every step, so it needs a version tag, a spec hash and per-step staleness data — plus a
+  coordinated web release. The machinery outweighs the problem.
+- **Deterministic naming** (a name with several shapes never wins the short form): a first slice
+  over property keys was implemented and measured — box drift fell 378 -> 297 name families, but
+  digitalocean's did NOT move (1,486 -> 1,519). Bucketing the drifting names showed why: 84% are
+  cascade renames whose roots are array-item names, `allOf` member minting and the DEDUP order
+  itself (two browse orders build 2,111 vs 2,320 nodes). Making all of that order-independent is
+  a rewrite of the naming policy with heavy, user-visible renames (530+ families, concentrated in
+  stripe/github). Slice reverted.
+
+**Wake this issue when** a member-list selection actually breaks in real web use — then pick the
+cure knowing which cost hurts less in practice.
+
+**Refs:** `src/oas/nodes/*.ts` (`get id()` per class), `src/oas/generator/typesCollector.ts`,
+#71/#72 (the shipped floor), #12/#22/#9 (the rename machinery).

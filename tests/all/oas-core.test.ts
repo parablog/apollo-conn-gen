@@ -1483,12 +1483,17 @@ test('test_http_block_layout_with_all_members', async () => {
 test('test_oas_responseType_keeps_the_list_wrapper', async () => {
   const gen = await OasGen.fromFile(`${oasBasePath}/petstore.yaml`, {} as never);
   await gen.visit();
-  // resultType is filled in while generating, not while visiting
-  gen.generateSchema(['get:/pet/findByStatus>**', 'get:/pet/{petId}>**']);
 
   const list = gen.paths.get('get:/pet/findByStatus')!;
   const single = gen.paths.get('get:/pet/{petId}')!;
   assert.ok(T.isOp(list) && T.isOp(single));
+  // resultType is only set once the op and its response child are visited. Generation visits
+  // its own copy of the nodes since #71, so the ops read here are visited directly.
+  for (const op of [list, single]) {
+    for (const child of gen.expand(op)) {
+      gen.expand(child);
+    }
+  }
 
   // `[Pet]` stays an array here
   assert.equal(T.responseType(list)!.id.startsWith('array:'), true);

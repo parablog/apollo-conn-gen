@@ -1,5 +1,6 @@
 import {
   Arr,
+  Body,
   CircularRef,
   Composed,
   En,
@@ -9,7 +10,10 @@ import {
   Op,
   Prop,
   PropArray,
+  PropComp,
   PropEn,
+  PropMap,
+  PropObj,
   PropScalar,
   ReferenceObject,
   Res,
@@ -151,6 +155,23 @@ export class T {
       node = node.itemsType;
     }
     return node;
+  }
+
+  // What the parent contains, when it contains exactly one thing — a list has one item type, a
+  // field has one value, a response has one body. e.g. (digitalocean.yaml)
+  //   prop:array:#deployments      prop:obj:#spec      res:r / body:b
+  //    └─ items                     └─ obj              └─ children[0], when it is the only child
+  // A parent with several things inside (an object's fields, a choice's options) gives nothing.
+  public static innerChild(parent: IType | undefined): IType | undefined {
+    if (parent instanceof PropObj) return parent.obj;
+    if (parent instanceof PropArray) return parent.items;
+    if (parent instanceof PropComp) return parent.comp;
+    if (parent instanceof PropMap) return parent.map;
+    if (parent instanceof Arr) return parent.itemsType;
+    if (parent instanceof Res || parent instanceof Body) {
+      return parent.children.length === 1 ? parent.children[0] : undefined;
+    }
+    return undefined;
   }
 
   // The part of the response a selection is written against. A list answers the shape of one item,
