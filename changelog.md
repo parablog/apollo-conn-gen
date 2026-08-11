@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.20.0]
+
+### Fixed
+- An array request body now takes a list of its item type; before, the argument named an
+  input type that was never defined and composition failed. Issue #66.
+- A map entry's `value:` now ends in `Input` like the definition it points at; 14 specs'
+  mutations failed composition over this. Issue #68.
+- Generating twice on the same instance returned different schemas — names depended on what
+  ran before. Every generation now starts fresh; repeated generation on large specs is also
+  much faster (stripe: about 7 minutes down to 1). Issue #71.
+- A selection saved while browsing now resolves even when a fresh run names its type
+  differently, as long as only one node can be meant. Issue #72.
+
+### Removed
+- **Breaking**: `OasContext.reset()` — no longer needed; each generation runs on a fresh context.
+
 ## [0.19.0]
 
 ### Changed
