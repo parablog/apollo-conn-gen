@@ -1,0 +1,80 @@
+openapi: 3.0.3
+info:
+  title: Map input suffix
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /snapshots:
+    post:
+      operationId: createSnapshot
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                manifests:
+                  type: object
+                  additionalProperties:
+                    $ref: '#/components/schemas/Manifest'
+                manifestLists:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Manifest'
+                portBindings:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/HostPort'
+                labels:
+                  type: object
+                  additionalProperties:
+                    type: string
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateResult'
+    get:
+      operationId: getSnapshot
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  manifests:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/Manifest'
+components:
+  schemas:
+    Manifest:
+      type: object
+      properties:
+        name:
+          type: string
+    HostPort:
+      type: object
+      properties:
+        hostPort:
+          type: string
+    CreateResult:
+      type: object
+      properties:
+        id:
+          type: string

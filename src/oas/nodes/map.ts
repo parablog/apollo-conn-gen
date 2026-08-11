@@ -80,13 +80,13 @@ export class Map extends Type {
       if (this.valueType instanceof Arr) {
         // For arrays, generate [ItemType] format (let the array type handle its own nullability)
         if (this.valueType.itemsType && this.valueType.itemsType.name) {
-          writer.write('[' + Naming.genTypeName(this.valueType.itemsType.name) + ']');
+          writer.write('[' + this.valueTypeName(this.valueType.itemsType) + ']');
         } else {
           writer.write('[JSON]');
         }
       } else {
         // For other types, use the type name directly without hardcoded !
-        writer.write(Naming.genTypeName(this.valueType.name));
+        writer.write(this.valueTypeName(this.valueType));
       }
     } else {
       writer.write('JSON');
@@ -95,6 +95,12 @@ export class Map extends Type {
 
     trace(context, '<- [map::generate]', `-> out: ${this.name}`);
     context.leave(this);
+  }
+
+  // Returns the type name of the value, with a suffix if there's a ref to a container (i.e. for inputs):
+  // e.g. github manifests: { additionalProperties: $ref manifest } -> value: ManifestInput  #68
+  private valueTypeName(value: IType): string {
+    return Naming.genTypeName(value.name) + (T.isContainer(value) ? (value as Type).nameSuffix() : '');
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {

@@ -3491,3 +3491,248 @@ composes as-is.
 **Refs:** `src/oas/nodes/body.ts` (`visitBody`, `select`), `src/oas/nodes/post.ts` (`bodyArg`),
 #30 (the genTypeName agreement discipline the fix must keep). Fixture
 `tests/resources/oas/array-body.yaml`, test `test_66_array_body_references_item_input_type`.
+
+## 67 · A property whose `allOf` wraps an array loses the field and writes an empty input — ⬜ Open
+
+**Symptom:** `INVALID_GRAPHQL: expected an Input Value Definition` — the body's input type is
+written with no fields, `input InputInput { }`. digitalocean `post:/v2/firewalls/{firewall_id}/tags`
+and `del:` on the same path (both reproduced; they are the spec's only 2 failing mutations).
+
+**The whole INVALID_GRAPHQL bucket** (25 mutation ops, attributed 2026-08-11 by generating each op
+from the `COV_DUMP` list and validating with graphql-js) splits into three families:
+- 14 — a map entry's `value:` misses the `Input` suffix -> **#68**.
+- 8 — a body that ends up with no fields is still written and referenced -> **this issue**. Besides
+  the digitalocean pair documented below, the same gap covers: github `patch:/gists`, pages x2 and
+  `…/requested_reviewers` (a body union whose members all degrade to JSON -> zero-field merge);
+  plaid `post:/categories/get` (body object with no properties — nothing emitted, the arg still
+  points at it); omni `put:/v1/schedules/{scheduleId}` (arg references `BInputInput`, never emitted).
+- 3 — sibling names that collide after sanitising are written twice -> **#69**.
+
+**OAS** (digitalocean — an `allOf` used only to attach a description to a `$ref`; the target is an
+**array**, not an object):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        properties:
+          tags:
+            allOf:
+              - $ref: '#/paths/…/image/properties/tags'   # type: array, items: {type: string}, nullable
+              - description: An array containing the names of the Tags to be assigned…
+        required: [tags]
+```
+
+**Example:**
+```graphql
+# now — the field is gone, and the empty block is invalid GraphQL
+input InputInput {
+}
+body: """ $args.input { } """
+# wanted — the array the allOf wraps (required + nullable -> no `!`, as #55)
+input InputInput { tags: [String] }
+body: """ $args.input { tags } """
+```
+
+**Cause:**
+- Every property carrying `allOf` becomes a merged object (`Factory.fromProp` -> `PropComp` +
+  `Composed`, `factory.ts:419`).
+- The merge collects fields from the members that are objects (`Composed.consolidate`); an array
+  member has no fields to give, so the merge ends up with zero.
+- The description-only member is already skipped (#5), so this `allOf` is really just a wrapper
+  around one array — but nothing unwraps it to the array.
+- The field then drops out of the type and out of the body selection, yet the empty
+  `input InputInput { }` block is still written and the argument still points at it.
+- The tree shows the array itself is visited fine — the loss happens after, when the merge and the
+  emission only look for object fields:
+  ```
+  body:b>obj:input:Input>prop:comp:tags>comp:input:Tags>array:String>scalar:string
+  ```
+
+**AST:** none expected — the `Composed` already holds the array child. The likely fix is an unwrap:
+an `allOf` whose only real member is not an object takes that member's shape (`Composed.updateName`
+already treats a single-`$ref` `allOf` as a wrapper around its target). The other 6 ops in the
+family reach the empty body by different roads (union of JSON members, object with no properties),
+so the check belongs where every body passes through (`bodyArg()`): a body that produced no fields
+should drop the whole `input:` argument (or degrade to JSON) instead of writing an empty block or
+referencing a name that is never defined.
+**Refs:** `src/oas/nodes/factory.ts` (`fromProp`, the `allOf` branch), `src/oas/nodes/comp.ts`
+(`consolidate`), `src/oas/nodes/post.ts` (`bodyArg` — where a fieldless body would need to drop),
+#50 (same empty-input symptom, different cause), #5 (description-only members skipped), #55
+(required + nullable stays nullable).
+
+## 68 · A map entry's `value:` names the input type without its `Input` suffix — ✅ Fixed
+
+**Symptom:** `INVALID_GRAPHQL: cannot find type Manifest in this document` — the map entry
+references a name only the un-suffixed output side would use. 14 of the mutation sweep's 25
+INVALID_GRAPHQL ops: docker `post:/containers/create`; github `post:/gists`,
+`post:…/dependency-graph/snapshots`; incidentio catalog_entries x5; omni
+`patch:…/dashboards/{dashboardId}/filters`, `put:/v1/documents/{documentId}`; square team-members
+x2 and catalog x2. The square catalog pair wears a different error — the bare name also exists as
+an output type there, so rover says `must be Input Type` instead — but it is the same line.
+
+**OAS** (github `post:/repos/{owner}/{repo}/dependency-graph/snapshots` — a request-body field
+that is a map of components):
+```yaml
+manifests:
+  type: object
+  additionalProperties:
+    $ref: '#/components/schemas/manifest'
+```
+
+**Example:**
+```graphql
+# now — the entry's own name gets the suffix, its value does not
+input ManifestsEntryInput {
+  key: String
+  value: Manifest          # ✗ never defined — the definition below has the suffix
+}
+input ManifestInput { … }
+# wanted
+  value: ManifestInput
+```
+
+**Cause:**
+- The entry type's header appends the input suffix (`Map.generate`, `map.ts:70`) — `ManifestsEntryInput`.
+- Its `value:` line writes only `genTypeName(valueType.name)` (`map.ts:89`) — the value's own
+  suffix is never asked for.
+- The response side spells both without a suffix, so they agree there — which is why only
+  mutations break.
+- The array branch beside it (`map.ts:83`) has the same gap: a map of arrays of objects would
+  write `value: [Thing]` against a `ThingInput` definition.
+
+**AST:** none expected — definition and reference must agree (the #15/#30 discipline); an emission
+fix in `Map.generate`.
+
+**Fix:** both value writes route through one helper (`Map.valueTypeName`): containers take
+`genTypeName + nameSuffix()`, scalars and enums stay bare, and the response side is untouched
+(the suffix is empty there). Verified on plain, array and nested-map values — nested maps agree
+because the reference now derives the same name the nested map's own header writes.
+
+**Refs:** `src/oas/nodes/map.ts` (`generate`, the `value:` lines), #15/#30 (the agreement rule),
+#66 (the same rule applied to array bodies). Fixture `tests/resources/oas/map-input-suffix.yaml`,
+test `test_68_map_entry_value_carries_input_suffix`. Found while testing, filed separately: an
+input-side map with SCALAR values drops out of the body entirely (fixture `labels`/`tags`; docker's
+real `Labels`) — see #70.
+
+## 69 · Sibling names that collide after sanitising are written twice — ⬜ Open
+
+**Symptom:** `INVALID_GRAPHQL: Field prefsBackground already exists` (trello `post:/boards`,
+`put:/boards/{idBoard}`) and duplicate enum values (openfigi `post:/mapping`) — the last 3 ops of
+the mutation sweep's INVALID_GRAPHQL bucket.
+
+**OAS** (trello — the `boards` component carries both spellings of each pref side by side):
+```yaml
+boards:
+  properties:
+    prefs/background: { type: string }
+    prefs_background: { type: string }
+```
+openfigi needs no sanitising at all — `MappingJob.stateCode` literally lists every `enum` value
+twice (`AC, AC, HI, HI, …`).
+
+**Example:**
+```graphql
+input BoardsInput {
+  prefsBackground: String   # from prefs/background
+  prefsBackground: String   # from prefs_background — same name, invalid
+}
+```
+
+**Cause:**
+- Each field name sanitises on its own (`prefs/background` and `prefs_background` both ->
+  `prefsBackground`); nothing compares the result against sibling names before writing.
+- Enum values are written as listed — a spec that repeats a value writes it twice.
+- #61 is the same missing check seen from the other direction (`@type` vs `type`).
+- A fix that renames or drops one twin must keep the body mapping in agreement — today it writes
+  `prefs_background: prefsBackground` and the `prefs/…` twin against the same field name.
+
+**AST:** none expected — a check at write time: two siblings with the same cleaned name and the
+same shape collapse to one; different shapes need a bumped name, as #63 does for types.
+**Refs:** `src/oas/utils/naming.ts` (field sanitising), `src/oas/nodes/en.ts` (enum values), #61
+(the same missing check, found first on `@type` vs `type`), #63 (the bump precedent).
+
+## 70 · A map with scalar values disappears from a request body — ⬜ Open
+
+**Symptom:** a body field that is a map of strings is silently missing from the input type and the
+body mapping — the request can never carry it. Found while fixing #68; docker
+`post:/containers/create` loses its `Labels` map the same way. No compose error, so no sweep
+bucket counts it — the field is just gone.
+
+**OAS** (docker — a map whose values are plain strings):
+```yaml
+Labels:
+  type: object
+  additionalProperties:
+    type: string
+```
+
+**Example** (fixture `map-input-suffix.yaml` — `labels` is in the spec, not in the schema):
+```graphql
+# now
+input InputInput {
+  manifests: [ManifestsEntryInput]     # map of objects: kept
+}                                      # labels: gone
+# wanted
+input InputInput {
+  manifests: [ManifestsEntryInput]
+  labels: [LabelsEntryInput]           # key: String, value: String
+}
+```
+
+**Cause:**
+- The `>**` selection expansion only produces paths that end at a `prop:` leaf.
+- A map of objects ends in the object's props, so it gets paths. A map of scalars ends at a bare
+  `scalar:` node — no path is produced:
+  ```
+  prop:map:manifests>map:input:ManifestsEntry>obj:input:#/c/s/Manifest>prop:scalar:name   ✓ selected
+  prop:map:labels>map:input:LabelsEntry>scalar:string                                     ✗ no path
+  ```
+- With no path, `selectedProps` never matches the field, and it drops from the type and the body.
+- Same gap #59 records for a list of lists of scalars ("no leaf to select") — this is the map
+  spelling of it.
+
+**AST:** no node change expected — the expansion (or the selection match) needs to treat a map
+whose value is a scalar as its own leaf.
+**Refs:** `src/oas/oasGen.ts` (`expand`), `src/oas/nodes/type.ts` (`selectedProps`), #59 (the
+list-of-lists spelling), #68 (where it surfaced). Fixture `tests/resources/oas/map-input-suffix.yaml`
+(`labels`, `tags`).
+
+## 71 · Generating twice on one `OasGen` changes the output — `reset()` forgets most state — ⬜ Open
+
+**Symptom:** the same op generates DIFFERENT schemas depending on what was generated before it on
+the same instance. Reproduced on digitalocean: generate three `/v2/apps` ops, then
+`get:/v2/apps/{app_id}/deployments` — against a fresh instance the fourth op says
+`type ActiveDeployment`; on the reused one it says
+`type Inlinev2AppsDeploymentsResponseActiveDeployment`, and the whole selection is indented one
+space deeper. Flagged by another session as: "`reset()` only clears some fields; the fix is
+'always build a fresh instance', but the API does not force this."
+
+**Example** (same op, `get:/v2/apps/{app_id}/deployments>**`, fourth vs first on an instance):
+```graphql
+# fresh instance
+type ActiveDeployment { … }
+  deployments: [ActiveDeployment]
+# reused instance — earlier ops' names still occupy context.types, so the rename kicks in
+type Inlinev2AppsDeploymentsResponseActiveDeployment { … }
+  deployments: [Inlinev2AppsDeploymentsResponseActiveDeployment]
+```
+
+**Cause:**
+- `OasContext.reset()` (`oasContext.ts`) clears `generatedSet` and `sdlPropOverrides` — nothing else.
+- `context.types` keeps every name stored by earlier generations, so a name that is free on a
+  fresh instance looks taken on a reused one and gets the #12-style qualified rename.
+- `context.indent` / `refCount` carry over too — the indent drift is visible in the selection.
+- The nodes themselves also remember: `visited`, `Composed.consolidated` + the props it copied in,
+  and any renames — none of that is reachable from `reset()` at all.
+- The workaround is already institutional: `tools/coverage-spec.mts` builds a fresh `OasGen` per op
+  ("the abstract-types path mutates shared nodes"), and every test does the same. Nothing stops
+  the web app (the yalc consumer) or any other caller from reusing one instance.
+
+**AST:** no node change — a lifecycle decision. Either `reset()` becomes complete (hard: node
+state is out of its reach) or the API enforces one-generation-per-instance (e.g. `generateSchema`
+rebuilds from the kept parser+options, or refuses a second call). The second matches what every
+caller already does.
+**Refs:** `src/oas/oasContext.ts` (`reset`), `src/oas/oasGen.ts` (`generateSchema`, `getContext`),
+`tools/coverage-spec.mts` (the fresh-instance workaround), #12/#22 (the renames that make stale
+`context.types` visible), #13 (cycle-cut divergence, same shared-node mutation family).

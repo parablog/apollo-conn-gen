@@ -1666,6 +1666,22 @@ test('test_63_inline_wrapper_must_not_steal_component_name', async () => {
   assert.deepEqual(duplicates, [], 'no type is defined twice');
 });
 
+test('test_68_map_entry_value_carries_input_suffix', async () => {
+  // #68: a map entry named its value without the `Input` suffix the definition carries —
+  // `value: Manifest` against `input ManifestInput`. Now plain, array and nested-map values all
+  // reference the suffixed name; scalar values and the response side stay bare.
+  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 11);
+  assert.ok(schema !== undefined);
+  assert.ok(/value: ManifestInput\n/.test(schema!), 'plain map value carries the suffix');
+  assert.ok(/input ManifestInput \{/.test(schema!), 'and its definition exists');
+  assert.ok(/value: \[ManifestInput\]\n/.test(schema!), 'array map value carries it inside the brackets');
+  assert.ok(/value: PortBindingsEntryEntryInput\n/.test(schema!), 'nested map value matches the nested header');
+  assert.ok(/input PortBindingsEntryEntryInput \{/.test(schema!), 'which is how the nested map names itself');
+  assert.ok(/value: HostPortInput\n/.test(schema!), 'the nested map value carries it too');
+  assert.ok(!/value: Manifest\n/.test(schema!.replace(/type ManifestsEntry \{[^}]*\}/, '')), 'no bare input reference remains');
+  assert.ok(/type ManifestsEntry \{\n {2}key: String\n {2}value: Manifest\n\}/.test(schema!), 'the response side stays bare');
+});
+
 test('test_66_array_body_references_item_input_type', async () => {
   // #66: a body that is an array (gong `fields`) used to emit `input: InputInput!`, a type nothing
   // defines. Now the arg is a list of the item's type. Composing checks the body mapping too.
