@@ -1,4 +1,4 @@
-import { Factory, Get, Body, Type } from './internal.js';
+import { Arr, Factory, Get, Body, T, Type } from './internal.js';
 import { Writer } from '../io/writer.js';
 import { OasContext } from '../oasContext.js';
 import { Operation } from 'oas/operation';
@@ -124,11 +124,18 @@ export class Post extends Get {
     trace(context, '<- [post::visitBody]', `out: ${this.name}`);
   }
 
-  // `input: <Payload>!`, or undefined when the op has no JSON body. Definition and reference
-  // must agree (the #15 discipline): the input type definition emits genTypeName, so this does
-  // too (`ssh_keysItemInput` vs the definition's `SshKeysItemInput`). see docs/issues.md #30
+  // The `input:` argument for the op's JSON body, or undefined when there is none. The argument
+  // and the type definition must write the same name, e.g. `ssh_keys` -> `SshKeysItemInput` in both. #15 #30
   private bodyArg(): string | undefined {
     if (!this.body || !this.body.payload) return undefined;
+
+    // A body that is an array takes the item's type, as a list. e.g. gong `fields`:
+    // { type: array, items: $ref GenericSchemaFieldRequest } -> [GenericSchemaFieldRequestInput!]!  #66
+    if (this.body.payload instanceof Arr) {
+      const item = this.body.payload.itemsType as Type;
+      const itemName = T.isContainer(item) ? Naming.genTypeName(item.name) + item.nameSuffix() : item.name;
+      return 'input: [' + itemName + '!]!';
+    }
 
     const payload = this.body.payload as Type;
     const sanitised = Naming.genTypeName(payload.name!);

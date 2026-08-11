@@ -3444,3 +3444,50 @@ rewrite) plus keeping `$this.<sanitised>` consistent with the `@key`.
 **Refs:** #16 (found while planning it — its key suppression matches `keyFields` against
 `Prop.name`, both raw OAS names today; sanitising `keyFields` for `@key` must keep that check in
 step, and the test above fails if it does not), `Naming.sanitiseField`.
+
+## 66 · An array request body names an input type that is never defined — ✅ Fixed
+
+**Symptom:** `INVALID_BODY: unknown type InputInput.*.isDeleted` — gong
+`post:/v2/crm/object/schema` and `post:/v2/crm/stages` (2 mutation ops, only corpus hits).
+
+**OAS** (gong, Swagger 2.0 — a body param whose schema is an **array**; the loader converts it
+to an OAS 3 request body before we see it):
+```yaml
+parameters:
+  - in: body
+    name: fields
+    required: true
+    schema:
+      type: array
+      items: { $ref: '#/definitions/GenericSchemaFieldRequest' }
+```
+
+**Example:**
+```graphql
+# now — the arg names InputInput, which no SDL line defines; the real input type is the item's
+createV2CrmObjectSchema(..., input: InputInput!): SchemaUpdateResponse
+input GenericSchemaFieldRequestInput { ... }
+# wanted — a list of the item input type that is actually emitted
+createV2CrmObjectSchema(..., input: [GenericSchemaFieldRequestInput!]!): SchemaUpdateResponse
+```
+
+**Cause:** an inline body schema gets the placeholder name `Input` (`body.ts` `visitBody`), and
+`bodyArg()` (`post.ts`) builds the arg as `genTypeName(payload.name) + nameSuffix()` → `InputInput`.
+- `bodyArg()` has no array branch: it never unwraps an `Arr` payload to its item type, and never
+  writes the `[...]` list wrapper.
+- The item type itself generates fine — only the argument reference is wrong.
+- The body selection (`$args.input { … }`) also assumes an object payload; check what the list
+  form should emit before fixing the arg alone.
+
+**AST:** none expected — `Body` already holds the `Arr` payload; this is an emission fix in
+`bodyArg()` plus whatever the body selection needs.
+
+**Fix:** `bodyArg()` gets an `Arr` branch — it unwraps the payload to its item type and writes the
+list form, `input: [GenericSchemaFieldRequestInput!]!`, using the same genTypeName + suffix
+convention `PropArray.getValue` already uses for item references (#30 agreement kept). The body
+selection needed nothing: `$args.input { … }` applies element-wise over a list, and the fixture
+composes as-is.
+
+**Refs:** `src/oas/nodes/body.ts` (`visitBody`, `select`), `src/oas/nodes/post.ts` (`bodyArg`),
+#30 (the genTypeName agreement discipline the fix must keep). Fixture
+`tests/resources/oas/array-body.yaml`, test `test_66_array_body_references_item_input_type`.

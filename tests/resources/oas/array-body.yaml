@@ -1,0 +1,43 @@
+swagger: '2.0'
+info:
+  title: Array body
+  version: 1.0.0
+host: api.example.com
+basePath: /v2
+schemes:
+  - https
+paths:
+  /crm/stages:
+    post:
+      summary: Create stages
+      operationId: createStages
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: fields
+          required: true
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/GenericSchemaFieldRequest'
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/SchemaUpdateResponse'
+definitions:
+  GenericSchemaFieldRequest:
+    type: object
+    properties:
+      label:
+        type: string
+      isDeleted:
+        type: boolean
+  SchemaUpdateResponse:
+    type: object
+    properties:
+      requestId:
+        type: string

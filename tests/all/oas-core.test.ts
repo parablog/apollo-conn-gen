@@ -1665,3 +1665,12 @@ test('test_63_inline_wrapper_must_not_steal_component_name', async () => {
   const duplicates = [...new Set(typeNames.filter((n, i, a) => a.indexOf(n) !== i))];
   assert.deepEqual(duplicates, [], 'no type is defined twice');
 });
+
+test('test_66_array_body_references_item_input_type', async () => {
+  // #66: a body that is an array (gong `fields`) used to emit `input: InputInput!`, a type nothing
+  // defines. Now the arg is a list of the item's type. Composing checks the body mapping too.
+  const schema = await runOasTest('array-body.yaml', ['post:/crm/stages>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/input: \[GenericSchemaFieldRequestInput!\]!/.test(schema!), 'the arg is a list of the item input type');
+  assert.ok(!/InputInput/.test(schema!), 'the placeholder-derived name is gone');
+});
