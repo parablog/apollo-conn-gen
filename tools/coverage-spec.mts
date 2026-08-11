@@ -12,13 +12,14 @@
 //
 // Usage:
 //   node --import tsx/esm ./tools/coverage-spec.mts [--spec <file>] [--limit N]
-//        [--concurrency N] [--verbs get|mutations|all]
+//        [--concurrency N] [--workers N] [--verbs get|mutations|all]
 import { OasGen } from '../src/index.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { exec as _exec, execSync } from 'child_process';
 import { promisify } from 'util';
+import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
 
 // The generator traces via console.log/warn; mute it (progress goes to stderr, report to file).
 console.log = () => {};
@@ -76,6 +77,7 @@ const ALL_SPECS = [
   'openapi.car_configurator_service_(ccs)_int-10.210.0.yaml',
   'incidentio.json',
   'sanity-projects.json',
+  'gong.json',
 ];
 
 // One pass at the current shipping versions (connect v0.4 / fed v2.14, per DEFAULT_VERSIONS): real
@@ -93,12 +95,17 @@ const getArg = (name: string, def?: string) => {
 };
 const onlySpec = getArg('--spec');
 const limit = parseInt(getArg('--limit', '0')!, 10);
-const concurrency = parseInt(getArg('--concurrency', '8')!, 10);
+const concurrency = parseInt(getArg('--concurrency', '16')!, 10);
+// One worker thread sweeps one whole spec at a time; generation is CPU-bound JS, so this is what
+// lets a long spec (confluence, 51s) overlap the rest instead of serialising the sweep.
+const workers = parseInt(getArg('--workers', String(Math.min(8, Math.max(1, os.cpus().length - 2))))!, 10);
 const verbsSel = getArg('--verbs', 'get'); // get | mutations | all
 // each --verbs sweep gets its own report file so a later run doesn't clobber an earlier one.
 const opsLabel = verbsSel === 'get' ? 'GET' : verbsSel === 'mutations' ? 'mutation' : 'all';
 const outFile = verbsSel === 'get' ? 'COVERAGE.md' : `COVERAGE-${verbsSel}.md`;
-const specs = onlySpec ? [onlySpec] : ALL_SPECS;
+// --specs a.yaml,b.json sweeps just that subset, e.g. probing a fix across the two specs it touches
+const someSpecs = getArg('--specs');
+const specs = onlySpec ? [onlySpec] : someSpecs ? someSpecs.split(',') : ALL_SPECS;
 const passKeys = ['abstract'] as (keyof typeof PASSES)[];
 
 // Whole (spec, pass) combinations that infinite-loop the generator — skipped so the sweep can
@@ -238,12 +245,31 @@ function addBucket(buckets: Map<string, Bucket>, key: string, example: string) {
   else buckets.set(key, { count: 1, example });
 }
 
+// Compose slots are shared ACROSS workers (index 0 counts in-flight, index 1 is the one big-schema
+// token), so when only one spec is left its worker can use the whole --concurrency budget instead
+// of an even split. Waiters poll with a short sleep.
+async function withSlot<T>(slots: Int32Array, index: number, capacity: number, fn: () => Promise<T>): Promise<T> {
+  for (;;) {
+    const inFlight = Atomics.load(slots, index);
+    if (inFlight < capacity && Atomics.compareExchange(slots, index, inFlight, inFlight + 1) === inFlight) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  try {
+    return await fn();
+  } finally {
+    Atomics.sub(slots, index, 1);
+  }
+}
+
 async function runPass(
   file: string,
   parser: any,
   ops: string[],
   passKey: keyof typeof PASSES,
   skip: boolean,
+  slots: Int32Array,
 ): Promise<PassResult> {
   const r: PassResult = { total: ops.length, ok: 0, degraded: 0, genEmpty: 0, genThrow: 0, composeFail: 0, buckets: new Map() };
   const verdicts: Record<string, string> = {};
@@ -279,11 +305,11 @@ async function runPass(
   const small = candidates.filter((c) => c.schema.length < BIG_SCHEMA_BYTES);
   const big = candidates.filter((c) => c.schema.length >= BIG_SCHEMA_BYTES);
   const composed = new Map<string, { ok: boolean; code?: string }>();
-  (await pool(small, (c, i) => compose(c.op, c.schema, fed, i), concurrency)).forEach((res, i) =>
-    composed.set(small[i].op, res),
+  (await pool(small, (c, i) => withSlot(slots, 0, concurrency, () => compose(c.op, c.schema, fed, i)), concurrency)).forEach(
+    (res, i) => composed.set(small[i].op, res),
   );
-  (await pool(big, (c, i) => compose(c.op, c.schema, fed, small.length + i), 1)).forEach((res, i) =>
-    composed.set(big[i].op, res),
+  (await pool(big, (c, i) => withSlot(slots, 1, 1, () => compose(c.op, c.schema, fed, small.length + i)), 1)).forEach(
+    (res, i) => composed.set(big[i].op, res),
   );
   for (const { op } of candidates) {
     const res = composed.get(op)!;
@@ -305,18 +331,19 @@ async function runPass(
 
 // ---- main -----------------------------------------------------------------
 type SpecReport = { file: string; skip: boolean; ops: number; passes: Partial<Record<keyof typeof PASSES, PassResult>> };
+// what one spec's sweep hands back: its report row plus lines for the global histogram
+type SpecOutcome = { rep: SpecReport; extraBuckets: { key: string; example: string }[] };
 
-const reports: SpecReport[] = [];
+const reports: (SpecReport | undefined)[] = [];
 const globalBuckets = new Map<string, Bucket>();
 
-for (const file of specs) {
-  process.stderr.write(`\n== ${file} ==\n`);
+async function sweepSpec(file: string, slots: Int32Array): Promise<SpecOutcome> {
+  process.stderr.write(`== ${file} ==\n`);
+  const extraBuckets: SpecOutcome['extraBuckets'] = [];
   const loaded = await loadBase(file);
   if (!loaded) {
-    process.stderr.write(`  LOAD-FAIL\n`);
-    reports.push({ file, skip: false, ops: 0, passes: {} });
-    addBucket(globalBuckets, 'LOAD-FAIL (spec did not parse)', file);
-    continue;
+    process.stderr.write(`  ${file}: LOAD-FAIL\n`);
+    return { rep: { file, skip: false, ops: 0, passes: {} }, extraBuckets: [{ key: 'LOAD-FAIL (spec did not parse)', example: file }] };
   }
   const { gen, skip } = loaded;
   const MUTATION_PREFIXES = ['post:', 'put:', 'patch:', 'del:'];
@@ -328,31 +355,75 @@ for (const file of specs) {
         : true,
   );
   if (limit > 0) ops = ops.slice(0, limit);
-  process.stderr.write(`  ${ops.length} ${verbsSel === 'get' ? 'GET ' : verbsSel + ' '}ops${skip ? ' (skipValidation)' : ''}\n`);
 
   const rep: SpecReport = { file, skip, ops: ops.length, passes: {} };
-  reports.push(rep);
   for (const pk of passKeys) {
     const reason = skipReason(file, pk);
     if (reason) {
       rep.passes[pk] = { total: ops.length, ok: 0, degraded: 0, genEmpty: 0, genThrow: 0, composeFail: 0, buckets: new Map(), skipped: reason };
-      addBucket(globalBuckets, `GEN-HANG: ${reason}`, `${file} ${pk} pass (whole)`);
-      process.stderr.write(`  [${pk}] SKIPPED — ${reason}\n`);
-      writeReport();
+      extraBuckets.push({ key: `GEN-HANG: ${reason}`, example: `${file} ${pk} pass (whole)` });
+      process.stderr.write(`  ${file} [${pk}] SKIPPED — ${reason}\n`);
       continue;
     }
-    const pr = await runPass(file, gen.parser, ops, pk, skip);
+    const pr = await runPass(file, gen.parser, ops, pk, skip, slots);
     rep.passes[pk] = pr;
-    for (const [k, b] of pr.buckets) {
-      const g = globalBuckets.get(k);
-      if (g) g.count += b.count;
-      else globalBuckets.set(k, { count: b.count, example: `${file} ${b.example}` });
-    }
     process.stderr.write(
-      `  [${pk}] ok=${pr.ok} degraded=${pr.degraded} genEmpty=${pr.genEmpty} genThrow=${pr.genThrow} composeFail=${pr.composeFail} (${pct(pr.ok, pr.total)})\n`,
+      `  ${file} [${pk}] ${ops.length} ops${skip ? ' (skipValidation)' : ''}: ok=${pr.ok} degraded=${pr.degraded} genEmpty=${pr.genEmpty} genThrow=${pr.genThrow} composeFail=${pr.composeFail} (${pct(pr.ok, pr.total)})\n`,
     );
-    writeReport(); // incremental: survive a later hang/crash with partial results
   }
+  return { rep, extraBuckets };
+}
+
+function mergeOutcome(into: Map<string, Bucket>, outcome: SpecOutcome): void {
+  for (const extra of outcome.extraBuckets) {
+    addBucket(into, extra.key, extra.example);
+  }
+  for (const pass of Object.values(outcome.rep.passes)) {
+    for (const [key, bucket] of pass.buckets) {
+      const g = into.get(key);
+      if (g) g.count += bucket.count;
+      else into.set(key, { count: bucket.count, example: `${outcome.rep.file} ${bucket.example}` });
+    }
+  }
+}
+
+// each worker sweeps one spec end to end and posts the outcome back (Maps survive the clone)
+async function sweepSpecInWorker(file: string, slots: Int32Array): Promise<SpecOutcome> {
+  // the tsx loader registers per thread, so each worker registers its own before loading this file.
+  // workers start with an empty argv, so the parent's flags ride along and are pushed back on
+  // before the import — otherwise every worker falls back to defaults (e.g. --verbs get)
+  const bootstrap = `
+    const { register } = require('tsx/esm/api');
+    const { workerData } = require('worker_threads');
+    process.argv.push(...workerData.argv);
+    register();
+    import(${JSON.stringify(import.meta.url)});
+  `;
+  const worker = new Worker(bootstrap, { eval: true, workerData: { file, slots, argv: process.argv.slice(2) } });
+  return new Promise<SpecOutcome>((resolve, reject) => {
+    worker.once('message', resolve);
+    worker.once('error', reject);
+    worker.once('exit', (code) => code !== 0 && reject(new Error(`worker for ${file} exited with ${code}`)));
+  });
+}
+
+if (isMainThread) {
+  const specWorkers = Math.max(1, Math.min(workers, specs.length));
+  const slots = new Int32Array(new SharedArrayBuffer(8));
+  await pool(specs, async (file, i) => {
+    const outcome =
+      specWorkers === 1
+        ? await sweepSpec(file, slots)
+        : await sweepSpecInWorker(file, slots);
+    reports[i] = outcome.rep;
+    mergeOutcome(globalBuckets, outcome);
+    writeReport(); // incremental: survive a later hang/crash with partial results
+    return undefined;
+  }, specWorkers);
+} else {
+  const args = workerData as { file: string; slots: Int32Array };
+  parentPort!.postMessage(await sweepSpec(args.file, args.slots));
+  process.exit(0);
 }
 
 function pct(n: number, d: number): string {
@@ -362,7 +433,8 @@ function pct(n: number, d: number): string {
 // ---- markdown report ------------------------------------------------------
 function passTable(pk: keyof typeof PASSES): string {
   const head = `| Spec | GET ops | OK | DEGRADED | GEN-empty | GEN-throw | COMPOSE-fail | pass-rate |\n|---|--:|--:|--:|--:|--:|--:|--:|`;
-  const rows = reports.map((rp) => {
+  // incremental writes happen while workers are still sweeping — rows fill in as they finish
+  const rows = reports.flatMap((rp) => (rp === undefined ? [] : [rp])).map((rp) => {
     const p = rp.passes[pk];
     if (!p) return `| ${rp.file}${rp.skip ? ' †' : ''} | ${rp.ops} | — | — | — | — | — | LOAD-FAIL |`;
     if (p.skipped) return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | — | — | — | — | — | HANG (${p.skipped}) |`;
@@ -401,5 +473,7 @@ ${histo}
   fs.writeFileSync(outFile, md);
 }
 
-writeReport();
-process.stderr.write(`\nWrote ${outFile}\n`);
+if (isMainThread) {
+  writeReport();
+  process.stderr.write(`\nWrote ${outFile}\n`);
+}

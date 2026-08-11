@@ -20,9 +20,8 @@ lint-corpus:
 lint-corpus-mutations:
 	node --import tsx/esm ./tools/lint-corpus.mts --verbs mutations
 
-# The two lint passes come first: they take minutes rather than the best part of an hour, and a
-# schema the linter rejects is not worth composing. The two compose sweeps then run TOGETHER
-# (-j2, up to 16 rovers at peak); a pass that fails still fails the whole run.
-coverage-all: lint-corpus lint-corpus-mutations
-	$(MAKE) -j2 coverage coverage-mutations
+# All four passes run TOGETHER — each writes its own report file and tmp dir, so nothing collides.
+# A pass that fails still fails the whole run; the lint findings just arrive alongside the composes.
+coverage-all:
+	$(MAKE) -j4 lint-corpus lint-corpus-mutations coverage coverage-mutations
 
