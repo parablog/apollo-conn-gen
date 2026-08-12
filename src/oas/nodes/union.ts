@@ -115,6 +115,11 @@ export class Union extends Type {
         child.generate(context, writer, selection);
       }
     } else if (context.inContextOf(Res, this)) {
+      // a merge with no fields is never written — the field answers JSON instead  #80
+      if (this.isFlat() && !this.hasSelectedProps(selection)) {
+        writer.write('JSON');
+        return;
+      }
       // R2: when promoted to an interface, the field returns the base interface, not the union name.
       writer.write(Naming.genTypeName(this.interfaceBaseRef ?? this.name));
       return;
@@ -126,10 +131,16 @@ export class Union extends Type {
       const name = Union.resolvedTypeName(this.name);
 
       if (this.isFlat()) {
+        // an empty merge writes no type — its field was written as JSON  #80
+        if (!this.hasSelectedProps(selection)) {
+          trace(context, '   [union::generate]', `[union] no fields to merge, skipping: ${this.name}`);
+        }
         // No real union here: an input-position oneOf (GraphQL has no input unions) or no
         // discriminator (no tag for `->match`). Emit the merged object — the selection falls back to
         // the same flat form (see select), so SDL and selection agree. see docs/issues.md #25, #36
-        this.generateMergedObject(context, writer, selection, name, '#### union degraded to a merged object: ');
+        else {
+          this.generateMergedObject(context, writer, selection, name, '#### union degraded to a merged object: ');
+        }
       } else if (this.interfaceBaseRef) {
         // R2: promoted to an interface — the base (emitted as `interface`) and the members
         // (each `... implements Base`) carry the type system; emit no `union X = A | B` line.
@@ -391,6 +402,12 @@ export class Union extends Type {
       // .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
       ids.add(child);
 
+      // go deeper to get the fields from those inner members, if needed, and only those selected
+      if (child instanceof Union) {
+        props.push(...child.selectedProps(selection));
+        return;
+      }
+
       Array.from(child.props.values())
         .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
         .forEach((prop) => props.push(prop));
@@ -429,10 +446,26 @@ export class Union extends Type {
     // TODO: pending
   }
 
+  // False when merging finds no fields at all — such a union is written as JSON, not as an empty type.
+  // Merged fields sit on this.props; the op line asks with no selection at hand, so read them first.
+  // e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no fields  #80
+  public hasSelectedProps(selection: string[]): boolean {
+    if (this.consolidated) {
+      return this.props.size > 0;
+    }
+    return this.dedupedSelectedProps(selection).length > 0;
+  }
+
   public selectedProps(selection: string[]) {
     const collected: Prop[] = [];
 
     this.children.forEach((child) => {
+      // a member that is itself a union has no fields of its own — take its members' fields.
+      // e.g. (stripe) del bank_accounts answers anyOf [payment_source, deleted_payment_source], both anyOf too  #80
+      if (child instanceof Union) {
+        collected.push(...child.selectedProps(selection));
+        return;
+      }
       Array.from(child.props.values())
         .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
         .forEach((prop) => collected.push(prop));

@@ -4144,3 +4144,57 @@ validation gap fixed in router source, not yet in a released plugin.
 
 **Next step:** nothing generator-side. Re-check this op when a supergraph plugin newer than 2.15.1
 ships; if it still fails there, find the router fix commit and reference it here.
+
+## 80 · A union of unions (or of arrays) merges to an empty type and an empty selection — ✅ Fixed
+
+**Symptom:** stripe's last 3 mutation failures — `del:/v1/customers/{customer}/bank_accounts/{id}`,
+`…/cards/{id}`, `…/sources/{id}` — fail as `INVALID_SELECTION: @connect(selection:) … is empty`
+(the local composer trips first on the empty type body: `INVALID_GRAPHQL: expected Field
+Definition`). Github's 2 stargazers GETs fail the same way.
+
+**OAS** (stripe — the delete answers a choice between two choices, none with fields of its own):
+```json
+"responses.200": { "anyOf": [ { "$ref": "payment_source" }, { "$ref": "deleted_payment_source" } ] }
+"payment_source":         { "anyOf": [account, bank_account, card, source] }
+"deleted_payment_source": { "anyOf": [deleted_bank_account, deleted_card] }
+```
+(github — the members are arrays instead:)
+```yaml
+schema:
+  anyOf:
+    - { type: array, items: { $ref: simple-user } }
+    - { type: array, items: { $ref: stargazer } }
+```
+
+**Example** — what was written:
+```graphql
+type DeleteV1…Response { #### replacement for Union …
+}
+selection: """
+"""
+```
+
+**Cause:** a union with no discriminator is written as one merged object (#25/#36), and the merge
+(`Union.selectedProps` / `consolidate`) collected fields by reading each member's own `props` —
+one level only. A member that is itself a union, or an array, has no `props`, so the merge found
+nothing and both the type body and the selection came out empty. The #51 fallback for empty
+response sides never fires here — it only looks at object-typed fields, and this union is the
+response itself.
+
+**Fix**, two halves:
+- **Members that are unions contribute their members' fields** — `selectedProps` recurses into a
+  union member, so stripe's deletes now merge the six leaf members' fields
+  (`last4`, `deleted`, …) into the replacement object.
+- **A merge that still finds nothing is written as `JSON`** — the field answers `JSON` and the
+  selection passes the whole value through as `$`, the same route a plain-value response takes
+  (#47). Covers the array members: a merged object cannot carry a list shape. The check reads the
+  merged `props` when consolidation already ran, because the op line is written without a
+  selection at hand.
+
+**AST:** untouched — the change is which fields the merge collects and what an empty merge writes.
+**Refs:** `src/oas/nodes/union.ts` (`selectedProps`, `consolidate`, `hasSelectedProps`,
+`generate`), `src/oas/nodes/res.ts` (`select`, the #47 branch). Fixtures `union-of-unions.yaml` +
+`union-of-arrays.yaml`, tests `test_80_union_of_unions_merges_member_fields` +
+`test_80_union_of_arrays_answers_json`. Verified per-op: the 3 stripe deletes and github
+stargazers compose; the control `del:/v1/accounts/{account}/bank_accounts/{id}` (a union of real
+objects) emits byte-identical output. Related: #25, #36, #47, #50, #51.

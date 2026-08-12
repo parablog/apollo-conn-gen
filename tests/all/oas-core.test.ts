@@ -1742,6 +1742,29 @@ test('test_78_same_named_maps_over_different_values_split', async () => {
   assert.equal(schema!.match(/type MetadataEntry \{/g)?.length, 1, 'maps with the same schema still share one entry type');
 });
 
+test('test_80_union_of_unions_merges_member_fields', async () => {
+  // #80: a union whose members are themselves unions merged to an empty type and an empty
+  // selection. The members' members now contribute their fields to the merge.
+  // e.g. (stripe) del bank_accounts answers anyOf [payment_source, deleted_payment_source], both anyOf too.
+  const schema = await runOasTest('union-of-unions.yaml', ['del:/sources/{id}>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/type DeleteSourcesByIdResponse \{[^}]*last4: String/.test(schema!), 'the merged type carries the fields');
+  assert.ok(/deleted: Boolean/.test(schema!), 'from every member of every member');
+  assert.ok(/bankName: bank_name\?/.test(schema!), 'and the selection reads them');
+  assert.ok(!/\{\s*\}/.test(schema!), 'no empty type body remains');
+});
+
+test('test_80_union_of_arrays_answers_json', async () => {
+  // #80: a union whose members are arrays has no fields to merge — an array member cannot put its
+  // list shape into a merged object. The field answers JSON and passes the value through.
+  // e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer].
+  const schema = await runOasTest('union-of-arrays.yaml', ['get:/watchers>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/watchers: JSON/.test(schema!), 'the field answers JSON');
+  assert.ok(/selection: """\n\s+\$\n\s+"""/.test(schema!), 'the whole value passes through');
+  assert.ok(!/replacement for Union/.test(schema!), 'no merged type is written');
+});
+
 test('test_74_request_body_component_ref', async () => {
   // #74: a body written as `requestBody: { $ref: '#/components/requestBodies/…' }` used to emit a
   // mutation with no input and no body at all. It now generates exactly what the inline form does.

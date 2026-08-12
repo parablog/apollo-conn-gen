@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: Union of unions
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /sources/{id}:
+    delete:
+      operationId: deleteSource
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/PaymentSource'
+                  - $ref: '#/components/schemas/DeletedPaymentSource'
+components:
+  schemas:
+    PaymentSource:
+      anyOf:
+        - $ref: '#/components/schemas/BankAccount'
+        - $ref: '#/components/schemas/Card'
+    DeletedPaymentSource:
+      anyOf:
+        - $ref: '#/components/schemas/DeletedBankAccount'
+    BankAccount:
+      type: object
+      properties:
+        last4:
+          type: string
+        bank_name:
+          type: string
+    Card:
+      type: object
+      properties:
+        last4:
+          type: string
+        brand:
+          type: string
+    DeletedBankAccount:
+      type: object
+      properties:
+        deleted:
+          type: boolean

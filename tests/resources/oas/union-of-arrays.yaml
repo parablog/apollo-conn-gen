@@ -1,0 +1,37 @@
+openapi: 3.0.3
+info:
+  title: Union of arrays
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /watchers:
+    get:
+      operationId: getWatchers
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Watcher'
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        login:
+          type: string
+    Watcher:
+      type: object
+      properties:
+        starred_at:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
