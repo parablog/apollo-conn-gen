@@ -1671,6 +1671,28 @@ test('test_63_inline_wrapper_must_not_steal_component_name', async () => {
   assert.deepEqual(duplicates, [], 'no type is defined twice');
 });
 
+test('test_67_allof_decorated_array_body_keeps_the_field', async () => {
+  // #67: a property whose allOf only decorates an array lost the field, leaving an empty input.
+  // The array now IS the field; required + nullable stays nullable (#55).
+  const schema = await runOasTest('allof-array-body.yaml', ['post:/firewalls/{firewallId}/tags>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/tags: \[String\]\n/.test(schema!), 'the wrapped array is the field, nullable');
+  assert.ok(/input: InputInput!/.test(schema!), 'the body argument stays');
+  assert.ok(/tags\n/.test(schema!), 'and the body mapping sends it');
+});
+
+test('test_67_fieldless_bodies_stop_dangling', async () => {
+  // #67: a body with nothing to send used to reference a type that was never written
+  // (`input: InputInput!`). One value is now sent whole; nothing at all drops the argument.
+  const schema = await runOasTest('fieldless-bodies.yaml', ['post:/notes>**', 'post:/empty>**', 'post:/free>**'], 3, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/createNotes\(input: String!\)/.test(schema!), 'a string body is one value, sent whole');
+  assert.ok(/body: "\$args\.input"/.test(schema!), 'with the whole-value mapping');
+  assert.ok(/createEmpty:/.test(schema!), 'an object with no fields takes no argument');
+  assert.ok(/createFree\(input: JSON!\)/.test(schema!), 'a free-form body degrades to JSON');
+  assert.ok(!/InputInput/.test(schema!), 'no dangling name remains');
+});
+
 test('test_74_request_body_component_ref', async () => {
   // #74: a body written as `requestBody: { $ref: '#/components/requestBodies/…' }` used to emit a
   // mutation with no input and no body at all. It now generates exactly what the inline form does.

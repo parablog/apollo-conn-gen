@@ -3170,6 +3170,10 @@ fails today.
 **Symptom:** composition fails with `INVALID_GRAPHQL: Field type already exists on
 Customer360PromotionVO`. The written type carries two `type` fields.
 
+**Also on the input side (2026-08-12):** since #74 resolves `$ref`'d request bodies, TMF717's
+three `post:/listener/…` ops fail the same way inside `Customer360PromotionVOInput` — the
+mutations sweep counts them under INVALID_GRAPHQL. One fix covers both directions.
+
 **OAS:** (TMF717) every entity extends `Extensible`, whose tag field is `@type`; the promotion
 object also has a business field literally named `type`:
 
@@ -3492,7 +3496,7 @@ composes as-is.
 #30 (the genTypeName agreement discipline the fix must keep). Fixture
 `tests/resources/oas/array-body.yaml`, test `test_66_array_body_references_item_input_type`.
 
-## 67 · A property whose `allOf` wraps an array loses the field and writes an empty input — ⬜ Open
+## 67 · A property whose `allOf` wraps an array loses the field and writes an empty input — ✅ Fixed
 
 **Symptom:** `INVALID_GRAPHQL: expected an Input Value Definition` — the body's input type is
 written with no fields, `input InputInput { }`. digitalocean `post:/v2/firewalls/{firewall_id}/tags`
@@ -3507,12 +3511,12 @@ from the `COV_DUMP` list and validating with graphql-js) splits into three famil
   plaid `post:/categories/get` (body object with no properties — nothing emitted, the arg still
   points at it); omni `put:/v1/schedules/{scheduleId}` (arg references `BInputInput`, never emitted).
 
-**Population grew 8 -> 15 (2026-08-12):** #74 made `$ref`'d request bodies visible, and seven of
-them have no fields, landing here — sendgrid x4 (e.g. `del:/contactdb/lists/{list_id}`, whose
+**Population grew 8 -> 12 (2026-08-12):** #74 made `$ref`'d request bodies visible, and the
+fieldless ones land here — sendgrid x4 (confirmed on `del:/contactdb/lists/{list_id}`: the
 referenced body is just `schema: { nullable: true }` -> a JSON scalar renamed `Input` -> the arg
-says `InputInput`) and TMF717 x3 (`post:/hub`, the two `post:/listener/…` ops — these parse as
-plain GraphQL but fail rover's compose; exact sub-shape to pin during the fix, a `COV_DUMP` run
-names the sendgrid four exactly).
+says `InputInput`; a `COV_DUMP` run names the other three). TMF717's three new failures are NOT
+this issue — they are #61 on the input side (`@type` + `type` colliding inside
+`Customer360PromotionVOInput`), noted there.
 - 3 — sibling names that collide after sanitising are written twice -> **#69**.
 
 **OAS** (digitalocean — an `allOf` used only to attach a description to a `$ref`; the target is an
@@ -3563,10 +3567,22 @@ family reach the empty body by different roads (union of JSON members, object wi
 so the check belongs where every body passes through (`bodyArg()`): a body that produced no fields
 should drop the whole `input:` argument (or degrade to JSON) instead of writing an empty block or
 referencing a name that is never defined.
-**Refs:** `src/oas/nodes/factory.ts` (`fromProp`, the `allOf` branch), `src/oas/nodes/comp.ts`
-(`consolidate`), `src/oas/nodes/post.ts` (`bodyArg` — where a fieldless body would need to drop),
-#50 (same empty-input symptom, different cause), #5 (description-only members skipped), #55
-(required + nullable stays nullable).
+
+**Fix (two parts, as the AST note called it):**
+- an `allOf` that only decorates one non-object schema IS that schema
+  (`Factory.allOfDecoratedTarget`) — digitalocean's `tags` comes out `tags: [String]`, still
+  nullable per #55, and the body sends it;
+- a body with nothing to send drops its argument, its mapping and its emitted type
+  (`Body.isEmptyBody`, read by `bodyArg`, `Body.select` and `Body.dependencies`); a body that
+  is one value is sent whole — `input: JSON!` / `input: String!` with `body: "$args.input"` — and
+  a scalar payload keeps its own name instead of being renamed `Input`.
+Verified on all nine reproducible corpus ops (digitalocean x2, github x4, plaid, omni, sendgrid
+lists). Expected sweep: INVALID_GRAPHQL 18 -> 6 (3 x #61 TMF717, 3 x #69 remain).
+**Refs:** `src/oas/nodes/factory.ts` (`allOfDecoratedTarget`), `src/oas/nodes/body.ts`
+(`isEmptyBody`, `select`), `src/oas/nodes/post.ts` (`bodyArg`), #50 (same empty-input
+symptom, different cause), #5 (description-only members skipped), #55 (required + nullable stays
+nullable). Fixtures `allof-array-body.yaml` + `fieldless-bodies.yaml`, tests
+`test_67_allof_decorated_array_body_keeps_the_field`, `test_67_fieldless_bodies_stop_dangling`.
 
 ## 68 · A map entry's `value:` names the input type without its `Input` suffix — ✅ Fixed
 

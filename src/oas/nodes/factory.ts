@@ -322,9 +322,19 @@ export class Factory {
     }
 
     // uses the type of the schema to find out what kind of property it is
-    const schemaObj = schema as SchemaObject;
+    let schemaObj = schema as SchemaObject;
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
     Nullability.normalize(schemaObj);
+
+    // An `allOf` that only decorates one non-object schema IS that schema — merging it as an
+    // object gives zero fields and the field vanishes. e.g. (digitalocean) tags:
+    //   { allOf: [ $ref -> { type: array, items: {type: string} }, { description: … } ] } -> [String]  #67
+    const allOfSchema = this.findAllOfSchema(context, schemaObj);
+    if (allOfSchema) {
+      schemaObj = allOfSchema;
+      schema = allOfSchema;
+    }
+
     const type = schemaObj.type;
 
     if (type) {
@@ -441,6 +451,34 @@ export class Factory {
     }
 
     return prop;
+  }
+
+  // Discards all the empty schemas from an allOf and finds the real target schema. Resolves the ref if needed.
+  // e.g. (allof-array-body.yaml) tags: { allOf: [ $ref -> array of string, { description: … } ] }  #67
+  private static findAllOfSchema(context: OasContext, schema: SchemaObject): SchemaObject | undefined {
+    if (!schema.allOf) {
+      return undefined;
+    }
+
+    const targets = schema.allOf.filter((member) => !this.isEmptySchema(member as SchemaObject));
+    if (targets.length !== 1) {
+      return undefined;
+    }
+
+    const target = targets[0] as SchemaObject | ReferenceObject;
+    const resolved =
+      '$ref' in target
+        ? (context.resolvePointer(target.$ref as string) as SchemaObject | null)
+        : (target as SchemaObject);
+
+    if (!resolved) {
+      return undefined;
+    }
+
+    const objectLike =
+      resolved.type === 'object' || resolved.properties || resolved.allOf || resolved.oneOf || resolved.anyOf;
+
+    return objectLike ? undefined : resolved;
   }
 
   /**

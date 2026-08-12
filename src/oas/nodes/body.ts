@@ -1,4 +1,4 @@
-import { Factory, IType, ReferenceObject, Type } from './internal.js';
+import { Factory, IType, Prop, ReferenceObject, Scalar, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -42,14 +42,34 @@ export class Body extends Type {
   }
 
   dependencies(): IType[] {
-    return this.payload ? [this.payload] : [];
+    return this.payload && !this.isEmptyBody() ? [this.payload] : [];
+  }
+
+  // A body a mapping cannot send: no fields of its own and no member that has any. A single value
+  // (a Scalar) is NOT this — it is sent whole. e.g. (fieldless-bodies.yaml) { type: object, properties: {} }  #67
+  public isEmptyBody(): boolean {
+    const payload = this.payload;
+    if (!payload || payload instanceof Scalar) {
+      return false;
+    }
+    if (payload.props.size > 0) {
+      return false;
+    }
+    // the children that are not props are the allOf/oneOf members; members that are all scalars
+    // carry no fields to pick either. e.g. (github patch:/gists/{gist_id}) a body union of JSON members  #67
+    const members = Array.from(payload.children).filter((child) => !(child instanceof Prop));
+    return members.length === 0 || members.every((member) => member instanceof Scalar);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '-> [body:select]', `-> in: ${this.parent!.name}`);
 
-    if (this.payload) {
-      const spacing = ' '.repeat(8);
+    const spacing = ' '.repeat(8);
+
+    if (this.payload instanceof Scalar) {
+      // one value, we send it as a whole. #67
+      writer.write(spacing + 'body: "$args.input"\n');
+    } else if (this.payload && !this.isEmptyBody()) {
       writer.write(spacing + 'body: """\n').write(spacing + '$args.input {\n');
 
       context.indent += 2;
@@ -74,7 +94,10 @@ export class Body extends Type {
       this.add(type);
 
       this.payload = type;
-      this.payload!.name = name;
+      // a scalar keeps its name — it IS the type the argument writes. e.g. { nullable: true } -> JSON  #67
+      if (!(type instanceof Scalar)) {
+        this.payload!.name = name;
+      }
     }
     // don't know how to handle this yet
     else {

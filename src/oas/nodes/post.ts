@@ -1,4 +1,4 @@
-import { Arr, Factory, Get, Body, ReferenceObject, T, Type } from './internal.js';
+import { Arr, Factory, Get, Body, ReferenceObject, Scalar, T, Type } from './internal.js';
 import { Writer } from '../io/writer.js';
 import { OasContext } from '../oasContext.js';
 import { Operation } from 'oas/operation';
@@ -146,7 +146,7 @@ export class Post extends Get {
     const requestBody = context.resolvePointer(raw.$ref) as
       | { content?: Record<string, { schema?: SchemaObject }> }
       | undefined;
-    
+
     // and make sure it is of JSON type
     const json = Object.keys(requestBody?.content ?? {}).find((key) => /^application\/(?:.*\+)?json/i.test(key));
     return json ? requestBody!.content![json].schema : undefined;
@@ -156,6 +156,15 @@ export class Post extends Get {
   // and the type definition must write the same name, e.g. `ssh_keys` -> `SshKeysItemInput` in both. #15 #30
   private bodyArg(): string | undefined {
     if (!this.body || !this.body.payload) return undefined;
+
+    // A body with nothing to send takes no argument — its name would point at a type that is
+    // never written. e.g. (fieldless-bodies.yaml) { type: object, properties: {} } emitted `input: InputInput!`  #67
+    if (this.body.isEmptyBody()) return undefined;
+
+    // A body that is one value takes it whole. e.g. (fieldless-bodies.yaml) { nullable: true } -> input: JSON!  #67
+    if (this.body.payload instanceof Scalar) {
+      return 'input: ' + this.body.payload.name + '!';
+    }
 
     // A body that is an array takes the item's type, as a list. e.g. gong `fields`:
     // { type: array, items: $ref GenericSchemaFieldRequest } -> [GenericSchemaFieldRequestInput!]!  #66

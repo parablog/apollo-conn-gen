@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: allOf array body
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /firewalls/{firewallId}/tags:
+    post:
+      operationId: addTags
+      parameters:
+        - name: firewallId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tags:
+                  allOf:
+                    - $ref: '#/components/schemas/Tags'
+                    - description: The names of the tags to assign.
+              required:
+                - tags
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+components:
+  schemas:
+    Tags:
+      type: array
+      nullable: true
+      items:
+        type: string
+    Result:
+      type: object
+      properties:
+        ok:
+          type: boolean
