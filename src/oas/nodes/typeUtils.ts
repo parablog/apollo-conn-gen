@@ -38,6 +38,17 @@ export class T {
     );
   }
 
+  // A map value the selection reads whole (scalar, enum, or empty object degraded to JSON).
+  // A cycle-cut ref is not one — its SDL type is a composite that would need a sub-selection.
+  // e.g. (ccs) alternatives: { additionalProperties: $ref Amount } inside Amount itself  #76
+  public static isWholeMapValue(value: IType): boolean {
+    return T.isLeaf(value) && !T.isCircular(value);
+  }
+
+  public static isCircular(type: IType): boolean {
+    return type instanceof CircularRef;
+  }
+
   public static isPropScalar(type: IType): boolean {
     return type instanceof PropScalar;
   }

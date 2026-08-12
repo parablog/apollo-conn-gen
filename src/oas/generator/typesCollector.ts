@@ -286,7 +286,8 @@ class PathsCollector {
           this.gen.expand(child);
           // a map of plain values has nothing below it to select — the map itself is the leaf;
           // the field used to vanish. e.g. (map-input-suffix.yaml) labels: { additionalProperties: { type: string } }  #70
-          if (child instanceof PropMap && child.map.valueType && T.isLeaf(child.map.valueType)) {
+          // (whole values only — a cycle-cut value would select bare against a composite SDL type  #76)
+          if (child instanceof PropMap && child.map.valueType && T.isWholeMapValue(child.map.valueType)) {
             // add the child path instead
             newSelection.add(child.path());
           }

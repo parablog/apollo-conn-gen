@@ -3969,3 +3969,62 @@ differ from the `schema:` form, that is a new issue.
 **AST:** none — the fallback schema feeds the existing parameter path.
 **Refs:** `src/oas/nodes/factory.ts` (`fromParam`). Fixtures `param-via-content.yaml` +
 `param-via-schema.yaml`, test `test_75_param_via_content_generates`, comparison finding C28.
+
+## 76 · A map whose value cycles back selects a bare `value` against a composite type — ✅ Fixed
+
+**Symptom:** the op composes into `GRAPH_QL_ERROR: No matching shape found for selection` (the
+local composer says it plainly: `` `Amount` has no fields ``). Regression from #70's fix: the
+2026-08-12 sweep dropped Mercedes CCS from 43/43 to 21/43 GET ops (stripe −2, launch_library −1 —
+the whole 25-op `GRAPH_QL_ERROR` bucket).
+
+**OAS** (ccs — a dictionary whose values are the very type that holds it, currency → amount):
+```yaml
+Amount:
+  properties:
+    value: { type: number }
+    unit: { type: string }
+    alternatives:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/Amount'
+```
+
+**Example** — the schema and the selection disagree about `value`:
+```graphql
+type AlternativesEntry {
+  key: String
+  value: Amount                        # SDL: a composite type
+}
+# selection
+alternatives: alternatives?->entries {
+  key
+  value                                # bare — nothing ever selects Amount's fields
+}
+```
+Expansion then trims `Amount` to zero fields, and composition rejects the empty type.
+
+**Cause:**
+- Deep in a walk, the map's value node is a `CircularRef` (the cycle cut — `Amount` is already on
+  the path).
+- Before #70 such a map field produced no selection path at all, so it silently vanished — and
+  everything composed.
+- #70's expansion clause used `T.isLeaf` to spot maps of plain values, and `T.isLeaf` counts
+  `CircularRef` as a leaf — so the cycle-cut fields came back, half-formed:
+  - selection: `PropMap.needsValueSelection()` (also `T.isLeaf`) → bare `value`;
+  - SDL: `Map.valueTypeName()` keeps the referenced name → `value: Amount`.
+
+**Fix:** the expansion clause asks `T.isWholeMapValue` instead — `T.isLeaf` minus `CircularRef` —
+so a cycle-cut map value drops the field again (the pre-#70 behaviour for exactly this shape).
+Maps of plain values (#70's point) still stay. Dropping is deliberate: keeping the field would
+need either `value: JSON` in the SDL (divergent twin definitions of the same entry type within
+one op — the #15 family) or expanding through the cycle (unbounded).
+
+**AST:** untouched — the change is which map fields the `>**` expansion selects.
+**Refs:** `src/oas/nodes/typeUtils.ts` (`isWholeMapValue`), `src/oas/generator/typesCollector.ts`
+(the #70 clause). Fixture `map-recursive-value.yaml`, test
+`test_76_cycle_cut_map_value_drops_the_field`. Verified per-op on ccs
+`get:/api/v1/vehicles/{vehicleId}/alternatives` (fails at `c282f31`, composes with the fix); the
+sweep re-run (2026-08-12) confirms: ccs 43/43, GET corpus 2300 → 2322 of 2339 (99.3%), the
+`GRAPH_QL_ERROR` bucket 25 → 3. The 3 left (stripe `get:/v1/promotion_codes` ×2,
+launch_library ×1) are NOT this bug — stripe's op already failed on 2026-08-11, before
+`c282f31` existed. Separate, pre-existing issue; unfiled as of this entry.

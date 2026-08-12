@@ -1707,6 +1707,18 @@ test('test_70_scalar_valued_maps_stay', async () => {
   assert.ok(/labels: \[LabelsEntry\]/.test(schema!), 'the response side keeps its map of strings as well');
 });
 
+test('test_76_cycle_cut_map_value_drops_the_field', async () => {
+  // #76: a map whose value refers back to a type already on the path (ccs: Amount.alternatives ->
+  // Amount) selected a bare `value` against a composite entry type, failing composition. The field
+  // is dropped instead; maps of plain values (#70) stay.
+  const schema = await runOasTest('map-recursive-value.yaml', ['get:/prices>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(!/alternatives/.test(schema!), 'the cycle-cut map field is gone from SDL and selection');
+  assert.ok(/type Amount \{\n {2}unit: String\n {2}value: Float\n\}/.test(schema!), 'its owner keeps the plain fields');
+  assert.ok(/fuelPrices: \[FuelPricesEntry\]/.test(schema!), 'the scalar-valued map stays');
+  assert.ok(/fuelPrices: fuelPrices\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!), 'read whole in the mapping');
+});
+
 test('test_74_request_body_component_ref', async () => {
   // #74: a body written as `requestBody: { $ref: '#/components/requestBodies/…' }` used to emit a
   // mutation with no input and no body at all. It now generates exactly what the inline form does.

@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: Recursive map value
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /prices:
+    get:
+      operationId: getPrice
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Price'
+components:
+  schemas:
+    Price:
+      type: object
+      properties:
+        amount:
+          $ref: '#/components/schemas/Amount'
+        fuelPrices:
+          type: object
+          additionalProperties:
+            type: number
+    Amount:
+      type: object
+      properties:
+        value:
+          type: number
+        unit:
+          type: string
+        alternatives:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Amount'
