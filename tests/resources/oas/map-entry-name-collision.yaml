@@ -1,0 +1,58 @@
+openapi: 3.0.3
+info:
+  title: Map entry name collision
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /promotions:
+    get:
+      operationId: getPromotion
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promotion'
+components:
+  schemas:
+    Promotion:
+      type: object
+      properties:
+        coupon:
+          $ref: '#/components/schemas/Coupon'
+        restrictions:
+          $ref: '#/components/schemas/Restrictions'
+    Coupon:
+      type: object
+      properties:
+        currency_options:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CouponCurrencyOption'
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    Restrictions:
+      type: object
+      properties:
+        currency_options:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/RestrictionCurrencyOption'
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    CouponCurrencyOption:
+      type: object
+      properties:
+        amount_off:
+          type: integer
+    RestrictionCurrencyOption:
+      type: object
+      properties:
+        minimum_amount:
+          type: integer

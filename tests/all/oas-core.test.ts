@@ -1708,9 +1708,9 @@ test('test_70_scalar_valued_maps_stay', async () => {
 });
 
 test('test_76_cycle_cut_map_value_drops_the_field', async () => {
-  // #76: a map whose value refers back to a type already on the path (ccs: Amount.alternatives ->
-  // Amount) selected a bare `value` against a composite entry type, failing composition. The field
-  // is dropped instead; maps of plain values (#70) stay.
+  // #76: a map value pointing back to a type above it (ccs: Amount.alternatives -> Amount) wrote
+  // `value` with no fields under it, and composing failed. The field is dropped instead; maps of
+  // plain values (#70) stay.
   const schema = await runOasTest('map-recursive-value.yaml', ['get:/prices>**'], 1, 3);
   assert.ok(schema !== undefined);
   assert.ok(!/alternatives/.test(schema!), 'the cycle-cut map field is gone from SDL and selection');
@@ -1728,6 +1728,18 @@ test('test_77_empty_composed_map_value_reads_whole', async () => {
   assert.ok(/type MergedPortsEntry \{\n {2}key: String\n {2}value: JSON\n\}/.test(schema!), 'its value degrades to JSON');
   assert.ok(/mergedPorts: mergedPorts\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!), 'read whole, no value block');
   assert.ok(/exposedPorts: \[ExposedPortsEntry\]/.test(schema!), 'the empty-object control behaves the same');
+});
+
+test('test_78_same_named_maps_over_different_values_split', async () => {
+  // #78: two maps with one field name and two different values got one entry type — the selection
+  // then asked for fields the written value type does not have. The second map now takes a new
+  // name, like #9; two maps with the same schema (metadata) still share one entry type.
+  const schema = await runOasTest('map-entry-name-collision.yaml', ['get:/promotions>**'], 1, 8);
+  assert.ok(schema !== undefined);
+  assert.ok(/type CurrencyOptionsEntry \{\n {2}key: String\n {2}value: CouponCurrencyOption\n\}/.test(schema!), 'first map keeps the plain name');
+  assert.ok(/type RestrictionsCurrencyOptionsEntry \{\n {2}key: String\n {2}value: RestrictionCurrencyOption\n\}/.test(schema!), 'the second renames by its container');
+  assert.ok(/currencyOptions: \[RestrictionsCurrencyOptionsEntry\]/.test(schema!), 'and is referenced by the new name');
+  assert.equal(schema!.match(/type MetadataEntry \{/g)?.length, 1, 'maps with the same schema still share one entry type');
 });
 
 test('test_74_request_body_component_ref', async () => {

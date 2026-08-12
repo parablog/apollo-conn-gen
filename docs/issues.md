@@ -4058,7 +4058,7 @@ mergedPorts:                        # gone: field vanished from SDL and selectio
   time every Composed reads as empty, and populated ones would select a bare `value` against a
   real SDL type (#76 in reverse).
 
-**Fix:** `T.isComposedEmpty` — pre-consolidation-safe emptiness, walking the Composed's members
+**Fix:** `T.isComposedEmpty` — safe to ask before `consolidate()` has run, walking the Composed's members
 (visited by then) for any non-`Prop` node with props. `T.isLeaf` adds it as a clause;
 `Map.valueTypeName` stays untouched (it runs post-consolidation, where `props.size === 0` is
 correct). Both spellings of the field now emit `value: JSON`, read whole.
@@ -4071,3 +4071,76 @@ it ever surfaces.
 **Refs:** `src/oas/nodes/typeUtils.ts` (`isComposedEmpty`, `isLeaf`). Fixture
 `map-empty-composed-value.yaml`, test `test_77_empty_composed_map_value_reads_whole`
 (empty-`Obj` control in the same fixture). Related: #70, #76.
+
+## 78 · Two same-named maps over different value types collapse into one entry type — ✅ Fixed
+
+**Symptom:** `GRAPH_QL_ERROR` on compose; the local composer names it:
+`Object type 'CouponCurrencyOption' has no field 'minimumAmount'`. Hit all four stripe
+`/v1/promotion_codes` ops (GET + POST, both paths) — the sweep residue left after #76.
+
+**OAS** (stripe — two dictionaries, same field name, different value schemas):
+```yaml
+coupon:
+  currency_options:
+    additionalProperties: { $ref: coupon_currency_option }           # amount_off, …
+promotion_codes_resource_restrictions:
+  currency_options:
+    additionalProperties: { $ref: promotion_code_currency_option }   # minimum_amount, …
+```
+
+**Example** — one definition wins, the other route's selection still asks for its own fields:
+```graphql
+type CurrencyOptionsEntry { key: String value: CouponCurrencyOption }   # first one stored
+currencyOptions: currency_options?->entries {
+  key
+  value { minimumAmount: minimum_amount }    # resolved against CouponCurrencyOption -> no such field
+}
+```
+
+**Cause:** the map entry type is named from the field alone (`map.ts updateName` →
+`CurrencyOptionsEntry`), and `Map.visit` carried a literal stub where the collision should be
+handled: `// Handle name conflict similar to Obj` — empty branch, second map never stored, never
+renamed. The #9 machinery (`T.collidesWithStoredType` / `T.resolveNameConflict`) was never wired up
+for maps.
+
+**Fix:** fill the stub the same way `Obj.visit` does: when the name is taken by a different shape,
+the map takes its container's name in front (`RestrictionsCurrencyOptionsEntry`). Two maps with the
+same schema still share one entry type (stripe's dozens of `metadata` string maps keep a single
+`MetadataEntry`, via `isSameInlineDefinition`), and a renamed shape that appears again takes the
+same new name instead of a `2` (`canConvergeOn`). The map's id is built from its name, so the
+definition and every reference move together, same as #9. One guard on top: a request-body map and a response map can share a name
+without clashing — the body side writes with the `Input` suffix (`LabelsEntryInput` next to
+`LabelsEntry`), so that pair is left alone (test_68/test_70 caught the false rename).
+
+**Known ceiling:** when a body map holds the name, a response map is neither renamed nor
+remembered — so a *second* response map with the same name and a different shape would still
+collapse into the first. Needs three maps sharing one name in one op; file a new issue if it
+ever fires.
+
+**AST:** untouched — naming only.
+**Refs:** `src/oas/nodes/map.ts` (`visit`). Fixture `map-entry-name-collision.yaml`, test
+`test_78_same_named_maps_over_different_values_split`. Verified per-op on stripe: all four
+`promotion_codes` ops compose. Related: #9, #15, #18.
+
+## 79 · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
+
+**Symptom:** the last `GRAPH_QL_ERROR` sweep residue: launch_library
+`get:/2.3.0/dashboard/starship/` fails on stock rover with `No matching shape found for selection.
+Attempted 3 different shape variations and all failed` — the 3 matches the union's member count.
+
+**Example** (generated output — a 3-member union discriminated by `->match`):
+```graphql
+union PolymorphicStarshipDashboardEndpoint = StarshipDashboardList | StarshipDashboardNormal | StarshipDashboardDetailed
+... response_mode->match(
+  ["list", { __typename: $("StarshipDashboardList"), … }],
+  …
+)
+```
+
+**Evidence it is upstream, not ours:** the same schema (today's sweep leftover `schema-115`)
+composes clean through `tools/local/apollo-federation-cli` (patched, newer router code) and fails
+only through the published supergraph plugin 2.15.1. Same pattern as #14 (`->entries` crediting):
+validation gap fixed in router source, not yet in a released plugin.
+
+**Next step:** nothing generator-side. Re-check this op when a supergraph plugin newer than 2.15.1
+ships; if it still fails there, find the router fix commit and reference it here.
