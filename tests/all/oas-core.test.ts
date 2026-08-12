@@ -1671,6 +1671,31 @@ test('test_63_inline_wrapper_must_not_steal_component_name', async () => {
   assert.deepEqual(duplicates, [], 'no type is defined twice');
 });
 
+test('test_74_request_body_component_ref', async () => {
+  // #74: a body written as `requestBody: { $ref: '#/components/requestBodies/…' }` used to emit a
+  // mutation with no input and no body at all. It now generates exactly what the inline form does.
+  const referenced = await runOasTest('request-body-component-ref.yaml', ['post:/things>**'], 1, 2);
+  assert.ok(referenced !== undefined);
+  assert.ok(/createThings\(input: ThingInput!\)/.test(referenced!), 'the input argument is back');
+  assert.ok(/input ThingInput \{/.test(referenced!), 'and its type is defined');
+  assert.ok(/\$args\.input \{/.test(referenced!), 'and the body mapping is written');
+
+  const inline = await runOasTest('request-body-inline.yaml', ['post:/things>**'], 1, 2);
+  assert.strictEqual(referenced, inline, 'a referenced body means exactly what the inline one means');
+});
+
+test('test_75_param_via_content_generates', async () => {
+  // #75: a parameter carrying `content: { application/json: { schema } }` instead of `schema:`
+  // crashed on `schema.default`. It now takes the same route as a `schema:` parameter.
+  const viaContent = await runOasTest('param-via-content.yaml', ['get:/things>**'], 1, 1);
+  assert.ok(viaContent !== undefined);
+  const args = (schema: string) => /things\(([^)]*)\)/.exec(schema)?.[1];
+  assert.equal(args(viaContent!), 'filter: JSON, sort: String', 'object degrades to JSON, the enum to String');
+
+  const viaSchema = await runOasTest('param-via-schema.yaml', ['get:/things>**'], 1, 1);
+  assert.equal(args(viaContent!), args(viaSchema!), 'both spellings give the same argument types');
+});
+
 test('test_68_map_entry_value_carries_input_suffix', async () => {
   // #68: a map entry named its value without the `Input` suffix the definition carries —
   // `value: Manifest` against `input ManifestInput`. Now plain, array and nested-map values all

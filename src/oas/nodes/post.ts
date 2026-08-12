@@ -1,7 +1,8 @@
-import { Arr, Factory, Get, Body, T, Type } from './internal.js';
+import { Arr, Factory, Get, Body, ReferenceObject, T, Type } from './internal.js';
 import { Writer } from '../io/writer.js';
 import { OasContext } from '../oasContext.js';
 import { Operation } from 'oas/operation';
+import { SchemaObject } from 'oas/types';
 import { trace, warn } from '../log/trace.js';
 import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
@@ -93,6 +94,13 @@ export class Post extends Get {
 
     const mediaTypes = this.operation.getRequestBodyMediaTypes();
     if (mediaTypes.length === 0) {
+      // `requestBody: { $ref: '#/components/requestBodies/…' }` reports no media types — the
+      // mutation used to come out with no input and no body at all. see docs/issues.md #74
+      const referenced = this.resolveBodySchemaReference(context);
+      if (referenced) {
+        this.body = Factory.fromBody(context, this, referenced) as Body;
+        this.body.visit(context);
+      }
       return;
     }
 
@@ -122,6 +130,26 @@ export class Post extends Get {
     this.body.visit(context);
 
     trace(context, '<- [post::visitBody]', `out: ${this.name}`);
+  }
+
+  // The JSON schema inside a body the spec wrote as a reference. e.g. (request-body-component-ref.yaml)
+  //   requestBody: { $ref: '#/components/requestBodies/CreateThing' }   <- resolved here
+  //   CreateThing: { required: true, content: { application/json: { schema: $ref Thing } } }
+  private resolveBodySchemaReference(context: OasContext): SchemaObject | undefined {
+    const raw = _.get(this.operation, 'schema.requestBody') as ReferenceObject | undefined;
+    // if there's no reference, bail
+    if (!raw || !('$ref' in raw)) {
+      return undefined;
+    }
+
+    // resolve the pointer
+    const requestBody = context.resolvePointer(raw.$ref) as
+      | { content?: Record<string, { schema?: SchemaObject }> }
+      | undefined;
+    
+    // and make sure it is of JSON type
+    const json = Object.keys(requestBody?.content ?? {}).find((key) => /^application\/(?:.*\+)?json/i.test(key));
+    return json ? requestBody!.content![json].schema : undefined;
   }
 
   // The `input:` argument for the op's JSON body, or undefined when there is none. The argument

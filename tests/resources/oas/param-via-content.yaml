@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info:
+  title: Param via content
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /things:
+    get:
+      operationId: listThings
+      parameters:
+        - name: filter
+          in: query
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Filter'
+        - name: sort
+          in: query
+          required: false
+          content:
+            application/json:
+              schema:
+                type: string
+                enum:
+                  - asc
+                  - desc
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Filter:
+      type: object
+      properties:
+        color:
+          type: string
+        size:
+          type: integer
+    Thing:
+      type: object
+      properties:
+        name:
+          type: string

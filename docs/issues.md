@@ -3506,6 +3506,13 @@ from the `COV_DUMP` list and validating with graphql-js) splits into three famil
   `…/requested_reviewers` (a body union whose members all degrade to JSON -> zero-field merge);
   plaid `post:/categories/get` (body object with no properties — nothing emitted, the arg still
   points at it); omni `put:/v1/schedules/{scheduleId}` (arg references `BInputInput`, never emitted).
+
+**Population grew 8 -> 15 (2026-08-12):** #74 made `$ref`'d request bodies visible, and seven of
+them have no fields, landing here — sendgrid x4 (e.g. `del:/contactdb/lists/{list_id}`, whose
+referenced body is just `schema: { nullable: true }` -> a JSON scalar renamed `Input` -> the arg
+says `InputInput`) and TMF717 x3 (`post:/hub`, the two `post:/listener/…` ops — these parse as
+plain GraphQL but fail rover's compose; exact sub-shape to pin during the fix, a `COV_DUMP` run
+names the sendgrid four exactly).
 - 3 — sibling names that collide after sanitising are written twice -> **#69**.
 
 **OAS** (digitalocean — an `allOf` used only to attach a description to a `$ref`; the target is an
@@ -3843,3 +3850,90 @@ cure knowing which cost hurts less in practice.
 
 **Refs:** `src/oas/nodes/*.ts` (`get id()` per class), `src/oas/generator/typesCollector.ts`,
 #71/#72 (the shipped floor), #12/#22/#9 (the rename machinery).
+
+## 74 · A request body written as a reference emits a mutation with no input at all — ✅ Fixed
+
+**Symptom:** the mutation comes out as `createThings: Thing` — no `input` argument, no `body:`
+mapping — so a client can never send data through it, and nothing errors. Found by the TS/Rust
+comparison (finding C12, `docs/research/connect-gen-comparison`).
+
+**OAS** (`request-body-component-ref.yaml` — the body lives under `components.requestBodies`):
+```yaml
+paths:
+  /things:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/CreateThing'
+components:
+  requestBodies:
+    CreateThing:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Thing'
+```
+
+**Example:**
+```graphql
+# before — silently unusable
+createThings: Thing
+# after — identical to what the inline spelling produces
+createThings(input: ThingInput!): Thing
+```
+
+**Cause:**
+- the parser keeps the `$ref` exactly as written, and `getRequestBodyMediaTypes()` answers
+  nothing for it;
+- `visitBody` read that as "this op has no body" and returned at its first guard.
+
+**Fix:** when no media types come back, `visitBody` resolves the reference itself
+(`resolvePointer`), takes the JSON media type's schema out of the referenced request body, and
+hands it to the same `Factory.fromBody` call the inline path uses. The test pins byte-equality
+against an inline twin of the same spec.
+
+**Side effect, expected:** bodies this fix makes visible land on the open #67 bug when they have
+no fields — the mutations sweep's INVALID_GRAPHQL bucket grew 11 -> 18 (sendgrid +4, TMF717 +3).
+Those ops were "green" before only because they carried no body at all; #67's entry carries the
+new population.
+
+**AST:** none — the resolved schema joins the existing body path.
+**Refs:** `src/oas/nodes/post.ts` (`visitBody`, `referencedBodySchema`). Fixtures
+`request-body-component-ref.yaml` + `request-body-inline.yaml`, test
+`test_74_request_body_component_ref`, comparison finding C12.
+
+## 75 · A parameter declared through `content` crashes generation — ✅ Fixed
+
+**Symptom:** the whole run dies with `TypeError: Cannot read properties of undefined (reading
+'default')` in `factory.ts`. Found by the TS/Rust comparison (finding C28).
+
+**OAS** (`param-via-content.yaml` — `content` with one media type instead of `schema`):
+```yaml
+parameters:
+  - name: filter
+    in: query
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Filter'
+```
+
+**Example:**
+```graphql
+# wanted, and now generated — the same arguments a `schema:` parameter gets
+things(filter: JSON, sort: String): [Thing]
+```
+
+**Cause:**
+- a parameter carries either `schema` or `content` (with exactly one media type entry);
+- `fromParam` read only `param.schema` and dereferenced `.default` on it.
+
+**Fix:** `fromParam` falls back to the single `content` entry's schema, and the `.default` read
+is guarded. The argument then takes the identical route a `schema:` parameter takes — an object
+degrades to `JSON` (#19), a plain string/enum stays a scalar. Scope: the argument type and the
+crash — how a `content` parameter should serialize into the query string is untouched; if it must
+differ from the `schema:` form, that is a new issue.
+
+**AST:** none — the fallback schema feeds the existing parameter path.
+**Refs:** `src/oas/nodes/factory.ts` (`fromParam`). Fixtures `param-via-content.yaml` +
+`param-via-schema.yaml`, test `test_75_param_via_content_generates`, comparison finding C28.

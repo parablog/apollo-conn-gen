@@ -481,10 +481,13 @@ export class Factory {
       param = p as ParameterObject;
     }
 
-    const schema = param.schema as SchemaObject;
+    // Takes the schema from `content` when a parameter has no `schema:` — without this the run
+    // crashed. e.g. (param-via-content.yaml) filter: { content: { application/json: { schema: $ref Filter } } }  #75
+    const media = param.content ? Object.values(param.content)[0] : undefined;
+    const schema = (param.schema ?? media?.schema) as SchemaObject;
     const required = param.required === true;
 
-    return new Param(parent, param.name, schema, required, schema.default, param);
+    return new Param(parent, param.name, schema, required, schema?.default, param);
   }
 
   public static fromCircularRef(parent: IType, child: IType): IType {
