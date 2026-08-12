@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
-import { Arr, IType, Prop, PropArray, PropCircRef, PropEn, PropObj, Res, Scalar, T } from '../nodes/internal.js';
+import { Arr, IType, Prop, PropArray, PropCircRef, PropEn, PropMap, PropObj, Res, Scalar, T } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
 import { SelectionPath } from '../utils/selectionPath.js';
@@ -284,6 +284,12 @@ class PathsCollector {
           newSelection.add(child.path());
         } else {
           this.gen.expand(child);
+          // a map of plain values has nothing below it to select — the map itself is the leaf;
+          // the field used to vanish. e.g. (map-input-suffix.yaml) labels: { additionalProperties: { type: string } }  #70
+          if (child instanceof PropMap && child.map.valueType && T.isLeaf(child.map.valueType)) {
+            // add the child path instead
+            newSelection.add(child.path());
+          }
         }
       });
 

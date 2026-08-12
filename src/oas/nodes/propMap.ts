@@ -1,4 +1,4 @@
-import { IType, Map, Prop } from './internal.js';
+import { IType, Map, Prop, T } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
@@ -100,8 +100,9 @@ export class PropMap extends Prop {
     trace(context, '<- [prop-map:select]', 'out ' + this.name + ', map: ' + this.map.name);
   }
 
+  // a value with fields opens a `value { … }` block; a plain value is read whole. #70
   private needsValueSelection(): boolean {
-    return Boolean(this.map.valueType && !this.map.valueType.name?.match(/^(String|Int|Float|Boolean|JSON)$/));
+    return Boolean(this.map.valueType && !T.isLeaf(this.map.valueType));
   }
 
   dependencies(): IType[] {

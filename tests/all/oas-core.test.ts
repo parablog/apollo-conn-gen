@@ -618,10 +618,11 @@ test('test_048_oas_test_031_post-body-oneOf', async () => {
 });
 
 test('test_049_oas_test_032_mindbody-JSON', async () => {
-  // 'data' field should be generated as JSON
+  // `data` is a map with no declared value shape — kept as entries of JSON values since #70
+  // (before that it silently vanished): data: [DataEntry], DataEntry { key, value: JSON }
   const paths = ['get:/health/information>**'];
 
-  await runOasTest(`mindbody.json`, paths, 11, 2, false, true);
+  await runOasTest(`mindbody.json`, paths, 11, 3, false, true);
 });
 
 test('test_050_oas_test_033_initial-support-for-put', async () => {
@@ -1693,6 +1694,19 @@ test('test_67_fieldless_bodies_stop_dangling', async () => {
   assert.ok(!/InputInput/.test(schema!), 'no dangling name remains');
 });
 
+test('test_70_scalar_valued_maps_stay', async () => {
+  // #70: a map of plain values silently vanished from bodies and responses — nothing under it
+  // counted as a selection leaf, so the field was never selected. The map itself is the leaf now.
+  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 14);
+  assert.ok(schema !== undefined);
+  assert.ok(/labels: \[LabelsEntryInput\]/.test(schema!), 'the body keeps its map of strings');
+  assert.ok(/input LabelsEntryInput \{\n {2}key: String\n {2}value: String\n\}/.test(schema!), 'with its entry type');
+  assert.ok(/tags: \[TagsEntryInput\]/.test(schema!), 'a map of string lists stays too');
+  assert.ok(/value: \[String\]/.test(schema!), 'its value is the list');
+  assert.ok(/labels: labels->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!), 'the mapping reads the value whole');
+  assert.ok(/labels: \[LabelsEntry\]/.test(schema!), 'the response side keeps its map of strings as well');
+});
+
 test('test_74_request_body_component_ref', async () => {
   // #74: a body written as `requestBody: { $ref: '#/components/requestBodies/…' }` used to emit a
   // mutation with no input and no body at all. It now generates exactly what the inline form does.
@@ -1722,7 +1736,7 @@ test('test_68_map_entry_value_carries_input_suffix', async () => {
   // #68: a map entry named its value without the `Input` suffix the definition carries —
   // `value: Manifest` against `input ManifestInput`. Now plain, array and nested-map values all
   // reference the suffixed name; scalar values and the response side stay bare.
-  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 11);
+  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 14);
   assert.ok(schema !== undefined);
   assert.ok(/value: ManifestInput\n/.test(schema!), 'plain map value carries the suffix');
   assert.ok(/input ManifestInput \{/.test(schema!), 'and its definition exists');

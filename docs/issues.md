@@ -3675,7 +3675,7 @@ same shape collapse to one; different shapes need a bumped name, as #63 does for
 **Refs:** `src/oas/utils/naming.ts` (field sanitising), `src/oas/nodes/en.ts` (enum values), #61
 (the same missing check, found first on `@type` vs `type`), #63 (the bump precedent).
 
-## 70 · A map with scalar values disappears from a request body — ⬜ Open
+## 70 · A map with scalar values disappears from a request body — ✅ Fixed
 
 **Symptom:** a body field that is a map of strings is silently missing from the input type and the
 body mapping — the request can never carry it. Found while fixing #68; docker
@@ -3717,9 +3717,25 @@ input InputInput {
 
 **AST:** no node change expected — the expansion (or the selection match) needs to treat a map
 whose value is a scalar as its own leaf.
-**Refs:** `src/oas/oasGen.ts` (`expand`), `src/oas/nodes/type.ts` (`selectedProps`), #59 (the
-list-of-lists spelling), #68 (where it surfaced). Fixture `tests/resources/oas/map-input-suffix.yaml`
-(`labels`, `tags`).
+
+**Fix (two lines of behaviour, no new machinery):**
+- after the `>**` walk expands a map field (its own, existing expansion), a value that is a plain
+  value (`T.isLeaf` — a string, an enum, a list of strings, free-form JSON, which is a Scalar
+  node) makes the field itself the leaf (`collectExpandedPaths`);
+- the written mapping reads such a value whole — `labels->entries { key value }` — instead of
+  opening a `value { }` block it cannot fill (`PropMap.needsValueSelection` now checks the value's
+  shape with `T.isLeaf`, not its name);
+- a map value that is an object with no fields writes `value: JSON` — the empty object is never
+  written (#19), so naming it dangled. Caught by the sweep on docker `ExposedPorts` and eleven
+  confluence ops (`Map.valueTypeName`).
+Works on both sides (body and response). A map with NO declared value shape (mindbody `data`,
+empty `additionalProperties`) now comes out as entries of JSON values rather than vanishing —
+two corpus fixture counts moved for exactly this (omni `join_via_map`, mindbody `data`).
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`),
+`src/oas/nodes/propMap.ts` (`needsValueSelection`), #59 (the list-of-lists spelling), #68 (where
+it surfaced). Fixture `tests/resources/oas/map-input-suffix.yaml` (`labels`, `tags`, GET-side
+`labels`), test `test_70_scalar_valued_maps_stay`.
 
 ## 71 · Generating twice on one `OasGen` changes the output — `reset()` forgets most state — ✅ Fixed
 

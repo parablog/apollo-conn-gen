@@ -61,6 +61,10 @@ paths:
                     type: object
                     additionalProperties:
                       $ref: '#/components/schemas/Manifest'
+                  labels:
+                    type: object
+                    additionalProperties:
+                      type: string
 components:
   schemas:
     Manifest:

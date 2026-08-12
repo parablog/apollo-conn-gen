@@ -1,4 +1,4 @@
-import { Arr, Factory, IType, Res, Type, T, Scalar } from './internal.js';
+import { Arr, Composed, Factory, IType, Obj, Res, Type, T, Scalar } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -100,6 +100,12 @@ export class Map extends Type {
   // Returns the type name of the value, with a suffix if there's a ref to a container (i.e. for inputs):
   // e.g. github manifests: { additionalProperties: $ref manifest } -> value: ManifestInput  #68
   private valueTypeName(value: IType): string {
+    // A value that would emit an empty type is never written (#19) — its value is free-form JSON.
+    // Obj and Composed emit from their props; a Map always has key/value and a Union its members,
+    // so neither degrades. e.g. (docker /commit) ExposedPorts: { additionalProperties: { type: object } } -> value: JSON  #70
+    if ((value instanceof Obj || value instanceof Composed) && value.props.size === 0) {
+      return 'JSON';
+    }
     return Naming.genTypeName(value.name) + (T.isContainer(value) ? (value as Type).nameSuffix() : '');
   }
 
