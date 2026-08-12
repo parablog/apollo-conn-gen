@@ -1719,6 +1719,17 @@ test('test_76_cycle_cut_map_value_drops_the_field', async () => {
   assert.ok(/fuelPrices: fuelPrices\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!), 'read whole in the mapping');
 });
 
+test('test_77_empty_composed_map_value_reads_whole', async () => {
+  // #77: a map value that is an allOf of empty objects vanished, while a plain empty object (#70)
+  // was kept as JSON. An empty Composed now counts as a leaf too — same field, same treatment.
+  const schema = await runOasTest('map-empty-composed-value.yaml', ['get:/containers>**'], 1, 5);
+  assert.ok(schema !== undefined);
+  assert.ok(/mergedPorts: \[MergedPortsEntry\]/.test(schema!), 'the composed-valued map stays');
+  assert.ok(/type MergedPortsEntry \{\n {2}key: String\n {2}value: JSON\n\}/.test(schema!), 'its value degrades to JSON');
+  assert.ok(/mergedPorts: mergedPorts\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!), 'read whole, no value block');
+  assert.ok(/exposedPorts: \[ExposedPortsEntry\]/.test(schema!), 'the empty-object control behaves the same');
+});
+
 test('test_74_request_body_component_ref', async () => {
   // #74: a body written as `requestBody: { $ref: '#/components/requestBodies/…' }` used to emit a
   // mutation with no input and no body at all. It now generates exactly what the inline form does.

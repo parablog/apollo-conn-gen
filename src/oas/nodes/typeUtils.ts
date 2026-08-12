@@ -34,8 +34,25 @@ export class T {
       type instanceof CircularRef ||
       (type instanceof PropArray && type.items instanceof Scalar) ||
       (type instanceof Obj && _.isEmpty(type.props)) ||
+      T.isComposedEmpty(type) ||
       T.isScalarArray(type)
     );
+  }
+
+  // Traverses a Composed to check for props. Useful when consolidate has not been invoked.
+  // e.g. (map-empty-composed-value.yaml) mergedPorts: { additionalProperties: allOf two empty objects }  #77
+  public static isComposedEmpty(type: IType): boolean {
+    if (!(type instanceof Composed)) {
+      return false;
+    }
+
+    let empty = true;
+    T.traverse(type, (node) => {
+      if (node !== type && !(node instanceof Prop) && !_.isEmpty(node.props)) {
+        empty = false;
+      }
+    });
+    return empty;
   }
 
   // A map value the selection reads whole (scalar, enum, or empty object degraded to JSON).

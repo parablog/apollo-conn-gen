@@ -4028,3 +4028,46 @@ sweep re-run (2026-08-12) confirms: ccs 43/43, GET corpus 2300 → 2322 of 2339 
 `GRAPH_QL_ERROR` bucket 25 → 3. The 3 left (stripe `get:/v1/promotion_codes` ×2,
 launch_library ×1) are NOT this bug — stripe's op already failed on 2026-08-11, before
 `c282f31` existed. Separate, pre-existing issue; unfiled as of this entry.
+
+## 77 · A map whose value is an allOf of empty objects vanishes; a plain empty object stays — ✅ Fixed
+
+**Symptom:** the sibling of #70's fix, found during #76's review. A map value that is a plain empty
+object is kept and degraded to `JSON`; the same shape written as an `allOf` of empty objects
+silently drops the field. No corpus hit — caught by reading the predicates, not a sweep.
+
+**OAS** (fixture — both fields mean "free-form values", only the spelling differs):
+```yaml
+exposedPorts:                       # kept: value: JSON, read whole (#70)
+  type: object
+  additionalProperties:
+    type: object
+mergedPorts:                        # gone: field vanished from SDL and selection
+  type: object
+  additionalProperties:
+    allOf:
+      - type: object
+      - type: object
+```
+
+**Cause:**
+- `Map.valueTypeName()` already degrades an empty `Obj` **or `Composed`** to `JSON`, but
+  `T.isLeaf` only had the `Obj` empty-props clause — `Composed extends Type`, not `Obj`.
+- So `T.isWholeMapValue` said "not a whole value" and the #70 expansion clause skipped the field.
+- The naive fix (read `Composed.props` in `isLeaf`) is wrong: the collector runs before
+  `consolidate()`, and a Composed's own props are filled **only** by consolidation — at collect
+  time every Composed reads as empty, and populated ones would select a bare `value` against a
+  real SDL type (#76 in reverse).
+
+**Fix:** `T.isComposedEmpty` — pre-consolidation-safe emptiness, walking the Composed's members
+(visited by then) for any non-`Prop` node with props. `T.isLeaf` adds it as a clause;
+`Map.valueTypeName` stays untouched (it runs post-consolidation, where `props.size === 0` is
+correct). Both spellings of the field now emit `value: JSON`, read whole.
+
+**Not folded in:** a Composed whose members have props but whose selected props are all filtered
+out by `consolidate(selection)` — same disagreement class, different trigger; file separately if
+it ever surfaces.
+
+**AST:** untouched — the change is which map values count as read-whole.
+**Refs:** `src/oas/nodes/typeUtils.ts` (`isComposedEmpty`, `isLeaf`). Fixture
+`map-empty-composed-value.yaml`, test `test_77_empty_composed_map_value_reads_whole`
+(empty-`Obj` control in the same fixture). Related: #70, #76.
