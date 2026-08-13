@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   slack's `post:/admin.apps.approve` can post data. Issue #83.
 - A body field that takes any key the caller wants is now one `JSON` argument and reaches the API,
   so docker's `post:/containers/create` sends its `Labels`. Responses are unchanged. Issue #84.
+- An operation that documents only `201` (or another success code) now answers with the schema the
+  API really sends, so github's `post:/app-manifests/{code}/conversions` returns its integration
+  instead of `success: true`. Issue #85.
+- A list that holds one of several plain values, such as confluence's `contentIds`, is kept as a
+  list of `JSON` instead of disappearing from the type and the mapping. Issue #86.
 
 ### Added
 

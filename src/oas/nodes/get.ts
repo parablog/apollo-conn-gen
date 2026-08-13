@@ -6,9 +6,15 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 import { Params } from '../utils/params.js';
 import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 import _ from 'lodash';
+
+const JSON_MEDIA_TYPE = /^application\/(?:.*\+)?json/i;
+
+// the operation's `responses:` block, keyed by status code or `default`
+type ResponsesByCode = Record<string, ResponseObject | ReferenceObject>;
 
 export class Get extends Type implements Op {
   public verb: string = 'GET';
@@ -136,23 +142,47 @@ export class Get extends Type implements Op {
   }
 
   protected visitResponses = (context: OasContext) => {
-    const statusCodes = this.operation.getResponseStatusCodes();
+    const responses = (this.operation.schema.responses ?? {}) as ResponsesByCode;
 
-    if (!statusCodes.includes('200') && !statusCodes.includes('default')) {
-      // we can potentially synthesize an Empty response here:
+    const code = this.findSuccessResponseCode(context, responses);
+    if (!code) {
+      // nothing documented we can read — synthesize the success response instead
       this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
       return;
     }
 
-    const responses = this.operation.schema.responses;
-    if (responses!['200']) {
-      this.visitResponse(context, '200', responses!['200'] as ResponseObject);
-    } else if (responses!.default) {
-      this.visitResponse(context, 'default', responses!.default as ResponseObject);
-    } else {
-      throw new Error("Could not find a '200' or 'default' response");
-    }
+    this.visitResponse(context, code, responses[code] as ResponseObject);
   };
+
+  // Finds the code of the response we read: `200` if the spec has one, else the lowest other 2xx
+  // that sends a JSON body, else `default`. Nothing found means we invent the answer instead.
+  //   e.g. (github) post:/app-manifests/{code}/conversions documents only `201`   #85
+  private findSuccessResponseCode(context: OasContext, responses: ResponsesByCode): string | undefined {
+    if (responses['200']) {
+      return '200';
+    }
+    const created = Object.keys(responses)
+      .filter((code) => /^2\d\d$/.test(code))
+      .sort()
+      .find((code) => this.sendsJson(context, responses[code]));
+
+    return created ?? (responses.default ? 'default' : undefined);
+  }
+
+  // True when a response carries a JSON body, so `204` and a contentless one answer false and keep
+  // the synthetic. A reference we cannot read is skipped, not thrown on: we are only picking a code.
+  //   e.g. (response-201-only.yaml) `201: { content: { application/json } }` -> true   #85
+  private sendsJson(context: OasContext, response: ResponseObject | ReferenceObject): boolean {
+    let resolved = response;
+    if ('$ref' in response) {
+      const lookup = context.lookupResponse((response as ReferenceObject).$ref!);
+      if (!lookup || '$ref' in lookup) {
+        return false;
+      }
+      resolved = lookup as ResponseObject;
+    }
+    return Object.keys((resolved as ResponseObject).content ?? {}).some((key) => JSON_MEDIA_TYPE.test(key));
+  }
 
   private visitResponse(context: OasContext, code: string, response: ResponseObject): void {
     const content = response.content as MediaTypeObject;
@@ -165,7 +195,7 @@ export class Get extends Type implements Op {
       const availableKeys = _.keys(response.content);
 
       trace(context, `  [${code}]`, `Available content types: ${availableKeys.join(', ')}`);
-      const keys = _.first(availableKeys.filter((k) => /^application\/(?:.*\+)?json/i.test(k)));
+      const keys = _.first(availableKeys.filter((k) => JSON_MEDIA_TYPE.test(k)));
       trace(context, `  [${code}]`, `Matched JSON key: ${keys || 'none'}`);
 
       const json = keys ? response.content![keys] : undefined;
@@ -196,7 +226,7 @@ export class Get extends Type implements Op {
     // a response schema with no fields to select (googlebooks `Empty`: description +
     // `properties: {}`) — synthesize the same `success: Boolean` response as a missing body. #31
     const resolved = '$ref' in schema ? (context.lookupRef((schema as ReferenceObject).$ref!) as SchemaObject) : schema;
-    if (resolved && (Factory.isEmptySchema(resolved) || Factory.isShapelessObject(resolved))) {
+    if (resolved && (Schemas.isEmpty(resolved) || Schemas.isShapelessObject(resolved))) {
       schema = SYN_SUCCESS_RESPONSE.content!['application/json'].schema as SchemaObject;
     }
 

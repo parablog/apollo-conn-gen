@@ -36,6 +36,7 @@ import { warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { GqlUtils } from '../utils/gql.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 import { Nullability } from '../utils/nullability.js';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
@@ -74,7 +75,7 @@ export class Factory {
     // github's "maybe empty" anyOf (`anyOf: [member, {}]`): the fieldless member renders
     // nothing, so a single real member collapses to it. see docs/issues.md #20
     if (schemaObj.anyOf && !schemaObj.oneOf && !schemaObj.allOf) {
-      const real = schemaObj.anyOf.filter((m) => !this.isShapelessObject(m as SchemaObject));
+      const real = schemaObj.anyOf.filter((m) => !Schemas.isShapelessObject(m as SchemaObject));
       if (real.length === 1) {
         return this.fromSchema(context, parent, real[0] as SchemaObject | ReferenceObject);
       }
@@ -97,7 +98,7 @@ export class Factory {
     // a shapeless object (nothing but a boolean `additionalProperties`, or `{}`) declares no fields:
     // fall back to the JSON scalar — NOT an empty Obj, which generate() would skip, dangling the
     // reference. see docs/issues.md #19
-    else if (this.isShapelessObject(schemaObj)) {
+    else if (Schemas.isShapelessObject(schemaObj)) {
       result = new Scalar(parent, 'JSON', schemaObj);
     }
     // scalar
@@ -111,50 +112,6 @@ export class Factory {
     }
 
     return result;
-  }
-
-  // every member is a legal GraphQL enum value once trimmed (TMF637 ships `'aborted '`): a bare
-  // identifier that isn't a boolean/null literal. Anything else (numbers, "+1", "fast-forward",
-  // true) has no enum form. see #24
-  private static isGqlEnum(schema: SchemaObject): boolean {
-    const VALID_ENUM_VALUE = /^[_A-Za-z][_0-9A-Za-z]*$/;
-    const RESERVED = new Set(['true', 'false', 'null']);
-    return _.every(schema.enum, (value) => {
-      if (typeof value !== 'string') return false;
-      const trimmed = value.trim();
-      return VALID_ENUM_VALUE.test(trimmed) && !RESERVED.has(trimmed);
-    });
-  }
-
-  // Keywords that give a schema a renderable GraphQL shape; a schema with none is metadata-only. #5
-  private static readonly SHAPE_KEYWORDS = [
-    '$ref',
-    'type',
-    'enum',
-    'items',
-    'allOf',
-    'oneOf',
-    'anyOf',
-    'additionalProperties',
-  ];
-
-  /** True when a schema carries no renderable content (metadata only). see docs/issues.md #5 */
-  public static isEmptySchema(schema: SchemaObject | ReferenceObject): boolean {
-    const s = schema as Record<string, unknown>;
-    return Factory.SHAPE_KEYWORDS.every((k) => s[k] == null) && _.isEmpty(s.properties);
-  }
-
-  /**
-   * True for an object with no declared fields: no shape keyword except (at most) an explicit
-   * object `type` and a boolean `additionalProperties` (`{}`, `{ additionalProperties: false }`,
-   * `{ type: object, properties: {} }` — googlebooks `Empty`). A real map
-   * (`additionalProperties: <schema>`) is NOT shapeless. see docs/issues.md #19, #31
-   */
-  public static isShapelessObject(schema: SchemaObject): boolean {
-    const s = schema as Record<string, unknown>;
-    const noShape = ['$ref', 'enum', 'items', 'allOf', 'oneOf', 'anyOf'].every((k) => s[k] == null);
-    const objectOrUntyped = s.type == null || s.type === 'object';
-    return noShape && objectOrUntyped && _.isEmpty(s.properties) && typeof s.additionalProperties !== 'object';
   }
 
   private static createScalarType(schema: SchemaObject | null, parent: IType) {
@@ -205,7 +162,7 @@ export class Factory {
       );
     }
     // map (object with only additionalProperties)
-    else if (this.isMapSchema(schema)) {
+    else if (Schemas.isMap(schema)) {
       result = new Map(parent, ref || _.get(schema, 'name') || null, schema);
     }
     // or a plain obj
@@ -224,28 +181,16 @@ export class Factory {
     return result;
   }
 
-  // A map in a request body is sent whole, as JSON; a map in a response keeps its key/value pairs.
-  // e.g. (docker-engine) Labels: { additionalProperties: { type: string } }
-  //   body -> labels: JSON,  response -> labels: [LabelsEntry]      see docs/issues.md #84
-  private static isParentAnInput(parent: IType): boolean {
-    return parent.kind === 'input';
-  }
-
-  private static isMapSchema(schema: SchemaObject): boolean {
-    // A schema is considered a map if:
-    // 1. It has additionalProperties defined as an object
-    // 2. It has no explicit properties OR has empty properties
-    return Boolean(
-      schema.additionalProperties &&
-        typeof schema.additionalProperties === 'object' &&
-        (!schema.properties || _.isEmpty(schema.properties)),
-    );
-  }
-
   // What a list holds. An object with no fields becomes JSON — an empty type would take the whole
   // field with it. e.g. archivedChannels: { type: array, items: { type: object } } -> [JSON]. #56
   public static fromArrayItems(context: OasContext, parent: IType, items: SchemaObject): IType {
-    if (Factory.isShapelessObject(items)) {
+    if (Schemas.isShapelessObject(items)) {
+      return new Scalar(parent, 'JSON', items);
+    }
+    // a list holding one of several plain values is JSON too — a union of scalars has no fields to
+    // select, so the whole field used to disappear. e.g. (confluence) post:/content/convert-ids-to-types
+    //   contentIds: { type: array, items: { anyOf: [string, number] } }  ->  [JSON]      #86
+    if (Schemas.holdsPlainValues(context, items)) {
       return new Scalar(parent, 'JSON', items);
     }
     return Factory.fromSchema(context, parent, items);
@@ -385,8 +330,8 @@ export class Factory {
           const propComp: PropComp = new PropComp(parent, propName, schemaObj);
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
           prop = propComp;
-        } else if (this.isMapSchema(schemaObj)) {
-          if (this.isParentAnInput(parent)) {
+        } else if (Schemas.isMap(schemaObj)) {
+          if (T.isParentAnInput(parent)) {
             // send it as JSON instead
             prop = new PropScalar(parent, propName, 'JSON', schemaObj);
           } else {
@@ -403,7 +348,7 @@ export class Factory {
           prop = new PropObj(parent, propName, schemaObj, propType);
         }
       } else if (schemaObj?.enum) {
-        if (this.isGqlEnum(schemaObj)) {
+        if (GqlUtils.isGqlEnum(schemaObj)) {
           // an inline enum starts under its field's name; En.visit gives it the owning type's name
           // in front: (petstore.yaml) Order's `status` -> OrderStatus. see docs/issues.md #57
           const en: En = new En(
@@ -442,8 +387,8 @@ export class Factory {
       const propComp: PropComp = new PropComp(parent, propName, schemaObj);
       propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
       prop = propComp;
-    } else if (this.isMapSchema(schemaObj)) {
-      if (this.isParentAnInput(parent)) {
+    } else if (Schemas.isMap(schemaObj)) {
+      if (T.isParentAnInput(parent)) {
         prop = new PropScalar(parent, propName, 'JSON', schemaObj);
       } else {
         // Map property: object with only additionalProperties (no explicit type)
@@ -476,7 +421,7 @@ export class Factory {
       return undefined;
     }
 
-    const targets = schema.allOf.filter((member) => !this.isEmptySchema(member as SchemaObject));
+    const targets = schema.allOf.filter((member) => !Schemas.isEmpty(member as SchemaObject));
     if (targets.length !== 1) {
       return undefined;
     }

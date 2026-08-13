@@ -20,6 +20,13 @@ paths:
                 properties:
                   count:
                     type: integer
+                  # the same shape on the way back: it used to vanish from the response too
+                  codes:
+                    type: array
+                    items:
+                      anyOf:
+                        - type: string
+                        - type: number
   /unrelated:
     get:
       operationId: getUnrelated

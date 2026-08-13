@@ -100,6 +100,12 @@ export class T {
     return type.id.startsWith('scalar:');
   }
 
+  // True for anything under a request body — `input` is set on the body and inherited from there.
+  //   e.g. (docker-engine) post:/containers/create > body:b > comp:input:Input -> true    #84
+  public static isParentAnInput(parent: IType): boolean {
+    return parent.kind === 'input';
+  }
+
   public static containers(node: IType) {
     return Array.from(node.children.values())
       .filter((child) => !(child instanceof Prop) && T.isContainer(child))

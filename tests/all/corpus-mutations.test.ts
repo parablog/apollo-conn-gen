@@ -26,7 +26,8 @@ test('test_corpus_mut_slack', async () => {
 
 test('test_corpus_mut_digitalocean', async () => {
   // account/keys: snake_case body payload name (#30); body aliases + defaults (#28/#29)
-  await runOasTest('digitalocean.yaml', ['post:/v2/account/keys>**'], 290, 2);
+  // 3 types since #85: it answers `201` with the created key, where it used to answer `default`
+  await runOasTest('digitalocean.yaml', ['post:/v2/account/keys>**'], 290, 3);
 });
 
 test('test_corpus_mut_box', async () => {
@@ -46,11 +47,14 @@ test('test_corpus_mut_sendgrid', async () => {
 });
 
 test('test_corpus_mut_github', async () => {
-  await runOasTest('github.yaml', ['post:/app-manifests/{code}/conversions>**'], 845, 1);
+  // 3 types since #85: this op documents only `201`, so it answers the real conversion type now
+  // instead of the synthetic `success: Boolean`. It was the canary for that bug.
+  await runOasTest('github.yaml', ['post:/app-manifests/{code}/conversions>**'], 845, 3);
 });
 
 test('test_corpus_mut_omni', async () => {
-  await runOasTest('omni.yaml', ['post:/scim/v2/groups>**'], 146, 3, false, true);
+  // 5 types since #85: `201` carries the created group, which brings its own members and meta
+  await runOasTest('omni.yaml', ['post:/scim/v2/groups>**'], 146, 5, false, true);
 });
 
 test('test_corpus_mut_confluence', async () => {

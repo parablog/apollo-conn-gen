@@ -5,6 +5,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 import _ from 'lodash';
 
 export class Composed extends Type {
@@ -188,7 +189,7 @@ export class Composed extends Type {
       const allOfItemSchema = allOfs[i];
 
       // skip metadata-only allOf members (they contribute no fields). see docs/issues.md #5
-      if (Factory.isEmptySchema(allOfItemSchema as SchemaObject)) {
+      if (Schemas.isEmpty(allOfItemSchema as SchemaObject)) {
         trace(context, '   [composed::all-of]', `skipping empty allOf member #${i}`);
         continue;
       }

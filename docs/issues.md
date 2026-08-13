@@ -139,8 +139,8 @@ allOf:
 ```
 **AST:** shape change — the contentless member contributes **no child** to `Composed.children`
 (before: the whole build threw mid-tree). Sibling members are built as usual.
-**Refs:** `src/oas/nodes/comp.ts` (`visitAllOfNode`), `factory.ts` (`isEmptySchema`), fixture
-`allof-empty-member.yaml`.
+**Refs:** `src/oas/nodes/comp.ts` (`visitAllOfNode`), `src/oas/utils/schemas.ts` (`Schemas.isEmpty`,
+which is where `Factory.isEmptySchema` now lives), fixture `allof-empty-member.yaml`.
 
 ## 6 · Leading-digit type names rejected — ✅ Fixed (`0b9c31e`, R3)
 **Symptom:** an item type from a digit-leading path → rover `INTERNAL_ERROR`
@@ -933,6 +933,8 @@ the collapsed members surfaced types the collector then orphaned (`UNRESOLVED_FI
 were #26's bugs, not this fix's: retested after #26, the collapse is **+6 ops / 0 regressions**.
 Multi-member anyOfs stay dropped on purpose — building real unions from them regressed ~10
 github ops into the R2 union wall when measured.
+**Narrowed by #86:** a multi-member choice of plain values (`anyOf: [string, number]`) inside a
+list is no longer dropped — it reads as `[JSON]`. Choices with object members are still dropped.
 **AST:** shape change for the collapsing case only — the member's node replaces an empty Union.
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema` collapse + `isShapelessObject`).
 
@@ -4568,7 +4570,7 @@ json:  {"metadata":{"k1":"v1","k2":"v2"},"name":"Fer"}
 **Fix:**
 - A map-valued field in a body is not built as a map: it is the JSON scalar, the same answer #19
   gives an object with no shape. The caller passes the object, and the body sends it as it comes.
-- One predicate, `Factory.sendsMapAsJson(parent)` — true when the parent is on the input side, which
+- One predicate, `T.isParentAnInput(parent)` — true when the parent is on the input side, which
   only a body is: `kind = 'input'` is set in one place (`body.ts`) and inherited from there.
 - A map inside a map falls out with it. The outer field is a scalar now, so the inner map is never
   built and `PortBindingsEntryEntryInput` is gone with the rest.
@@ -4609,8 +4611,173 @@ after    post:/containers/create > body:b > comp:input:Input > prop:scalar:Label
 A selection saved against the old path (the web app stores them) will not resolve — #72 matches on
 names, not on a node that changed kind.
 
-**Refs:** `src/oas/nodes/factory.ts` (`sendsMapAsJson`, both `fromProp` map branches). Fixture
+**Refs:** `src/oas/nodes/factory.ts` (both `fromProp` map branches), `src/oas/nodes/typeUtils.ts`
+(`T.isParentAnInput`), `src/oas/utils/schemas.ts` (`Schemas.isMap`). Fixture
 `map-input-suffix.yaml` (a body map, a map of maps, a map of lists, and now a map query param),
 tests `test_84_body_map_is_sent_as_json`, `test_70_scalar_valued_maps_stay` and
 `test_68_map_value_names_the_type_it_points_at` (both re-pointed at the response side). Found while
 verifying #83 against the router. Related: #19, #40, #68, #70, #83.
+
+## 85 · A response that is not `200` is thrown away — ✅ Fixed
+
+**Symptom:** a POST whose only documented answer is `201` returns `success: Boolean` and nothing
+else. The real schema is never read, and no warning says so. Found by running the generator against
+HubSpot's and PagerDuty's create endpoints and comparing with the deployed connectors.
+
+**OAS** (github `post:/app-manifests/{code}/conversions` — `201` is the only success it documents):
+```yaml
+responses:
+  '201':
+    description: Response
+    content:
+      application/json:
+        schema: { $ref: '#/components/schemas/integration' }
+  '404': { $ref: '#/components/responses/not_found' }
+  '422': { $ref: '#/components/responses/validation_failed' }
+```
+
+**Example** — before, and after:
+```graphql
+# before — the answer is invented
+createAppManifestsByCodeConversions(input: InputInput!): CreateAppManifestsByCodeConversionsResponse
+  @connect(… selection: """
+  success: $(true)
+  """)
+
+# after — the answer is the integration the API really sends
+createAppManifestsByCodeConversions(input: InputInput!): CreateAppManifestsByCodeConversionsResponse
+  @connect(… selection: """
+  id
+  slug?
+  nodeId: node_id
+  …
+  """)
+```
+
+**Cause:**
+- `Get.visitResponses` looked for `200`, then `default`, and invented a response when it found
+  neither (`SYN_SUCCESS_RESPONSE`, the `success: Boolean` object from #31/#33).
+- `201`, `202` and the rest were never looked at, however much schema they carried.
+- `Post` inherits the method from `Get`, so every write operation using the REST "created"
+  convention was affected.
+- Composition cannot see it: a mutation answering `success: Boolean` is valid, just useless.
+
+**How many** (a parse of the corpus, no generation — operations with no `200` whose 2xx carries a
+JSON body):
+```
+  99  github        50  sendgrid      39  incidentio     23  asana
+  11  omni           8  docker         5  ably            5  confluence (202)
+ 244  answered with the invented response
+  79  more also declare `default`, so they answered with `default` — usually the error shape
+```
+
+**Fix:** `visitResponses` picks the response to answer with, in this order:
+- `200` if the spec has one — unchanged, whatever its content, so nothing that works today moves;
+- else the lowest other 2xx that carries a JSON body;
+- else `default`;
+- else the invented response, as before.
+
+A reference is resolved with `context.lookupResponse`, the same call `visitResponseRef` makes; one
+that cannot be read is skipped rather than thrown on, because this step only picks a code —
+`visitResponse` still does all the schema work, including the non-JSON fallback (#33) and the
+empty-schema case (#31).
+
+**Why the content test.** `204` and any 2xx with no body must keep the invented response: TMF632's
+`del:/individual/{id}` answers `204` and still writes `success: $(true)`. Picking by status code
+alone would take an empty `201` and lose a `202` that has the schema — no corpus operation has that
+shape today, but the test costs one line.
+
+**A real 2xx also beats `default`.** `default` means "anything else", and in these 79 operations it
+is the error shape: digitalocean's `post:/v2/account/keys` answers `[201, 401, 429, 500, default]`
+and we returned the error. Same defect, so it is fixed here rather than filed again.
+
+**AST** — the response node points at the real type instead of the invented one:
+```
+before   post:/app-manifests/{code}/conversions > res:r > obj:type:…Response  (success: Boolean)
+after    post:/app-manifests/{code}/conversions > res:r > comp:type:…Response (the integration)
+```
+
+**Refs:** `src/oas/nodes/get.ts` (`visitResponses`, `findSuccessResponseCode`, `sendsJson`; the JSON media-type
+test is now one constant shared with `visitResponse`). Fixture `response-201-only.yaml`, test
+`test_85_first_success_response_is_taken`. `test_corpus_mut_github` pinned this bug at one type and
+now expects three — it was the canary; `test_corpus_mut_digitalocean` (2 -> 3, the `default` case)
+and `test_corpus_mut_omni` (3 -> 5) moved with it, and sendgrid's `post:/alerts` changed shape
+without changing its count. Related: #31, #33.
+
+## 86 · A list of "one of several plain values" loses the whole field — ✅ Fixed
+
+**Symptom:** a field declared as a list whose items are `anyOf: [string, number]` is missing from
+the type and from the mapping. When it is the only property of a request body, the input type is
+written with no fields at all and rover rejects the schema:
+`INVALID_GRAPHQL: expected an Input Value Definition`. Found against the deployed connector for
+confluence's `post:/content/convert-ids-to-types`, which sends the field.
+
+**OAS** (confluence — `contentIds` takes either spelling of an id):
+```yaml
+ConvertRequest:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required: [contentIds]
+        properties:
+          contentIds:
+            type: array
+            items:
+              anyOf:
+                - type: string
+                - type: number
+```
+
+**Example** — before, and after:
+```graphql
+# before — the field is gone, and the type it left behind is invalid
+input InputInput {
+}
+
+# after
+input InputInput {
+  ids: [JSON]!
+}
+body: """
+$args.input { ids }
+"""
+```
+
+**Cause:**
+- Two or more members means a real union is built (#20 collapses a choice only when ONE member is
+  left after dropping the fieldless ones).
+- A union of plain values has no fields, so nothing under it can be selected.
+- With no selectable leaf the collector drops the field from the type and the mapping — the same
+  cause as #59 (a list of lists of plain values) and #70 (a map of plain values).
+- Written straight onto a property the same choice already answered `JSON`, through #80's
+  no-fields-to-merge fallback; only the list spelling had nothing to catch it.
+- Composition sees the fallout, not the cause: a body whose only property vanished writes an empty
+  input type.
+
+**Fix:** `Factory.fromArrayItems` answers `JSON` for a choice of plain values, the way it already
+answers `JSON` for an object with no shape (#56). A member is a plain value when it is an enum or a
+type GraphQL has a scalar for; a `$ref` to one counts, a `null` member is ignored, and a choice with
+object members is left alone as a union.
+
+**What still applies:** measured on one fixture per shape —
+```
+direct:   anyOf [string, number]                -> JSON               (unchanged, #80)
+withNull: [ anyOf [string, null] ]              -> [String]           (unchanged)
+objects:  [ anyOf [Widget, Gadget] ]            -> [ObjectsUnionInput] (unchanged, a real union)
+listed:   [ anyOf [string, number] ]            -> [JSON]             (#86)
+viaRef:   [ anyOf [$ref Name(string), integer]] -> [JSON]             (#86)
+```
+
+**AST** — the list's item node changes kind; nothing else moves:
+```
+before   prop:array:#ids > union:input:IdsUnion   (no fields, never selected -> field dropped)
+after    prop:array:#ids > scalar:JSON
+```
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromArrayItems`), `src/oas/utils/schemas.ts`
+(`Schemas.holdsPlainValues`). Fixture
+`anyof-body-drops-operation.yaml` (a body list and, added with the fix, the same shape in the
+response), test `test_86_list_of_plain_values_stays`. Narrows #20, which still drops a choice of
+objects. Related: #19, #56, #59, #70, #80.
