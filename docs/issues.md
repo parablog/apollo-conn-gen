@@ -3096,41 +3096,91 @@ change), and this only alters which unions reach it.
 `test_R2_interface_oneof_promotes_and_composes` / `test_R2_interface_skips_when_base_used_concretely`
 in `tests/all/r2-abstract.test.ts` (the promotion path that should have applied).
 
-## 59 · A required list of lists writes its `!` on the next line — ⬜ Open
+## 59 · A list of lists writes a name nothing defines, no block, and its `!` on the next line — ✅ Fixed
 
-**Symptom:** the non-null marker lands alone on the line after the field. The schema still parses —
-line breaks mean nothing to GraphQL — but it reads wrong, and any tool comparing schemas line by
-line sees a phantom difference.
+**Symptom:** three things, all on a field that is a list of lists. The first two only show when the
+items are objects, which is why this sat as a cosmetic issue until box reached it:
+- the field names the inner list (`nameConflicts: [name_conflicts]`) and composition stops with
+  `cannot find type 'name_conflicts' in this document`;
+- the selection opens no block, so the item's fields are written as the parent's own — the linter
+  says `PATH_NOT_IN_RESPONSE: download_name is not one of the properties post:/zip_downloads
+  documents`, and it is right;
+- a required list of lists of plain values puts its `!` alone on the next line.
 
-**OAS:**
+**OAS** (box `post:/zip_downloads` — `name_conflicts` is a list of lists of objects):
 ```yaml
-required: [processes]
-processes: { type: array, items: { type: array, items: { type: string } } }
+ZipDownload:
+  properties:
+    name_conflicts:
+      type: array
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            download_name: { type: string }
+            id: { type: string }
+            original_name: { type: string }
+            type: { type: string }
 ```
 
-**Example:**
+**Example** — before, and after:
 ```graphql
-# now
-processes: [[String]]
-!
-# wanted
-processes: [[String]]!
+# before
+nameConflicts: [name_conflicts]        # nothing defines this
+selection: """
+nameConflicts: name_conflicts?      downloadName: download_name?
+id?
+"""
+
+# after
+nameConflicts: [[NameConflictsItem]]
+selection: """
+nameConflicts: name_conflicts? {
+ downloadName: download_name?
+ id?
+}
+"""
+```
+```graphql
+# and for plain values
+processes: [[String]]!                 # was `[[String]]` then `!` on its own line
 ```
 
-**Cause:** a list of lists of scalars writes its own line ending after the closing bracket
-(`propArray.ts`, the `T.isScalarArray` branch writes `']\n'`), and the `!` for a required field is
-written after the value (`prop.ts`) — so it lands on the fresh line. A plain `[String]` takes the
-other branch and is fine.
+**Cause:** three places in `propArray.ts` looked at `items` without peeling the list wrappers.
+`items` is the inner `Arr`, not what the list finally holds:
+- `getValue` — `T.isContainer(Arr)` is false, so it wrote the inner list's raw name;
+- `needsBrackets` — same test, so no `{ }` was opened and `Arr.select` wrote the object's fields
+  straight into the parent;
+- `generateValue` — the `T.isScalarArray` branch ended the line itself (`']\n'`), while
+  `Prop.generate` writes `!` after the value and then the newline.
 
-Hard to hit today: under `>**` a list of lists has no leaf to select, so the field is dropped and
-only an explicitly named path reaches it. Which is also why it went unnoticed.
+**Fix:** all three peel first, through one helper — `T.findLastArrayItemIn`, which is now also what
+`T.responseItemType` uses instead of its own copy of the same walk — and
+`generateValue` writes `']'` with no newline, so the one contract in `Prop.generate` holds: the
+value, then `!`, then the line ending. One block is right for any depth: the router keeps the
+nesting, measured with `rover connector run` on the generated box connector against an echo server:
+```
+{"name_conflicts": [[{download_name…}, {…}]]}  ->  nameConflicts: [[{downloadName…}, {…}]], no problems
+```
 
-**Tests:** `test_required_nested_array_bang_stays_on_the_line` in `tests/all/oas-core.test.ts`,
-fixture `tests/resources/oas/required-nested-array.yaml`, selecting the field by its full path.
-Marked `todo` — asserts the wanted output, fails today.
+**Why it surfaced now:** #85. Box's op documents `202` plus a `default`, so we used to answer the
+error shape and never built `ZipDownload`. It was the one op in the corpus reaching this shape —
+`lint-corpus --verbs mutations` went from 0 diagnostics to 4, and box's mutations pass-rate showed
+one `composeFail`.
 
-**AST:** no change expected — a writer fix, not a node-shape change.
-**Refs:** #55 (found while fixing it; the `!` writer is the same line of `prop.ts`).
+**Still open:** a list of lists of *plain values* has no leaf, so `>**` still drops the field and
+only a named path reaches it. Same family as #70 and #86; not fixed here.
+
+**AST:** no node change — the same tree, written differently.
+
+**Refs:** `src/oas/nodes/propArray.ts` (`getValue`, `needsBrackets`, `generateValue`),
+`src/oas/nodes/typeUtils.ts` (`T.findLastArrayItemIn`). Fixture
+`required-nested-array.yaml` (the plain-value case, plus `rows` for the object case), tests
+`test_59_required_nested_array_bang_stays_on_the_line`,
+`test_59_nested_list_of_objects_names_and_selects_its_item`, and
+`test_corpus_mut_box_nested_list`, which composes the real box operation. Related: #52 (a real list
+of lists must stay nested), #55, #85 (which reached it).
 
 ## 60 · A required `oneOf [string, null]` property loses its field entirely — ✅ Fixed
 

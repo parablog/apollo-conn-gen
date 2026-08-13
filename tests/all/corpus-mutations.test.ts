@@ -34,6 +34,13 @@ test('test_corpus_mut_box', async () => {
   await runOasTest('box.yaml', ['post:/collaboration_whitelist_entries>**'], 258, 7);
 });
 
+test('test_corpus_mut_box_nested_list', async () => {
+  // zip_downloads answers `202` with a list of lists of objects (#85 reaches it, #59 writes it):
+  // the field names `[[NameConflictsItem]]` and its selection opens one block. Composing is the
+  // check — the reference used to name the inner list, which nothing defines.
+  await runOasTest('box.yaml', ['post:/zip_downloads>**'], 258, 5);
+});
+
 test('test_corpus_mut_openai', async () => {
   await runOasTest('openai.yaml', ['post:/audio/transcriptions>**'], 28, 1);
 });

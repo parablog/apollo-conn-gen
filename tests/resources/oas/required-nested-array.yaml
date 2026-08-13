@@ -32,3 +32,16 @@ paths:
                       type: array
                       items:
                         type: string
+                  # the same nesting over objects (box's `name_conflicts`): the field must name the
+                  # type at the bottom, and the selection must open one block for it
+                  rows:
+                    type: array
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          label:
+                            type: string
+                          value:
+                            type: string

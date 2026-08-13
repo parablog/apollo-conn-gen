@@ -164,6 +164,16 @@ export class T {
     return type instanceof Arr && type.itemsType instanceof Scalar;
   }
 
+  // What is at the bottom of a list, however many lists deep it goes.
+  //   e.g. (box) name_conflicts is a list of lists of objects -> the object          #59
+  public static findLastArrayItemIn(node?: IType): IType | undefined {
+    let inner = node;
+    while (inner instanceof Arr) {
+      inner = inner.itemsType;
+    }
+    return inner;
+  }
+
   // What the operation gives back, with the response wrapper removed. A list stays a list.
   // e.g. (petstore) get:/pet/findByStatus returns a list of pets:
   //   responses: { '200': { schema: { type: array, items: { $ref: '#/c/s/Pet' } } } }
@@ -184,11 +194,7 @@ export class T {
   //        └─ array:#/components/schemas/AnyPage
   //            └─ union:#/components/schemas/AnyPage    <- this
   public static responseItemType(op: Op): IType | undefined {
-    let node = T.responseType(op);
-    while (node instanceof Arr) {
-      node = node.itemsType;
-    }
-    return node;
+    return T.findLastArrayItemIn(T.responseType(op));
   }
 
   // What the parent contains, when it contains exactly one thing — a list has one item type, a

@@ -40,7 +40,8 @@ export class PropArray extends Prop {
 
       writer.write('[');
       arr.generate(context, writer, []);
-      writer.write(']\n');
+      // no newline: the caller writes `!` for a required field and ends the line. #59
+      writer.write(']');
 
       // because it's a scalar array, we can assume that's all we need to generate
       context.generatedSet.add(this.items!.id);
@@ -49,13 +50,19 @@ export class PropArray extends Prop {
     }
   }
 
+  // The field's type, one pair of brackets per list. A list of lists names what is at the bottom —
+  // it used to write the inner list's own name, which nothing defines.
+  //   e.g. (box) name_conflicts -> `[[NameConflictsItem]]`, not `[name_conflicts]`      #59
   public override getValue(context: OasContext): string {
-    if (this.items && T.isContainer(this.items)) {
-      const type = Naming.genTypeName(this.items.name) + (this.items as Type).nameSuffix();
-      return `[${type}]`;
-    }
+    const inner = T.findLastArrayItemIn(this.items)!;
+    const name = T.isContainer(inner) ? Naming.genTypeName(inner.name) + (inner as Type).nameSuffix() : inner.name;
 
-    return `[${this.items!.name}]`;
+    // one pair of brackets per list on the way down
+    let value = `[${name}]`;
+    for (let node = this.items; node instanceof Arr; node = node.itemsType) {
+      value = `[${value}]`;
+    }
+    return value;
   }
 
   public forPrompt(_context: OasContext): string {
@@ -107,8 +114,11 @@ export class PropArray extends Prop {
     trace(context, '<- [prop:array:select]', 'out');
   }
 
+  // Whether the selection opens a `{ }` block for what the list holds. A list of lists opens one
+  // block for the type at the bottom, or its fields are written as the parent's own.
+  //   e.g. (box) post:/zip_downloads name_conflicts: array of array of object    #59
   public needsBrackets(child?: IType): boolean {
-    if (!child) return false;
-    return T.isContainer(child);
+    const inner = T.findLastArrayItemIn(child);
+    return inner != null && T.isContainer(inner);
   }
 }

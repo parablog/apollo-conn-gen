@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   instead of `success: true`. Issue #85.
 - A list that holds one of several plain values, such as confluence's `contentIds`, is kept as a
   list of `JSON` instead of disappearing from the type and the mapping. Issue #86.
+- A field holding a list of lists, such as box's `name_conflicts`, now names the type at the bottom
+  of the lists and selects its fields inside one block, so the operation composes. Issue #59.
 
 ### Added
 

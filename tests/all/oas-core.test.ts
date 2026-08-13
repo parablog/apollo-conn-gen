@@ -983,11 +983,9 @@ test('test_required_and_nullable_emits_a_nullable_field', async () => {
   assert.ok(/since: String[^!]/.test(schema!), 'required + nullable parameter -> no !');
 });
 
-test('test_required_nested_array_bang_stays_on_the_line', { todo: 'the ! lands on its own line' }, async () => {
-  // A required list of lists writes its own line ending before the `!` is added, so the `!` lands
-  // alone on the next line. Parses fine (line breaks are ignored), reads wrong. The field is only
-  // reachable by naming its path — under `>**` a list of lists has no leaf and is dropped.
-  // Marked todo: asserts the wanted output, fails today. see docs/issues.md #59
+test('test_59_required_nested_array_bang_stays_on_the_line', async () => {
+  // #59: a required list of lists ended its own line before the `!` was written, so the `!` landed
+  // alone on the next one. Parses fine (line breaks mean nothing), reads wrong.
   const schema = await runOasTest(
     'required-nested-array.yaml',
     [
@@ -1001,6 +999,18 @@ test('test_required_nested_array_bang_stays_on_the_line', { todo: 'the ! lands o
   );
   assert.ok(schema !== undefined);
   assert.ok(/processes: \[\[String\]\]!/.test(schema!), 'the ! belongs on the same line as the field');
+  assert.ok(!/\n\n\s+titles/.test(schema!), 'and no blank line is left behind either');
+});
+
+test('test_59_nested_list_of_objects_names_and_selects_its_item', async () => {
+  // #59: a list of lists of objects wrote the inner list's own name (`[name_conflicts]`, which
+  // nothing defines) and opened no block, so the item's fields were written as the parent's own.
+  // box's `post:/zip_downloads` only reaches this since #85 — it answers `202`.
+  const schema = await runOasTest('required-nested-array.yaml', ['get:/matrix>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/rows: \[\[RowsItem\]\]/.test(schema!), 'the field names what is at the bottom of the lists');
+  assert.ok(/type RowsItem \{/.test(schema!), 'which is the name the definition writes');
+  assert.ok(/rows\? \{\n\s+label\?\n\s+value\?\n\s+\}/.test(schema!), 'and the selection opens one block for it');
 });
 
 test('test_61_sanitised_at_type_must_not_collide', { todo: 'both fields emit as `type`' }, async () => {
