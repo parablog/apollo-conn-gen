@@ -25,6 +25,7 @@ interface IGenOptions {
   connectorSpecVersion?: string;
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
+  skipOptionalMarkers?: boolean;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   skipAuth?: boolean;
@@ -44,6 +45,7 @@ export class OasGen {
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
       mapper: undefined,
       skipOptionalArgs: false,
+      skipOptionalMarkers: false,
     },
   ): Promise<OasGen> {
     validateVersionOptions(options);
@@ -82,6 +84,7 @@ export class OasGen {
       connectorSpecVersion: DEFAULT_VERSIONS.connectorSpecVersion,
       mapper: undefined,
       skipOptionalArgs: false,
+      skipOptionalMarkers: false,
     },
     // prompt: Prompt
   ): Promise<OasGen> {

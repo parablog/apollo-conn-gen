@@ -271,7 +271,15 @@ async function runPass(
   skip: boolean,
   slots: Int32Array,
 ): Promise<PassResult> {
-  const r: PassResult = { total: ops.length, ok: 0, degraded: 0, genEmpty: 0, genThrow: 0, composeFail: 0, buckets: new Map() };
+  const r: PassResult = {
+    total: ops.length,
+    ok: 0,
+    degraded: 0,
+    genEmpty: 0,
+    genThrow: 0,
+    composeFail: 0,
+    buckets: new Map(),
+  };
   const verdicts: Record<string, string> = {};
   // Phase 1 (sequential, CPU): fresh gen per op -> classify generation, collect compose candidates.
   const candidates: { op: string; schema: string }[] = [];
@@ -305,9 +313,9 @@ async function runPass(
   const small = candidates.filter((c) => c.schema.length < BIG_SCHEMA_BYTES);
   const big = candidates.filter((c) => c.schema.length >= BIG_SCHEMA_BYTES);
   const composed = new Map<string, { ok: boolean; code?: string }>();
-  (await pool(small, (c, i) => withSlot(slots, 0, concurrency, () => compose(c.op, c.schema, fed, i)), concurrency)).forEach(
-    (res, i) => composed.set(small[i].op, res),
-  );
+  (
+    await pool(small, (c, i) => withSlot(slots, 0, concurrency, () => compose(c.op, c.schema, fed, i)), concurrency)
+  ).forEach((res, i) => composed.set(small[i].op, res));
   (await pool(big, (c, i) => withSlot(slots, 1, 1, () => compose(c.op, c.schema, fed, small.length + i)), 1)).forEach(
     (res, i) => composed.set(big[i].op, res),
   );
@@ -324,13 +332,21 @@ async function runPass(
   }
   // per-op verdict dump for before/after attribution: COV_DUMP=/path/prefix
   if (process.env.COV_DUMP) {
-    fs.writeFileSync(`${process.env.COV_DUMP}.${file.replace(/[^a-z0-9]+/gi, '_')}.${passKey}.json`, JSON.stringify(verdicts, null, 1));
+    fs.writeFileSync(
+      `${process.env.COV_DUMP}.${file.replace(/[^a-z0-9]+/gi, '_')}.${passKey}.json`,
+      JSON.stringify(verdicts, null, 1),
+    );
   }
   return r;
 }
 
 // ---- main -----------------------------------------------------------------
-type SpecReport = { file: string; skip: boolean; ops: number; passes: Partial<Record<keyof typeof PASSES, PassResult>> };
+type SpecReport = {
+  file: string;
+  skip: boolean;
+  ops: number;
+  passes: Partial<Record<keyof typeof PASSES, PassResult>>;
+};
 // what one spec's sweep hands back: its report row plus lines for the global histogram
 type SpecOutcome = { rep: SpecReport; extraBuckets: { key: string; example: string }[] };
 
@@ -343,7 +359,10 @@ async function sweepSpec(file: string, slots: Int32Array): Promise<SpecOutcome> 
   const loaded = await loadBase(file);
   if (!loaded) {
     process.stderr.write(`  ${file}: LOAD-FAIL\n`);
-    return { rep: { file, skip: false, ops: 0, passes: {} }, extraBuckets: [{ key: 'LOAD-FAIL (spec did not parse)', example: file }] };
+    return {
+      rep: { file, skip: false, ops: 0, passes: {} },
+      extraBuckets: [{ key: 'LOAD-FAIL (spec did not parse)', example: file }],
+    };
   }
   const { gen, skip } = loaded;
   const MUTATION_PREFIXES = ['post:', 'put:', 'patch:', 'del:'];
@@ -360,7 +379,16 @@ async function sweepSpec(file: string, slots: Int32Array): Promise<SpecOutcome> 
   for (const pk of passKeys) {
     const reason = skipReason(file, pk);
     if (reason) {
-      rep.passes[pk] = { total: ops.length, ok: 0, degraded: 0, genEmpty: 0, genThrow: 0, composeFail: 0, buckets: new Map(), skipped: reason };
+      rep.passes[pk] = {
+        total: ops.length,
+        ok: 0,
+        degraded: 0,
+        genEmpty: 0,
+        genThrow: 0,
+        composeFail: 0,
+        buckets: new Map(),
+        skipped: reason,
+      };
       extraBuckets.push({ key: `GEN-HANG: ${reason}`, example: `${file} ${pk} pass (whole)` });
       process.stderr.write(`  ${file} [${pk}] SKIPPED — ${reason}\n`);
       continue;
@@ -410,16 +438,17 @@ async function sweepSpecInWorker(file: string, slots: Int32Array): Promise<SpecO
 if (isMainThread) {
   const specWorkers = Math.max(1, Math.min(workers, specs.length));
   const slots = new Int32Array(new SharedArrayBuffer(8));
-  await pool(specs, async (file, i) => {
-    const outcome =
-      specWorkers === 1
-        ? await sweepSpec(file, slots)
-        : await sweepSpecInWorker(file, slots);
-    reports[i] = outcome.rep;
-    mergeOutcome(globalBuckets, outcome);
-    writeReport(); // incremental: survive a later hang/crash with partial results
-    return undefined;
-  }, specWorkers);
+  await pool(
+    specs,
+    async (file, i) => {
+      const outcome = specWorkers === 1 ? await sweepSpec(file, slots) : await sweepSpecInWorker(file, slots);
+      reports[i] = outcome.rep;
+      mergeOutcome(globalBuckets, outcome);
+      writeReport(); // incremental: survive a later hang/crash with partial results
+      return undefined;
+    },
+    specWorkers,
+  );
 } else {
   const args = workerData as { file: string; slots: Int32Array };
   parentPort!.postMessage(await sweepSpec(args.file, args.slots));
@@ -434,12 +463,15 @@ function pct(n: number, d: number): string {
 function passTable(pk: keyof typeof PASSES): string {
   const head = `| Spec | GET ops | OK | DEGRADED | GEN-empty | GEN-throw | COMPOSE-fail | pass-rate |\n|---|--:|--:|--:|--:|--:|--:|--:|`;
   // incremental writes happen while workers are still sweeping — rows fill in as they finish
-  const rows = reports.flatMap((rp) => (rp === undefined ? [] : [rp])).map((rp) => {
-    const p = rp.passes[pk];
-    if (!p) return `| ${rp.file}${rp.skip ? ' †' : ''} | ${rp.ops} | — | — | — | — | — | LOAD-FAIL |`;
-    if (p.skipped) return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | — | — | — | — | — | HANG (${p.skipped}) |`;
-    return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | ${p.ok} | ${p.degraded} | ${p.genEmpty} | ${p.genThrow} | ${p.composeFail} | ${pct(p.ok, p.total)} |`;
-  });
+  const rows = reports
+    .flatMap((rp) => (rp === undefined ? [] : [rp]))
+    .map((rp) => {
+      const p = rp.passes[pk];
+      if (!p) return `| ${rp.file}${rp.skip ? ' †' : ''} | ${rp.ops} | — | — | — | — | — | LOAD-FAIL |`;
+      if (p.skipped)
+        return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | — | — | — | — | — | HANG (${p.skipped}) |`;
+      return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | ${p.ok} | ${p.degraded} | ${p.genEmpty} | ${p.genThrow} | ${p.composeFail} | ${pct(p.ok, p.total)} |`;
+    });
   return [head, ...rows].join('\n');
 }
 

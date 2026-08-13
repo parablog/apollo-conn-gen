@@ -34,6 +34,10 @@ export async function runOasTest(
     emitConnectorErrors?: boolean;
     skipAuth?: boolean;
     directives?: DirectivesConfig;
+    skipOptionalMarkers?: boolean;
+    // the local composer is one fixed build and ignores `federation_version`, so a test that pins an
+    // older composition has to go through stock rover to mean anything. see docs/issues.md #16
+    forceRover?: boolean;
   } = {},
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
@@ -45,6 +49,7 @@ export async function runOasTest(
     showParentInSelections: false,
     mapper,
     skipOptionalArgs,
+    skipOptionalMarkers: opts.skipOptionalMarkers,
     inferEntityResolvers,
     emitConnectorErrors: opts.emitConnectorErrors,
     skipAuth: opts.skipAuth,
@@ -77,7 +82,7 @@ export async function runOasTest(
   const sampleFile = path.join(oasTestDir, 'simple-query.graphql');
   fs.writeFileSync(sampleFile, 'type Query { hello: String }', { encoding: 'utf-8', flag: 'w' });
 
-  const [result, output] = compose(schemaFile, sampleFile, opts.composeFederationVersion);
+  const [result, output] = compose(schemaFile, sampleFile, opts.composeFederationVersion, opts.forceRover);
   if (shouldFail) {
     assert.ok(!result);
     assert.ok(output !== undefined);
@@ -186,7 +191,12 @@ function localComposer(): string | undefined {
   return fs.existsSync(cli) ? cli : undefined;
 }
 
-function compose(schemaPath: string, samplePath?: string, federationVersion: string = '2.15.1'): [boolean, string?] {
+function compose(
+  schemaPath: string,
+  samplePath?: string,
+  federationVersion: string = '2.15.1',
+  forceRover: boolean = false,
+): [boolean, string?] {
   console.info('schemaPath', schemaPath);
 
   const rover: [boolean, (string | undefined)?] = isRoverAvailable('rover');
@@ -218,7 +228,8 @@ subgraphs:
   fs.writeFileSync(supergraphFile, content, { encoding: 'utf-8', flag: 'w' });
 
   // Prefer the local patched composer (has the unreleased #14 ->entries fix) when present; else rover.
-  const local = localComposer();
+  // `forceRover` skips it: it is one fixed build, so only rover honours `federation_version` above.
+  const local = forceRover ? undefined : localComposer();
   const cmd = local
     ? `${local} compose --config ${supergraphFile}`
     : `${rover[1]} supergraph compose --config ${supergraphFile} --elv2-license accept`;

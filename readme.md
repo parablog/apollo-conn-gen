@@ -29,7 +29,7 @@ The generator emits `connect/v0.4` schemas (the only supported connector spec ve
 
 Note: connect v0.4 is experimental. The router must enable `connectors: preview_connect_v0_4: true` and use federation `>= v2.13` — the CLI prints a reminder on every run.
 
-Selections mark OAS-optional fields with the mapping language's `?` (`name?`, `category? { … }`), so a key the API legitimately omits stops triggering the router's missing-property warnings; required fields stay plain, and entity keys are never marked. Composing schemas with these markers needs **composition 2.15 or newer** (`federation_version: =2.15.1` in a supergraph config) — older composition versions fail them with `CONNECTORS_UNRESOLVED_FIELD`.
+Selections mark OAS-optional fields with the mapping language's `?` (`name?`, `category? { … }`), so a key the API legitimately omits stops triggering the router's missing-property warnings; required fields stay plain, and entity keys are never marked. Composing schemas with these markers needs **composition 2.15 or newer** (`federation_version: =2.15.1` in a supergraph config) — the latest stable composition release, `2.14.3`, fails them with `CONNECTORS_UNRESOLVED_FIELD`. Pass `--skip-optional-markers` (library: `skipOptionalMarkers: true`) to leave the markers out and compose with `federation_version: =2.14.3`; markers are emitted by default.
 
 ## Prerequisites
 
@@ -66,9 +66,9 @@ node ./dist/cli/oas <path-to-oas-spec>
 
 Replace `<path-to-oas-spec>` with the relative or absolute path to your OAS YAML or JSON file.
 
-### Example with *Petstore*
+### Example with _Petstore_
 
-*Note: the petstore spec can be downloaded from (<https://petstore3.swagger.io>)*
+_Note: the petstore spec can be downloaded from (<https://petstore3.swagger.io>)_
 
 ```bash
 node ./dist/cli/oas ./tests/resources/petstore.yaml
@@ -108,11 +108,7 @@ If we have a file `tests/resources/json/preferences/user/50.json` with the follo
 {
   "userId": 50,
   "favouriteTeams": ["Luton"],
-  "favouriteLeagues": [
-    "premier-league",
-    "championship",
-    "scottish-premiership"
-  ],
+  "favouriteLeagues": ["premier-league", "championship", "scottish-premiership"],
   "joiningDate": "2023-12-11"
 }
 ```
@@ -128,21 +124,17 @@ Will result in the following Apollo connector schema:
 ```graphql
 extend schema
   @link(url: "https://specs.apollo.dev/federation/v2.14", import: ["@key"])
-  @link(
-    url: "https://specs.apollo.dev/connect/v0.4"
-    import: ["@connect", "@source"]
-  )
+  @link(url: "https://specs.apollo.dev/connect/v0.4", import: ["@connect", "@source"])
   @source(name: "api", http: { baseURL: "http://localhost:4010" })
 
 scalar JSON
 
 type Root {
- userId: Int
- favouriteTeams: [String]
- favouriteLeagues: [String]
- joiningDate: String
+  userId: Int
+  favouriteTeams: [String]
+  favouriteLeagues: [String]
+  joiningDate: String
 }
-
 
 type Query {
   root: Root
@@ -150,12 +142,13 @@ type Query {
       source: "api"
       http: { GET: "/test" }
       selection: """
-       userId
-       favouriteTeams
-       favouriteLeagues
-       joiningDate
+      userId
+      favouriteTeams
+      favouriteLeagues
+      joiningDate
       """
-    )}
+    )
+}
 ```
 
 ## Using the `apollo-conn-gen` library
@@ -176,8 +169,8 @@ npm i apollo-conn-gen@latest
 Next, in your JS/TS file, you can import the tools using
 
 ```typescript
-import { OasGen } from "apollo-conn-gen/oas"
-import { JsonGen } from "apollo-conn-gen/json"
+import { OasGen } from 'apollo-conn-gen/oas';
+import { JsonGen } from 'apollo-conn-gen/json';
 ```
 
 ### OasGen Library Usage Examples
@@ -189,21 +182,21 @@ const gen = await OasGen.fromFile('./petstore.yaml', {
   showParentInSelections: false,
   federationVersion: 'v2.14',
   connectorSpecVersion: 'v0.4',
-  skipOptionalArgs: false  // Include all query parameters (default)
+  skipOptionalArgs: false, // Include all query parameters (default)
 });
 
 // Process the specification to build internal structures
 await gen.visit();
 
 // Generate schema for all available paths
-const allPaths = Array.from(gen.paths.values()).map(p => p.path() + '>**');
+const allPaths = Array.from(gen.paths.values()).map((p) => p.path() + '>**');
 const fullSchema = gen.generateSchema(allPaths);
 console.log(fullSchema);
 
 // Generate schema for specific selections
 const specificPaths = [
   'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id',
-  'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:name'
+  'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:name',
 ];
 const customSchema = gen.generateSchema(specificPaths);
 
@@ -219,21 +212,22 @@ const genFromData = await OasGen.fromData(fileBuffer, { skipValidation: true });
 
 All options are optional unless noted. They can be passed to `OasGen.fromFile` / `OasGen.fromData`:
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `skipValidation` | `boolean` | `false` | Skip OAS validation before generating. |
-| `baseURL` | `string` | `servers[0]` from the spec | Override the `@source` base URL. |
-| `federationVersion` | `string` | `v2.14` | Federation version for the `@link` URL (`>= v2.13`). |
-| `connectorSpecVersion` | `string` | `v0.4` | Connector spec version (only `v0.4` is supported). |
-| `overrides` | `OverridesConfig` | — | Per-operation request rewiring, keyed by op id. See [Request overrides](#request-overrides). |
-| `batch` | `BatchConfig` | — | Batch endpoints, keyed by op id. See [Batch endpoints](#batch-endpoints). |
-| `directives` | `DirectivesConfig` | — | Directives declared by hand, keyed by the type or field they belong on. See [Manual directives](#manual-directives). |
-| `mapper` | `Mapper` | — | Operation name mapper. See [Transform Rules](#transform-rules). |
-| `skipOptionalArgs` | `boolean` | `false` | Omit optional query parameters from generated operations. |
-| `inferEntityResolvers` | `boolean` | `false` | Infer entity resolvers and emit `@key` / `entity: true`. |
-| `emitConnectorErrors` | `boolean` | `false` | Emit an `errors { message extensions { statusCode: $status } }` block for operations that document HTTP error responses (library-only, no CLI flag). |
-| `skipAuth` | `boolean` | `false` | Omit all auth: no headers on `@source`, no auth on `@connect`. |
-| `showParentInSelections` | `boolean` | `false` | Annotate selection output with the parent each field comes from (debugging aid). |
+| Option                   | Type               | Default                    | Description                                                                                                                                          |
+| ------------------------ | ------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skipValidation`         | `boolean`          | `false`                    | Skip OAS validation before generating.                                                                                                               |
+| `baseURL`                | `string`           | `servers[0]` from the spec | Override the `@source` base URL.                                                                                                                     |
+| `federationVersion`      | `string`           | `v2.14`                    | Federation version for the `@link` URL (`>= v2.13`).                                                                                                 |
+| `connectorSpecVersion`   | `string`           | `v0.4`                     | Connector spec version (only `v0.4` is supported).                                                                                                   |
+| `overrides`              | `OverridesConfig`  | —                          | Per-operation request rewiring, keyed by op id. See [Request overrides](#request-overrides).                                                         |
+| `batch`                  | `BatchConfig`      | —                          | Batch endpoints, keyed by op id. See [Batch endpoints](#batch-endpoints).                                                                            |
+| `directives`             | `DirectivesConfig` | —                          | Directives declared by hand, keyed by the type or field they belong on. See [Manual directives](#manual-directives).                                 |
+| `mapper`                 | `Mapper`           | —                          | Operation name mapper. See [Transform Rules](#transform-rules).                                                                                      |
+| `skipOptionalArgs`       | `boolean`          | `false`                    | Omit optional query parameters from generated operations.                                                                                            |
+| `skipOptionalMarkers`    | `boolean`          | `false`                    | Omit the `?` optional-field markers from selections, so the output composes with composition older than 2.15.                                        |
+| `inferEntityResolvers`   | `boolean`          | `false`                    | Infer entity resolvers and emit `@key` / `entity: true`.                                                                                             |
+| `emitConnectorErrors`    | `boolean`          | `false`                    | Emit an `errors { message extensions { statusCode: $status } }` block for operations that document HTTP error responses (library-only, no CLI flag). |
+| `skipAuth`               | `boolean`          | `false`                    | Omit all auth: no headers on `@source`, no auth on `@connect`.                                                                                       |
+| `showParentInSelections` | `boolean`          | `false`                    | Annotate selection output with the parent each field comes from (debugging aid).                                                                     |
 
 ### Security schemes and auth
 
@@ -246,7 +240,7 @@ The library can check the selections in a connector schema — every rule the ge
 ```typescript
 import { lintSelections } from 'apollo-conn-gen';
 
-const findings = lintSelections(sdl);      // [{ code, message, from, to, severity, … }]
+const findings = lintSelections(sdl); // [{ code, message, from, to, severity, … }]
 const withSpec = lintSelections(sdl, gen); // pass a loaded OasGen to also check paths against the API's real responses
 ```
 
@@ -260,10 +254,10 @@ const jsonData = '{"user": {"id": 1, "name": "John", "email": "john@example.com"
 const jsonGen = JsonGen.fromReader(jsonData, {
   federationVersion: 'v2.14',
   connectorSpecVersion: 'v0.4',
-  rootType: 'User',           // optional: customizes root type (default: 'Root'), use '[User]' for list
+  rootType: 'User', // optional: customizes root type (default: 'Root'), use '[User]' for list
   baseURL: 'https://api.example.com', // optional: @source baseURL (default: 'http://localhost:4010')
-  relativePath: '/users',     // optional: @connect HTTP path (default: '/test')
-  queryField: 'allUsers',    // optional: query field name (default: derived from rootType)
+  relativePath: '/users', // optional: @connect HTTP path (default: '/test')
+  queryField: 'allUsers', // optional: query field name (default: derived from rootType)
 });
 
 // Generate full Apollo Connector schema
@@ -279,10 +273,7 @@ const selectionOnly = jsonGen.writeSelection();
 console.log(selectionOnly);
 
 // Generate from multiple JSON files/strings
-const multipleJsons = [
-  '{"product": {"id": 1, "name": "Widget"}}',
-  '{"product": {"id": 2, "price": 19.99}}'
-];
+const multipleJsons = ['{"product": {"id": 1, "name": "Widget"}}', '{"product": {"id": 2, "price": 19.99}}'];
 const multiGen = JsonGen.fromJsons(multipleJsons);
 const mergedSchema = multiGen.generateSchema();
 
@@ -325,7 +316,7 @@ The `JsonGen` class supports incremental JSON processing and multiple output for
 ```typescript
 // Incremental JSON processing
 const gen = JsonGen.new({
-  rootType: 'User',           // optional: root type becomes 'User', nested types become 'UserAddress', etc.
+  rootType: 'User', // optional: root type becomes 'User', nested types become 'UserAddress', etc.
   baseURL: 'https://api.example.com',
   relativePath: '/users',
 });
@@ -339,9 +330,9 @@ gen.walkJson('{"product": {"id": 1, "title": "Widget"}}');
 const mergedSchema = gen.generateSchema();
 
 // Different output modes for different use cases
-const typesOnly = gen.writeTypes();      // GraphQL types without connectors
+const typesOnly = gen.writeTypes(); // GraphQL types without connectors
 const selectionsOnly = gen.writeSelection(); // Selection sets for debugging
-const fullSchema = gen.generateSchema();     // Complete Apollo Connector schema
+const fullSchema = gen.generateSchema(); // Complete Apollo Connector schema
 ```
 
 #### Modular Imports
@@ -377,12 +368,8 @@ Here's an example of the output when selecting all the fields from `[GET] /pet/{
 ```graphql
 extend schema
   @link(url: "https://specs.apollo.dev/federation/v2.14", import: ["@key"])
-  @link(
-    url: "https://specs.apollo.dev/connect/v0.4"
-    import: ["@connect", "@source"]
-  )
+  @link(url: "https://specs.apollo.dev/connect/v0.4", import: ["@connect", "@source"])
   @source(name: "api", http: { baseURL: "https://petstore3.swagger.io/api/v3" })
-
 
 scalar JSON
 
@@ -407,9 +394,9 @@ type Tag {
 }
 
 enum PetStatus {
- available,
- pending,
- sold
+  available
+  pending
+  sold
 }
 
 type Query {
@@ -419,12 +406,7 @@ type Query {
   petByPetId(petId: Int!): Pet
     @connect(
       source: "api"
-      http: {
-        GET: "/pet/{$args.petId}"
-        headers: [
-          { name: "api_key", value: "{$config.apiKey}" }
-        ]
-      }
+      http: { GET: "/pet/{$args.petId}", headers: [{ name: "api_key", value: "{$config.apiKey}" }] }
       selection: """
       category {
        id
@@ -459,6 +441,7 @@ Note the `api_key` header: petstore declares an `apiKey` security scheme, which 
 - `--federation-version <version>`: Federation version to use (default: `v2.14`).
 - `--connector-spec-version <version>`: Connector spec version to use (default: `v0.4`, the only supported value).
 - `--skip-optional-args`: Skip optional arguments in queries (default: `false`).
+- `--skip-optional-markers`: Skip the `?` optional-field markers in selections (default: `false`).
 - `--base-url <url>`: Override the `@source` base URL (default: `servers[0]` from the spec).
 - `--overrides <file>`: Load per-operation request overrides from a JSON file, keyed by op id. See [Request overrides](#request-overrides).
 - `--batch <file>`: Load batch endpoints (op id -> `{ maxSize? }`) from a JSON file. See [Batch endpoints](#batch-endpoints).
@@ -581,28 +564,28 @@ In library code:
 import { RulesLoader, OpNameMapper } from 'apollo-conn-gen/oas';
 
 const rules = {
-  "description": "Complex API transformation rules",
-  "rules": [
+  description: 'Complex API transformation rules',
+  rules: [
     {
-      "pattern": "^apiV1(.*)$",
-      "replacement": "api_v1_$1",
-      "priority": 10,
-      "description": "Convert apiV1 prefix to snake_case"
+      pattern: '^apiV1(.*)$',
+      replacement: 'api_v1_$1',
+      priority: 10,
+      description: 'Convert apiV1 prefix to snake_case',
     },
     {
-      "pattern": "^get(.*)$",
-      "replacement": "fetch$1",
-      "priority": 5,
-      "description": "Convert get operations to fetch"
+      pattern: '^get(.*)$',
+      replacement: 'fetch$1',
+      priority: 5,
+      description: 'Convert get operations to fetch',
     },
     {
-      "pattern": "([a-z])([A-Z])",
-      "replacement": "$1_$2",
-      "priority": 1,
-      "enabled": true,
-      "description": "Convert camelCase to snake_case"
-    }
-  ]
+      pattern: '([a-z])([A-Z])',
+      replacement: '$1_$2',
+      priority: 1,
+      enabled: true,
+      description: 'Convert camelCase to snake_case',
+    },
+  ],
 };
 
 const mapper = OpNameMapper.fromRules(rules);
@@ -721,12 +704,8 @@ will output the following:
 ```graphql
 extend schema
   @link(url: "https://specs.apollo.dev/federation/v2.14", import: ["@key"])
-  @link(
-    url: "https://specs.apollo.dev/connect/v0.4"
-    import: ["@connect", "@source"]
-  )
+  @link(url: "https://specs.apollo.dev/connect/v0.4", import: ["@connect", "@source"])
   @source(name: "api", http: { baseURL: "https://petstore3.swagger.io/api/v3" })
-
 
 scalar JSON
 
@@ -739,9 +718,9 @@ type Pet {
 }
 
 enum PetStatus {
- available,
- pending,
- sold
+  available
+  pending
+  sold
 }
 
 type Query {
@@ -751,12 +730,7 @@ type Query {
   petByPetId(petId: Int!): Pet
     @connect(
       source: "api"
-      http: {
-        GET: "/pet/{$args.petId}"
-        headers: [
-          { name: "api_key", value: "{$config.apiKey}" }
-        ]
-      }
+      http: { GET: "/pet/{$args.petId}", headers: [{ name: "api_key", value: "{$config.apiKey}" }] }
       selection: """
       id
       name
@@ -785,21 +759,17 @@ The tool supports the use of wildcards in selection sets. For example, to select
 `./tests/resources/wildcard-petstore-selection.json`:
 
 ```json
-[
-  "get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>*"
-]
+["get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>*"]
 ```
 
-Note that using wildcards only works for *scalar* (and enum) fields.
+Note that using wildcards only works for _scalar_ (and enum) fields.
 
 ### Selecting everything under a specific selection path
 
 The tool also supports selecting everything under a specific path. For example, if we wanted to select everything for the operation `get:/pet/{petId}`, then all we need to do is use a selection like so (note the double `*` at the end):
 
 ```json
-[
-  "get:/pet/{petId}>**"
-]
+["get:/pet/{petId}>**"]
 ```
 
 With this, the tool will generate the whole schema under that path — including nested object types like `Category` and `Tag`:
@@ -813,6 +783,7 @@ This is particularly useful for specifications that are bound to change often.
 ## Skipping Optional Arguments
 
 The `--skip-optional-args` option allows you to generate cleaner schemas by excluding optional query parameters from the generated GraphQL operations. This is useful when:
+
 - You have APIs with many optional query parameters that clutter the schema
 - You want to generate a minimal schema focusing on required parameters only
 - You need to reduce the complexity of the generated GraphQL operations
@@ -820,34 +791,38 @@ The `--skip-optional-args` option allows you to generate cleaner schemas by excl
 ### Example
 
 Without `--skip-optional-args` (default behavior):
+
 ```bash
 node ./dist/cli/oas ./api-spec.yaml
 ```
 
 Generated query might include all parameters:
+
 ```graphql
 type Query {
   searchProducts(
-    category: String!    # required
-    minPrice: Float      # optional
-    maxPrice: Float      # optional
-    sortBy: String       # optional
-    limit: Int           # optional
-    offset: Int          # optional
+    category: String! # required
+    minPrice: Float # optional
+    maxPrice: Float # optional
+    sortBy: String # optional
+    limit: Int # optional
+    offset: Int # optional
   ): [Product]
 }
 ```
 
 With `--skip-optional-args`:
+
 ```bash
 node ./dist/cli/oas ./api-spec.yaml --skip-optional-args
 ```
 
 Generated query includes only required parameters:
+
 ```graphql
 type Query {
   searchProducts(
-    category: String!    # required only
+    category: String! # required only
   ): [Product]
 }
 ```
@@ -866,7 +841,7 @@ OpenAPI schemas with `additionalProperties` like this:
 VehicleComponentTree:
   type: object
   additionalProperties:
-    $ref: "#/components/schemas/VehicleComponent"
+    $ref: '#/components/schemas/VehicleComponent'
 ```
 
 Are automatically converted to GraphQL types like this:
@@ -892,6 +867,7 @@ type VehicleComponentsEntry {
 ### GraphQL structure
 
 Each map is converted to an array of entry objects with:
+
 - `key: String` - The map key
 - `value: <Type>` - The map value (can be objects, arrays, or scalars)
 
@@ -904,6 +880,7 @@ This allows GraphQL clients to work with map data while maintaining type safety 
 When running tests, the tool automatically generates a `run-rover.sh` script in the system's temporary directory (`/${TMP_DIR}$/oas-test/run-rover.sh` on Unix systems). This script can be used to start a local supergraph with the generated schema.
 
 The script includes:
+
 - Environment variable validation for `APOLLO_KEY` and `APOLLO_GRAPH_REF`
 - Both `rover supergraph compose` and `rover dev` commands
 - Helpful error messages if required environment variables are missing
@@ -911,12 +888,14 @@ The script includes:
 To use the script:
 
 1. **Set your Apollo Studio credentials**:
+
    ```bash
    export APOLLO_KEY=your_apollo_studio_key
    export APOLLO_GRAPH_REF=your_graph_ref
    ```
 
 2. **Run the generated script**:
+
    ```bash
    # Navigate to the test directory
    cd /${SYSTEM_TMP_DIR}$/oas-test
@@ -939,6 +918,7 @@ node --import tsx/esm --test --test-name-pattern "petstore" tests/all/*.test.ts
 ```
 
 The test suite includes over 250 test cases covering:
+
 - Basic OAS and JSON generation
 - Transform rules and name mapping
 - Complex OpenAPI patterns (`allOf`, `oneOf`, unions and interfaces)

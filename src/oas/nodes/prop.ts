@@ -45,7 +45,11 @@ export abstract class Prop extends Type {
 
   // the `?` symbol marks a field the API may leave out, so the router stops warning when it does.
   // e.g. (petstore) optional `name?`, while required `id` stays plain and still warns.
+  // `skipOptionalMarkers` drops every marker, for a caller composing below 2.15. see #16
   public isOptionalInSelection(context: OasContext): boolean {
+    if (context.generateOptions?.skipOptionalMarkers) {
+      return false;
+    }
     return !this.required && this.parent?.kind !== 'input' && !this.isEntityKey(context);
   }
 

@@ -40,12 +40,11 @@ export type GenerateOptions = {
   connectorSpecVersion?: string;
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
+  skipOptionalMarkers?: boolean; // skip '?' marker
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   skipAuth?: boolean;
-  // R14: directives declared by hand, keyed by the type or field they belong on; `*` covers many fields.
-  // e.g. (r14-directives) { "Mutation.*": ["@tag(name: \"require-approval\")"], "User.email": ["@authenticated"] }
-  directives?: DirectivesConfig;
+  directives?: DirectivesConfig; // directives to apply
 };
 
 // Max nested $ref hops resolvePointer will follow before giving up (guards against ref cycles).

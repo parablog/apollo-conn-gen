@@ -736,6 +736,37 @@ tokenized `?` at every step, so linted schemas stay clean.
 **Refs:** `src/oas/nodes/prop*.ts` (`select`), `obj.ts` (`visitProperties` sets `required`). Gate: the
 abstract pass needs composition ≥ 2.15 (or the patched toolchain) before this is corpus-safe on v0.4.
 
+### Opt-out for callers below composition 2.15
+
+A consuming project pinned to the latest stable federation composition, 2.14.3, could not compose
+anything the generator produced,
+so the markers are now switchable: `skipOptionalMarkers: true` (CLI `--skip-optional-markers`) drops
+every one of them. The default is unchanged — markers on. All seven `writer.write('?')` sites are
+gated by one predicate, so the switch is a single clause in `Prop.isOptionalInSelection`, placed
+first so `isEntityKey` is never walked when markers are off.
+
+Measured with stock rover on petstore `get:/pet/findByStatus` (the op `test_16` already uses):
+
+```
+markers on,  federation_version: =2.14.3  -> 4 x CONNECTORS_UNRESOLVED_FIELD
+                                             (Category.id, Category.name, Tag.id, Tag.name)
+markers off, federation_version: =2.14.3  -> composes
+```
+
+**Why the existing 2.14.x tests never caught this:** `compose()` in `src/tests/runners.ts` prefers
+`tools/local/apollo-federation-cli` whenever it is present, and that binary takes only `--config`
+and `--no-expand` — it has no federation-version selection and ignores `federation_version`
+entirely. So `oas-core.test.ts` tests passing `composeFederationVersion: '2.14.3'` were composing on
+the patched ≥2.15 build. A new `forceRover` option in the runner's opts bag skips the local binary
+and calls Rover's installed official plugin for that exact version, so the pin means something.
+
+**Refs:** `src/oas/nodes/prop.ts` (`isOptionalInSelection`), `src/oas/oasContext.ts` +
+`src/oas/oasGen.ts` (the two parallel option lists), `src/cli/oas.ts`, `src/tests/runners.ts`
+(`forceRover`). Tests `test_16_optional_markers_fail_composition_below_215` (the pinned 2.14.3
+rejection), `test_16_skip_optional_markers_composes_below_215`,
+`test_16_skip_optional_markers_reaches_the_cli`, `test_16_skip_optional_markers_moves_nothing_else`
+(map fixture — the marker sits between the self-alias and `->entries`).
+
 ## 17 · Param defaults dangle ` = ` for non-number/string values — ✅ Fixed (`aae14ca`)
 **Symptom:** rover syntax error — `expected a valid Value`:
 `v2RegistryDockerCredentials(…, readWrite: Boolean = ): …` — the default's right-hand side is empty.
