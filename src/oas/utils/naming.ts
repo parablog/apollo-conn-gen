@@ -193,16 +193,21 @@ export class Naming {
       // when it isn't a bare identifier (omni's `urn:omni:params:1.0:UserAttribute` broke the
       // parser unquoted); the field reference is always a bare identifier. see #32
       const key = /^[_A-Za-z][_0-9A-Za-z]*$/.test(name) ? name : `"${name}"`;
-      return key + ': ' + sanitised;
+      // a reference starting with `null` reads as a literal, so it takes the path form
+      // e.g. (omni) `nullSort` would read as `null` plus a stray `Sort`. see docs/issues.md #82
+      const value = /^null/.test(sanitised) ? `$.${sanitised}` : sanitised;
+      return key + ': ' + value;
     }
 
     // Response direction: safe GraphQL field <- original JSON key. Write the key bare when it is
     // one; otherwise as the path step `$."key"` — after an alias a plain quoted string is a string
     // LITERAL under connect/v0.4, returning the key's own name as the value. see #62
     const original = name.startsWith('@') ? name : fieldName;
-    // the router's own `Identifier ::= [a-zA-Z_] NO_SPACE [0-9a-zA-Z_]*` (json_selection/README.md);
-    // `true`/`false`/`null` pass it but read as literals in value position, so they take the path form
-    const isBareKey = /^[_A-Za-z][_0-9A-Za-z]*$/.test(original) && !/^(true|false|null)$/.test(original);
+    // a key starting with `null`, or exactly `true`/`false`, reads as a literal and takes the path form
+    // e.g. (omni) `null_sort` would read as `null` plus a stray `_sort`. see docs/issues.md #62, #82
+    const isBareKey = /^[_A-Za-z][_0-9A-Za-z]*$/.test(original) && !/^null|^(true|false)$/.test(original);
+    // the key keeps its own spelling when it is a safe identifier, else becomes a quoted path step
+    // e.g. (r3-edge-cases) `_id` -> `id: _id`, `full name` -> `fullName: $."full name"`
     const key = isBareKey ? original : `$."${Naming.escapeSelectionKey(original)}"`;
     return `${sanitised}: ${key}`;
   }

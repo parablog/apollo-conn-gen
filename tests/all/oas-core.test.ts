@@ -1784,6 +1784,18 @@ test('test_81_path_tokens_match_declared_params', async () => {
   assert.ok(/\(subscriberId: String!, addOnId: String!\)/.test(schema!), 'case-only disagreement matches too');
 });
 
+test('test_82_keyword_prefixed_keys_take_the_path_form', async () => {
+  // #82: after an alias the router matches `null` by prefix, so a bare `null_sort` read as the null
+  // literal plus a stray identifier. Both directions now write the key as a path.
+  // e.g. (omni) `post /v1/query/run` sorts carry a `null_sort` field.
+  const schema = await runOasTest('literal-prefixed-field.yaml', ['post:/sorts>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/null_sort: \$\.nullSort/.test(schema!), 'the body reads the input field as a path');
+  assert.ok(/nullSort: \$\."null_sort"\?/.test(schema!), 'the response reads the JSON key as a path');
+  assert.ok(/column_name: columnName/.test(schema!), 'an ordinary alias stays bare');
+  assert.ok(/columnName: column_name\?/.test(schema!), 'in both directions');
+});
+
 test('test_74_request_body_component_ref', async () => {
   // #74: a body written as `requestBody: { $ref: '#/components/requestBodies/…' }` used to emit a
   // mutation with no input and no body at all. It now generates exactly what the inline form does.

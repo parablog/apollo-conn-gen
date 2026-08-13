@@ -4275,3 +4275,49 @@ names). Fixture `path-param-mismatch.yaml`, test
 `test_81_path_tokens_match_declared_params`. Verified per-op through rover: all four ops
 compose; the control `put:/v1/api-keys/{id}` (the sibling op that declares its `id`) emits
 byte-identical output. Related: #2, #3.
+
+## 82 · A selection value starting with `null` is read as the null literal — ✅ Fixed
+
+**Symptom:** two omni ops. `post:/v1/query/run` fails `INVALID_BODY: InputInput.*.query.*.sorts.*
+doesn't have a field named 'Sort'`; `post:/v1/ai/generate-query` fails composition with
+`Object type 'SortsItem' has no field '_sort'`.
+
+**OAS** (omni — a sort carries a `null_sort` field):
+```yaml
+sorts:
+  type: array
+  items:
+    type: object
+    properties:
+      null_sort: { type: string }
+```
+
+**Example** — what was written, and how the router reads it:
+```
+null_sort: nullSort      # body:     `null` then a stray `Sort`
+nullSort: null_sort?     # response: `null` then a stray `_sort`
+```
+
+**Cause:** #62 established that after an alias the composer parses a literal or a path, and guarded
+keys that are *exactly* `true`, `false` or `null`. The keyword is matched by prefix, so any value
+beginning with `null` splits into the literal plus whatever follows it.
+
+**Fix:** the guard now covers values *prefixed* with `null`, in both directions and in both
+deliberately siloed copies (`src/oas/utils/naming.ts`, `src/json/walker/naming.ts`). The response
+direction extends the existing keyword guard; the request direction had no value-side guard at all
+(its #32 guard quotes the *key*, on the left of the alias), so it gains one. Emitted forms:
+```
+null_sort: $.nullSort         # body
+nullSort: $."null_sort"?      # response
+```
+
+**Latent sibling** (no failing op in the corpus, so not fixed): `true`/`false` are the same trap one
+prefix further — a `true_value` key would alias to `trueValue: true_value` and split identically.
+They keep the narrow exact-word guard until an op actually fails on one, so the corpus does not move
+for a shape nobody has hit.
+
+**AST:** untouched — the change is how one alias is spelled.
+**Refs:** `src/oas/utils/naming.ts` (`sanitiseFieldForSelect`, both branches),
+`src/json/walker/naming.ts` (`sanitiseFieldForSelect`). Fixture `literal-prefixed-field.yaml`, test
+`test_82_keyword_prefixed_keys_take_the_path_form`. Verified per-op through rover and the local
+composer: both omni ops compose. Related: #32, #62.

@@ -1,0 +1,37 @@
+openapi: 3.0.3
+info:
+  title: Keys that start with a JSONSelection keyword (issue 82)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # `null_sort` aliases to `nullSort` in both directions; bare, either side reads as the null literal
+  /sorts:
+    post:
+      operationId: runSort
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                null_sort:
+                  type: string
+                column_name:
+                  type: string
+      responses:
+        '200':
+          description: The sort that ran
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sort'
+components:
+  schemas:
+    Sort:
+      type: object
+      properties:
+        null_sort:
+          type: string
+        column_name:
+          type: string
