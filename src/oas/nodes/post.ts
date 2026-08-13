@@ -7,6 +7,13 @@ import { trace, warn } from '../log/trace.js';
 import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
 
+// container for the schema and media types, so we can
+// include www-encoded bodies
+interface ReferencedBody {
+  schema: SchemaObject;
+  mediaType: string;
+}
+
 export class Post extends Get {
   public body?: Body;
   public verb: string = 'POST';
@@ -98,15 +105,15 @@ export class Post extends Get {
       // mutation used to come out with no input and no body at all. see docs/issues.md #74
       const referenced = this.resolveBodySchemaReference(context);
       if (referenced) {
-        this.body = Factory.fromBody(context, this, referenced) as Body;
+        this.body = Factory.fromBody(context, this, referenced.schema, referenced.mediaType) as Body;
         this.body.visit(context);
       }
       return;
     }
 
-    const mediaType = _.first(mediaTypes.filter((k) => /^application\/(?:.*\+)?json/i.test(k)));
+    const mediaType = Post.findSendableMediaType(mediaTypes);
     if (!mediaType) {
-      warn(context, '  [post::visitBody]', `No JSON media type found!`);
+      warn(context, '  [post::visitBody]', `Cannot send ${mediaTypes.join(', ')}: ${this.name} goes out with no body.`);
       return;
     }
 
@@ -126,16 +133,24 @@ export class Post extends Get {
       return;
     }
 
-    this.body = Factory.fromBody(context, this, body.schema) as Body;
+    this.body = Factory.fromBody(context, this, body.schema, mediaType) as Body;
     this.body.visit(context);
 
     trace(context, '<- [post::visitBody]', `out: ${this.name}`);
   }
 
-  // The JSON schema inside a body the spec wrote as a reference. e.g. (request-body-component-ref.yaml)
+  // Find which content type the body is read from: JSON if the operation offers it, else a form.
+  // Multipart and binary have no mapping we can write, so they are not picked at all.
+  // e.g. (stripe) post:/v1/customers: [application/x-www-form-urlencoded] -> the form   #83
+  private static findSendableMediaType(mediaTypes: string[]): string | undefined {
+    const json = mediaTypes.find((type) => /^application\/(?:.*\+)?json/i.test(type));
+    return json ?? mediaTypes.find((type) => type.toLowerCase().startsWith('application/x-www-form-urlencoded'));
+  }
+
+  // The schema inside a body the spec wrote as a reference. e.g. (request-body-component-ref.yaml)
   //   requestBody: { $ref: '#/components/requestBodies/CreateThing' }   <- resolved here
   //   CreateThing: { required: true, content: { application/json: { schema: $ref Thing } } }
-  private resolveBodySchemaReference(context: OasContext): SchemaObject | undefined {
+  private resolveBodySchemaReference(context: OasContext): ReferencedBody | undefined {
     const raw = _.get(this.operation, 'schema.requestBody') as ReferenceObject | undefined;
     // if there's no reference, bail
     if (!raw || !('$ref' in raw)) {
@@ -147,12 +162,25 @@ export class Post extends Get {
       | { content?: Record<string, { schema?: SchemaObject }> }
       | undefined;
 
-    // and make sure it is of JSON type
-    const json = Object.keys(requestBody?.content ?? {}).find((key) => /^application\/(?:.*\+)?json/i.test(key));
-    return json ? requestBody!.content![json].schema : undefined;
+    const content = requestBody?.content ?? {};
+    const contentTypes = Object.keys(content);
+    const mediaType = Post.findSendableMediaType(contentTypes);
+    if (!mediaType) {
+      if (contentTypes.length > 0) {
+        warn(
+          context,
+          '  [post::visitBody]',
+          `Cannot send ${contentTypes.join(', ')}: ${this.name} goes out with no body.`,
+        );
+      }
+      return undefined;
+    }
+
+    const schema = content[mediaType].schema;
+    return schema ? { schema, mediaType } : undefined;
   }
 
-  // The `input:` argument for the op's JSON body, or undefined when there is none. The argument
+  // The `input:` argument for the op's body, or undefined when there is none. The argument
   // and the type definition must write the same name, e.g. `ssh_keys` -> `SshKeysItemInput` in both. #15 #30
   private bodyArg(): string | undefined {
     if (!this.body || !this.body.payload) return undefined;

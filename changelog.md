@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- A request body the API takes as a form is now sent: the mutation gets its argument, its mapping
+  and the `Content-Type` header the router form-encodes on, so stripe's `post:/v1/customers` and
+  slack's `post:/admin.apps.approve` can post data. Issue #83.
+
 ### Added
 
 - New `skipOptionalMarkers` option (CLI `--skip-optional-markers`) leaves the `?` optional-field

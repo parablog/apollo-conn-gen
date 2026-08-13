@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: A multi-member anyOf body silently drops the whole operation
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /convert:
+    post:
+      operationId: convert
+      requestBody:
+        $ref: '#/components/requestBodies/ConvertRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+  /unrelated:
+    get:
+      operationId: getUnrelated
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+components:
+  requestBodies:
+    ConvertRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - ids
+            properties:
+              ids:
+                type: array
+                maxItems: 100
+                items:
+                  anyOf:
+                    - type: string
+                    - type: number

@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: 201-only response
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widgets:
+    post:
+      operationId: createWidget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WidgetInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+components:
+  schemas:
+    WidgetInput:
+      type: object
+      properties:
+        name:
+          type: string
+    Widget:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string

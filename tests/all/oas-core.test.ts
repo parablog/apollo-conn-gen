@@ -2062,3 +2062,67 @@ test('test_66_array_body_references_item_input_type', async () => {
   assert.ok(/input: \[GenericSchemaFieldRequestInput!\]!/.test(schema!), 'the arg is a list of the item input type');
   assert.ok(!/InputInput/.test(schema!), 'the placeholder-derived name is gone');
 });
+
+test('test_83_form_body_is_sent_with_its_content_type', async () => {
+  // #83: a body written as a form was dropped for not being JSON, and the mutation came out with no
+  // argument and no body. The fields are mapped now, and the connector says it is sending a form.
+  const schema = await runOasTest('form-encoded-body.yaml', ['post:/approve>**', 'post:/customers>**'], 7, 5);
+  assert.ok(schema !== undefined);
+  assert.ok(/createApprove\(input: InputInput!\)/.test(schema!), 'the flat form takes an argument');
+  assert.ok(/app_id: appId\n/.test(schema!), 'and sends its fields');
+  assert.ok(/createCustomers\(input: BInputInput!\)/.test(schema!), 'the nested form takes one too');
+  assert.ok(/address \{\n\s+city\n\s+line1\n/.test(schema!), 'sending the nested object');
+  assert.ok(/expand\n/.test(schema!), 'and the list');
+  assert.equal(
+    schema!.match(/\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/g)?.length,
+    2,
+    'each form connector carries the bare content type, with no charset',
+  );
+});
+
+test('test_83_a_form_the_router_refuses_stays_bodyless', async () => {
+  // #83: a form is sent as an object, so a body that is one value or a list still sends nothing —
+  // `rover connector run` refuses both. Multipart has no mapping we can write and is unchanged.
+  const schema = await runOasTest('form-encoded-body.yaml', ['post:/note>**', 'post:/tags>**', 'post:/files>**'], 7, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/createNote: Result/.test(schema!), 'a form of one value takes no argument');
+  assert.ok(/createTags: Result/.test(schema!), 'nor does a form that is a list');
+  assert.ok(/createFiles: Result/.test(schema!), 'nor a multipart upload');
+  assert.ok(!/body:/.test(schema!), 'and none of them map a body');
+  assert.ok(!/Content-Type/.test(schema!), 'so none of them write the form content type');
+});
+
+test('test_83_json_still_wins_over_a_form', async () => {
+  // #83: JSON is picked first when a body offers both, and a body written as
+  // `requestBody: { $ref: … }` reads its content type the same way the inline spelling does.
+  const schema = await runOasTest('form-encoded-body.yaml', ['post:/both>**', 'post:/coupons>**'], 7, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/createBoth\(input: AddressInput!\)/.test(schema!), 'the JSON body is the one taken');
+  assert.ok(/createCoupons\(input: InputInput!\)/.test(schema!), 'a referenced form is sent as well');
+  assert.equal(
+    schema!.match(/\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/g)?.length,
+    1,
+    'only the form connector writes the content type',
+  );
+});
+
+test('test_83_stripe_writes_its_form_bodies', async () => {
+  // #83: 326 of the 445 dropped bodies are stripe's, and every one of them is a form — each used to
+  // come out with nothing to send. `metadata` comes out `JSON` because stripe writes it as an
+  // anyOf, not as a map, so #84 does not reach it.
+  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 102);
+  assert.ok(customers !== undefined);
+  assert.ok(/createV1Customers\(input: InputInput!\)/.test(customers!), 'stripe takes its form body');
+  assert.ok(
+    /\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/.test(customers!),
+    'with the header',
+  );
+  assert.ok(/cash_balance: cashBalance \{/.test(customers!), 'nested objects are sent under their spec names');
+  assert.ok(/expand\n/.test(customers!), 'and lists are sent whole');
+
+  // multipart: nothing we can map, so it keeps composing with no argument and no body
+  const files = await runOasTest('stripe.json', ['post:/v1/files>**'], 589, 8);
+  assert.ok(files !== undefined);
+  assert.ok(/createV1Files: File/.test(files!), 'the multipart upload takes no argument');
+  assert.ok(!/body:/.test(files!), 'and maps no body');
+});

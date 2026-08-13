@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info:
+  title: apiKey header with a documented literal prefix
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+security:
+  - ApiKeyAuth: []
+paths:
+  /widgets:
+    get:
+      operationId: getWidgets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: 'Format: `Token token=<API_KEY>`'

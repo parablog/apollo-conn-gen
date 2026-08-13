@@ -20,7 +20,8 @@ test('test_corpus_mut_googlebooks', async () => {
 });
 
 test('test_corpus_mut_slack', async () => {
-  await runOasTest('slack.yaml', ['post:/admin.apps.approve>**'], 174, 1);
+  // 2 types since #83: slack posts a form, so the body is mapped and its input type is written
+  await runOasTest('slack.yaml', ['post:/admin.apps.approve>**'], 174, 2);
 });
 
 test('test_corpus_mut_digitalocean', async () => {

@@ -476,6 +476,12 @@ node ./dist/cli/oas -h
 
 An override key that matches no operation is ignored with a warning.
 
+### Request bodies
+
+A body is taken from the first content type the router can send: JSON, or `application/x-www-form-urlencoded`. A form body is mapped the same way a JSON one is, and its `@connect` also writes `headers: [{ name: "Content-Type", value: "application/x-www-form-urlencoded" }]` — the router form-encodes the body when it reads exactly that value (`name=x&tags[0]=a&address[city]=Luton`). Your own `Content-Type` header, from the spec or from an override, is left alone.
+
+Everything else — multipart, octet-stream, plain text — has no mapping we can write, so the operation is generated with no argument and no body, and the run warns with its name. A form that is a single value or a list does the same: the router only form-encodes objects.
+
 ### Batch endpoints
 
 `--batch <file>` (library: the `batch` option) marks operations as batch endpoints, keyed by op id. The only knob is the batch size cap; the entity, key, request and selection are all inferred. `{}` or `null` means defaults:

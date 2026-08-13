@@ -4352,3 +4352,224 @@ for a shape nobody has hit.
 `src/json/walker/naming.ts` (`sanitiseFieldForSelect`). Fixture `literal-prefixed-field.yaml`, test
 `test_82_keyword_prefixed_keys_take_the_path_form`. Verified per-op through rover and the local
 composer: both omni ops compose. Related: #32, #62.
+
+## 83 · A request body that is not JSON is dropped, so the mutation sends nothing — ✅ Fixed
+
+**Symptom:** stripe's `createV1Customers` and slack's `createAdminAppsApprove` compose and run with
+no `input` argument and no `body:` mapping — there is no way to send them any data.
+- 445 write operations across the corpus are like this, about 16% of the mutations counted as
+  passing: stripe 326, slack 91, and 28 more across box, docker, openai, confluence, github, ably,
+  asana and omni.
+- Slack still carries its auth headers, so at a glance the operation looks finished.
+- Not a stripe problem: slack has been like this all along, the stripe upgrade only made it big.
+
+**OAS** (stripe `post:/v1/customers`, trimmed — every write operation in the spec takes a form,
+never JSON):
+```yaml
+requestBody:
+  content:
+    application/x-www-form-urlencoded:
+      schema:
+        type: object
+        properties:
+          name: { type: string, maxLength: 256 }
+          expand: { type: array, items: { type: string } }
+          cash_balance:
+            type: object
+            properties:
+              settings:
+                type: object
+                properties:
+                  reconciliation_mode: { type: string, enum: [automatic, manual, merchant_default] }
+      encoding:
+        expand:       { style: deepObject, explode: true }
+        cash_balance: { style: deepObject, explode: true }
+```
+
+**Example** — before, and after:
+```graphql
+# before — nothing to send
+createV1Customers: Customer
+  @connect(source: "api", http: { POST: "/v1/customers"} selection: """…""")
+
+# after
+createV1Customers(input: InputInput!): Customer
+  @connect(
+    source: "api"
+    http: {
+      POST: "/v1/customers"
+      headers: [{ name: "Content-Type", value: "application/x-www-form-urlencoded" }]
+      body: """
+      $args.input {
+        cash_balance: cashBalance {
+         settings {
+          reconciliation_mode: reconciliationMode
+         }
+        }
+        expand
+        name
+      }
+      """
+    }
+    …
+  )
+```
+
+**Cause:**
+- `Post.visitBody` kept only content types matching `application/…json` and returned otherwise.
+- `this.body` stayed unset, so no argument and no mapping were written.
+- The same filter sat in the `#74` `$ref` path (`resolveBodySchemaReference`), there without even a
+  warning — 2 of slack's 91.
+- Composition cannot see it: a mutation with no body is valid, so the sweep counted these as OK.
+
+**Fix:**
+- The body takes the first content type we can send: JSON, else `application/x-www-form-urlencoded`.
+- `Body` carries the content type it was built from; `isFormEncoded()` answers for the writer.
+- A form connector writes `Content-Type: application/x-www-form-urlencoded` on its `@connect`. The
+  router matches that value exactly — a `; charset=utf-8` suffix stops the match — and a header the
+  spec or the user already wrote wins. It goes per-operation, not on `@source`: box has 3 form
+  bodies against 98 JSON ones.
+- Everything else (multipart, octet-stream, x-tar, text/*) still sends no body, but now warns with
+  the operation name: `Cannot send multipart/form-data: /v1/files goes out with no body.`
+
+**How the router encodes it** — the generated `form-encoded-body.yaml` `post:/customers` connector,
+run with `rover connector run` against a local echo server, with
+`{ name: "Fer & Co", expand: ["a","b"], address: { line1: "1 High St", city: "Luton" } }`:
+```
+address%5Bcity%5D=Luton&address%5Bline1%5D=1+High+St&expand%5B0%5D=a&expand%5B1%5D=b&name=Fer+%26+Co
+   i.e.  address[city]=Luton&address[line1]=1 High St&expand[0]=a&expand[1]=b&name=Fer & Co
+```
+Lists are indexed from 0, nested objects use brackets, spaces become `+`. That is exactly what
+stripe's `style: deepObject, explode: true` asks for, so `encoding:` needs no code of its own. A
+spec asking for `style: form, explode: false` would want its lists written another way — no spec in
+the corpus does.
+
+**Known limitation — a form has to be an object.** Send one value or a list and the router stops
+with `Could not serialize body: Expected URL-encoded forms to be objects`; composition never sees
+it. So a form body that is a single value (#67) or an array (#66) takes no argument and writes no
+body — the same answer #67 already gives a body with no fields.
+
+**Known limitation — a map in a body is not sent, form or JSON.** Filed as #84.
+
+**AST** — the body node was never built before, so a whole side of the operation was missing:
+```
+before   post:/v1/customers > res:r > obj:type:customer
+after    post:/v1/customers > body:b > obj:input:Input > prop:scalar:name …
+                            > res:r  > obj:type:customer
+```
+`Body` also holds the content type it was built from. No new node kind, and nothing walks the tree
+differently — the header itself is written at emission time only.
+
+**Refs:** `src/oas/nodes/post.ts` (`visitBody`, `sendableMediaType`, `resolveBodySchemaReference`),
+`src/oas/nodes/body.ts` (`isFormEncoded`, `isEmptyBody`, `select`), `src/oas/io/operationWriter.ts`
+(`headersBlock`, `sendsForm`), `src/oas/nodes/factory.ts` (`fromBody`). Fixture
+`form-encoded-body.yaml` (flat form, nested form, a form of one value, a form that is a list,
+multipart, a form written as a `$ref`, and JSON alongside a form), tests
+`test_83_form_body_is_sent_with_its_content_type`,
+`test_83_a_form_the_router_refuses_stays_bodyless`, `test_83_json_still_wins_over_a_form`,
+`test_83_stripe_writes_its_form_bodies`. `test_corpus_mut_slack` moves from 1 type to 2 — it pinned
+the bug. Related: #66, #67, #70, #74.
+
+## 84 · A map in a request body is never sent — ⬜ Open
+
+**Symptom:** a mutation whose body carries a map of plain values composes, runs, and silently posts
+everything except the map. docker's `post:/containers/create` loses its `Labels`. The router reports
+it as a problem on the request, not as an error:
+```
+Method ->entries requires an object input, not array
+  path: $args.input.labels.->entries   location: RequestBody
+```
+
+**OAS** (docker-engine `post:/containers/create`, trimmed — `Labels` takes any key the caller wants):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        allOf:
+          - $ref: '#/components/schemas/ContainerConfig'
+          - properties: { HostConfig: { $ref: '#/components/schemas/HostConfig' } }
+ContainerConfig:
+  type: object
+  properties:
+    Labels:
+      type: object
+      description: User-defined key/value metadata.
+      additionalProperties: { type: string }
+```
+
+**Example** — what is generated today, and what docker receives:
+```graphql
+input InputInput { labels: [LabelsEntryInput]  image: String  … }
+input LabelsEntryInput { key: String  value: String }
+
+createContainersCreate(name: String, input: InputInput!): CreateContainersCreateResponse
+  @connect(… body: """
+  $args.input {
+    Labels: labels->entries {
+     key
+     value
+    }
+    Image: image
+  }
+  """)
+```
+```
+called with:  labels: [{ key: "env", value: "prod" }], image: "nginx"
+POST body:    {"Image":"nginx"}          # Labels never arrives
+```
+
+**Cause:**
+- `->entries` takes an **object** and gives back a list of `{ key, value }` pairs.
+- That is what a response needs — the API sends `{"a":"1"}`, we read it as pairs — and it works.
+- A request goes the other way: the argument is **already** a list of pairs, so `->entries` gets a
+  list where it wants an object, and refuses.
+- Nothing in the mapping language goes back the other way. The whole list of methods is `entries`,
+  `size`, `map`, `filter`, `find`, `first`, `get`, `last`, `slice`, `joinNotNull`, `echo`,
+  `jsonStringify`, `match`, the comparisons and the arithmetic — none of them build an object.
+- The object literal `$({ … })` does build one, but every key has to be written in the schema. A map
+  takes whatever keys the caller sends, so there is nothing to write. Measured:
+  ```
+  Labels: $({ env: $args.input.name })                      -> {"Labels":{"env":"nginx"}}   ok
+  Labels: $({ $args.input.labels->first.key: … })           -> Failed to parse schema
+  ```
+- Composition cannot see it: the selection is written correctly, and only the values that reach the
+  API are wrong.
+- The same code writes both sides: `PropMap.select` has no idea whether it is inside a body or a
+  response (`src/oas/nodes/propMap.ts:58-100`).
+
+**AST** — one node type, two sides. The response side is right, the body side is not:
+```
+get:/containers/{id} > res:r  > obj:type:Container   > prop:map:labels > map:type:LabelsEntry   ok
+post:/containers/create > body:b > obj:input:Input   > prop:map:labels > map:input:LabelsEntry  lost
+```
+
+**This is ours to fix, not the router's.** An argument typed `JSON`, sent as it comes, already
+arrives correctly — as JSON and as a form. Measured with `rover connector run` against a local echo
+server:
+```graphql
+input BInputInput { name: String  metadata: JSON }
+body: """
+$args.input { metadata name }
+"""
+```
+```
+form:  metadata%5Bk1%5D=v1&metadata%5Bk2%5D=v2&name=Fer     # metadata[k1]=v1&metadata[k2]=v2
+json:  {"metadata":{"k1":"v1","k2":"v2"},"name":"Fer"}
+```
+So the fix is: a map inside a body is written as `JSON` — no entry type, no `->entries` — and the
+caller passes the object itself. Responses keep the entry list, which is correct there. The other
+way to fix it would be a new method in the router that turns pairs back into an object; that would
+let the argument keep its `key`/`value` type, but no such method exists and nothing here waits on
+it. Stripe does not need either: it writes `metadata` as an `anyOf`, which comes out `JSON` already.
+
+**What it costs today:** every mutation whose body holds a map loses that field. #68 and #70 built
+the entry type and gave it the `Input` ending for exactly these bodies, so the generated schema has
+looked right all along — the field just never left the router.
+
+**AST:** nothing has changed yet. A fix would stop building the `Map` node under a body and use the
+JSON scalar instead, the same answer #19 already gives an object with no fields.
+
+**Refs:** `src/oas/nodes/propMap.ts` (`select`, `getValue`), `src/oas/nodes/map.ts`,
+`src/oas/nodes/factory.ts` (`fromSchema`, the `additionalProperties` route). Found while verifying
+#83 against the router. Related: #19, #68, #70, #76, #77, #78, #83.

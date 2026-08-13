@@ -200,6 +200,13 @@ export class OperationWriter {
       }
     }
 
+    // a form body is announced with this exact value, and a `; charset=` suffix would break it.
+    // a Content-Type the spec or the user already wrote stays as it is.
+    // e.g. (form-encoded-body.yaml) post:/approve -> added, post:/both (JSON) -> not added   #83
+    if (this.sendsForm(op, override) && !entries.some((entry) => entry.name.toLowerCase() === 'content-type')) {
+      entries = [{ name: 'Content-Type', value: 'application/x-www-form-urlencoded' }, ...entries];
+    }
+
     if (entries.length === 0) {
       return null;
     }
@@ -210,6 +217,16 @@ export class OperationWriter {
     }
     lines.push('        ]');
     return lines.join('\n') + '\n';
+  }
+
+  // True when the request carries a form. A body dropped by an override (`"body": null`) or one we
+  // write nothing for sends no data at all, so it is not a form either.
+  // e.g. (form-encoded-body.yaml) post:/approve -> true, post:/note (one value) -> false    #83
+  private sendsForm(op: Op, override: OverrideEntry | undefined): boolean {
+    if (override?.body === null || !op.body?.isFormEncoded()) {
+      return false;
+    }
+    return !op.body.isEmptyBody();
   }
 
   // merge user overrides over the inferred params: a string replaces the inferred value,

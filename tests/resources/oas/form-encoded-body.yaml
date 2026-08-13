@@ -1,0 +1,185 @@
+openapi: 3.0.3
+info:
+  title: Form encoded bodies
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # flat, slack-shaped: every field is a scalar
+  /approve:
+    post:
+      operationId: approveApp
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - app_id
+              properties:
+                app_id:
+                  type: string
+                team_id:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  # nested, stripe-shaped: an object, a list and a map of plain values
+  /customers:
+    post:
+      operationId: createCustomer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                expand:
+                  type: array
+                  items:
+                    type: string
+                metadata:
+                  type: object
+                  additionalProperties:
+                    type: string
+                address:
+                  $ref: '#/components/schemas/Address'
+            encoding:
+              expand:
+                style: deepObject
+                explode: true
+              metadata:
+                style: deepObject
+                explode: true
+              address:
+                style: deepObject
+                explode: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  # a form that is one value: the router refuses it, so no body goes out
+  /note:
+    post:
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  # a form that is a list: same, no body goes out
+  /tags:
+    post:
+      operationId: createTags
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Address'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  # multipart: nothing we can map, stays bodyless
+  /files:
+    post:
+      operationId: uploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  # a form written as a reference, the shape #74 fixed for JSON
+  /coupons:
+    post:
+      operationId: createCoupon
+      requestBody:
+        $ref: '#/components/requestBodies/CreateCoupon'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  # JSON alongside a form: JSON still wins, and no content type is written
+  /both:
+    post:
+      operationId: createBoth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Address'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Address'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+components:
+  requestBodies:
+    CreateCoupon:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            properties:
+              code:
+                type: string
+  schemas:
+    Address:
+      type: object
+      properties:
+        line1:
+          type: string
+        city:
+          type: string
+    Result:
+      type: object
+      properties:
+        id:
+          type: string

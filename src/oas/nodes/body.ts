@@ -1,4 +1,4 @@
-import { Factory, IType, Prop, ReferenceObject, Scalar, Type } from './internal.js';
+import { Arr, Factory, IType, Prop, ReferenceObject, Scalar, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -8,7 +8,14 @@ export class Body extends Type {
   public schema: SchemaObject;
   public payload?: IType;
 
-  constructor(parent: IType, name: string, schema: SchemaObject) {
+  constructor(
+    parent: IType,
+    name: string,
+    schema: SchemaObject,
+    // the content type this body was read from. e.g. (stripe) post:/v1/customers:      #83
+    //   content: { application/x-www-form-urlencoded: { schema: … } }
+    public mediaType: string,
+  ) {
     super(parent, name);
     this.schema = schema;
     this.kind = 'input'; // all children will have the same type
@@ -45,11 +52,23 @@ export class Body extends Type {
     return this.payload && !this.isEmptyBody() ? [this.payload] : [];
   }
 
+  public isFormEncoded(): boolean {
+    return this.mediaType.toLowerCase().startsWith('application/x-www-form-urlencoded');
+  }
+
   // A body a mapping cannot send: no fields of its own and no member that has any. A single value
   // (a Scalar) is NOT this — it is sent whole. e.g. (fieldless-bodies.yaml) { type: object, properties: {} }  #67
   public isEmptyBody(): boolean {
     const payload = this.payload;
-    if (!payload || payload instanceof Scalar) {
+    if (!payload) {
+      return false;
+    }
+    // a form is sent as an object, so one value or a list has nothing to send.
+    // e.g. (form-encoded-body.yaml) post:/note { type: string }, post:/tags { type: array }  #83
+    if (this.isFormEncoded() && (payload instanceof Scalar || payload instanceof Arr)) {
+      return true;
+    }
+    if (payload instanceof Scalar) {
       return false;
     }
     if (payload.props.size > 0) {
@@ -66,7 +85,7 @@ export class Body extends Type {
 
     const spacing = ' '.repeat(8);
 
-    if (this.payload instanceof Scalar) {
+    if (this.payload instanceof Scalar && !this.isEmptyBody()) {
       // one value, we send it as a whole. #67
       writer.write(spacing + 'body: "$args.input"\n');
     } else if (this.payload && !this.isEmptyBody()) {

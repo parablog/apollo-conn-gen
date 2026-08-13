@@ -558,8 +558,8 @@ export class Factory {
     return new Delete(name, op);
   }
 
-  public static fromBody(_context: OasContext, parent: IType, schema: SchemaObject): IType {
-    const body = new Body(parent, 'b', schema);
+  public static fromBody(_context: OasContext, parent: IType, schema: SchemaObject, mediaType: string): IType {
+    const body = new Body(parent, 'b', schema, mediaType);
     parent.add(body);
     return body;
   }
