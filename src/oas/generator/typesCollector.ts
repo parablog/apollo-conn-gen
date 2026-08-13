@@ -1,6 +1,18 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
-import { Arr, IType, Prop, PropArray, PropCircRef, PropEn, PropMap, PropObj, Res, Scalar, T } from '../nodes/internal.js';
+import {
+  Arr,
+  IType,
+  Prop,
+  PropArray,
+  PropCircRef,
+  PropEn,
+  PropMap,
+  PropObj,
+  Res,
+  Scalar,
+  T,
+} from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 import { Naming } from '../utils/naming.js';
 import { SelectionPath } from '../utils/selectionPath.js';
