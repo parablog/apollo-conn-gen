@@ -9,13 +9,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - An array request body now takes a list of its item type; before, the argument named an
   input type that was never defined and composition failed. Issue #66.
+- An `allOf` that only decorates a single non-object schema now means that schema, so
+  digitalocean's firewall `tags` comes out `[String]` and the body sends it. A body with nothing
+  to send drops its argument, its mapping and its type; a body that is one value is sent whole
+  as `input: JSON!` with `body: "$args.input"`. Issue #67.
 - A map entry's `value:` now ends in `Input` like the definition it points at; 14 specs'
   mutations failed composition over this. Issue #68.
+- A request body now keeps a map of plain values, so docker's `post:/containers/create` can
+  send its `Labels`. Issue #70.
 - Generating twice on the same instance returned different schemas — names depended on what
   ran before. Every generation now starts fresh; repeated generation on large specs is also
   much faster (stripe: about 7 minutes down to 1). Issue #71.
 - A selection saved while browsing now resolves even when a fresh run names its type
   differently, as long as only one node can be meant. Issue #72.
+- A request body written as `requestBody: { $ref: … }` now produces the same mutation the inline
+  spelling does, argument and body mapping included. Issue #74.
+- A parameter that carries `content:` instead of `schema:` now takes the same route a `schema:`
+  parameter takes: an object becomes `JSON`, a string or enum stays a scalar. Issue #75.
+- A map whose values cycle back to the type holding them now drops the field, so Mercedes CCS's
+  `Amount.alternatives` composes. Issue #76.
+- A map value written as an `allOf` of empty objects now reads whole as `JSON`, the same as the
+  plain empty object spelling. Issue #77.
+- Two maps sharing a field name over different value types now take distinct entry types, the
+  second named after its container (`RestrictionsCurrencyOptionsEntry`); maps over the same
+  schema still share one, so stripe's many `metadata` maps keep a single `MetadataEntry`.
+  Issue #78.
+- A union whose members are themselves unions now merges their fields into one object, and a
+  merge with no fields to take answers `JSON` and passes the whole value through. Issue #80.
+- Every `{token}` in a path now has an argument of the same name: a parameter the spec named
+  differently is renamed to the token it serves (omni declares `/v1/labels/{labelName}` as
+  `name`), and a token the spec left undeclared gets a required `String`. Issue #81.
+- A response or request-body key that starts with `null` is now written as a path step, so the
+  router reads the whole key (omni's `null_sort`). Issue #82.
 
 ### Removed
 - **Breaking**: `OasContext.reset()` — no longer needed; each generation runs on a fresh context.
