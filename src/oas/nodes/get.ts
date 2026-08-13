@@ -6,6 +6,7 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Params } from '../utils/params.js';
 import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 import _ from 'lodash';
 
@@ -111,20 +112,25 @@ export class Get extends Type implements Op {
   protected visitParameters(context: OasContext): void {
     trace(context, '-> [get::params]', 'in: ' + this.name);
 
-    const parameters = this.operation.getParameters();
+    // a `$ref` parameter has no name of its own until it is resolved, and the match below needs one
+    // e.g. (digitalocean) `$ref: '#/paths/~1widgets~1%7Bwidget_id%7D/get/parameters/0'`. see #3
+    const declared = (this.operation.getParameters() ?? []).map((p) => {
+      const resolved = '$ref' in p ? context.resolvePointer((p as ReferenceObject).$ref!) : undefined;
+      return (resolved as ParameterObject) ?? p;
+    });
 
-    if (parameters && parameters.length > 0) {
-      this.params = parameters
-        .filter((p) => !p.in || (p.in && (p.in as string).toLowerCase() !== 'header'))
-        .filter((p: ParameterObject) => {
-          // If skipOptionalArgs is true, only include required parameters
-          // Otherwise, include all parameters
-          return context.generateOptions?.skipOptionalArgs ? p.required : true;
-        })
-        .map((p: ParameterObject) => this.visitParameter(context, this, p));
-    } else {
-      this.params = [];
-    }
+    // every `{token}` in the path needs a parameter of the same name, whatever the spec called it
+    // e.g. (omni) `get /v1/api-keys/{id}` declares no parameters at all. see docs/issues.md #81
+    const parameters = Params.matchToPath(declared, this.operation.path);
+
+    this.params = parameters
+      .filter((p) => !p.in || (p.in && (p.in as string).toLowerCase() !== 'header'))
+      .filter((p: ParameterObject) => {
+        // If skipOptionalArgs is true, only include required parameters
+        // Otherwise, include all parameters
+        return context.generateOptions?.skipOptionalArgs ? p.required : true;
+      })
+      .map((p: ParameterObject) => this.visitParameter(context, this, p));
 
     trace(context, '<- [get::params]', 'out: ' + this.name);
   }

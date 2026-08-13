@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: Path params that disagree with the path (issue 81)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # nothing declared at all — the arg has to be invented (omni's get /v1/api-keys/{id})
+  /api-keys/{id}:
+    get:
+      operationId: getApiKey
+      responses:
+        '200':
+          description: An API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+  # declared under another name entirely (omni's put /v1/labels/{labelName} declares `name`)
+  /labels/{labelName}:
+    put:
+      operationId: updateLabel
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A label
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+  # case-only disagreement (mindbody's {addOnId} declares `addonId`)
+  /subscribers/{subscriberId}/add-ons/{addOnId}:
+    put:
+      operationId: updateAddOn
+      parameters:
+        - name: subscriberId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: addonId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: An add-on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Thing:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string

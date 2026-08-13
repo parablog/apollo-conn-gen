@@ -1765,6 +1765,25 @@ test('test_80_union_of_arrays_answers_json', async () => {
   assert.ok(!/replacement for Union/.test(schema!), 'no merged type is written');
 });
 
+test('test_81_path_tokens_match_declared_params', async () => {
+  // #81: the URL templates every path token as `{$args.<token>}` while the args came from the
+  // declared parameters alone, so a spec that disagrees with its own path lost the argument.
+  // e.g. (omni) `put /v1/labels/{labelName}` declares the parameter as `name`.
+  const paths = [
+    'get:/api-keys/{id}>**',
+    'put:/labels/{labelName}>**',
+    'put:/subscribers/{subscriberId}/add-ons/{addOnId}>**',
+  ];
+  const schema = await runOasTest('path-param-mismatch.yaml', paths, 3, 1, false, true);
+  assert.ok(schema !== undefined);
+  assert.ok(/apiKeys\(id: String!\)/.test(schema!), 'an undeclared token still becomes an argument');
+  assert.ok(/GET: "\/api-keys\/\{\$args\.id\}"/.test(schema!), 'and the URL reads it');
+  assert.ok(/\(labelName: String!, userId: String\)/.test(schema!), 'a renamed param answers to its token');
+  assert.ok(/PUT: "\/labels\/\{\$args\.labelName\}"/.test(schema!), 'and keeps its place in the URL');
+  assert.ok(!/\bname: String!/.test(schema!), 'the old name is gone, not duplicated');
+  assert.ok(/\(subscriberId: String!, addOnId: String!\)/.test(schema!), 'case-only disagreement matches too');
+});
+
 test('test_74_request_body_component_ref', async () => {
   // #74: a body written as `requestBody: { $ref: '#/components/requestBodies/…' }` used to emit a
   // mutation with no input and no body at all. It now generates exactly what the inline form does.

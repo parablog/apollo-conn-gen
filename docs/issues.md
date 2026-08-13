@@ -4198,3 +4198,80 @@ response itself.
 `test_80_union_of_arrays_answers_json`. Verified per-op: the 3 stripe deletes and github
 stargazers compose; the control `del:/v1/accounts/{account}/bank_accounts/{id}` (a union of real
 objects) emits byte-identical output. Related: #25, #36, #47, #50, #51.
+
+## 81 · A path token the spec names differently (or not at all) loses its argument — ✅ Fixed
+
+**Symptom:** rover rejects the connector — `INVALID_URL: In 'GET' in @connect(http:) on
+'Query.v1ApiKeys': $args doesn't have a field named 'id'`. Four ops: omni
+`get:/v1/api-keys/{id}`, `put:/v1/labels/{labelName}`, `del:/v1/labels/{labelName}`, mindbody
+`put:/v2/subscribers/{subscriberId}/add-ons/{addOnId}`.
+
+**OAS** — three ways a spec disagrees with its own path:
+```yaml
+/v1/api-keys/{id}:          # omni — no `parameters:` block at all
+  get:
+    responses: { '200': { ... } }
+
+/v1/labels/{labelName}:     # omni — the token is `labelName`, the parameter is `name`
+  put:
+    parameters:
+      - { name: name, in: path, required: true, schema: { type: string } }
+
+/v2/subscribers/{subscriberId}/add-ons/{addOnId}:   # mindbody — `addOnId` vs `addonId`
+  put:
+    parameters:
+      - { name: addonId, in: path, required: true }
+```
+
+**Example** — what was written for the labels PUT:
+```graphql
+updateLabelsByName(name: String!, userId: String): Label
+  @connect(http: { PUT: "/labels/{$args.labelName}" ... })
+```
+The URL asks for `$args.labelName`; the field only has `name`.
+
+**Cause:** the URL and the arguments were built from two sources that never met. `templatedPath`
+(`src/oas/io/operationWriter.ts`) rewrites every `{token}` in the path string to
+`{$args.<camelCased token>}` from the path alone, while the arguments come from an independent walk
+of the declared parameters (`Get.visitParameters` -> `Factory.fromParam` -> `Param.generate`). They
+agree only when the spec's parameter name matches its own path token.
+
+**Fix:** make the two agree before the arguments are built. `Params.matchToPath` matches each path
+token to a declared path parameter — same argument name, then same ignoring case, then a lone
+leftover token and a lone leftover parameter, which can only be each other — and renames the
+parameter to the token it serves. A token with no parameter at all gets a required `String` one
+invented for it. `templatedPath` is untouched: once every token has a parameter of that name, the
+two sides agree by construction.
+
+A rename fires only where the *argument* names differ, so a snake-cased `label_name` serving
+`{labelName}` is left alone — its raw name is what entity-resolver inference matches object
+properties against (`src/oas/nodes/entity.ts`).
+
+**Why `Params.pathTokens` matches `{...}` itself:** the `oas` library (v25.3.0) exposes nothing that
+enumerates a path template's tokens. `Operation.getParameters()` returns only what the spec declared,
+which is the input that is wrong here. The library does parse templates internally for URL matching,
+but `normalizePath` is module-local and lossy (it drops the first `-` in a name), and
+`PathMatch.url.slugs` needs a concrete request URL and returns that URL's values, not the tokens.
+`PathMatch` is not even an exported type. Five other sites in `src` already match `{...}` the same
+way, so the idiom is the house style, not a new one.
+
+**Latent siblings** (no failing op in the corpus, so not fixed):
+- An optional (`required: false`) declared path parameter is dropped from the arguments by
+  `skipOptionalArgs` while the URL still templates it — the same mismatch from the other side.
+- A path token declared as `in: header` is filtered out of the arguments (`get.ts`) and still
+  templated.
+- omni's `get:/v1/api-keys` and `get:/v1/api-keys/{id}` both name themselves `v1ApiKeys`, because
+  `Naming.genOperationName` derives its `ByX` suffix from the declared parameters and never sees the
+  invented one. Only a whole-spec generation collides; per-op composition does not.
+
+**Composer divergence, worth knowing:** `tools/local/apollo-federation-cli` composes all four of
+these clean — it skips rover's `$args`/body argument-existence checks. Per-op repros for URL and
+body shapes have to go through rover.
+
+**AST:** untouched — the change is which parameters an operation node is built from.
+**Refs:** `src/oas/utils/params.ts` (`matchToPath`, `matchPathTokens`), `src/oas/nodes/get.ts`
+(`visitParameters`, which now resolves `$ref` parameters up front so the match can read their
+names). Fixture `path-param-mismatch.yaml`, test
+`test_81_path_tokens_match_declared_params`. Verified per-op through rover: all four ops
+compose; the control `put:/v1/api-keys/{id}` (the sibling op that declares its `id`) emits
+byte-identical output. Related: #2, #3.
