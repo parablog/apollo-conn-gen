@@ -1892,14 +1892,16 @@ test('test_67_fieldless_bodies_stop_dangling', async () => {
 test('test_70_scalar_valued_maps_stay', async () => {
   // #70: a map of plain values silently vanished from bodies and responses — nothing under it
   // counted as a selection leaf, so the field was never selected. The map itself is the leaf now.
-  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 14);
+  // A body map is `JSON` since #84, so what #70 fixed is now asserted on the response side only.
+  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 6);
   assert.ok(schema !== undefined);
-  assert.ok(/labels: \[LabelsEntryInput\]/.test(schema!), 'the body keeps its map of strings');
-  assert.ok(/input LabelsEntryInput \{\n {2}key: String\n {2}value: String\n\}/.test(schema!), 'with its entry type');
-  assert.ok(/tags: \[TagsEntryInput\]/.test(schema!), 'a map of string lists stays too');
-  assert.ok(/value: \[String\]/.test(schema!), 'its value is the list');
-  assert.ok(/labels: labels->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!), 'the mapping reads the value whole');
-  assert.ok(/labels: \[LabelsEntry\]/.test(schema!), 'the response side keeps its map of strings as well');
+  assert.ok(/labels: \[LabelsEntry\]/.test(schema!), 'the response keeps its map of strings');
+  assert.ok(/type LabelsEntry \{\n {2}key: String\n {2}value: String\n\}/.test(schema!), 'with its entry type');
+  assert.ok(
+    /labels: labels\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!),
+    'and the selection reads the value whole',
+  );
+  assert.ok(/value: Manifest\n/.test(schema!), 'a map of objects keeps the object as its value');
 });
 
 test('test_76_cycle_cut_map_value_drops_the_field', async () => {
@@ -2032,26 +2034,36 @@ test('test_75_param_via_content_generates', async () => {
   assert.equal(args(viaContent!), args(viaSchema!), 'both spellings give the same argument types');
 });
 
-test('test_68_map_entry_value_carries_input_suffix', async () => {
-  // #68: a map entry named its value without the `Input` suffix the definition carries —
-  // `value: Manifest` against `input ManifestInput`. Now plain, array and nested-map values all
-  // reference the suffixed name; scalar values and the response side stay bare.
-  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 14);
+test('test_68_map_value_names_the_type_it_points_at', async () => {
+  // #68 gave a map value the `Input` ending its definition carries (`value: ManifestInput`). Since
+  // #84 a map in a body is written as `JSON`, so no map is left under an input and only the
+  // response side still has a value to name.
+  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 6);
   assert.ok(schema !== undefined);
-  assert.ok(/value: ManifestInput\n/.test(schema!), 'plain map value carries the suffix');
-  assert.ok(/input ManifestInput \{/.test(schema!), 'and its definition exists');
-  assert.ok(/value: \[ManifestInput\]\n/.test(schema!), 'array map value carries it inside the brackets');
-  assert.ok(/value: PortBindingsEntryEntryInput\n/.test(schema!), 'nested map value matches the nested header');
-  assert.ok(/input PortBindingsEntryEntryInput \{/.test(schema!), 'which is how the nested map names itself');
-  assert.ok(/value: HostPortInput\n/.test(schema!), 'the nested map value carries it too');
-  assert.ok(
-    !/value: Manifest\n/.test(schema!.replace(/type ManifestsEntry \{[^}]*\}/, '')),
-    'no bare input reference remains',
-  );
   assert.ok(
     /type ManifestsEntry \{\n {2}key: String\n {2}value: Manifest\n\}/.test(schema!),
-    'the response side stays bare',
+    'a response map value points at the type as it is defined',
   );
+  assert.ok(!/ManifestInput|EntryInput/.test(schema!), 'and no map input type is written at all');
+});
+
+test('test_84_body_map_is_sent_as_json', async () => {
+  // #84: a body map was written as key/value pairs and mapped with `->entries`, which needs an
+  // object — the router refused it and the field never left. The body sends the object itself now.
+  const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 6);
+  assert.ok(schema !== undefined);
+  assert.ok(/labels: JSON\n/.test(schema!), 'a map of strings is one JSON field');
+  assert.ok(/portBindings: JSON\n/.test(schema!), 'so is a map of maps — the inner one is never built');
+  assert.ok(!/EntryInput/.test(schema!), 'and no entry input type is written');
+
+  const body = /body: """([\s\S]*?)"""/.exec(schema!)?.[1];
+  assert.ok(body !== undefined);
+  assert.ok(/\n\s+labels\n/.test(body!), 'the body sends the field as it comes');
+  assert.ok(!/->entries/.test(body!), 'with no ->entries, which only reads an object');
+  assert.ok(/labels\?->entries \{/.test(schema!), 'while the response still reads its map as pairs');
+
+  // a map that is not in a body is untouched: this one is a query param, JSON since #40
+  assert.ok(/snapshots\(filter: JSON\)/.test(schema!), 'a query param that is a map stays as it was');
 });
 
 test('test_66_array_body_references_item_input_type', async () => {
@@ -2066,7 +2078,8 @@ test('test_66_array_body_references_item_input_type', async () => {
 test('test_83_form_body_is_sent_with_its_content_type', async () => {
   // #83: a body written as a form was dropped for not being JSON, and the mutation came out with no
   // argument and no body. The fields are mapped now, and the connector says it is sending a form.
-  const schema = await runOasTest('form-encoded-body.yaml', ['post:/approve>**', 'post:/customers>**'], 7, 5);
+  // 4 types, not 5: since #84 the `metadata` map is one JSON field, with no entry type of its own
+  const schema = await runOasTest('form-encoded-body.yaml', ['post:/approve>**', 'post:/customers>**'], 7, 4);
   assert.ok(schema !== undefined);
   assert.ok(/createApprove\(input: InputInput!\)/.test(schema!), 'the flat form takes an argument');
   assert.ok(/app_id: appId\n/.test(schema!), 'and sends its fields');

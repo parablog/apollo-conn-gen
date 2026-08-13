@@ -3663,11 +3663,15 @@ fix in `Map.generate`.
 (the suffix is empty there). Verified on plain, array and nested-map values — nested maps agree
 because the reference now derives the same name the nested map's own header writes.
 
+**Superseded on the body side by #84:** a map in a request body is written as one `JSON` field now,
+so no map is left under an input and the suffix never applies there. `Map.valueTypeName` stays as
+it is — it is still the one place a value is named, and the response side uses it.
+
 **Refs:** `src/oas/nodes/map.ts` (`generate`, the `value:` lines), #15/#30 (the agreement rule),
-#66 (the same rule applied to array bodies). Fixture `tests/resources/oas/map-input-suffix.yaml`,
-test `test_68_map_entry_value_carries_input_suffix`. Found while testing, filed separately: an
-input-side map with SCALAR values drops out of the body entirely (fixture `labels`/`tags`; docker's
-real `Labels`) — see #70.
+#66 (the same rule applied to array bodies), #84 (bodies). Fixture
+`tests/resources/oas/map-input-suffix.yaml`, test `test_68_map_value_names_the_type_it_points_at`.
+Found while testing, filed separately: an input-side map with SCALAR values drops out of the body
+entirely (fixture `labels`/`tags`; docker's real `Labels`) — see #70.
 
 ## 69 · Sibling names that collide after sanitising are written twice — ⬜ Open
 
@@ -3763,10 +3767,14 @@ Works on both sides (body and response). A map with NO declared value shape (min
 empty `additionalProperties`) now comes out as entries of JSON values rather than vanishing —
 two corpus fixture counts moved for exactly this (omni `join_via_map`, mindbody `data`).
 
+**Since #84 this holds on the response side only:** a map in a request body is sent as one `JSON`
+field, because `->entries` reads an object and the argument was a list of pairs — the field never
+reached the API. The test keeps the response assertions.
+
 **Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`),
 `src/oas/nodes/propMap.ts` (`needsValueSelection`), #59 (the list-of-lists spelling), #68 (where
-it surfaced). Fixture `tests/resources/oas/map-input-suffix.yaml` (`labels`, `tags`, GET-side
-`labels`), test `test_70_scalar_valued_maps_stay`.
+it surfaced), #84 (bodies). Fixture `tests/resources/oas/map-input-suffix.yaml` (`labels`, `tags`,
+GET-side `labels`), test `test_70_scalar_valued_maps_stay`.
 
 ## 71 · Generating twice on one `OasGen` changes the output — `reset()` forgets most state — ✅ Fixed
 
@@ -4470,7 +4478,7 @@ multipart, a form written as a `$ref`, and JSON alongside a form), tests
 `test_83_stripe_writes_its_form_bodies`. `test_corpus_mut_slack` moves from 1 type to 2 — it pinned
 the bug. Related: #66, #67, #70, #74.
 
-## 84 · A map in a request body is never sent — ⬜ Open
+## 84 · A map in a request body is never sent — ✅ Fixed
 
 **Symptom:** a mutation whose body carries a map of plain values composes, runs, and silently posts
 everything except the map. docker's `post:/containers/create` loses its `Labels`. The router reports
@@ -4557,19 +4565,52 @@ $args.input { metadata name }
 form:  metadata%5Bk1%5D=v1&metadata%5Bk2%5D=v2&name=Fer     # metadata[k1]=v1&metadata[k2]=v2
 json:  {"metadata":{"k1":"v1","k2":"v2"},"name":"Fer"}
 ```
-So the fix is: a map inside a body is written as `JSON` — no entry type, no `->entries` — and the
-caller passes the object itself. Responses keep the entry list, which is correct there. The other
-way to fix it would be a new method in the router that turns pairs back into an object; that would
-let the argument keep its `key`/`value` type, but no such method exists and nothing here waits on
-it. Stripe does not need either: it writes `metadata` as an `anyOf`, which comes out `JSON` already.
+**Fix:**
+- A map-valued field in a body is not built as a map: it is the JSON scalar, the same answer #19
+  gives an object with no shape. The caller passes the object, and the body sends it as it comes.
+- One predicate, `Factory.sendsMapAsJson(parent)` — true when the parent is on the input side, which
+  only a body is: `kind = 'input'` is set in one place (`body.ts`) and inherited from there.
+- A map inside a map falls out with it. The outer field is a scalar now, so the inner map is never
+  built and `PortBindingsEntryEntryInput` is gone with the rest.
+- Responses are untouched: they still read their pairs with `->entries`.
+- A query param that is a map was already JSON before this (#40) and stays that way — there is a
+  test over `map-input-suffix.yaml`'s GET that says so.
 
-**What it costs today:** every mutation whose body holds a map loses that field. #68 and #70 built
-the entry type and gave it the `Input` ending for exactly these bodies, so the generated schema has
-looked right all along — the field just never left the router.
+**Example** — the same docker operation, after:
+```graphql
+input InputInput { labels: JSON  image: String  … }     # no LabelsEntryInput any more
+body: """
+$args.input {
+  Labels: labels
+  Image: image
+}
+"""
+```
+```
+called with:  labels: {"env":"prod","tier":"web"}, image: "nginx"
+POST body:    {"Image":"nginx","Labels":{"env":"prod","tier":"web"}}
+```
+Measured on the regenerated docker connector with `rover connector run` against a local echo
+server: the field arrives and the run reports no problems.
 
-**AST:** nothing has changed yet. A fix would stop building the `Map` node under a body and use the
-JSON scalar instead, the same answer #19 already gives an object with no fields.
+**What it costs:** the argument stops being typed. `labels: [LabelsEntryInput]` becomes
+`labels: JSON`, so nothing checks the keys any more. That is the trade — a field that arrives
+untyped, instead of a typed one that was thrown away.
 
-**Refs:** `src/oas/nodes/propMap.ts` (`select`, `getValue`), `src/oas/nodes/map.ts`,
-`src/oas/nodes/factory.ts` (`fromSchema`, the `additionalProperties` route). Found while verifying
-#83 against the router. Related: #19, #68, #70, #76, #77, #78, #83.
+**Still open — a body that is only a map, and a list of maps.** Both are built through
+`Factory.fromSchema`, not through the property route, and keep the old shape. Same defect, no
+operation found that does it; fix them when one turns up.
+
+**AST** — one node kind is replaced, on the body side only:
+```
+before   post:/containers/create > body:b > comp:input:Input > prop:map:Labels > map:input:LabelsEntry
+after    post:/containers/create > body:b > comp:input:Input > prop:scalar:Labels
+```
+A selection saved against the old path (the web app stores them) will not resolve — #72 matches on
+names, not on a node that changed kind.
+
+**Refs:** `src/oas/nodes/factory.ts` (`sendsMapAsJson`, both `fromProp` map branches). Fixture
+`map-input-suffix.yaml` (a body map, a map of maps, a map of lists, and now a map query param),
+tests `test_84_body_map_is_sent_as_json`, `test_70_scalar_valued_maps_stay` and
+`test_68_map_value_names_the_type_it_points_at` (both re-pointed at the response side). Found while
+verifying #83 against the router. Related: #19, #40, #68, #70, #83.

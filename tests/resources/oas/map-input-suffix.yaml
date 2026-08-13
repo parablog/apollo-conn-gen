@@ -49,6 +49,14 @@ paths:
                 $ref: '#/components/schemas/CreateResult'
     get:
       operationId: getSnapshot
+      parameters:
+        # a query param that is a map: it is not a body, so it keeps taking the JSON route #40 gives it
+        - name: filter
+          in: query
+          schema:
+            type: object
+            additionalProperties:
+              type: string
       responses:
         '200':
           description: OK

@@ -224,6 +224,13 @@ export class Factory {
     return result;
   }
 
+  // A map in a request body is sent whole, as JSON; a map in a response keeps its key/value pairs.
+  // e.g. (docker-engine) Labels: { additionalProperties: { type: string } }
+  //   body -> labels: JSON,  response -> labels: [LabelsEntry]      see docs/issues.md #84
+  private static isParentAnInput(parent: IType): boolean {
+    return parent.kind === 'input';
+  }
+
   private static isMapSchema(schema: SchemaObject): boolean {
     // A schema is considered a map if:
     // 1. It has additionalProperties defined as an object
@@ -379,9 +386,14 @@ export class Factory {
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
           prop = propComp;
         } else if (this.isMapSchema(schemaObj)) {
-          // Map property: object with only additionalProperties
-          const mapType: Map = new Map(parent, ref || propName, schemaObj);
-          prop = new PropMap(parent, propName, schemaObj, mapType);
+          if (this.isParentAnInput(parent)) {
+            // send it as JSON instead
+            prop = new PropScalar(parent, propName, 'JSON', schemaObj);
+          } else {
+            // Map property: object with only additionalProperties
+            const mapType: Map = new Map(parent, ref || propName, schemaObj);
+            prop = new PropMap(parent, propName, schemaObj, mapType);
+          }
         } else if (schemaObj.properties != null) {
           const propType: IType = new Obj(parent, ref || propName, schemaObj);
           prop = new PropObj(parent, propName, schemaObj, propType);
@@ -431,9 +443,13 @@ export class Factory {
       propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
       prop = propComp;
     } else if (this.isMapSchema(schemaObj)) {
-      // Map property: object with only additionalProperties (no explicit type)
-      const mapType: Map = new Map(parent, ref || propName, schemaObj);
-      prop = new PropMap(parent, propName, schemaObj, mapType);
+      if (this.isParentAnInput(parent)) {
+        prop = new PropScalar(parent, propName, 'JSON', schemaObj);
+      } else {
+        // Map property: object with only additionalProperties (no explicit type)
+        const mapType: Map = new Map(parent, ref || propName, schemaObj);
+        prop = new PropMap(parent, propName, schemaObj, mapType);
+      }
     } else if (schemaObj.properties != null) {
       const propType: IType = new Obj(parent, ref || propName, schemaObj);
       prop = new PropObj(parent, propName, schemaObj, propType);

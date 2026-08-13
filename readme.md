@@ -482,6 +482,8 @@ A body is taken from the first content type the router can send: JSON, or `appli
 
 Everything else — multipart, octet-stream, plain text — has no mapping we can write, so the operation is generated with no argument and no body, and the run warns with its name. A form that is a single value or a list does the same: the router only form-encodes objects.
 
+A field that takes any key the caller wants (`additionalProperties`) is one `JSON` argument in a body — you pass `{"env":"prod"}` and it is sent as it comes. Responses still read such a field as a list of `key`/`value` pairs.
+
 ### Batch endpoints
 
 `--batch <file>` (library: the `batch` option) marks operations as batch endpoints, keyed by op id. The only knob is the batch size cap; the entity, key, request and selection are all inferred. `{}` or `null` means defaults:

@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - A request body the API takes as a form is now sent: the mutation gets its argument, its mapping
   and the `Content-Type` header the router form-encodes on, so stripe's `post:/v1/customers` and
   slack's `post:/admin.apps.approve` can post data. Issue #83.
+- A body field that takes any key the caller wants is now one `JSON` argument and reaches the API,
+  so docker's `post:/containers/create` sends its `Labels`. Responses are unchanged. Issue #84.
 
 ### Added
 
