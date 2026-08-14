@@ -4695,3 +4695,73 @@ typed from here, so the field is required in both), `src/cli/oas.ts` (`--service
 `checkServicePrefix`). Tests `tests/all/service-prefix.test.ts`: two through the CLI (the rename and
 the rejection) and three calling the transform directly (interface/union/members, argument types,
 the name check). The CLI one is what a revert breaks — the direct calls bypass the wiring.
+
+## 92 · A response that is a dictionary of plain values generates nothing — ✅ Fixed
+**Symptom:** two github ops produce an empty document — no types, no `type Query` — and the sweep
+scores them GEN-EMPTY: `get:/emojis` and `get:/repos/{owner}/{repo}/languages`. They were the last
+two GEN-EMPTY ops with a known cause, and the whole of github's remainder after #88.
+
+**OAS** (github — the whole 200 body is a dictionary; `/emojis` is names to image URLs,
+`language` is languages to byte counts):
+```yaml
+/emojis:            { additionalProperties: { type: string } }
+language:           { additionalProperties: { type: integer } }   # $ref'd by /repos/…/languages
+```
+
+**Example**:
+```graphql
+# before — 268 bytes, the preamble and nothing else
+scalar JSON
+
+# after
+type REntry { key: String  value: String }
+type Query { emojis: [REntry] @connect(… selection: "$->entries { key value }") }
+```
+
+**Cause:** `PathsCollector.collectExpandedPaths` pairs every "the response is just X" leaf case with
+its under-a-property twin, and one half of the map pair was never written:
+
+| under a property | at the response root |
+|---|---|
+| `PropScalar` | `Scalar` + `parent instanceof Res` (#32) |
+| `PropArray` of scalars | `Arr` + `parent instanceof Res` (#47) |
+| `PropMap` with a whole value (#70) | missing |
+
+Nothing matched, `newSelection` stayed empty, and the empty-side fallback only looks for a `PropObj`
+with no props — so the op expanded to zero paths and was dropped before any writer ran. That is why
+#90, which fixed the *writers* for a map at the response root, did not reach these two: an
+object-valued map root descends into the value's props and expands normally, a plain-valued one has
+nothing below it to reach.
+
+**Fix:** the missing leaf case, `Map` whose parent is a `Res` and whose value `T.isWholeMapValue`
+answers for — the same call #70 makes under a property. #90 had already taught `Map.generate` to
+write `[<Name>Entry]` in `Res` position and `Res.select` to write `$->entries`, so nothing else was
+needed; `needsValueSelection()` is false for a plain value, giving `key` and a bare `value`.
+
+**Where it goes, and why not where it looks like it should.** The check sits **inside** the `else`,
+after `this.gen.expand(child)` — not as a branch beside the other `parent instanceof Res` cases. The
+node tree is lazy: a `Map`'s `valueType` is undefined until the node is expanded, so a branch placed
+before the `else` tests `undefined` and never fires. #70's twin is inside the `else` for exactly
+this reason. Placing it alongside its siblings looks right and silently does nothing.
+
+`Map` is imported there as `MapNode`: the file builds plenty of real `Map`s and the node class would
+shadow the built-in.
+
+**Measured:** github 442/444 → 444/444; the corpus GEN-EMPTY bucket 4 → 2. Whole-spec github
+generation before and after differs by additions only — the two ops and their two entry types, with
+none of the other 502 types touched.
+
+**Petstore gained an op too**, which is what moved three existing tests from 8 types to 9:
+`get:/store/inventory` is the same shape (`additionalProperties: { type: integer }`, status codes to
+quantities) and had been generating nothing all along. It now answers
+`storeInventory: [REntry]`. The tests already listed the op in their selections, so the count was
+the only thing hiding it — a reminder that a GEN-EMPTY op is invisible in a `typesSize` assertion
+until it stops being empty. Updated in `oas-core.test.ts` (two) and `mapper.test.ts` (one).
+
+**AST** — none. The tree already held the `Map`; only the expansion missed it.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`), `src/oas/nodes/typeUtils.ts`
+(`isWholeMapValue`). Fixture `map-response-root.yaml` (four ops: object-valued root, map under a
+field, string-valued root, integer-valued root), test
+`test_92_map_of_plain_values_at_the_response_root_expands`. See #70 for the under-a-property twin
+and #90 for the writers.

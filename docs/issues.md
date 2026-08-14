@@ -511,3 +511,31 @@ of the field (`obj.ts`), while every route's `Obj.select` keeps its own `PropCir
 `src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override lookup vs
 `select`), `src/oas/nodes/propCircRef.ts`. See #13 for the mechanism and #26 for the reachability
 walk that has to mirror both.
+
+## 93 · An inline map at the response root is always called `REntry` — ⬜ Open
+**Symptom:** github `get:/emojis` emits its entry type as `REntry`, which says nothing about the
+operation or the data. Every unnamed map at a response root gets that same name.
+
+**Cause:** `Map.updateName()` names an unnamed map `<parentName> + "Entry"`. A response-root map's
+parent is the `Res`, and a `Res` is named `r` — so the answer is always `REntry`. The three sibling
+container nodes all special-case this position and name themselves after the operation:
+
+| node | unnamed, under a `Res` |
+|---|---|
+| `Obj.updateName` | `op.getGqlOpName() + 'Response'` |
+| `Composed.updateName` | `op.getGqlOpName() + 'Response'` |
+| `Union.updateName` | `op.getGqlOpName() + 'Response'` |
+| `Map.updateName` | `'REntry'` — the `Res` branch is missing |
+
+**Latent, not currently biting.** Only an *inline* map root mints `REntry`; one behind a `$ref`
+takes the ref's name (`/repos/{owner}/{repo}/languages` → `LanguageEntry`). github has exactly one
+of each, so nothing collides today. Two inline map roots in one spec would both ask for `REntry` and
+land on #78's conflict machinery, which renames by container — and both containers are `r`.
+
+**Fix (not done):** give `Map.updateName` the same `parent instanceof Res` branch, with `Entry`
+instead of `Response`. Cost: it renames confluence's entry type too, so the `REntry` assertions in
+`test_90_map_at_the_response_root_takes_entries` move with it.
+
+**Refs:** `src/oas/nodes/map.ts` (`updateName`), against `obj.ts` / `comp.ts` / `union.ts`
+(`updateName`). Surfaced while fixing #92; the whole-spec github check that closed #92 is what
+showed the collision is not reachable yet.

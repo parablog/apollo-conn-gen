@@ -36,6 +36,32 @@ paths:
                     type: object
                     additionalProperties:
                       $ref: '#/components/schemas/Restriction'
+  # the same, over a plain value — github's /emojis, a map of strings
+  /emoji:
+    get:
+      operationId: getEmoji
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  # and over a number — github's /repos/{owner}/{repo}/languages, byte counts per language
+  /languages:
+    get:
+      operationId: getLanguages
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
 components:
   schemas:
     Restriction:

@@ -52,7 +52,7 @@ test('test_004_oas_test minimal petstore 03 all GETs', async () => {
     'get:/user/logout>**',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 8);
+  await runOasTest(`petstore.yaml`, paths, 19, 9);
 });
 
 test('test_005_oas_test full get petstore', async () => {
@@ -535,7 +535,7 @@ test('test_041_oas_test_026_petstore-paths', async () => {
     'get:/user/logout>**',
   ];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 8);
+  await runOasTest(`petstore.yaml`, paths, 19, 9);
 });
 
 // TODO: we should have a proper Enum status here
@@ -2154,7 +2154,7 @@ test('test_90_map_at_the_response_root_takes_entries', async () => {
   // #90: a response body that is itself a dictionary had no field name to hang the arrow off, so
   // the selection started inside the value and rover answered SELECTED_FIELD_NOT_FOUND. Res.select
   // now reads the entries of the response itself, and the field is the list ->entries answers.
-  const schema = await runOasTest('map-response-root.yaml', ['get:/restrictions>**'], 2, 2);
+  const schema = await runOasTest('map-response-root.yaml', ['get:/restrictions>**'], 4, 2);
   assert.ok(schema !== undefined);
   assert.ok(/restrictions: \[REntry\]/.test(schema!), 'the whole-response map is a list of entries');
   assert.ok(/type REntry \{\n {2}key: String\n {2}value: Restriction\n\}/.test(schema!), 'entry type is written');
@@ -2165,8 +2165,22 @@ test('test_90_map_at_the_response_root_takes_entries', async () => {
 test('test_90_map_under_a_field_is_unchanged', async () => {
   // the same map one level down still goes through PropMap, which writes the field name in front
   // of the arrow. Both callers now share one ->entries body, so this guards the extraction.
-  const schema = await runOasTest('map-response-root.yaml', ['get:/pages>**'], 2, 3);
+  const schema = await runOasTest('map-response-root.yaml', ['get:/pages>**'], 4, 3);
   assert.ok(schema !== undefined);
   assert.ok(/labels: \[LabelsEntry\]/.test(schema!), 'a map under a field keeps its own entry type');
   assert.ok(/labels: labels\?->entries \{/.test(schema!), 'and the field name still precedes the arrow');
+});
+
+test('test_92_map_of_plain_values_at_the_response_root_expands', async () => {
+  // #92: `>**` had no leaf case for a whole-response map over a plain value, so it expanded to zero
+  // paths and the op was dropped before any writer ran. github's /emojis and /languages both did.
+  const strings = await runOasTest('map-response-root.yaml', ['get:/emoji>**'], 4, 1);
+  assert.ok(strings !== undefined);
+  assert.ok(/emoji: \[REntry\]/.test(strings!), 'the map is a list of entries');
+  assert.ok(/type REntry \{\n {2}key: String\n {2}value: String\n\}/.test(strings!), 'a string value');
+  assert.ok(/\$->entries \{\n\s*key\n\s*value\n\s*\}/.test(strings!), 'key and a bare value — no value block');
+
+  const numbers = await runOasTest('map-response-root.yaml', ['get:/languages>**'], 4, 1);
+  assert.ok(numbers !== undefined);
+  assert.ok(/type REntry \{\n {2}key: String\n {2}value: Int\n\}/.test(numbers!), 'and an integer value');
 });

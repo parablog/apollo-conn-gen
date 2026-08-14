@@ -3,6 +3,8 @@ import { Composed } from '../nodes/comp.js';
 import {
   Arr,
   IType,
+  // aliased: this file builds plenty of real `Map`s, and the node class would shadow the built-in
+  Map as MapNode,
   Prop,
   PropArray,
   PropCircRef,
@@ -295,12 +297,23 @@ class PathsCollector {
           // Nothing to pick apart, so the array itself is the leaf. see docs/FIXED.md #47
           newSelection.add(child.path());
         } else {
+          // the value type is only known once the node is expanded, so both map checks come after
           this.gen.expand(child);
           // a map of plain values has nothing below it to select — the map itself is the leaf;
           // the field used to vanish. e.g. (map-input-suffix.yaml) labels: { additionalProperties: { type: string } }  #70
           // (whole values only — a cycle-cut value would select bare against a composite SDL type  #76)
           if (child instanceof PropMap && child.map.valueType && T.isWholeMapValue(child.map.valueType)) {
             // add the child path instead
+            newSelection.add(child.path());
+          }
+          // the same map as the whole response, where there is no property to hang it off — without
+          // this the op expands to nothing. e.g. (github) get:/emojis: { additionalProperties: string }  #92
+          if (
+            child instanceof MapNode &&
+            child.parent instanceof Res &&
+            child.valueType &&
+            T.isWholeMapValue(child.valueType)
+          ) {
             newSelection.add(child.path());
           }
         }
