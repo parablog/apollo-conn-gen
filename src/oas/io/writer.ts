@@ -20,7 +20,10 @@ export class Writer {
     // resolve the spec's security once (schemes, global requirement, per-op mode) and share it —
     // schemaWriter (@source) and operationWriter (per-@connect) both query it instead of re-walking
     // the whole spec per operation.
-    const security = SecurityPlan.from(gen.parser, { skipAuth: gen.options.skipAuth });
+    const security = SecurityPlan.from(gen.parser, {
+      skipAuth: gen.options.skipAuth,
+      authValuePrefix: gen.options.authValuePrefix,
+    });
     this.schemaWriter = new SchemaWriter(gen, security);
     this.operationWriter = new OperationWriter(gen, security);
   }

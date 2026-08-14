@@ -4831,3 +4831,61 @@ after    prop:array:#ids > scalar:JSON
 `anyof-body-drops-operation.yaml` (a body list and, added with the fix, the same shape in the
 response), test `test_86_list_of_plain_values_stays`. Narrows #20, which still drops a choice of
 objects. Related: #19, #56, #59, #70, #80.
+
+## 87 · An API key header sends the key alone, with no room for the text the API asks for — ✅ Fixed
+
+**Symptom:** PagerDuty answers `401` to every request. The API wants
+`Authorization: Token token=<API_KEY>`, and the generated `@source` sends only the key. Found by
+comparing the generated schema against the deployed PagerDuty connector, which is written from a
+manifest by a different (Rust) tool.
+
+**OAS** (pagerduty, `components.securitySchemes` — the format lives in prose, in `description`;
+there is no OAS field for it):
+```yaml
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: 'Format: `Token token=<API_KEY>`'
+```
+
+**Example** — before, and after `--auth-value-prefix "Token token="`:
+```graphql
+# before — the key alone, which the API rejects
+@source(name: "api", http: { baseURL: "…", headers: [{ name: "Authorization", value: "{$config.apiKey}" }] })
+
+# after — the text the description asks for, then the key
+@source(name: "api", http: { baseURL: "…", headers: [{ name: "Authorization", value: "Token token={$config.apiKey}" }] })
+```
+
+**Cause:**
+- `mapSchemeToAuth` writes one fixed value per scheme type; for an API key in a header that value is
+  always `{$config.apiKey}`.
+- The spec says what the value must look like in free text only, so nothing in the document can be
+  read to build it.
+- The generator had no option for it either, on the command line or in `IGenOptions`.
+
+**Fix:** a new `--auth-value-prefix <prefix>` option (library: `authValuePrefix`). Its text is
+written in front of the key, exactly as given:
+- one value for the whole run — the same prefix applies wherever an API-key header resolves, on
+  `@source` and on each `@connect`;
+- nothing is added between the prefix and the key, so a trailing space belongs in the option
+  (`--auth-value-prefix "Token "`);
+- every other scheme is untouched: an API key in the query string, bearer, basic and OAuth2 all
+  write what they wrote before;
+- without the option the header is `{$config.apiKey}`, byte for byte what it was.
+
+**Known limitation:** a prefix passed for a spec with no API-key header does nothing and says
+nothing. Telling the difference would mean knowing which schemes an operation really uses and
+whether `--skip-auth` turned them off.
+
+**AST** — none. Auth is written from the parsed security schemes, not from the node tree.
+
+**Refs:** `src/oas/io/security.ts` (`mapSchemeToAuth`, `resolveAuth`, `SecurityPlan`),
+`src/cli/oas.ts`, `src/oas/oasGen.ts`, `src/oas/oasContext.ts`, `src/oas/io/writer.ts`. Fixture
+`apikey-header-prefix.yaml`, tests `test_87_apikey_header_writes_the_auth_value_prefix` and
+`test_87_auth_value_prefix_reaches_the_cli` (the option really travels from the command line).

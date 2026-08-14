@@ -151,6 +151,10 @@ program
   .option('--skip-optional-markers', 'Skip the "?" optional-field markers in selections', false)
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
   .option('--skip-auth', 'Omit all auth (no headers on @source, no auth on @connect)', false)
+  .option(
+    '--auth-value-prefix <prefix>',
+    'Text to write before an apiKey header value, e.g. "Token token=" (add the trailing space yourself if the API needs one); only applies when the scheme is apiKey in a header',
+  )
   .parse(process.argv);
 
 const source = program.args[0];

@@ -29,6 +29,7 @@ interface IGenOptions {
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   skipAuth?: boolean;
+  authValuePrefix?: string;
   directives?: DirectivesConfig;
 }
 

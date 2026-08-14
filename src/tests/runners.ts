@@ -33,6 +33,7 @@ export async function runOasTest(
     composeFederationVersion?: string;
     emitConnectorErrors?: boolean;
     skipAuth?: boolean;
+    authValuePrefix?: string;
     directives?: DirectivesConfig;
     skipOptionalMarkers?: boolean;
     // the local composer is one fixed build and ignores `federation_version`, so a test that pins an
@@ -53,6 +54,7 @@ export async function runOasTest(
     inferEntityResolvers,
     emitConnectorErrors: opts.emitConnectorErrors,
     skipAuth: opts.skipAuth,
+    authValuePrefix: opts.authValuePrefix,
     connectorSpecVersion: opts.connectorSpecVersion,
     federationVersion: opts.federationVersion,
   });

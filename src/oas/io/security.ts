@@ -21,17 +21,26 @@ interface AuthEntry extends NameValue {
 // un-emitted HEAD/OPTIONS op no longer flips the whole spec into per-op mode.
 const SUPPORTED_METHODS: readonly string[] = ['get', 'post', 'put', 'patch', 'delete'];
 
+// The auth choices for one run: leave auth out, or write text before an API key header value.
+interface SecurityOptions {
+  skipAuth?: boolean;
+  authValuePrefix?: string;
+}
+
 /**
  * Map one OAS security scheme to its connector auth entry, or null when it makes none.
  * Header values carry `{}` interpolation; a query value is a raw JSONSelection (no braces) because
  * it lands in a `queryParams: """…"""` block, which is already a JSONSelection context.
  */
-function mapSchemeToAuth(scheme: SecuritySchemeObject): AuthEntry | null {
+function mapSchemeToAuth(scheme: SecuritySchemeObject, authValuePrefix?: string): AuthEntry | null {
   switch (scheme.type) {
     case 'apiKey':
-      // apiKey in a header, e.g. `{ type: apiKey, in: header, name: X-API-Key }`
+      // apiKey in a header, e.g. `{ type: apiKey, in: header, name: X-API-Key }`. Some APIs want
+      // text before the key, which --auth-value-prefix supplies:
+      //   (apikey-header-prefix.yaml) Authorization -> "Token token={$config.apiKey}"
       if (scheme.in === 'header' && scheme.name) {
-        return { kind: 'header', name: scheme.name, value: '{$config.apiKey}' };
+        const value = authValuePrefix ? `${authValuePrefix}{$config.apiKey}` : '{$config.apiKey}';
+        return { kind: 'header', name: scheme.name, value };
       }
       // apiKey in the query string, e.g. `{ type: apiKey, in: query, name: api_key }`
       if (scheme.in === 'query' && scheme.name) {
@@ -78,13 +87,14 @@ function droppedSchemeWarning(name: string, scheme: SecuritySchemeObject | undef
 function resolveAuth(
   securityRequirements: SecurityRequirementObject[] | undefined,
   schemes: SecuritySchemesObject,
+  authValuePrefix?: string,
 ): { auth: AuthEntry | null; warnings: string[] } {
   let auth: AuthEntry | null = null;
   const warnings: string[] = [];
 
   for (const name of securityRequirements?.flatMap((requirement) => Object.keys(requirement)) ?? []) {
     const scheme = schemes[name];
-    const entry = scheme ? mapSchemeToAuth(scheme) : null;
+    const entry = scheme ? mapSchemeToAuth(scheme, authValuePrefix) : null;
 
     if (entry) {
       // first scheme that maps wins; a later viable alternative is a silent OR choice
@@ -138,6 +148,7 @@ export class SecurityPlan {
     globalReq: SecurityRequirementObject[] | undefined,
     perOpMode: boolean,
     private readonly skipAuth: boolean = false,
+    private readonly authValuePrefix?: string,
   ) {
     this.schemes = schemes;
     this.globalReq = globalReq;
@@ -145,13 +156,19 @@ export class SecurityPlan {
     this.globalWarningBodies = new Set(globalReq ? resolveAuth(globalReq, schemes).warnings : []);
   }
 
-  static from(api: Oas, opts?: { skipAuth?: boolean }): SecurityPlan {
+  static from(api: Oas, opts?: SecurityOptions): SecurityPlan {
     const def = api.getDefinition();
     // oas-normalize usually up-converts Swagger 2.0 → components.securitySchemes; the
     // securityDefinitions fallback (same shape) is a safety net. refs are dereferenced by oas,
     // so the shape is a plain SecuritySchemesObject.
     const schemes = (def.components?.securitySchemes ?? def.securityDefinitions ?? {}) as SecuritySchemesObject;
-    return new SecurityPlan(schemes, def.security, hasPerOperationSecurity(def), opts?.skipAuth ?? false);
+    return new SecurityPlan(
+      schemes,
+      def.security,
+      hasPerOperationSecurity(def),
+      opts?.skipAuth ?? false,
+      opts?.authValuePrefix,
+    );
   }
 
   // C3: emit the global's dropped-scheme warnings exactly once per generation. Called from
@@ -172,7 +189,7 @@ export class SecurityPlan {
     // no global requirement -> keep the headerless @source byte-for-byte
     if (!this.globalReq || this.globalReq.length === 0) return null;
 
-    const { auth, warnings } = resolveAuth(this.globalReq, this.schemes);
+    const { auth, warnings } = resolveAuth(this.globalReq, this.schemes, this.authValuePrefix);
     // C3: surface the global's dropped-scheme warnings exactly once (uniform mode; per-op mode
     // emits them from the first forOp).
     this.emitGlobalWarningsOnce();
@@ -208,7 +225,7 @@ export class SecurityPlan {
     if (this.skipAuth) return { header: null, query: null };
     // `??` not `||`: an explicit `security: []` (public) must NOT fall back to the global.
     const effective = op.operation.schema.security ?? this.globalReq;
-    const { auth, warnings } = resolveAuth(effective, this.schemes);
+    const { auth, warnings } = resolveAuth(effective, this.schemes, this.authValuePrefix);
 
     if (this.perOpMode) {
       // surface the global's dropped-scheme warnings exactly once (idempotent), then warn only

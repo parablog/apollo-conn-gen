@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
+import { spawnSync } from 'child_process';
 import { runOasTest } from '../../src/tests/runners.js';
 import { captureWarnings } from './_setup.js';
 
@@ -323,4 +324,35 @@ test('test_R5_security_per_op_global_warning_fires_once_across_inheriting_ops (C
     1,
     `the global cookie warning must fire exactly once across 3 inheriting ops, got ${cookieWarnings.length}: ${cookieWarnings.join(' | ')}`,
   );
+});
+
+test('test_87_apikey_header_writes_the_auth_value_prefix', async () => {
+  // PagerDuty asks for `Authorization: Token token=<API_KEY>` but only says so in the scheme's
+  // `description`, so the prefix comes from the option instead. see docs/issues.md #87
+  const schema = await runOasTest(
+    'apikey-header-prefix.yaml',
+    ['get:/widgets>**'],
+    1,
+    1,
+    false,
+    false,
+    undefined,
+    false,
+    false,
+    { authValuePrefix: 'Token token=' },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /\{ name: "Authorization", value: "Token token=\{\$config\.apiKey\}" \}/.test(schema!),
+    'wants the documented literal prefix baked into the header value',
+  );
+});
+
+test('test_87_auth_value_prefix_reaches_the_cli', async () => {
+  // The test above calls fromFile directly, so a CLI option that never reaches it would still pass.
+  const cli = ['--import', 'tsx/esm', 'src/cli/oas.ts', 'tests/resources/oas/apikey-header-prefix.yaml', '-n'];
+  const bare = spawnSync('node', cli, { encoding: 'utf-8' });
+  const prefixed = spawnSync('node', [...cli, '--auth-value-prefix', 'Token token='], { encoding: 'utf-8' });
+  assert.ok(bare.stdout.includes('value: "{$config.apiKey}"'), 'the CLI sends the key alone by default');
+  assert.ok(prefixed.stdout.includes('value: "Token token={$config.apiKey}"'), 'and the text in front when asked');
 });

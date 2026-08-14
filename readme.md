@@ -227,11 +227,14 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 | `inferEntityResolvers`   | `boolean`          | `false`                    | Infer entity resolvers and emit `@key` / `entity: true`.                                                                                             |
 | `emitConnectorErrors`    | `boolean`          | `false`                    | Emit an `errors { message extensions { statusCode: $status } }` block for operations that document HTTP error responses (library-only, no CLI flag). |
 | `skipAuth`               | `boolean`          | `false`                    | Omit all auth: no headers on `@source`, no auth on `@connect`.                                                                                       |
+| `authValuePrefix`        | `string`           | —                          | Text written before an API-key header value, e.g. `Token token=`. Only applies to an API key in a header.                                            |
 | `showParentInSelections` | `boolean`          | `false`                    | Annotate selection output with the parent each field comes from (debugging aid).                                                                     |
 
 ### Security schemes and auth
 
 When the spec declares `securitySchemes` (API key, HTTP bearer/basic, OAuth2), the generator maps them to connector auth automatically: headers or query params with `{$config.*}` placeholders, emitted on `@source` when the whole spec shares the same security, or per-operation on `@connect` when it varies. Pass `skipAuth: true` (CLI: `--skip-auth`) to omit all of it.
+
+Some APIs want text in front of the key and only say so in the scheme's `description` — PagerDuty asks for `Authorization: Token token=<API_KEY>`. Pass `authValuePrefix: 'Token token='` (CLI: `--auth-value-prefix "Token token="`) and that text is written before the key, exactly as given, so add the trailing space yourself if the API needs one. See [issue #87](docs/issues.md).
 
 ### Linting selections
 
@@ -448,6 +451,7 @@ Note the `api_key` header: petstore declares an `apiKey` security scheme, which 
 - `--directives <file>`: Load directives (`Type` or `Type.field` -> `["@…"]`) from a JSON file. See [Manual directives](#manual-directives).
 - `--infer-entity-resolvers`: Infer entity resolvers and emit `@key` / `entity: true` (default: `false`).
 - `--skip-auth`: Omit all auth — no headers on `@source`, no auth on `@connect` (default: `false`).
+- `--auth-value-prefix <prefix>`: Text to write before an API-key header value, e.g. `"Token token="` (default: none). Only applies when the scheme is an API key in a header.
 
 For a complete list of options, run:
 

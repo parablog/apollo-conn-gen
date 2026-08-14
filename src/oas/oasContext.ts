@@ -44,6 +44,7 @@ export type GenerateOptions = {
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   skipAuth?: boolean;
+  authValuePrefix?: string; // text written before an apiKey header value
   directives?: DirectivesConfig; // directives to apply
 };
 

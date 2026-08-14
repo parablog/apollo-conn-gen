@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.22.0]
 
 ### Fixed
 
@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - New `skipOptionalMarkers` option (CLI `--skip-optional-markers`) leaves the `?` optional-field
   markers out of selections, so the generated schema composes with the latest stable composition
   release (`2.14.3`). Markers are still emitted by default. Issue #16.
+- New `authValuePrefix` option (CLI `--auth-value-prefix`) writes text in front of an API-key header
+  value, such as PagerDuty's `Token token=`. The text is written exactly as given. Issue #87.
 
 ## [0.21.0]
 
