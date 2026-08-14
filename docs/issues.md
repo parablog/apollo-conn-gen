@@ -516,6 +516,13 @@ until that R2 gap is fixed. Full corpus byte-identical otherwise (zero regressio
 passes). box's 9 INTERNAL_ERROR ops confirmed a *different* mechanism (referenced-but-unemitted
 `Folder--Mini`, R-collector family) — untouched by this merge.
 
+**Status update (2026-08-14).** The R2 wall named above is gone, so it is no longer what holds
+these ops back. Confluence is at 93.8% (61/65 GET) and three of its four failures are now
+`CONNECTORS_UNRESOLVED_FIELD` on `Content.space` — the same divergence, raising the opposite
+error. The guard this entry relies on ("every union field is selected on at least the path it came
+from") is not enough: the composer wants the field provided at every position the type appears.
+Written up as #89.
+
 **Refs:** `src/oas/generator/typesCollector.ts` (`collect` + `findSelectedFieldNode`),
 `src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override
 lookup).
@@ -4889,3 +4896,144 @@ whether `--skip-auth` turned them off.
 `src/cli/oas.ts`, `src/oas/oasGen.ts`, `src/oas/oasContext.ts`, `src/oas/io/writer.ts`. Fixture
 `apikey-header-prefix.yaml`, tests `test_87_apikey_header_writes_the_auth_value_prefix` and
 `test_87_auth_value_prefix_reaches_the_cli` (the option really travels from the command line).
+
+## 88 · An operation on the root path `/` is written with no field name — ✅ Fixed
+
+**Symptom:** `github.yaml get:/` — GitHub's API root — is the last op in the corpus to fail with
+`CONNECTORS_UNRESOLVED_FIELD`, and it fails 33 times, once per field of the response type:
+
+```
+CONNECTORS_UNRESOLVED_FIELD: [test_spec] No connector resolves field `Root.authorizationsUrl`.
+CONNECTORS_UNRESOLVED_FIELD: [test_spec] No connector resolves field `Root.codeSearchUrl`.
+… 31 more
+```
+
+That reads like the selection is missing all 33 fields. It isn't — the selection is complete. The
+field it hangs off has no name:
+
+```graphql
+type Query {
+  : Root
+    @connect(source: "api", http: { GET: "/"}, selection: """
+      authorizationsUrl: authorizations_url
+      … all 33, correct
+      """)
+}
+```
+
+rover cannot bind a connector to a nameless field, so every field of `Root` reads as unresolved.
+This is the masking described in #27 and #40: one syntax error reported as a cascade. The local
+composer is blunter about the same schema — `INVALID_GRAPHQL: expected a Name`.
+
+**OAS** (github):
+```yaml
+paths:
+  /:
+    get:
+      operationId: meta/root
+      summary: GitHub API Root
+```
+
+**Cause:** `Naming.genOperationName` names an operation after its path. `formatPath('/')` splits on
+`/`, which gives two empty parts, capitalises neither, and joins them back to the empty string —
+correct for every other path, and nothing at all for the root. Nobody checked the result, so the
+empty name went straight into the SDL.
+
+Only GET shows it. The other verbs prefix the name — `post.ts` writes `'create' + upperFirst(name)`
+— so `POST /` was already emitting a valid, if odd, `create`.
+
+**The name also reaches type names.** `getGqlOpName()` is read in four more places to build
+`<op>Response` (`union.ts`, `obj.ts`, `comp.ts`) and a parent name (`factory.ts`). github escapes
+that because its response is a `$ref` (`Root`); with an inline response schema the same op emits a
+type called plain `Response`. That is why the fix belongs in `genOperationName` and not in `Get`.
+
+**Fix:** when the path yields no name, take the operationId; when there is no operationId either,
+call it `root`. `Naming.genParamName` already turns `meta/root` into `metaRoot`, so no new
+sanitiser. `GET /` is now `metaRoot`, `POST /` with no operationId is `createRoot`.
+
+**Blast radius:** two fixtures in the tree have a `/` path — `github.yaml` (get) and
+`FHIR-baseR4.yaml` (post, no operationId, not in the coverage corpus). No other operation's name
+changes: the new clause only runs when the old code produced the empty string.
+
+**AST** — none. This is the field name written from the path, not the node tree.
+
+**Refs:** `src/oas/utils/naming.ts` (`genOperationName`), reached from `get.ts` (`getGqlOpName`,
+`writeOpName`). Fixture `root-path-op.yaml` (both branches: the GET with an operationId, the POST
+without), test `test_88_root_path_op_takes_a_name`.
+
+## 89 · A field cut on some routes but kept on others is declared and never provided — 🔴 Open
+**Symptom:** three confluence relation ops fail compose, each with the same single error:
+
+```
+CONNECTORS_UNRESOLVED_FIELD: [test_spec] No connector resolves field `Content.space`.
+```
+
+- `get:/wiki/rest/api/relation/{relationName}/from/{sourceType}/{sourceKey}/to/{targetType}`
+- `get:/wiki/rest/api/relation/{relationName}/from/{sourceType}/{sourceKey}/to/{targetType}/{targetKey}`
+- `get:/wiki/rest/api/relation/{relationName}/to/{targetType}/{targetKey}/from/{sourceType}`
+
+They are the whole `CONNECTORS_UNRESOLVED_FIELD` bucket left in the GET sweep once #88 took the
+github op out of it.
+
+**OAS** (confluence — `Content` and `Space` point at each other, and `User` reaches `Space` too):
+```yaml
+Content:
+  properties:
+    space: { $ref: '#/components/schemas/Space' }
+    ancestors: { type: array, items: { $ref: '#/components/schemas/Content' } }
+Space:
+  properties:
+    homepage: { $ref: '#/components/schemas/Content' }
+User:
+  properties:
+    personalSpace: { $ref: '#/components/schemas/Space' }
+```
+
+**Example** — the same type, `Content`, reached at six places in one op's selection. Two keep
+`space`, four lost it to the cycle cut:
+```
+results.source                            space? { … }
+results.target                            space? { … }
+results.source.homepage                   # space: circular reference omitted
+results.source.personalSpace.homepage     # space: circular reference omitted
+results.target.homepage                   # space: circular reference omitted
+results.target.personalSpace.homepage     # space: circular reference omitted
+```
+The SDL declares the field once, because some route kept it:
+```graphql
+type Content {
+  # ancestors: [Content] - circular reference omitted
+  space: Space
+  …
+}
+```
+`ancestors` is the control: it is cut on *every* route, so it is commented in the SDL as well and
+composes fine. Only a field cut on *some* routes breaks.
+
+**Cause:** this is #13's mechanism, and it shows #13's guard is not enough.
+- #13 makes the emitted type the union of the fields surviving across routes, so a field kept on
+  one route is declared.
+- Its stated guard is "every union field is selected on at least the path it came from, so no
+  `CONNECTORS_UNRESOLVED_FIELD`". That holds here — `space` is selected, twice.
+- The composer does not accept that. It wants the field provided everywhere the type appears, not
+  somewhere. Four positions provide nothing, so the field counts as unresolved.
+- So #13 did not remove the divergence, it changed which error it raises: before #13 the selection
+  named a field the SDL lacked (`SELECTED_FIELD_NOT_FOUND`), after #13 the SDL names a field four
+  routes do not provide.
+
+**AST** — no new node shape. `Obj.generate` reads `context.sdlPropOverrides` for the un-cut version
+of the field (`obj.ts`), while every route's `Obj.select` keeps its own `PropCircRef` comment.
+
+**Ways out, none free:**
+- **Intersect instead of union** — a field cut on any route is dropped from the SDL *and* from every
+  route's selection. Small and boring, and it composes. Costs the field on the routes that could
+  really reach it, and inverts #13.
+- **Split the type** — the cut instance is a different shape, so give it its own name. Principled,
+  but `Space.homepage` alone is cut 351 times across confluence's 65 GET ops (#13), so the type
+  count needs measuring before this is affordable.
+- **Leave it** — 3 ops of 2392, on a spec already at 93.8%.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`collect`, `findSelectedFieldNode`),
+`src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override lookup vs
+`select`), `src/oas/nodes/propCircRef.ts`. See #13 for the mechanism and #26 for the reachability
+walk that has to mirror both.

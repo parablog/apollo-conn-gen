@@ -201,3 +201,13 @@ test('test_R8_path_param_snake_case_templated_with_args', async () => {
   // raw snake params may remain in the descriptive comment, but never in the connect GET URL
   assert.ok(!/GET: "[^"]*\{thing_id\}/.test(schema!), 'raw snake path param must not survive in the GET URL');
 });
+
+test('test_88_root_path_op_takes_a_name', async () => {
+  // `/` has no segment to name the field after, so the field came out nameless — `: Root` — and
+  // rover blamed every field of the response type. see docs/issues.md #88
+  const schema = await runOasTest('root-path-op.yaml', ['get:/>**', 'post:/>**'], 2, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(!/^\s*:\s/m.test(schema!), 'no nameless field emitted');
+  assert.ok(/\bmetaRoot(\(|:)/.test(schema!), 'the GET takes its operationId, meta/root -> metaRoot');
+  assert.ok(/\bcreateRoot(\(|:)/.test(schema!), 'the POST has no operationId and falls back to root');
+});

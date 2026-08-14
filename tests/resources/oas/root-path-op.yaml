@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: An API whose root path is a real endpoint
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # `/` has no segment to name the field after. GitHub's API root is the real case.
+  /:
+    get:
+      operationId: meta/root
+      summary: API root
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - currentUserUrl
+                properties:
+                  currentUserUrl:
+                    type: string
+                  emojisUrl:
+                    type: string
+    # the same bare path with no operationId to fall back on
+    post:
+      summary: Reset the root
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean

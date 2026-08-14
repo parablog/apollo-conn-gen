@@ -231,6 +231,11 @@ export class Naming {
       : [];
 
     const result = Naming.formatPath(path, parameters);
+    // The API root, `/`, has no segment to name after, so the path leaves us with nothing.
+    // e.g. (github) `GET /` takes its operationId `meta/root` and becomes `metaRoot`.
+    if (!result) {
+      return operation.hasOperationId() ? Naming.genParamName(operation.getOperationId()) : 'root';
+    }
     return _.lowerFirst(result);
   }
 
