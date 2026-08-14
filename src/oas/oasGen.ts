@@ -14,6 +14,7 @@ import { TypesCollector } from './generator/typesCollector.js';
 import { Mapper } from './mapper/types.js';
 import { Naming } from './utils/naming.js';
 import { Directives, DirectivesConfig } from './lint/directives.js';
+import { Namespace } from './lint/namespace.js';
 
 interface IGenOptions {
   skipValidation?: boolean;
@@ -26,6 +27,7 @@ interface IGenOptions {
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
   skipOptionalMarkers?: boolean;
+  servicePrefix?: string;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
   skipAuth?: boolean;
@@ -171,7 +173,9 @@ export class OasGen {
 
       const schema = writer.flush();
       // R14: directives the user declared go in after generation, over the finished document
-      return this.options.directives ? Directives.apply(schema, this.options.directives) : schema;
+      const directed = this.options.directives ? Directives.apply(schema, this.options.directives) : schema;
+      // last, so `--directives` selectors keep naming the types as the generator wrote them
+      return this.options.servicePrefix ? Namespace.apply(directed, this.options.servicePrefix) : directed;
     });
   }
 

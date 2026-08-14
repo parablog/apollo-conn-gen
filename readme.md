@@ -228,13 +228,26 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 | `emitConnectorErrors`    | `boolean`          | `false`                    | Emit an `errors { message extensions { statusCode: $status } }` block for operations that document HTTP error responses (library-only, no CLI flag). |
 | `skipAuth`               | `boolean`          | `false`                    | Omit all auth: no headers on `@source`, no auth on `@connect`.                                                                                       |
 | `authValuePrefix`        | `string`           | —                          | Text written before an API-key header value, e.g. `Token token=`. Only applies to an API key in a header.                                            |
+| `servicePrefix`          | `string`           | —                          | Prefix every type with `<Name>_` and every root field with `<name>_`, so separately generated connectors compose without colliding.                  |
 | `showParentInSelections` | `boolean`          | `false`                    | Annotate selection output with the parent each field comes from (debugging aid).                                                                     |
 
 ### Security schemes and auth
 
 When the spec declares `securitySchemes` (API key, HTTP bearer/basic, OAuth2), the generator maps them to connector auth automatically: headers or query params with `{$config.*}` placeholders, emitted on `@source` when the whole spec shares the same security, or per-operation on `@connect` when it varies. Pass `skipAuth: true` (CLI: `--skip-auth`) to omit all of it.
 
-Some APIs want text in front of the key and only say so in the scheme's `description` — PagerDuty asks for `Authorization: Token token=<API_KEY>`. Pass `authValuePrefix: 'Token token='` (CLI: `--auth-value-prefix "Token token="`) and that text is written before the key, exactly as given, so add the trailing space yourself if the API needs one. See [issue #87](docs/issues.md).
+Some APIs want text in front of the key and only say so in the scheme's `description` — PagerDuty asks for `Authorization: Token token=<API_KEY>`. Pass `authValuePrefix: 'Token token='` (CLI: `--auth-value-prefix "Token token="`) and that text is written before the key, exactly as given, so add the trailing space yourself if the API needs one. See [issue #87](docs/FIXED.md).
+
+### Namespacing a connector
+
+Connectors generated one spec at a time compose into a single supergraph, so two of them bringing a
+`JSON` scalar or a `widgets` root field collide. Pass `servicePrefix: 'ACME'` (CLI:
+`--service-prefix ACME`) and every type becomes `ACME_<Name>` and every root field `acme_<name>`; the
+type prefix uppercases the first character and keeps the rest as given, the field prefix is
+lowercased. `Query`, `Mutation` and `Subscription` keep their names — only their fields move.
+
+The prefix has to be a GraphQL name, so a directory id like `acme-sanity` is rejected at
+startup; its prefix is `ACME`. Prefixing runs last, after `directives`, so `--directives` selectors
+still name types as the generator wrote them. See [issue #91](docs/FIXED.md).
 
 ### Linting selections
 

@@ -4633,3 +4633,65 @@ selection, so the two agree. Data completeness, not composition.
 field), tests `test_90_map_at_the_response_root_takes_entries` and
 `test_90_map_under_a_field_is_unchanged` (the guard on the shared body). See #13 for the entry this
 leftover belongs to.
+
+## 91 · Two connectors generated on their own cannot compose together — ✅ Fixed
+**Symptom:** every generated connector brings a `scalar JSON`, and most bring a root field named
+after their path. Generate two specs separately, put both subgraphs in one supergraph, and the
+names collide. There was no way to namespace the output.
+
+The Rust `connect-gen` fork that generates the five production connectors (Stripe, Confluence, Omni,
+PagerDuty, HubSpot) prefixes everything with the service name — `type_prefix()` / `field_prefix()`
+threaded through its emit layer. `gen` had no equivalent.
+
+**Example** — `--service-prefix ACME` on the `apikey-header-prefix.yaml` fixture:
+```graphql
+# before
+scalar JSON
+type WidgetsResponse { count: Int }
+type Query { widgets: WidgetsResponse @connect(source: "api", …) }
+
+# after
+scalar ACME_JSON
+type ACME_WidgetsResponse { count: Int }
+type Query { acme_widgets: ACME_WidgetsResponse @connect(source: "api", …) }
+```
+
+**The rule, taken from the Rust manifest and not guessed** (`manifest.rs`, `capitalize()`):
+- type prefix = first character uppercased, **tail verbatim** — so `ACME` stays `ACME_`, and the five
+  services produce `Stripe_`, `Hubspot_`, `Pagerduty_`, `Confluence_`, `Omni_`;
+- field prefix = the value lowercased;
+- `Hubspot_`/`Pagerduty_`, not `HubSpot_`/`PagerDuty_` — those spellings are `catalog.yaml`
+  `display_name` values, not prefixes.
+
+**Why not `Naming.genTypeName`:** it is a context-free static function with 34 references across 18
+files, so making it prefix-aware means threading a mapper through the whole node hierarchy.
+
+**Fix:** a finished-document transform, the same technique `Directives.apply` uses — `parse()` only
+to read byte offsets, collect `{from, to, insert}` spans, sort descending and splice the original
+string. The AST is never re-printed, so the formatting survives.
+- renames every OBJECT / OBJECT_EXTENSION / INPUT_OBJECT / ENUM / UNION / INTERFACE / SCALAR
+  definition except `Query`/`Mutation`/`Subscription`, whose *fields* take the field prefix instead;
+- follows every reference: field and argument types, `implements` entries, union members, unwrapping
+  `[Pet!]!` so only the name inside the brackets moves;
+- runs **after** `Directives.apply`, so `--directives` selectors keep naming the unprefixed types;
+- rejects a prefix that is not a GraphQL name (`assertName`) — a hyphenated service directory id
+  like `acme-sanity` stops the run with a message; the prefix it wants is `ACME`.
+
+**Edge cases:** `scalar JSON` is renamed like any other scalar. A schema type called `Subscription`
+has already become `SubscriptionType` by then (`RESERVED_ROOT_TYPE_NAMES`), so it is just another
+name to prefix. Directive arguments are `StringValueNode`s and are never walked, so
+`@source(name: "api")` is untouched. Nested field names are left alone — their parent type carries
+the prefix.
+
+**Not in scope:** independent type/field prefix overrides (the Rust manifest allows them; all five
+services use the defaults), and hyphenated ids like `constellation-registry` →
+`Constellation_Registry_`.
+
+**AST** — none. This reads the finished document, not the node tree.
+
+**Refs:** `src/oas/lint/namespace.ts` (new, `Namespace.apply`), `src/oas/oasGen.ts`
+(`generateSchema`, `IGenOptions`), `src/oas/oasContext.ts` (`GenerateOptions` — `OasGen.options` is
+typed from here, so the field is required in both), `src/cli/oas.ts` (`--service-prefix`,
+`checkServicePrefix`). Tests `tests/all/service-prefix.test.ts`: two through the CLI (the rename and
+the rejection) and three calling the transform directly (interface/union/members, argument types,
+the name check). The CLI one is what a revert breaks — the direct calls bypass the wiring.

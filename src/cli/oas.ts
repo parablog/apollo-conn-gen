@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { assertName } from 'graphql';
 import { Command, OptionValues } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
@@ -65,6 +66,19 @@ function loadDirectives(opts: OptionValues): DirectivesConfig | undefined {
   }
 }
 
+// The prefix is written straight into type and field names, so a value that is not a GraphQL name
+// would produce a document that no longer parses. e.g. `acme-sanity` — the prefix it wants is `ACME`
+function parseServicePrefix(value: string): string {
+  try {
+    return assertName(value);
+  } catch {
+    console.error(
+      `Invalid --service-prefix "${value}": expected a GraphQL name — letters, digits and "_", not starting with a digit.`,
+    );
+    process.exit(1);
+  }
+}
+
 async function main(sourceFile: string, opts: OptionValues): Promise<void> {
   console.log = () => {};
 
@@ -85,6 +99,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     mapper: mapper,
     skipOptionalArgs: opts.skipOptionalArgs,
     skipOptionalMarkers: opts.skipOptionalMarkers,
+    servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
   });
@@ -149,6 +164,11 @@ program
   .option('--directives <file>', 'Load directives (Type or Type.field -> ["@…"]) from a JSON file')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--skip-optional-markers', 'Skip the "?" optional-field markers in selections', false)
+  .option(
+    '--service-prefix <name>',
+    'Prefix every type with "<Name>_" and every root field with "<name>_", so separately generated connectors compose without colliding',
+    parseServicePrefix,
+  )
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
   .option('--skip-auth', 'Omit all auth (no headers on @source, no auth on @connect)', false)
   .option(
