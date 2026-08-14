@@ -2149,3 +2149,24 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   assert.ok(/createV1Files: File/.test(files!), 'the multipart upload takes no argument');
   assert.ok(!/body:/.test(files!), 'and maps no body');
 });
+
+test('test_90_map_at_the_response_root_takes_entries', async () => {
+  // #90: a response body that is itself a dictionary had no field name to hang the arrow off, so
+  // the selection started inside the value and rover answered SELECTED_FIELD_NOT_FOUND. Res.select
+  // now reads the entries of the response itself, and the field is the list ->entries answers.
+  const schema = await runOasTest('map-response-root.yaml', ['get:/restrictions>**'], 2, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/restrictions: \[REntry\]/.test(schema!), 'the whole-response map is a list of entries');
+  assert.ok(/type REntry \{\n {2}key: String\n {2}value: Restriction\n\}/.test(schema!), 'entry type is written');
+  assert.ok(/selection: """\n\s*\$->entries \{/.test(schema!), 'the selection reads the response entries');
+  assert.ok(/key\n\s*value \{\n\s*allowed\?/.test(schema!), "the value's fields sit inside value, not at the root");
+});
+
+test('test_90_map_under_a_field_is_unchanged', async () => {
+  // the same map one level down still goes through PropMap, which writes the field name in front
+  // of the arrow. Both callers now share one ->entries body, so this guards the extraction.
+  const schema = await runOasTest('map-response-root.yaml', ['get:/pages>**'], 2, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/labels: \[LabelsEntry\]/.test(schema!), 'a map under a field keeps its own entry type');
+  assert.ok(/labels: labels\?->entries \{/.test(schema!), 'and the field name still precedes the arrow');
+});

@@ -1,0 +1,47 @@
+openapi: 3.0.3
+info:
+  title: A response body that is itself a dictionary
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # the whole 200 body is a map, keyed by operation name — confluence's byOperation shape
+  /restrictions:
+    get:
+      operationId: getRestrictions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: '#/components/schemas/Restriction'
+  # the same map one level down, under a field — the form that already worked
+  /pages:
+    get:
+      operationId: getPages
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  labels:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/Restriction'
+components:
+  schemas:
+    Restriction:
+      type: object
+      properties:
+        operationType:
+          type: string
+        allowed:
+          type: boolean

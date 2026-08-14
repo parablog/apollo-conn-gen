@@ -62,7 +62,9 @@ export class Map extends Type {
     }
 
     if (context.inContextOf(Res, this)) {
-      writer.write(Naming.genTypeName(this.name));
+      // `->entries` answers a list, so a whole response that is a dictionary reads as a list of
+      // entries. A map under a property already reads that way, from PropMap.getValue. see docs/FIXED.md #90
+      writer.write('[').write(Naming.genTypeName(this.name)).write(this.nameSuffix()).write(']');
       return;
     }
 
@@ -120,11 +122,40 @@ export class Map extends Type {
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [map::select]', `-> in: ${this.name}`);
 
+    // A map that is the whole response is read by Res.select, which owns the response root; here
+    // the map is under a property, and PropMap has already written the field name and the arrow.
     if (this.valueType) {
       this.valueType.select(context, writer, selection);
     }
 
     trace(context, '<- [map::select]', `-> out: ${this.name}`);
+  }
+
+  // The `->entries { key value { … } }` body; the caller writes what comes in front of the arrow.
+  // e.g. (map-response-root.yaml) `$` for a whole-response map, `labels` for one under a property.
+  public selectEntries(context: OasContext, writer: Writer, selection: string[]): void {
+    writer.write('->entries {').write('\n');
+    context.enter(this);
+
+    writer.write(' '.repeat(context.indent + context.stack.length)).write('key\n');
+    writer.write(' '.repeat(context.indent + context.stack.length)).write('value');
+
+    if (this.needsValueSelection()) {
+      writer.write(' {').write('\n');
+      context.enter(this);
+      this.valueType!.select(context, writer, selection);
+      context.leave(this);
+      writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
+    }
+    writer.write('\n');
+
+    context.leave(this);
+    writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
+  }
+
+  // a value with fields opens a `value { … }` block; a plain value is read whole. #70
+  private needsValueSelection(): boolean {
+    return Boolean(this.valueType && !T.isLeaf(this.valueType));
   }
 
   private visitAdditionalProperties(context: OasContext): void {

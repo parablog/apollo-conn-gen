@@ -4545,3 +4545,91 @@ changes: the new clause only runs when the old code produced the empty string.
 **Refs:** `src/oas/utils/naming.ts` (`genOperationName`), reached from `get.ts` (`getGqlOpName`,
 `writeOpName`). Fixture `root-path-op.yaml` (both branches: the GET with an operationId, the POST
 without), test `test_88_root_path_op_takes_a_name`.
+
+## 90 · A map at the response root loses its `->entries` wrapper — ✅ Fixed
+**Symptom:** `confluence.json get:/wiki/rest/api/content/{id}/restriction/byOperation` fails compose:
+
+```
+SELECTED_FIELD_NOT_FOUND: `@connect(selection:)` on
+`Query.wikiRestApiContentByIdRestrictionByOperation` contains field `operationType`,
+which does not exist on `REntry`.
+```
+
+It is the last `SELECTED_FIELD_NOT_FOUND` in the GET sweep — the "1" left over from #13's 8 → 1.
+
+**OAS** (confluence — the whole response body is a dictionary, keyed by operation):
+```json
+{ "type": "object",
+  "additionalProperties": {
+    "properties": {
+      "operationType": { "$ref": "#/components/schemas/ContentRestriction" },
+      "_links":        { "$ref": "#/components/schemas/GenericLinks" } } } }
+```
+
+**Example** — the two artifacts describe different shapes:
+```graphql
+# SDL — an entry object, and not a list of them
+wikiRestApiContentByIdRestrictionByOperation(id: String!, expand: [String]): REntry
+type REntry { key: String  value: inlineREntry }
+type inlineREntry { operationType: ContentRestriction }
+
+# selection — starts inside the value, with no ->entries and no key/value
+operationType? { … }
+```
+
+**Cause:** the map is the response *root*, so no `PropMap` is involved, and `PropMap` is the only
+node that writes the wrapper.
+- `Res.select` passes through for a scalar, a list of scalars and a fieldless union — there is no
+  case for a map, so it calls `Map.select`.
+- `Map.select` delegates straight to `valueType.select`. It writes no `->entries`, no `key`, no
+  `value` — so the selection is the value type's fields, at the root.
+- `Map.generate` in `Res` context writes the bare type name, so the field is `REntry` and not
+  `[REntry]`. `->entries` yields a list, so the field has to be one.
+- `PropMap` gets both right already: `getValue` returns `[<Map>]` and `select` writes
+  `<field>->entries { key value { … } }`. A map under a field composes; the same map at the root
+  does not.
+
+Confirmed in this op's own selection: `->entries` appears twice, both times on
+`macroRenderedOutput` — a `PropMap` deeper in the tree — and never at the root.
+
+**Fix:** mirror `PropMap` at the root — make the field a list
+and wrap the selection in a root-level `$->entries`. Hand-patching the generated schema to
+
+```graphql
+wikiRestApiContentByIdRestrictionByOperation(…): [REntry]
+selection: """
+$->entries { key  value { …the existing selection… } }
+"""
+```
+
+composes clean on stock rover at fed 2.15.1 — checked by hand before implementing, because the
+generator emitted `$->entries` nowhere and the root form was unproven.
+
+**Where it landed, and the one surprise.** `Res.select` owns the response root, so the branch sits
+there next to the scalar / scalar-list / fieldless-union passthroughs. The first attempt put it in
+`Map.select` behind `context.inContextOf(Res, this)`, the same guard `Map.generate` uses — and it
+never fired: `Res.generate` calls `context.enter(this)` but `Res.select` does not, so `Res` is
+never on the stack during selection. Worth remembering for any other node that wants to know it is
+at the response root while selecting.
+
+The `->entries { key value { … } }` body now lives on `Map.selectEntries`, called by both
+`PropMap.select` (which writes the field name first) and `Res.select` (which writes `$`); the two
+formerly had one implementation each. `needsValueSelection` moved to `Map` with it.
+
+**Measured:** confluence 61/65 → 62/65 GET; the last `SELECTED_FIELD_NOT_FOUND` in the sweep is
+gone. Maps under a field are byte-identical — the full suite is unchanged apart from the
+pre-existing #61 failure.
+
+**Also seen, not a bug:** `_links` is missing from `inlineREntry`. `GenericLinks` is itself a map
+whose value is `object | string`, which degrades away — and it is dropped from the SDL *and* the
+selection, so the two agree. Data completeness, not composition.
+
+**AST** — no new node shape. `Map` in `Res` position needs the list cardinality and the wrapper that
+`PropMap` already supplies.
+
+**Refs:** `src/oas/nodes/res.ts` (`select`), `src/oas/nodes/map.ts` (`generate` `Res` branch,
+`selectEntries`, `needsValueSelection`), `src/oas/nodes/propMap.ts` (`select`). Fixture
+`map-response-root.yaml` (both forms: the map as the whole response, and the same map under a
+field), tests `test_90_map_at_the_response_root_takes_entries` and
+`test_90_map_under_a_field_is_unchanged` (the guard on the shared body). See #13 for the entry this
+leftover belongs to.

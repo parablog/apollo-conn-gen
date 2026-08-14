@@ -1,4 +1,4 @@
-import { IType, Map, Prop, T } from './internal.js';
+import { IType, Map, Prop } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
@@ -71,25 +71,7 @@ export class PropMap extends Prop {
     if (this.isOptionalInSelection(context)) {
       writer.write('?');
     }
-    writer.write('->entries {').write('\n');
-    context.enter(this);
-
-    // Generate the key-value selection structure
-    writer.write(' '.repeat(context.indent + context.stack.length)).write('key\n');
-    writer.write(' '.repeat(context.indent + context.stack.length)).write('value');
-
-    // If the value type has complex structure, we need to expand it
-    if (this.map.valueType && this.needsValueSelection()) {
-      writer.write(' {').write('\n');
-      context.enter(this);
-      this.map.valueType.select(context, writer, selection);
-      context.leave(this);
-      writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
-    }
-    writer.write('\n');
-
-    context.leave(this);
-    writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
+    this.map.selectEntries(context, writer, selection);
 
     if (context.generateOptions.showParentInSelections) {
       writer.write(' # ').write(Naming.getRefName(this.parent!.name));
@@ -98,11 +80,6 @@ export class PropMap extends Prop {
     writer.write('\n');
 
     trace(context, '<- [prop-map:select]', 'out ' + this.name + ', map: ' + this.map.name);
-  }
-
-  // a value with fields opens a `value { … }` block; a plain value is read whole. #70
-  private needsValueSelection(): boolean {
-    return Boolean(this.map.valueType && !T.isLeaf(this.map.valueType));
   }
 
   dependencies(): IType[] {

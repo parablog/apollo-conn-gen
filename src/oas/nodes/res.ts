@@ -1,4 +1,4 @@
-import { Arr, Factory, IType, Scalar, Type, T, Union } from './internal.js';
+import { Arr, Factory, IType, Map, Scalar, Type, T, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -74,6 +74,12 @@ export class Res extends Type {
         // value will have to be replaced by a GQL type. In fact, we could potentially use SYN_ here but
         // it will have to do for now.
         writer.write(' '.repeat(context.indent)).write('$\n');
+      } else if (response instanceof Map) {
+        // the whole body is a dictionary, so there is no field name to hang the arrow off — take
+        // the entries of the response itself. e.g. (map-response-root.yaml) `$->entries { … }`  see docs/FIXED.md #90
+        writer.write(' '.repeat(context.indent)).write('$');
+        response.selectEntries(context, writer, selection);
+        writer.write('\n');
       } else response.select(context, writer, selection);
     }
 
