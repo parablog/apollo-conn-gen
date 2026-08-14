@@ -276,23 +276,23 @@ class PathsCollector {
           newSelection.add(child.path());
         } else if (child instanceof PropEn) {
           // enum props are leaves too — without this, `>**` silently drops every enum field
-          // (slack's `ok`-only stubs collapsed to zero types). see docs/issues.md #24
+          // (slack's `ok`-only stubs collapsed to zero types). see docs/FIXED.md #24
           newSelection.add(child.path());
         } else if (child instanceof PropCircRef) {
           // a cut cycle is a leaf: include its path so the commented field is emitted (in both the
-          // SDL and the selection) instead of silently dropped. see docs/issues.md #10
+          // SDL and the selection) instead of silently dropped. see docs/FIXED.md #10
           newSelection.add(child.path());
         } else if (child instanceof Scalar && child.parent instanceof Res) {
           // a response that is just a value, no object around it — a write answering `true` (adobe
           // commerce), or a token string (petstore `/user/login`):
           //   responses: { '200': { schema: { type: boolean } } }
-          // Nothing to pick apart, so the value itself is the leaf. see docs/issues.md #32
+          // Nothing to pick apart, so the value itself is the leaf. see docs/FIXED.md #32
           newSelection.add(child.path());
         } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
           // the case above with a list around it — a response that is just an array of values,
           // no object around it (spotify's "check saved" endpoints answer `[true, false]`):
           //   responses: { '200': { schema: { type: array, items: { type: boolean } } } }
-          // Nothing to pick apart, so the array itself is the leaf. see docs/issues.md #47
+          // Nothing to pick apart, so the array itself is the leaf. see docs/FIXED.md #47
           newSelection.add(child.path());
         } else {
           this.gen.expand(child);
@@ -310,14 +310,14 @@ class PathsCollector {
       // its only content is a free-form JSON object (asana: `data: $ref EmptyResponse` ->
       // `data: JSON`, emitted as an EMPTY invalid type before) — take those fields as the leaves.
       // Per side, not per op: a write whose body is selectable can still answer with an empty
-      // object, and checking the op as a whole never fires for it. see docs/issues.md #32, #51
+      // object, and checking the op as a whole never fires for it. see docs/FIXED.md #32, #51
       const sides = T.isOp(root) ? root.children : [root];
       for (const side of sides) {
         if (Array.from(newSelection).some((p) => p.startsWith(side.path()))) {
           continue;
         }
         // scoped to an otherwise-empty side on purpose: doing it everywhere diverged the
-        // selections of types shared across connectors. see docs/issues.md #32
+        // selections of types shared across connectors. see docs/FIXED.md #32
         T.traverse(side, (child) => {
           if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
             newSelection.add(child.path());

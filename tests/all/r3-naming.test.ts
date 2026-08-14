@@ -84,7 +84,7 @@ test('test_R3_oas_edge_fixture_composes_with_safe_names', async () => {
 
 test('test_R3_aliased_container_and_escaped_keys_compose', async () => {
   // The `$."key"` spelling on containers (`pageInfo: $."page info" { count }`) and the two
-  // escaping cases the router grammar allows: `\"` and `\\`. see docs/issues.md #62
+  // escaping cases the router grammar allows: `\"` and `\\`. see docs/FIXED.md #62
   const schema = await runOasTest('r3-edge-cases.yaml', ['get:/things>**'], 1, 3);
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('pageInfo: $."page info"? {'), 'object under a non-identifier key');
@@ -204,7 +204,7 @@ test('test_R8_path_param_snake_case_templated_with_args', async () => {
 
 test('test_88_root_path_op_takes_a_name', async () => {
   // `/` has no segment to name the field after, so the field came out nameless — `: Root` — and
-  // rover blamed every field of the response type. see docs/issues.md #88
+  // rover blamed every field of the response type. see docs/FIXED.md #88
   const schema = await runOasTest('root-path-op.yaml', ['get:/>**', 'post:/>**'], 2, 2);
   assert.ok(schema !== undefined);
   assert.ok(!/^\s*:\s/m.test(schema!), 'no nameless field emitted');

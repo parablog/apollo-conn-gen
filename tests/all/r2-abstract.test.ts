@@ -100,7 +100,7 @@ test('test_R2_interface_promotes_when_the_union_is_returned_in_a_list', async ()
   // The same shape as test_R2_interface_oneof_promotes_and_composes, except the op answers with a
   // LIST of the union. The list used to hide it: promotion looked at the response node itself, saw
   // an array rather than a union, and never considered it — so PageBase was emitted as a concrete
-  // type nothing referenced and composition failed. see docs/issues.md #58
+  // type nothing referenced and composition failed. see docs/FIXED.md #58
   const schema = await runOasTest('r2-interface-oneof-list.yaml', ['get:/pages>**'], 1, 4, false, false, undefined, false, false, {
     connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.14',
@@ -120,7 +120,7 @@ test('test_R2_interface_skips_when_the_base_is_returned_in_a_list', async () => 
   // Rule 3's twin: the base is used concretely by another op, but as `[PageBase]` rather than on
   // its own. The scan that answers "is the base returned anywhere" has to take the list off too,
   // or promotion goes ahead and that op returns a list of an interface with nothing to match on.
-  // see docs/issues.md #58
+  // see docs/FIXED.md #58
   let schema: string | undefined;
   const warnings = await captureWarnings(async () => {
     const gen = await OasGen.fromFile(`${oasBasePath}/r2-interface-base-in-list.yaml`, {
@@ -144,7 +144,7 @@ test('test_R2_interface_skips_when_the_base_is_returned_in_a_list', async () => 
 test('test_R2_union_without_discriminator_degrades_to_merged_object', async () => {
   // No tag field means `->match` has nothing to dispatch on, so a real union cannot be selected.
   // The abstract pass degrades to the same merged-object form the default pass emits — SDL and
-  // selection agree, and composition passes. see docs/issues.md #25
+  // selection agree, and composition passes. see docs/FIXED.md #25
   // typesSize 2: response + union — the merged members are no longer collected at all (#26)
   const schema = await runOasTest('oneof-no-discriminator.yaml', ['get:/search>**'], 1, 2, false, false, undefined, false, false, {
     connectorSpecVersion: 'v0.4',
@@ -281,7 +281,7 @@ test('test_R2_union_form_derived_from_connect_version', async () => {
 });
 
 // --- R2 (Scenario C): a discriminated union nested under a field, not the op's own response ---
-// see docs/issues.md #38
+// see docs/FIXED.md #38
 
 test('test_R2_union_nested_in_array_degrades_to_merged_object', async () => {
   // ItemUnion sits inside `results`, a named array field — not /list's own response. Rover can't
@@ -330,7 +330,7 @@ test('test_R2_union_top_level_array_stays_real_union', async () => {
   assert.ok(/^type Movie /m.test(schema!), 'Movie emitted as its own type');
 });
 
-// see docs/issues.md #43
+// see docs/FIXED.md #43
 test('test_R2_union_snake_case_member_refs_resolve_sanitised_name', async () => {
   // Same shape as /items (a real, top-level union), but the member component refs are snake_case
   // (`book_item`, `movie_item`). The union's member list and `->match`'s __typename must agree with
@@ -382,7 +382,7 @@ test('test_R2_union_inline_nested_degrades_via_local_check', async () => {
 });
 
 // --- R2 (Scenario D): merged members share a field name but disagree on its type ---
-// see docs/issues.md #39
+// see docs/FIXED.md #39
 
 test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
   // WrappedBasic and WrappedRich both have a "detail" field but point at different types. Only
@@ -408,7 +408,7 @@ test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
   assert.ok(!/DeepThing/.test(schema!), 'the shadowed type\'s own subtree must not be emitted either');
 });
 
-// see docs/issues.md #44
+// see docs/FIXED.md #44
 test('test_R2_union_merge_kind_collision_degrades_to_json', async () => {
   // StatusEnumKind and StatusStringKind both have a "status" field, but of incompatible KINDS
   // (enum vs plain string) — not just different targets of the same kind (that's the test above,
@@ -434,7 +434,7 @@ test('test_R2_union_merge_kind_collision_degrades_to_json', async () => {
   assert.ok(!/active/.test(schema!) && !/inactive/.test(schema!), 'the enum kind\'s own type must not leak in');
 });
 
-// see docs/issues.md #48
+// see docs/FIXED.md #48
 test('test_R2_union_shared_by_body_and_response_emits_both_flavours', async () => {
   // The same `Line` oneOf is reached twice: as the POST body and as the response (QuickBooks
   // `post:/v3/company/{realm-id}/bill`). Both flavours must be defined — the response's

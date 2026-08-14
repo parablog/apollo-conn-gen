@@ -6,7 +6,7 @@ paths:
   # a discriminated union nested inside a named array field — the shape every paginated-list REST
   # API produces (e.g. launch library's PaginatedAgencyList.results: [oneOf [...]]). Real unions
   # compose fine when they're the op's own response, but rover won't resolve any field of a
-  # `->match` reached through a wrapping property. see docs/issues.md #38
+  # `->match` reached through a wrapping property. see docs/FIXED.md #38
   /list:
     get:
       summary: A paginated list whose items are a discriminated union.
@@ -70,7 +70,7 @@ paths:
                               type: string
   # the same real-union shape as /items, but with snake_case component refs — the union's member
   # list and __typename must resolve the same sanitised (PascalCase) name the member's own `type`
-  # definition uses, not the raw ref. see docs/issues.md #43
+  # definition uses, not the raw ref. see docs/FIXED.md #43
   /snake-items:
     get:
       summary: A real union whose member refs are snake_case, not PascalCase.
@@ -86,7 +86,7 @@ paths:
   # StatusEnumKind and StatusStringKind both have a "status" field but of incompatible KINDS (enum
   # vs plain string) — not just different targets of the same kind (that's /wrapped-list, #39).
   # Must degrade to the untyped JSON scalar fallback, not silently keep one kind and drop the
-  # other. see docs/issues.md #44
+  # other. see docs/FIXED.md #44
   /kind-collision-list:
     get:
       summary: A nested union whose members share a field name of incompatible kinds.
@@ -103,7 +103,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/KindCollisionUnion'
   # WrappedBasic and WrappedRich both have a "detail" field but point at different types — only
-  # the first is kept, the other must not leak into the schema. see docs/issues.md #39
+  # the first is kept, the other must not leak into the schema. see docs/FIXED.md #39
   /wrapped-list:
     get:
       summary: A nested union whose members share a field name pointing at different types.

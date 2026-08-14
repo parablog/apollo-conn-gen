@@ -2,7 +2,7 @@ openapi: "3.0.1"
 info:
   title: Pages API (interface via oneOf + shared allOf base, returned as a list)
   version: "1.0.0"
-# see docs/issues.md #58
+# see docs/FIXED.md #58
 # Same shape as r2-interface-oneof.yaml, except the operation answers with a LIST of the union.
 # The list is what broke it: promotion only looked at the response node itself, saw an array rather
 # than a union, and never considered it — so PageBase was emitted as a concrete type nothing

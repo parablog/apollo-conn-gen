@@ -2,7 +2,7 @@ import { ServerObject } from 'oas/types';
 
 // Picks the OAS server to use as the connector's baseURL, e.g.
 //   servers: [{ url: '/v1.33' }, { url: 'https://docker.com/1.33' }]
-// skips the first one (no host) and uses the second. see docs/issues.md #41
+// skips the first one (no host) and uses the second. see docs/FIXED.md #41
 export class ServerUrl {
   public static resolve(servers: ServerObject[] | undefined): string {
     for (const server of servers ?? []) {

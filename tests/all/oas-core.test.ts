@@ -653,7 +653,7 @@ test('test_054_oas_test-better-naming', async () => {
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:type:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:type:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointNormal>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
     // this union is nested inside a named field (`results`), not the op's own response, so it
-    // renders as one merged type instead of a real `union` — see docs/issues.md #38. All 3 members
+    // renders as one merged type instead of a real `union` — see docs/FIXED.md #38. All 3 members
     // still need a selected field or the merge emits an empty one.
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:type:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautEndpointDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
   ];
@@ -760,7 +760,7 @@ test('test_inline_allof_property_gets_valid_name_and_composes', async () => {
 test('test_schema_ref_into_paths_gets_clean_type_name', async () => {
   // A schema $ref'd via a #/paths JSON-pointer (DigitalOcean pattern) must be emitted with a clean
   // type name derived from the pointer tail, not the raw pointer (which the composer rejects).
-  // see docs/issues.md #8. runOasTest composes via rover.
+  // see docs/FIXED.md #8. runOasTest composes via rover.
   const schema = await runOasTest('ref-schema-into-paths.yaml', ['get:/gadgets>**'], 2, 2);
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('#/paths'), 'raw #/paths pointer must not leak as a type name');
@@ -772,7 +772,7 @@ test('test_inline_name_collision_splits_by_container', async () => {
   // Two differently-shaped inline objects sharing a property key (`saleInfo.listPrice` -> {amount},
   // `offers[].listPrice` -> {amountInMicros}) must not collapse into one type (which drops fields and
   // breaks the selection: SELECTED_FIELD_NOT_FOUND). The colliding newcomer is qualified by its
-  // container -> `SaleInfoListPrice`, keeping both shapes. see docs/issues.md #9. composes via rover.
+  // container -> `SaleInfoListPrice`, keeping both shapes. see docs/FIXED.md #9. composes via rover.
   const schema = await runOasTest('inline-name-collision.yaml', ['get:/volume>**'], 1, 5);
   assert.ok(schema !== undefined);
   assert.ok(/type ListPrice \{[^}]*amountInMicros/s.test(schema!), 'first shape kept as ListPrice');
@@ -786,7 +786,7 @@ test('test_inline_identical_shapes_dedup_not_renamed', async () => {
   // box.yaml pattern) must DEDUP onto one type, not rename: renaming mints a fresh name-derived id
   // whose container dedups away, emitting an orphan type nothing references
   // (CONNECTORS_UNRESOLVED_FIELD). A different shape under the same key still splits per #9.
-  // see docs/issues.md #18. composes via rover.
+  // see docs/FIXED.md #18. composes via rover.
   const schema = await runOasTest('inline-identical-dedup.yaml', ['get:/items>**'], 1, 7);
   assert.ok(schema !== undefined);
   assert.ok(/\bsharedLink: SharedLink\b/.test(schema!), 'both parents reference the one SharedLink');
@@ -799,7 +799,7 @@ test('test_composed_collision_with_stored_object_splits_by_container', async () 
   // An inline allOf named from its property key (#7) sharing that key with an already-stored
   // inline OBJECT (`link.permissions` Obj vs `media.permissions` allOf — box `/files/{file_id}`)
   // used to emit `type Permissions` twice: Composed skipped the #9/#12 occupancy check
-  // (INTERNAL_ERROR). The Composed now splits by container. see docs/issues.md #22. composes via rover.
+  // (INTERNAL_ERROR). The Composed now splits by container. see docs/FIXED.md #22. composes via rover.
   const schema = await runOasTest('composed-name-collision.yaml', ['get:/items>**'], 1, 5);
   assert.ok(schema !== undefined);
   assert.ok(/type Permissions \{[^}]*canDownload/s.test(schema!), 'the stored Obj keeps the key name');
@@ -815,7 +815,7 @@ test('test_no_duplicate_type_definitions_launch_library', async () => {
   // A $ref reached two ways builds two nodes with the same name but different ids — `AgencyMini`
   // as an array item (`obj:type:…`) and as a single-member allOf (`comp:type:…`). The emit gate
   // keyed on the id missed the repeat and printed `type AgencyMini` twice (invalid SDL; rover
-  // connector list is lenient, so it slipped the suite). see docs/issues.md #26.
+  // connector list is lenient, so it slipped the suite). see docs/FIXED.md #26.
   const gen = await OasGen.fromFile(`${oasBasePath}/launch_Library_2-docs-v2.3.0.json`, {
     skipValidation: true,
     showParentInSelections: false,
@@ -869,7 +869,7 @@ test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
 test('test_param_default_boolean_emits_literal', async () => {
   // A boolean (or other non-number/string) param default used to leave a dangling ` = ` →
   // compose syntax error ("expected a valid Value"). Defaults now emit only for renderable types.
-  // see docs/issues.md #17. runOasTest composes via rover.
+  // see docs/FIXED.md #17. runOasTest composes via rover.
   const schema = await runOasTest('param-default-bool.yaml', ['get:/credentials>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(/readWrite: Boolean = false\b/.test(schema!), 'boolean default rendered as literal');
@@ -970,7 +970,7 @@ test('test_57_merged_union_defines_the_enum_it_references', async () => {
 test('test_required_and_nullable_emits_a_nullable_field', async () => {
   // In OpenAPI `required` and `nullable` are orthogonal: `required` says the key is present,
   // `nullable: true` says the value may be null. A field that is both must be NULLABLE in GraphQL —
-  // `String!` makes the router error on a legitimately-null value. see docs/issues.md #55
+  // `String!` makes the router error on a legitimately-null value. see docs/FIXED.md #55
   const schema = await runOasTest('required-nullable.yaml', ['get:/thing>**'], 1, 1, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/reqPlain: String!/.test(schema!), 'required + non-nullable -> String!');
@@ -1023,7 +1023,7 @@ test('test_61_sanitised_at_type_must_not_collide', { todo: 'both fields emit as 
 
 test('test_required_oneof_null_field_is_kept', async () => {
   // The third way a spec says "may be null": a choice list with a null arm. The null arm comes out
-  // and the schema is marked nullable instead; the field used to disappear. see docs/issues.md #60
+  // and the schema is marked nullable instead; the field used to disappear. see docs/FIXED.md #60
   const schema = await runOasTest('required-nullable-oneof.yaml', ['get:/thing>**'], 1, 4, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/reqOneOf: String\n/.test(schema!), 'oneOf [string, null] keeps the field, nullable');
@@ -1041,7 +1041,7 @@ test('test_required_oneof_null_field_is_kept', async () => {
 
 test('test_required_and_nullable_31_type_array', async () => {
   // The OAS 3.1 spelling of the same thing: `type: [string, 'null']`. refA and refB share one
-  // component, so the second visit sees it already rewritten and must agree. see docs/issues.md #55
+  // component, so the second visit sees it already rewritten and must agree. see docs/FIXED.md #55
   const schema = await runOasTest('required-nullable-31.yaml', ['get:/thing>**'], 1, 1, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/reqTypeArray: String\n/.test(schema!), 'required + type [string, null] -> nullable');
@@ -1053,7 +1053,7 @@ test('test_shapeless_object_schema_becomes_json_scalar', async () => {
   // `{}` / `{ additionalProperties: false }` schemas (Slack shares pattern) used to throw
   // "Cannot handle schema" when reached via fromSchema (array items, members). They are objects
   // with no declared fields -> JSON scalar (NOT an empty Obj, which generate() would skip and
-  // dangle the reference). see docs/issues.md #19. runOasTest composes via rover.
+  // dangle the reference). see docs/FIXED.md #19. runOasTest composes via rover.
   const schema = await runOasTest('shapeless-object.yaml', ['get:/messages>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(/privateChannels: \[JSON\]/.test(schema!), 'additionalProperties:false items -> [JSON]');
@@ -1064,7 +1064,7 @@ test('test_typeless_object_items_degrade_to_json', async () => {
   // `items: { type: object }` — an object with a declared type but no properties — degrades to
   // [JSON] exactly like `items: {}` and `additionalProperties: false` in the test above. It used to
   // be dropped from the emitted type entirely. Same fixture, `archivedChannels`.
-  // see docs/issues.md #56
+  // see docs/FIXED.md #56
   const schema = await runOasTest('shapeless-object.yaml', ['get:/messages>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(/archivedChannels: \[JSON\]/.test(schema!), 'items:{type:object} should degrade to [JSON]');
@@ -1074,7 +1074,7 @@ test('test_response_allof_snake_path_def_ref_names_converge', async () => {
   // A response-root allOf on a snake_case path synthesizes a name carrying the `_`
   // (`v2…Billing_historyResponse`); the definition (Composed.generate) used upperFirst(getRefName)
   // while the reference used genTypeName, so they diverged -> INVALID_GRAPHQL ("cannot find type").
-  // Both now route through genTypeName. see docs/issues.md #15. runOasTest composes via rover.
+  // Both now route through genTypeName. see docs/FIXED.md #15. runOasTest composes via rover.
   const schema = await runOasTest('response-allof-snake-path.yaml', ['get:/billing_history>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('type BillingHistoryResponse {'), 'definition camelized via genTypeName');
@@ -1087,7 +1087,7 @@ test('test_reserved_root_type_name_gets_suffixed', async () => {
   // Subscription type — connectors doesn't support subscriptions, so rover rejects a plain `type
   // Subscription { ... }` with SUBSCRIPTION_IN_CONNECTORS. genTypeName now suffixes the 3 reserved
   // root type names; every call site (definitions and references) resolves through it, so the
-  // definition and the nested field referencing it stay in agreement. see docs/issues.md #45
+  // definition and the nested field referencing it stay in agreement. see docs/FIXED.md #45
   const schema = await runOasTest('reserved-root-type-name.yaml', ['get:/customers/{id}>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('type SubscriptionType {'), 'reserved name gets suffixed at the definition');
@@ -1101,7 +1101,7 @@ test('test_array_item_ref_to_array_typed_schema_unwraps_redundant_nesting', asyn
   // this produced a second, nested Arr: the field referenced an undefined type (`[WidgetList]`)
   // while the real object was emitted under a different, property-derived name (`WidgetsItem`), and
   // the selection lost its nesting braces entirely. Unwrapping the redundant ref keeps `items`
-  // always the true element type everywhere else already assumes it is. see docs/issues.md #46
+  // always the true element type everywhere else already assumes it is. see docs/FIXED.md #46
   const schema = await runOasTest('array-refs-array-typed-schema.yaml', ['get:/widgets>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(/widgets: \[WidgetsItem\]/.test(schema!), 'field type matches the emitted object definition');
@@ -1116,7 +1116,7 @@ test('test_array_item_ref_to_array_typed_schema_unwraps_redundant_nesting', asyn
 test('test_inline_renamed_when_colliding_with_component_emitted_name', async () => {
   // An inline object named by its property key ('user') must not emit under the same GraphQL name as
   // a stored component ('#/c/s/User' -> `User`): occupancy is checked on the EMITTED name too, and the
-  // inline (never the $ref-named component) is qualified by its container. see docs/issues.md #12.
+  // inline (never the $ref-named component) is qualified by its container. see docs/FIXED.md #12.
   // runOasTest composes via rover.
   const schema = await runOasTest('inline-vs-component-name.yaml', ['get:/accounts>**'], 1, 4);
   assert.ok(schema !== undefined);
@@ -1130,7 +1130,7 @@ test('test_wrapper_named_after_contained_component_renames_both_owners', async (
   // A wrapper named after the component it lists (`group` containing [Group]) used to emit a second
   // `type Group` and fail to compose. Two `group` wrappers under different parents must each get their
   // own name (`SubjectsGroup`, `MembersGroup`); before the fix both stayed `Group` and clashed.
-  // see docs/issues.md #12, #37. composes via rover.
+  // see docs/FIXED.md #12, #37. composes via rover.
   const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['get:/permission>**'], 3, 6);
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('type SubjectsGroup'), 'subjects.group qualified by its container');
@@ -1143,7 +1143,7 @@ test('test_wrapper_named_after_contained_component_renames_both_owners', async (
 test('test_inline_not_renamed_without_contained_same_named_ref', async () => {
   // The check is on the wrapper's own contents, not just a matching name: `status` matches a scalar
   // component (which emits no type) and `label` matches a component this op never reaches — neither
-  // contains a ref to itself, so neither is renamed. see docs/issues.md #37.
+  // contains a ref to itself, so neither is renamed. see docs/FIXED.md #37.
   const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['get:/widget>**'], 3, 3);
   assert.ok(schema !== undefined);
   assert.ok(
@@ -1158,7 +1158,7 @@ test('test_same_key_wrapper_co_emits_safely_across_input_output', async () => {
   // The same `subjects.user` wrapper appears on the request body and the response, with different fields.
   // Both would take the same name; they stay distinct because the input one becomes `SubjectsUserInput`
   // and the output one is pushed to a longer name (`SpaceLikeSubjectsUser`). No duplicate, so it composes.
-  // see docs/issues.md #37.
+  // see docs/FIXED.md #37.
   const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['post:/space>**'], 3, 8);
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('input SubjectsUserInput'), 'input-side user wrapper qualified + Input-suffixed');
@@ -1172,7 +1172,7 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   // non-consolidating v0.4 path and compose: the re-entering field is cut at the first repeat of a
   // schema already on the expansion path and emitted as a comment in BOTH the SDL and the selection.
   // A shared non-recursive component (Shared, referenced twice from sibling fields) must NOT be cut.
-  // see docs/issues.md #10. runOasTest composes via rover.
+  // see docs/FIXED.md #10. runOasTest composes via rover.
   const schema = await runOasTest(
     'recursive-cycle.yaml',
     ['get:/nodes>**'],
@@ -1220,7 +1220,7 @@ test('test_bare_scalar_array_response_not_dropped', async () => {
   // scalar case only covers a direct Scalar, not an Arr-of-scalar) — the op was silently dropped
   // entirely. Even once selectable, the connector selection was empty (Arr.select delegated to
   // Scalar.select, which writes nothing without a default) until Res.select also learned to treat
-  // a bare array-of-scalar response like a bare scalar. Composes via rover. see docs/issues.md #47
+  // a bare array-of-scalar response like a bare scalar. Composes via rover. see docs/FIXED.md #47
   const schema = await runOasTest('bare-scalar-array-response.yaml', ['get:/me/widgets/contains>**'], 1, 0);
   assert.ok(schema !== undefined);
   assert.ok(/meWidgetsContains\(ids: String!\): \[Boolean\]/.test(schema!), 'field present, returns [Boolean]');
@@ -1230,7 +1230,7 @@ test('test_bare_scalar_array_response_not_dropped', async () => {
 test('test_enum_query_param_is_a_scalar_argument', async () => {
   // An argument can only be a plain value, so petstore's `status` is written as `String`:
   //   status: { in: query, schema: { type: string, enum: [available, pending, sold] } }
-  // The list of allowed values must never be written inside the argument. see docs/issues.md #53
+  // The list of allowed values must never be written inside the argument. see docs/FIXED.md #53
   const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/petFindByStatus\(status: String/.test(schema!), 'the enum param is a scalar argument');
@@ -1339,7 +1339,7 @@ test('test_16_skip_optional_markers_moves_nothing_else', async () => {
 
 test('test_webhooks_are_ignored_not_generated', async () => {
   // A spec can list `webhooks:` next to `paths:`. We only ever read the paths, so a webhook is
-  // skipped rather than refused. see docs/issues.md #53
+  // skipped rather than refused. see docs/FIXED.md #53
   const gen = await OasGen.fromFile(`${oasBasePath}/webhooks.yaml`, {
     showParentInSelections: false,
     skipValidation: true,
@@ -1355,7 +1355,7 @@ test('test_anyof_only_body_keeps_its_members', async () => {
   // A body listing its variants under `anyOf` with no `oneOf` (digitalocean's create-record, one
   // member per DNS record type). Members used to be read from `oneOf` alone, so the union was built
   // empty and wrote `input InputInput { }` — invalid SDL, and nothing was sent either.
-  // see docs/issues.md #50
+  // see docs/FIXED.md #50
   const schema = await runOasTest('anyof-only-body.yaml', ['post:/records>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(/input InputInput \{[^}]*\bname: String!/.test(schema!), 'the body carries the anyOf members');
@@ -1367,7 +1367,7 @@ test('test_empty_response_alongside_a_selectable_body', async () => {
   // A write answering with an object that has no fields (asana's success-is-the-status-code
   // convention). The free-form-JSON fallback only fired when the WHOLE op had nothing selectable,
   // and this op's body does, so the response was written as an empty `type … { }` with an empty
-  // selection. see docs/issues.md #51
+  // selection. see docs/FIXED.md #51
   const schema = await runOasTest(
     'empty-response-with-body.yaml',
     ['post:/goals/{goalId}/removeSupportingRelationship>**'],
@@ -1385,7 +1385,7 @@ test('test_inline_array_wrapping_another_array_unwraps_to_the_real_element', asy
   // is a wrapper, not an element (slack `get:/conversations.replies`). Left alone it made the
   // field reference a type nobody defines and flattened the element's fields into the parent's
   // selection, unbracketed. Sibling of #46, which covered only the `$ref` form.
-  // see docs/issues.md #52
+  // see docs/FIXED.md #52
   const schema = await runOasTest('nested-array-items.yaml', ['get:/wrapper-array>**'], 2, 2);
   assert.ok(schema !== undefined);
   assert.ok(/messages: \[MessagesUnion\]/.test(schema!), 'the field names the type that is defined');
@@ -1399,7 +1399,7 @@ test('test_genuine_array_of_arrays_stays_nested', async () => {
   // shape the service never sends. `processes` is dropped today for a separate reason (an array of
   // arrays of plain values has no leaf to select), so what this pins is that it never appears
   // flattened. Relaxing the unwrap test to accept `type: array` makes it appear, and fails here.
-  // see docs/issues.md #52
+  // see docs/FIXED.md #52
   const schema = await runOasTest('nested-array-items.yaml', ['get:/matrix>**'], 2, 1);
   assert.ok(schema !== undefined);
   assert.ok(!/processes: \[String\]/.test(schema!), 'the matrix must not be flattened into one list');
@@ -1407,7 +1407,7 @@ test('test_genuine_array_of_arrays_stays_nested', async () => {
 });
 
 test('test_same_name_fields_not_cut_as_circular', async () => {
-  // docs/issues.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
+  // docs/FIXED.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
   // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing
   // composition); now it is kept. Exercises BOTH fromProp and Type.add. Composes via rover.
   const schema = await runOasTest('same-name-fields.yaml', ['get:/thing>**'], 1, 4, false, true);
@@ -1418,7 +1418,7 @@ test('test_same_name_fields_not_cut_as_circular', async () => {
 });
 
 test('test_genuine_cycles_cut_by_route', async () => {
-  // docs/issues.md #36 companion: a genuine Node self-cycle reached via each route must STILL be cut by
+  // docs/FIXED.md #36 companion: a genuine Node self-cycle reached via each route must STILL be cut by
   // object identity, while the shared non-recursive Shared stays expanded under both referencing fields.
   // Composes via rover (default v0.4 / fed 2.14).
   const schema = await runOasTest('cycles-by-route.yaml', ['get:/nodes>**'], 1, 3, false, true);
@@ -1435,7 +1435,7 @@ test('test_genuine_cycles_cut_by_route', async () => {
 
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
-  // emitting `id: !`); coerce it to String. see docs/issues.md #11. runOasTest composes via rover.
+  // emitting `id: !`); coerce it to String. see docs/FIXED.md #11. runOasTest composes via rover.
   const schema = await runOasTest('param-anyof.yaml', ['get:/things/{id}>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(/\bid: String!/.test(schema!), 'anyOf param coerced to a String arg');
@@ -1446,7 +1446,7 @@ test('test_object_array_param_degrades_to_json_scalar', async () => {
   // A query param typed as an array of a real object schema has no GraphQL argument shape — the
   // generator used to emit a full `type SearchFilter {...}` body inline inside the argument list
   // (invalid GraphQL). Degrades to JSON, same convention as #19/#14, preserving array cardinality
-  // ([JSON], not a flattened bare JSON). see docs/issues.md #40. runOasTest composes via rover.
+  // ([JSON], not a flattened bare JSON). see docs/FIXED.md #40. runOasTest composes via rover.
   const schema = await runOasTest('param-object-array.yaml', ['get:/search>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(/\bfilters: \[JSON\]/.test(schema!), 'object array param degraded to [JSON]');
@@ -1455,7 +1455,7 @@ test('test_object_array_param_degrades_to_json_scalar', async () => {
 
 test('test_server_url_falls_back_past_bad_first_server', async () => {
   // servers[0] is "/v1.33" (no host) — docker-engine's real shape — so it's skipped for the next
-  // server that has one. see docs/issues.md #41
+  // server that has one. see docs/FIXED.md #41
   const schema = await runOasTest('server-fallback-relative.yaml', ['get:/ping>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(/baseURL: "https:\/\/example\.com\/1\.0"/.test(schema!), 'falls back to the usable server');
@@ -1472,7 +1472,7 @@ test('test_server_url_prefixes_protocol_relative', async () => {
 
 test('test_server_url_preserves_declared_order', async () => {
   // "//prod.example.com" is listed first, so it wins even though "https://sandbox..." (listed
-  // second) already has a scheme. see docs/issues.md #41
+  // second) already has a scheme. see docs/FIXED.md #41
   const schema = await runOasTest('server-order-preserved.yaml', ['get:/ping>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(/baseURL: "https:\/\/prod\.example\.com"/.test(schema!), 'first declared server wins');
@@ -1482,7 +1482,7 @@ test('test_server_url_preserves_declared_order', async () => {
 test('test_map_field_key_aliasing_not_duplicated', async () => {
   // A map field whose JSON key needs aliasing (currency_options -> currencyOptions) used to write
   // the alias twice: currencyOptions: "currency_options": currencyOptions: "currency_options"->entries
-  // — invalid selection syntax rover can't parse. see docs/issues.md #42
+  // — invalid selection syntax rover can't parse. see docs/FIXED.md #42
   const gen = await OasGen.fromFile(`${oasBasePath}/map-key-aliasing.yaml`, {
     skipValidation: false,
     showParentInSelections: false,
@@ -1497,7 +1497,7 @@ test('test_map_field_key_aliasing_not_duplicated', async () => {
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
   // OAS 3.1 nullable syntax `type: [string, 'null']` (no more `nullable: true`) reached
   // createScalarType as the literal "string,null" and threw. The array collapses to its first
-  // non-null entry — GraphQL fields are nullable by default. see docs/issues.md #23
+  // non-null entry — GraphQL fields are nullable by default. see docs/FIXED.md #23
   const schema = await runOasTest('type-array-null.yaml', ['get:/settings>**'], 1, 1, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/projectRootPath: String\b/.test(schema!), 'string-or-null prop becomes String');
@@ -1507,7 +1507,7 @@ test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
 
 test('test_enum_fields_selected_and_degraded', async () => {
   // `>**` expansion must include enum props (slack's ok-only stubs collapsed to zero types), and
-  // enums without a GraphQL form degrade honestly. see docs/issues.md #24
+  // enums without a GraphQL form degrade honestly. see docs/FIXED.md #24
   const schema = await runOasTest('enum-fields.yaml', ['get:/status>**'], 1, 3, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/ok: Boolean!/.test(schema!), 'boolean enum degrades to Boolean');
@@ -1527,7 +1527,7 @@ test('test_enum_fields_selected_and_degraded', async () => {
 
 test('test_mutation_params_and_body_share_one_argument_list', async () => {
   // an op with params AND a body emitted two parenthesised lists — `(username: String!)(input:
-  // UserInput!)` — which is not valid GraphQL. One list, body last. see docs/issues.md #27
+  // UserInput!)` — which is not valid GraphQL. One list, body last. see docs/FIXED.md #27
   const schema = await runOasTest('petstore.yaml', ['put:/user/{username}>**'], 19, 2, false, true);
   assert.ok(schema !== undefined);
   assert.ok(
@@ -1539,7 +1539,7 @@ test('test_mutation_params_and_body_share_one_argument_list', async () => {
 
 test('test_body_alias_direction_and_default_literals', async () => {
   // request-body selections map jsonKey <- graphqlField (the reverse of responses), string
-  // defaults are quoted literals, and 0/false are real defaults. see docs/issues.md #28, #29
+  // defaults are quoted literals, and 0/false are real defaults. see docs/FIXED.md #28, #29
   const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/things>**'], 3, 3, false, true);
   assert.ok(schema !== undefined);
   assert.ok(/log_destinations: logDestinations \{/.test(schema!), 'body alias maps key <- field');

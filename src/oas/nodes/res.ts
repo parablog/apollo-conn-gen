@@ -64,7 +64,7 @@ export class Res extends Type {
     const response = this.response;
     if (response) {
       // a plain value, or a list of them — nothing to pick apart, so pass the answer through as is.
-      // A union whose merge finds no fields answers JSON, passed through the same way. see docs/issues.md #47, #80
+      // A union whose merge finds no fields answers JSON, passed through the same way. see docs/FIXED.md #47, #80
       if (
         T.isScalar(response) ||
         (response instanceof Arr && response.itemsType instanceof Scalar) ||

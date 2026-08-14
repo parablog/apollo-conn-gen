@@ -302,7 +302,7 @@ export class T {
 
   // Qualify a colliding inline name with its container, bumping `2`, `3`… until free.
   // e.g. (googlebooks.yaml) `listPrice` under `offersItem` -> `OffersItemListPrice`. Both parts go
-  // through genTypeName so the result is always a valid identifier. see docs/issues.md #9
+  // through genTypeName so the result is always a valid identifier. see docs/FIXED.md #9
   public static resolveNameConflict(node: IType, context: OasContext): void {
     const base = Naming.genTypeName(T.findNonPropParent(node.parent!).name) + Naming.genTypeName(node.name);
     // a made-up name must also stay off component names, visited or not — the component cannot

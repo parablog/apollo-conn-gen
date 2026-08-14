@@ -34,7 +34,7 @@ export class Union extends Type {
 
   get id(): string {
     // The same `oneOf` sent in a request body and returned in a response is two nodes, like obj/comp/map:
-    // without the kind here one of them overwrites the other (QuickBooks `Bill.Line`). see docs/issues.md #48
+    // without the kind here one of them overwrites the other (QuickBooks `Bill.Line`). see docs/FIXED.md #48
     return `union:${this.kind}:${this.name}`;
   }
 
@@ -87,7 +87,7 @@ export class Union extends Type {
   //   get:/item -> oneOf [Book, Movie]
   // This doesn't — launch library's real shape, rover won't resolve anything inside the match:
   //   PaginatedAgencyList.results: [ oneOf [AgencyMini, AgencyNormal, AgencyDetailed] ]
-  // see docs/issues.md #38
+  // see docs/FIXED.md #38
   public isTopLevelResponse(): boolean {
     let node: IType | undefined = this.parent;
     while (node instanceof Arr) {
@@ -98,7 +98,7 @@ export class Union extends Type {
 
   // A union becomes one flat merged type, not a real `union`/interface, when: it's a request body
   // (GraphQL has no input unions), it has no tag field to pick a branch (#25), or it's nested
-  // inside a field rather than being the op's own response (#38). see docs/issues.md #25, #38
+  // inside a field rather than being the op's own response (#38). see docs/FIXED.md #25, #38
   public isFlat(): boolean {
     return this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
   }
@@ -127,7 +127,7 @@ export class Union extends Type {
     // generate traditional union
     else {
       // Definition/reference agreement, like comp.ts: references emit genTypeName(name), so the
-      // union line (and its consolidate-downgrade type) must too. see docs/issues.md #15, #6
+      // union line (and its consolidate-downgrade type) must too. see docs/FIXED.md #15, #6
       const name = Union.resolvedTypeName(this.name);
 
       if (this.isFlat()) {
@@ -137,7 +137,7 @@ export class Union extends Type {
         }
         // No real union here: an input-position oneOf (GraphQL has no input unions) or no
         // discriminator (no tag for `->match`). Emit the merged object — the selection falls back to
-        // the same flat form (see select), so SDL and selection agree. see docs/issues.md #25, #36
+        // the same flat form (see select), so SDL and selection agree. see docs/FIXED.md #25, #36
         else {
           this.generateMergedObject(context, writer, selection, name, '#### union degraded to a merged object: ');
         }
@@ -149,7 +149,7 @@ export class Union extends Type {
         // output + discriminator: a real `union X = A | B`. Filtering by prop-parent identity broke
         // for allOf members (their folded props keep the inner part as parent -> `union X = `). #34
         // Members are listed under the name their own `type` line uses: a component named
-        // `http_rule_response` is written as `HttpRuleResponse`. see docs/issues.md #43
+        // `http_rule_response` is written as `HttpRuleResponse`. see docs/FIXED.md #43
         const filtered = this.selectedMembers(selection);
 
         writer
@@ -215,7 +215,7 @@ export class Union extends Type {
   // the JSON scalar rather than pick a member (TMF717):
   //   Individual: { status: { $ref: '#/…/IndividualStateType' } }   # enum
   //   PartyRole:  { status: { type: string } }
-  // see docs/issues.md #39, #44
+  // see docs/FIXED.md #39, #44
   private dedupedSelectedProps(selection: string[]): Prop[] {
     const kindOf = (prop: Prop) => prop.id.split(':')[1];
 
@@ -286,7 +286,7 @@ export class Union extends Type {
     // R2: for a real output `union X = A | B` (output position + discriminator) produce the
     // composable abstract-type selection (connect v0.4): a spread `->match` whose branches set a
     // string-literal __typename per member. Merged-object unions (input position or no discriminator)
-    // fall back to the flat selection below. see docs/issues.md #25, #36
+    // fall back to the flat selection below. see docs/FIXED.md #25, #36
     if (!this.isFlat()) {
       this.selectAbstract(context, writer, selection);
       trace(context, '<- [union::select]', `-> out: ${this.name}`);
@@ -343,7 +343,7 @@ export class Union extends Type {
 
     members.forEach((child, idx) => {
       // `__typename` is the written name (`http_rule_response` -> `HttpRuleResponse`), or the router
-      // can't match what comes back to a member. see docs/issues.md #43
+      // can't match what comes back to a member. see docs/FIXED.md #43
       const typeName = Union.resolvedTypeName(child.name);
       // With no `mapping`, the value the service sends is the plain ref name — "Book", not "book".
       // It is compared against real payloads, so it keeps the name the OAS uses, unsanitised.
@@ -369,7 +369,7 @@ export class Union extends Type {
   }
 
   // The name a ref is written as: `http_rule_response` -> `HttpRuleResponse`. Same rule `Obj` and
-  // `Composed` use for their own `type X {` line. see docs/issues.md #15, #43
+  // `Composed` use for their own `type X {` line. see docs/FIXED.md #15, #43
   private static resolvedTypeName(ref: string): string {
     const sanitised = Naming.genTypeName(ref);
     const refName = Naming.getRefName(ref);

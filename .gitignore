@@ -59,7 +59,11 @@ KNOWN_ISSUES.md
 /tools/local/
 
 .last
-/docs/
+# docs/ is local scratch, except the two committed logs the code comments cite by name.
+# `/docs/*`, not `/docs/`: git will not re-include a file inside an excluded directory.
+/docs/*
+!/docs/issues.md
+!/docs/FIXED.md
 **/.DS_Store
 LINT-CORPUS.md
 /tests/resources/oas/incidentio.json

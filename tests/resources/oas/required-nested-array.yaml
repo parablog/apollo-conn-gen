@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: a required list of lists
   version: 1.0.0
-# see docs/issues.md #59
+# see docs/FIXED.md #59
 # The `!` for a required field is written after the value. A list of lists of scalars writes its own
 # line ending first, so the `!` lands alone on the next line. Harmless to the parser (line breaks
 # are ignored) but wrong to the eye — and to any tool comparing schemas line by line.

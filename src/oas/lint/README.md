@@ -85,4 +85,4 @@ reading nothing.
 
 A second opinion, not an authority: the arrow-method list and the reader's grammar can drift from
 the router, and everywhere the linter cannot be sure it says nothing. Its first corpus pass found
-one real generator bug (docs/issues.md #63) and one linter bug (#64) — the gate works.
+one real generator bug (docs/FIXED.md #63) and one linter bug (#64) — the gate works.

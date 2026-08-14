@@ -62,7 +62,7 @@ export function sanitiseFieldForSelect(name: string): string {
   // e.g. (stats/fixtures) `ko_time` -> `koTime: ko_time`, not `koTime: "ko_time"`
   const original = name.startsWith('@') ? name : fieldName;
   // a key starting with `null`, or exactly `true`/`false`, reads as a literal and takes the path form
-  // e.g. (omni) `null_sort` would read as `null` plus a stray `_sort`. see docs/issues.md #62, #82
+  // e.g. (omni) `null_sort` would read as `null` plus a stray `_sort`. see docs/FIXED.md #62, #82
   const isBareKey = /^[_A-Za-z][_0-9A-Za-z]*$/.test(original) && !/^null|^(true|false)$/.test(original);
 
   // the key keeps its own spelling when it is a safe identifier, else becomes a quoted path step

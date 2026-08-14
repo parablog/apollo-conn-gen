@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: made-up enum names that fight over the same name
   version: 1.0.0
-# see docs/issues.md #57
+# see docs/FIXED.md #57
 # Order.itemStatus and OrderItem.status both come out as OrderItemStatus (a split collision), and
 # User's fields land on names the UserRole component already owns. Distinct value sets everywhere,
 # so the same-definition dedup cannot hide a collision.

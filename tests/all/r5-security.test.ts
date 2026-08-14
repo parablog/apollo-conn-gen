@@ -328,7 +328,7 @@ test('test_R5_security_per_op_global_warning_fires_once_across_inheriting_ops (C
 
 test('test_87_apikey_header_writes_the_auth_value_prefix', async () => {
   // PagerDuty asks for `Authorization: Token token=<API_KEY>` but only says so in the scheme's
-  // `description`, so the prefix comes from the option instead. see docs/issues.md #87
+  // `description`, so the prefix comes from the option instead. see docs/FIXED.md #87
   const schema = await runOasTest(
     'apikey-header-prefix.yaml',
     ['get:/widgets>**'],

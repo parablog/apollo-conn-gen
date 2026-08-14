@@ -8,7 +8,7 @@ servers:
 # named property) had nothing selectable, so the whole op was silently dropped from the schema —
 # same failure mode as #32's bare scalar response, one level up. Real-world shape: spotify's "check
 # saved X" endpoints (get:/me/albums/contains, etc.) return a bare `[true, false, ...]`.
-# see docs/issues.md #47
+# see docs/FIXED.md #47
 paths:
   /me/widgets/contains:
     get:

@@ -41,7 +41,7 @@ export class Scalar extends Type {
     }
 
     // a string default must be quoted — `$(latest)` reads as a field path, `$("latest")` is
-    // the literal. Numbers/booleans stay bare. see docs/issues.md #28
+    // the literal. Numbers/booleans stay bare. see docs/FIXED.md #28
     const value = typeof this.schema.default === 'string' ? `"${this.schema.default}"` : String(this.schema.default);
 
     // the synthetic `success` field has no payload counterpart to coalesce from — keep $(true)

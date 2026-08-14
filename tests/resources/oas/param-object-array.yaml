@@ -7,7 +7,7 @@ servers:
 paths:
   # a query param typed as an array of a real ($ref'd) object schema has no GraphQL argument
   # shape (an inline `type X {...}` body isn't legal inside an argument list) — degrade to the
-  # JSON scalar, preserving array cardinality. see docs/issues.md #40
+  # JSON scalar, preserving array cardinality. see docs/FIXED.md #40
   /search:
     get:
       operationId: search

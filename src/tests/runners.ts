@@ -37,7 +37,7 @@ export async function runOasTest(
     directives?: DirectivesConfig;
     skipOptionalMarkers?: boolean;
     // the local composer is one fixed build and ignores `federation_version`, so a test that pins an
-    // older composition has to go through stock rover to mean anything. see docs/issues.md #16
+    // older composition has to go through stock rover to mean anything. see docs/FIXED.md #16
     forceRover?: boolean;
   } = {},
 ): Promise<string | undefined> {

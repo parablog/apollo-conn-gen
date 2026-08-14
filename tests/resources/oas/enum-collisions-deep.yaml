@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: every bump candidate is a component that never gets visited
   version: 1.0.0
-# see docs/issues.md #57
+# see docs/FIXED.md #57
 # User.role wants UserRole, then UserRole2 — both are components, neither selected. The made-up
 # name must keep bumping past names the spec owns, not just past names already stored.
 servers:

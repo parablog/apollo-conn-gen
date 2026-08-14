@@ -6,7 +6,7 @@ paths:
   # The body lists its variants under `anyOf` and never under `oneOf` (digitalocean
   # `post:/v2/domains/{domain_name}/records`, one member per DNS record type). The members must be
   # read from whichever keyword carries them, or the body is written with no fields at all.
-  # see docs/issues.md #50
+  # see docs/FIXED.md #50
   /records:
     post:
       operationId: createRecord

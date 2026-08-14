@@ -45,7 +45,7 @@ export class Composed extends Type {
     }
 
     // a PropComp-named inline allOf (#7) that clashes with a stored type of a different class
-    // must rename — otherwise the same type name is defined twice. see docs/issues.md #22
+    // must rename — otherwise the same type name is defined twice. see docs/FIXED.md #22
     if (this.parent instanceof Prop && T.collidesAcrossNodeClasses(this, context)) {
       T.resolveNameConflict(this, context);
     }
@@ -85,7 +85,7 @@ export class Composed extends Type {
       if (selected.length > 0) {
         // Definition and reference must agree: references emit genTypeName(name), so the definition
         // does too (upperFirst(getRefName) kept separators: `Billing_historyResponse` vs the
-        // reference's `BillingHistoryResponse`). Mirrors obj.ts. see docs/issues.md #15, #6
+        // reference's `BillingHistoryResponse`). Mirrors obj.ts. see docs/FIXED.md #15, #6
         const sanitised = Naming.genTypeName(this.name);
         const refName = Naming.getRefName(this.name);
         writer.write(this.kind + ' ');
@@ -188,7 +188,7 @@ export class Composed extends Type {
     for (let i = 0; i < allOfs.length; i++) {
       const allOfItemSchema = allOfs[i];
 
-      // skip metadata-only allOf members (they contribute no fields). see docs/issues.md #5
+      // skip metadata-only allOf members (they contribute no fields). see docs/FIXED.md #5
       if (Schemas.isEmpty(allOfItemSchema as SchemaObject)) {
         trace(context, '   [composed::all-of]', `skipping empty allOf member #${i}`);
         continue;

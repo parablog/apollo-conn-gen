@@ -4,7 +4,7 @@ info:
   version: 1.0.0
 servers:
   - url: https://api.example.com
-# Regression for docs/issues.md #36: two fields named `extension` on one path point to DIFFERENT types.
+# Regression for docs/FIXED.md #36: two fields named `extension` on one path point to DIFFERENT types.
 # The old name-based check wrongly cut the inner one as a loop, leaving its type empty (Inner has only
 # that one field). So this fails to compose before the fix and composes after. See #36 for the details.
 paths:

@@ -5,7 +5,7 @@ info:
 paths:
   # Subscription is reached two ways: as a nested field (Customer.subscription) and would also be
   # reached directly if selected on its own — both must agree on the same sanitised type name.
-  # see docs/issues.md #45
+  # see docs/FIXED.md #45
   /customers/{id}:
     get:
       operationId: getCustomer

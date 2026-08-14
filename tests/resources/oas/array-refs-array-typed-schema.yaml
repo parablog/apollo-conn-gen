@@ -4,7 +4,7 @@ info:
   version: 1.0.0
 paths:
   # WidgetList is itself `type: array` (a "list of X" component reused as an array-item ref) —
-  # a redundant nesting artifact, not a genuine array-of-arrays on the wire. see docs/issues.md #46
+  # a redundant nesting artifact, not a genuine array-of-arrays on the wire. see docs/FIXED.md #46
   /widgets:
     get:
       operationId: listWidgets

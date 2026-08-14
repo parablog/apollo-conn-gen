@@ -7,7 +7,7 @@ servers:
 paths:
   # Op A: two inline wrappers named `group`, each listing the `Group` component through its own `results`.
   # Each used to emit a second `type Group` and clash. They have different fields, so they must get
-  # different names (`SubjectsGroup`, `MembersGroup`). see docs/issues.md #12, #37.
+  # different names (`SubjectsGroup`, `MembersGroup`). see docs/FIXED.md #12, #37.
   /permission:
     get:
       operationId: getPermission
@@ -45,7 +45,7 @@ paths:
                         type: string
   # Op C: the same `subjects.user` wrapper on the request body and the response, with different fields.
   # Both would take the same name; the input/output split keeps them apart (`SubjectsUserInput` vs the
-  # output's own name) so they never emit one duplicated type. see docs/issues.md #37.
+  # output's own name) so they never emit one duplicated type. see docs/FIXED.md #37.
   /space:
     post:
       operationId: createSpace

@@ -5,7 +5,7 @@ info:
 paths:
   # A wrapper holding nothing but `items` is a spec-generator artifact — the payload is one list
   # (slack `get:/conversations.replies`, whose messages are `[ {…} ]`). The inner items are the real
-  # element, so the wrapper is dropped. see docs/issues.md #52
+  # element, so the wrapper is dropped. see docs/FIXED.md #52
   /wrapper-array:
     get:
       operationId: listWrapped
@@ -36,7 +36,7 @@ paths:
                                 type: integer
   # The opposite: an explicit inner `type: array` is a real list of lists (docker's `top` rows, one
   # array of column values per process). It must stay nested — dropping a level here would publish a
-  # shape the service never sends. see docs/issues.md #52
+  # shape the service never sends. see docs/FIXED.md #52
   /matrix:
     get:
       operationId: listMatrix

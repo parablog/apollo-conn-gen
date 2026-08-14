@@ -30,7 +30,7 @@ export class Param extends Type {
 
     // A GraphQL argument must be a single scalar; a param schema that is anyOf/oneOf (e.g.
     // DigitalOcean's `id | fingerprint` path param) has no single arg type — coerce to String.
-    // see docs/issues.md #11
+    // see docs/FIXED.md #11
     const argSchema =
       this.schema && (this.schema.anyOf || this.schema.oneOf)
         ? ({ type: 'string' } as SchemaObject)
@@ -80,7 +80,7 @@ export class Param extends Type {
   // A GraphQL argument can't carry an inline object/allOf body either (same problem as the
   // anyOf/oneOf coercion above) — degrade it, or just an array's items, to the existing
   // shapeless-object -> JSON scalar fallback (#19), so array cardinality survives ([JSON], not
-  // JSON). see docs/issues.md #40
+  // JSON). see docs/FIXED.md #40
   private static degradeObjectLikeSchema(context: OasContext, schema: SchemaObject): SchemaObject {
     if (Param.isObjectLike(context, schema)) {
       return {} as SchemaObject;

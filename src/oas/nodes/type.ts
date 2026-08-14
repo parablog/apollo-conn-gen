@@ -141,7 +141,7 @@ export abstract class Type implements IType {
     const ancestors: IType[] = this.ancestors();
     const sameId = ancestors.find((p) => p.id === child.id);
     // Same fix as factory.ts (fromProp), here when attaching a field to its parent: a shared field name is
-    // not a loop — compare the schema. docs/issues.md #36
+    // not a loop — compare the schema. docs/FIXED.md #36
     const isCycle = sameId !== undefined && sameId.schema === child.schema;
     let pushed = child;
 
@@ -161,7 +161,7 @@ export abstract class Type implements IType {
     // A prop is selected when some selection entry starts with its path. Done naively
     // (`selection.find(s => s.startsWith(prop.path()))`) this is O(props x selection) with a
     // path() rebuild per entry, which blows up on large recursive type sets (2700+ types x 20k
-    // selection entries -> billions of ops; see docs/issues.md #10). Index the selection once into
+    // selection entries -> billions of ops; see docs/FIXED.md #10). Index the selection once into
     // its set of `>`-boundary prefixes, then membership is O(1) per prop.
     const prefixes = selectionPrefixes(selection);
     return Array.from(this.props.values()).filter((prop) => prefixes.has(prop.path()));

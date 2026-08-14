@@ -38,7 +38,7 @@ class RemoveRefConverter extends AbstractConverter {
   public process(input: string): string {
     let result = input || '';
     // A schema $ref'd via a JSON-pointer into #/paths (DigitalOcean shares schemas this way) carries
-    // the whole pointer as its name; derive a clean tail name instead. see docs/issues.md #8
+    // the whole pointer as its name; derive a clean tail name instead. see docs/FIXED.md #8
     if (result.includes('#/paths/')) {
       return nameFromPathsPointer(result);
     }
@@ -78,7 +78,7 @@ const POINTER_NOISE = new Set([
 
 /**
  * Derive a readable type name from a JSON pointer into `#/paths/...` (how DigitalOcean shares inline
- * schemas). See docs/issues.md #8.
+ * schemas). See docs/FIXED.md #8.
  *
  * Input  (a raw pointer, RFC-6901 encoded):
  *   `#/paths/~1v2~1account~1keys/get/responses/200/content/application~1json/schema/.../properties/sshKeys/items`
@@ -120,7 +120,7 @@ class FinalConverter extends AbstractConverter {
 
 class EncodeLeadingSignConverter extends AbstractConverter {
   // a leading sign would be dropped by the generic sanitiser, colliding `+1` and `-1` (github's
-  // ReactionRollup) into one `_1` field — encode it into the name instead. see docs/issues.md #24
+  // ReactionRollup) into one `_1` field — encode it into the name instead. see docs/FIXED.md #24
   public process(input: string): string {
     if (input.startsWith('+')) return 'plus' + input.substring(1);
     if (input.startsWith('-')) return 'minus' + input.substring(1);
@@ -136,7 +136,7 @@ class ParamNameConverter extends AbstractConverter {
 
 export class Naming {
   // GraphQL keeps these three names for itself. A schema called one of them (stripe's
-  // `Subscription`) can't also be an ordinary type. see docs/issues.md #45
+  // `Subscription`) can't also be an ordinary type. see docs/FIXED.md #45
   private static readonly RESERVED_ROOT_TYPE_NAMES = new Set(['Query', 'Mutation', 'Subscription']);
 
   public static genParamName(param: string): string {
@@ -164,7 +164,7 @@ export class Naming {
   public static genTypeName(name: string): string {
     // guarantee a valid type identifier: drop any leftover non-identifier chars (e.g. the
     // `[`/`]`/`:` of an `[inline:Foo]` placeholder used as a name prefix), then non-empty +
-    // no leading digit. Idempotent for valid names. see docs/issues.md #6, #9
+    // no leading digit. Idempotent for valid names. see docs/FIXED.md #6, #9
     const cleaned = Naming.TYPE_CONVERTER.convert(name).replace(/[^_0-9A-Za-z]/g, '');
     if (cleaned.length === 0) {
       return Naming.NUMBER_PREFIX;
@@ -194,7 +194,7 @@ export class Naming {
       // parser unquoted); the field reference is always a bare identifier. see #32
       const key = /^[_A-Za-z][_0-9A-Za-z]*$/.test(name) ? name : `"${name}"`;
       // a reference starting with `null` reads as a literal, so it takes the path form
-      // e.g. (omni) `nullSort` would read as `null` plus a stray `Sort`. see docs/issues.md #82
+      // e.g. (omni) `nullSort` would read as `null` plus a stray `Sort`. see docs/FIXED.md #82
       const value = /^null/.test(sanitised) ? `$.${sanitised}` : sanitised;
       return key + ': ' + value;
     }
@@ -204,7 +204,7 @@ export class Naming {
     // LITERAL under connect/v0.4, returning the key's own name as the value. see #62
     const original = name.startsWith('@') ? name : fieldName;
     // a key starting with `null`, or exactly `true`/`false`, reads as a literal and takes the path form
-    // e.g. (omni) `null_sort` would read as `null` plus a stray `_sort`. see docs/issues.md #62, #82
+    // e.g. (omni) `null_sort` would read as `null` plus a stray `_sort`. see docs/FIXED.md #62, #82
     const isBareKey = /^[_A-Za-z][_0-9A-Za-z]*$/.test(original) && !/^null|^(true|false)$/.test(original);
     // the key keeps its own spelling when it is a safe identifier, else becomes a quoted path step
     // e.g. (r3-edge-cases) `_id` -> `id: _id`, `full name` -> `fullName: $."full name"`

@@ -102,7 +102,7 @@ export class Post extends Get {
     const mediaTypes = this.operation.getRequestBodyMediaTypes();
     if (mediaTypes.length === 0) {
       // `requestBody: { $ref: '#/components/requestBodies/…' }` reports no media types — the
-      // mutation used to come out with no input and no body at all. see docs/issues.md #74
+      // mutation used to come out with no input and no body at all. see docs/FIXED.md #74
       const referenced = this.resolveBodySchemaReference(context);
       if (referenced) {
         this.body = Factory.fromBody(context, this, referenced.schema, referenced.mediaType) as Body;

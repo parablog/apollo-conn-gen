@@ -6,7 +6,7 @@ paths:
   # The answer carries an object with no properties (asana's "success is the status code"
   # convention, `post:/goals/{goal_gid}/removeSupportingRelationship`). The body IS selectable, so
   # asking whether the whole op has anything to select never fires the free-form-JSON fallback for
-  # the response — it has to be asked per side. see docs/issues.md #51
+  # the response — it has to be asked per side. see docs/FIXED.md #51
   /goals/{goalId}/removeSupportingRelationship:
     post:
       operationId: removeSupportingRelationship

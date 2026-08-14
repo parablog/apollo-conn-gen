@@ -124,7 +124,7 @@ export class OperationWriter {
     writer.write(' '.repeat(6) + '}');
   }
 
-  // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/issues.md #2
+  // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/FIXED.md #2
   // an override path may already template (`{$args.id}`, `{$config.v}`) — leave `$` segments alone
   private templatedPath(op: Op, override?: OverrideEntry): string {
     return (override?.path ?? op.operation.path).replace(/\{([^}]+)\}/g, (m, name) =>

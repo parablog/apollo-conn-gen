@@ -62,7 +62,7 @@ export class Factory {
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
     Nullability.normalize(schemaObj);
 
-    // Cycle cut (see docs/issues.md #10): a recursive schema can only close through a component `$ref`,
+    // Cycle cut (see docs/FIXED.md #10): a recursive schema can only close through a component `$ref`,
     // and `lookupRef` returns the same `SchemaObject` instance for a given ref. So if this resolved ref's
     // schema is already on the expansion path (an ancestor was built from it), re-entering would recurse
     // forever / emit a circular connector selection. Stop with a `RefCircRef` sentinel (commented in both
@@ -73,7 +73,7 @@ export class Factory {
     }
 
     // github's "maybe empty" anyOf (`anyOf: [member, {}]`): the fieldless member renders
-    // nothing, so a single real member collapses to it. see docs/issues.md #20
+    // nothing, so a single real member collapses to it. see docs/FIXED.md #20
     if (schemaObj.anyOf && !schemaObj.oneOf && !schemaObj.allOf) {
       const real = schemaObj.anyOf.filter((m) => !Schemas.isShapelessObject(m as SchemaObject));
       if (real.length === 1) {
@@ -81,7 +81,7 @@ export class Factory {
       }
     }
 
-    // implied array: `items` present even without an explicit `type: array`. see docs/issues.md #4
+    // implied array: `items` present even without an explicit `type: array`. see docs/FIXED.md #4
     if (_.get(schemaObj, 'items') && (schemaObj.type === 'array' || schemaObj.type == null)) {
       result = this.createArrayType(parent, schemaObj, context);
     }
@@ -97,7 +97,7 @@ export class Factory {
     }
     // a shapeless object (nothing but a boolean `additionalProperties`, or `{}`) declares no fields:
     // fall back to the JSON scalar — NOT an empty Obj, which generate() would skip, dangling the
-    // reference. see docs/issues.md #19
+    // reference. see docs/FIXED.md #19
     else if (Schemas.isShapelessObject(schemaObj)) {
       result = new Scalar(parent, 'JSON', schemaObj);
     }
@@ -150,7 +150,7 @@ export class Factory {
     // union
     else if (schema.oneOf || schema.anyOf) {
       // an `anyOf` lists members just like a `oneOf` — read them too, or the union is built with
-      // none and writes an empty block (digitalocean's create-record body). see docs/issues.md #50
+      // none and writes an empty block (digitalocean's create-record body). see docs/FIXED.md #50
       //   schema: { anyOf: [ { allOf: [ … ] }, { … } ] }
       const members = schema.oneOf || schema.anyOf || [];
       result = new Union(
@@ -218,11 +218,11 @@ export class Factory {
   // An array's items sometimes hold another array instead of the real element — a property's items
   // must always be the element itself, so take the inner one. Two ways a spec writes it:
   //
-  // through a `$ref` to a component that is itself a list (docker-engine). see docs/issues.md #46
+  // through a `$ref` to a component that is itself a list (docker-engine). see docs/FIXED.md #46
   //   Containers:       { type: array, items: { $ref: '#/…/ContainerSummary' } }
   //   ContainerSummary: { type: array, items: { …the real object… } }
   //
-  // inline, as a wrapper holding nothing but `items` (slack). see docs/issues.md #52
+  // inline, as a wrapper holding nothing but `items` (slack). see docs/FIXED.md #52
   //   messages: { type: array, items: { items: { anyOf: [ … ] } } }
   //
   // Inline needs the stricter test: an explicit `type: array` there is a real list of lists (docker
@@ -304,7 +304,7 @@ export class Factory {
 
         // Array items resolve eagerly here, so if the item ref re-entered a schema on the path
         // (fromSchema returned the circular sentinel), bubble the cut up to the whole list field:
-        // render `# children: [Node] — circular reference omitted`. see docs/issues.md #10
+        // render `# children: [Node] — circular reference omitted`. see docs/FIXED.md #10
         if (itemsType instanceof CircularRef) {
           return new PropCircRef(parent, array);
         }
@@ -350,7 +350,7 @@ export class Factory {
       } else if (schemaObj?.enum) {
         if (GqlUtils.isGqlEnum(schemaObj)) {
           // an inline enum starts under its field's name; En.visit gives it the owning type's name
-          // in front: (petstore.yaml) Order's `status` -> OrderStatus. see docs/issues.md #57
+          // in front: (petstore.yaml) Order's `status` -> OrderStatus. see docs/FIXED.md #57
           const en: En = new En(
             parent,
             ref ?? propName,
@@ -363,7 +363,7 @@ export class Factory {
           // No GraphQL enum form for this one — degrade to the base scalar instead of emitting
           // an invalid definition: boolean/number enums (slack `ok: { enum: [true] }` ->
           // `ok: Boolean`) and string enums with non-identifier values (github reactions
-          // `enum: ["+1", "-1", …]` -> String). see docs/issues.md #24
+          // `enum: ["+1", "-1", …]` -> String). see docs/FIXED.md #24
           prop = new PropScalar(parent, propName, GqlUtils.getGQLScalarType(schemaObj), schemaObj);
         }
       }
@@ -405,7 +405,7 @@ export class Factory {
     }
 
     // Cut only a real loop: a field pointing back to a type we already passed through. Compare the schema,
-    // not the field name — different types reuse field names (e.g. Adobe `extension_attributes`). docs/issues.md #36
+    // not the field name — different types reuse field names (e.g. Adobe `extension_attributes`). docs/FIXED.md #36
     const cyclic = this.cyclicAncestor(parent, schemaObj);
     if (cyclic) {
       prop = new PropCircRef(parent, prop);
@@ -447,14 +447,14 @@ export class Factory {
    * identity — `lookupRef` returns the same instance per ref), or undefined. Scoped to the current
    * expansion path (`ancestors()`), so a shared non-recursive component used by sibling fields is NOT
    * cut — only a schema that is its own ancestor. `schema` is undefined for inline (non-`$ref`) nodes,
-   * which can never match an ancestor. see docs/issues.md #10
+   * which can never match an ancestor. see docs/FIXED.md #10
    */
   private static cyclicAncestor(parent: IType, schema?: SchemaObject): IType | undefined {
     if (!schema) return undefined;
     return parent.ancestors().find((a) => a.schema === schema);
   }
 
-  /** Build the `fromSchema` circular sentinel (commented in both SDL + selection). see docs/issues.md #10 */
+  /** Build the `fromSchema` circular sentinel (commented in both SDL + selection). see docs/FIXED.md #10 */
   public static fromRefCircRef(parent: IType, ancestor: IType, ref: string): IType {
     const node = new RefCircRef(parent, Naming.getRefName(ref) ?? ancestor.name);
     node.ref = ancestor;

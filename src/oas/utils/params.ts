@@ -6,7 +6,7 @@ import { Naming } from './naming.js';
 export class Params {
   // every `{token}` in the path needs a parameter of the same name, because the URL always asks for
   // `{$args.<token>}` — so a parameter is renamed to the token it serves, and a token with nothing
-  // declared gets a required String invented for it. see docs/issues.md #81
+  // declared gets a required String invented for it. see docs/FIXED.md #81
   //   (omni)     `/v1/labels/{labelName}`  declares `name`     -> renamed to `labelName`
   //   (mindbody) `/add-ons/{addOnId}`      declares `addonId`  -> renamed to `addOnId`
   //   (omni)     `/v1/api-keys/{id}`       declares nothing    -> `id: String!` invented
@@ -18,7 +18,7 @@ export class Params {
     const unmatchedTokens = pathTokens.filter((token) => !matched.has(token));
 
     // only where the argument names really differ — a snake-cased `label_name` already serves
-    // `{labelName}`, and entity resolvers look up properties by the raw name. see docs/issues.md #81
+    // `{labelName}`, and entity resolvers look up properties by the raw name. see docs/FIXED.md #81
     const renames = new Map(
       Array.from(matched, ([token, param]): [ParameterObject, string] => [param, token]).filter(
         ([p, token]) => Naming.genParamName(p.name) !== Naming.genParamName(token),

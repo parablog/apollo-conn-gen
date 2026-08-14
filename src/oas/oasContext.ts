@@ -122,7 +122,7 @@ export class OasContext {
     this.types.set(name, type);
 
     // Also reserve the *emitted* GraphQL name: an inline object named by its property key must not
-    // collide with a component's emitted name ('user' vs '#/c/s/User' both emit `User`). see issues.md #12
+    // collide with a component's emitted name ('user' vs '#/c/s/User' both emit `User`). see FIXED.md #12
     const emitted = Naming.genTypeName(name);
     if (emitted !== name) {
       this.types.set(emitted, type);
@@ -138,7 +138,7 @@ export class OasContext {
       return responses[Naming.getRefName(ref)!] ?? null;
     }
 
-    // generic JSON-pointer response ref (e.g. #/paths/…/responses/<code>). see docs/issues.md #3
+    // generic JSON-pointer response ref (e.g. #/paths/…/responses/<code>). see docs/FIXED.md #3
     if (ref && ref.startsWith('#/')) {
       return (this.resolvePointer(ref) as ResponseObject) ?? null;
     }
@@ -164,7 +164,7 @@ export class OasContext {
     }
 
     // generic JSON-pointer schema ref (e.g. #/paths/…); not a named component, so it skips
-    // refCount/consolidation. see docs/issues.md #3
+    // refCount/consolidation. see docs/FIXED.md #3
     if (ref && ref.startsWith('#/')) {
       return (this.resolvePointer(ref) as SchemaObject) ?? null;
     }
@@ -191,7 +191,7 @@ export class OasContext {
       return (parameters[name] as ParameterObject) ?? false;
     }
 
-    // generic JSON-pointer param ref (e.g. shared params via #/paths/…/parameters/N). see docs/issues.md #3
+    // generic JSON-pointer param ref (e.g. shared params via #/paths/…/parameters/N). see docs/FIXED.md #3
     if (ref && ref.startsWith('#/')) {
       return (this.resolvePointer(ref) as ParameterObject) ?? false;
     }
@@ -219,7 +219,7 @@ export class OasContext {
   // Takes the class itself, not its name: the browser build renames classes, so asking for "Param"
   // by name never found it and a `status` query param came out as a whole enum block:
   //   parameters: [{ name: status, in: query, schema: { type: string, enum: [available, sold] } }]
-  // see docs/issues.md #53
+  // see docs/FIXED.md #53
   public inContextOf<T extends IType>(type: new (...args: never[]) => T, node: IType): boolean {
     for (let i = this.stack.length - 1; i >= 0; i--) {
       if (this.stack[i] === node) {

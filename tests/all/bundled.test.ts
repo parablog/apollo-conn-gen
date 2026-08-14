@@ -7,7 +7,7 @@ import * as esbuild from 'esbuild';
 import { oasBasePath } from '../../src/tests/runners.js';
 
 // Every other test reads the source files as they are, so none of them sees what the browser build
-// does to the code. see docs/issues.md #53
+// does to the code. see docs/FIXED.md #53
 test('test_bundled_build_keeps_enum_params_as_scalar_arguments', async () => {
   // packed here rather than read from dist/ so a fresh checkout works. Only our own code is
   // renamed (packing the libraries too breaks them), and the file has to sit inside the repo or

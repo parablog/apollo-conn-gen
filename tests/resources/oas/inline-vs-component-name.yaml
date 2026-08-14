@@ -23,7 +23,7 @@ paths:
                     type: object
                     properties:
                       # inline wrapper named by its property key: emits as `User` without the
-                      # emitted-name occupancy check (docs/issues.md #12)
+                      # emitted-name occupancy check (docs/FIXED.md #12)
                       user:
                         type: object
                         properties:

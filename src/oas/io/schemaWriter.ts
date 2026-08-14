@@ -17,7 +17,7 @@ export class SchemaWriter {
 
   public writeDirectives(writer: Writer): void {
     const api: Oas = this.gen.parser;
-    // an explicit baseURL wins; otherwise pick a usable server. see docs/issues.md #41
+    // an explicit baseURL wins; otherwise pick a usable server. see docs/FIXED.md #41
     const host = this.gen.options.baseURL ?? ServerUrl.resolve(api.getDefinition().servers);
     const federationVersion = this.gen.options.federationVersion || DEFAULT_VERSIONS.federationVersion;
     const connectorSpecVersion = this.gen.options.connectorSpecVersion || DEFAULT_VERSIONS.connectorSpecVersion;

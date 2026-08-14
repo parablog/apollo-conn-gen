@@ -126,7 +126,7 @@ export class Get extends Type implements Op {
     });
 
     // every `{token}` in the path needs a parameter of the same name, whatever the spec called it
-    // e.g. (omni) `get /v1/api-keys/{id}` declares no parameters at all. see docs/issues.md #81
+    // e.g. (omni) `get /v1/api-keys/{id}` declares no parameters at all. see docs/FIXED.md #81
     const parameters = Params.matchToPath(declared, this.operation.path);
 
     this.params = parameters

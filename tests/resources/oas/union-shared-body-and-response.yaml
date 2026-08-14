@@ -6,7 +6,7 @@ paths:
   # `Line` is the same list of variants in the schema you send and in the schema you get back
   # (QuickBooks `post:/v3/company/{realm-id}/bill`). Both flavours have to be written — the response
   # used to reference a type that was never defined, because the two collided on one id.
-  # see docs/issues.md #48
+  # see docs/FIXED.md #48
   /bills:
     post:
       operationId: createBill

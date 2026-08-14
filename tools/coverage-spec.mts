@@ -110,7 +110,7 @@ const passKeys = ['abstract'] as (keyof typeof PASSES)[];
 
 // Whole (spec, pass) combinations that infinite-loop the generator — skipped so the sweep can
 // complete, reported as "not measurable" with the reason. Currently empty: the Confluence abstract
-// hang was fixed by docs/issues.md #10 (selection indexing + cycle cuts).
+// hang was fixed by docs/FIXED.md #10 (selection indexing + cycle cuts).
 const SKIP_PASSES = new Map<string, string>([]);
 const skipReason = (file: string, pass: keyof typeof PASSES) => SKIP_PASSES.get(`${file}::${pass}`);
 

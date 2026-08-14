@@ -2,7 +2,7 @@ openapi: "3.0.1"
 info:
   title: Pages API (shared base returned as a list -> no promotion)
   version: "1.0.0"
-# see docs/issues.md #58
+# see docs/FIXED.md #58
 # The twin of r2-interface-shared-base.yaml: the base is used concretely, but as a LIST rather than
 # on its own. Rule 3 has to catch this the same way. It nearly did not: the "is the base returned
 # anywhere" scan read the response node without taking the list off, so `[PageBase]` looked like no

@@ -55,7 +55,7 @@ export class PropCircRef extends Prop {
     // Cut the cycle: emit a comment and DO NOT recurse into the wrapped ref. Delegating to
     // `this.ref.select(...)` re-expands the very cycle this node exists to break, re-introducing the
     // recursion into the connector selection (rover then rejects it as CIRCULAR_REFERENCE). Mirrors
-    // CircularRef.select. see docs/issues.md #10
+    // CircularRef.select. see docs/FIXED.md #10
     writer
       .write(' '.repeat(context.indent + context.stack.length))
       .write(`# ${this.name}: circular reference omitted (re-visit schema and remove the reference)\n`);

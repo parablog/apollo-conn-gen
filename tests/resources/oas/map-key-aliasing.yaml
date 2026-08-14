@@ -6,7 +6,7 @@ servers:
   - url: https://api.example.com
 paths:
   # a map (additionalProperties) field whose JSON key needs snake_case -> camelCase aliasing —
-  # mirrors stripe's currency_options / docker-engine's Networks. see docs/issues.md #42
+  # mirrors stripe's currency_options / docker-engine's Networks. see docs/FIXED.md #42
   /coupons:
     get:
       operationId: getCoupons

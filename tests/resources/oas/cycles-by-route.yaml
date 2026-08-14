@@ -4,7 +4,7 @@ info:
   version: 1.0.0
 servers:
   - url: https://api.example.com
-# Companion to same-name-fields.yaml (docs/issues.md #36): checks that REAL loops are still cut after the
+# Companion to same-name-fields.yaml (docs/FIXED.md #36): checks that REAL loops are still cut after the
 # fix, reached three ways — `parent` (direct ref), `children` (array), and `wrapper.back` (a ref inside an
 # inline object). `Shared` is reused but is not a loop, so it must stay. Each looping field sits next to a
 # normal field, so cutting the loop still leaves a usable type. See #36.
