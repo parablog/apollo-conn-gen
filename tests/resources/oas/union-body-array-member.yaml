@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: Union body with an array member
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /restrictions:
+    post:
+      operationId: addRestrictions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestrictionArray'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restriction'
+components:
+  schemas:
+    # the array member is built with the union's own name, which is what zeroed its ref count
+    RestrictionArray:
+      oneOf:
+        - type: object
+          properties:
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/Restriction'
+            size:
+              type: integer
+        - type: array
+          items:
+            $ref: '#/components/schemas/Restriction'
+    Restriction:
+      type: object
+      properties:
+        operation:
+          type: string

@@ -175,9 +175,7 @@ export class Union extends Type {
     name: string,
     headline: string,
   ): void {
-    if (!this.consolidated) {
-      this.consolidate(selection).forEach((type) => context.decRefCount(type.name));
-    }
+    this.consolidateMembers(context, selection);
 
     const childrenTypes = this.children.map((child) => Naming.getRefName(child.name));
     writer.write(headline).write(name).write(' = ').write(childrenTypes.join(' | ')).write('\n\n');
@@ -262,9 +260,7 @@ export class Union extends Type {
       // consolidate first, like generateMergedObject does: merging picks which member's copy of a
       // shared field is kept, so reading the fields before the merge can name a different type than
       // the writer emits — box collected enum WebLinkBaseType but wrote `type: FileBaseType!`. #57
-      if (!this.consolidated) {
-        this.consolidate(selection).forEach((type) => context.decRefCount(type.name));
-      }
+      this.consolidateMembers(context, selection);
       return this.dedupedSelectedProps(selection);
     }
     // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
@@ -387,6 +383,20 @@ export class Union extends Type {
       if (Naming.getRefName(ref) === childRef) return value;
     }
     return null;
+  }
+
+  // Merging inlines the members' fields, so each loses one reference of its own — but a member can
+  // carry the union's own name, and zeroing that skips the type the body still asks for. #94
+  //   e.g. (confluence) ContentRestrictionAddOrUpdateArray: oneOf [ {object}, {array of $ref} ]
+  private consolidateMembers(context: OasContext, selection: string[]): void {
+    if (this.consolidated) {
+      return;
+    }
+    for (const member of this.consolidate(selection)) {
+      if (member.name !== this.name) {
+        context.decRefCount(member.name);
+      }
+    }
   }
 
   public consolidate(selection: string[]): Set<IType> {

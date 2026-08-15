@@ -2184,3 +2184,17 @@ test('test_92_map_of_plain_values_at_the_response_root_expands', async () => {
   assert.ok(numbers !== undefined);
   assert.ok(/type REntry \{\n {2}key: String\n {2}value: Int\n\}/.test(numbers!), 'and an integer value');
 });
+
+test('test_94_union_body_with_an_array_member_keeps_its_input_type', async () => {
+  // #94: a request body that is a oneOf of an object and an array of the same $ref referenced
+  // `RestrictionArrayInput!` and never defined it — rover answered INVALID_BODY on confluence's
+  // two `content/{id}/restriction` mutations. The array member carries the union's own name, so
+  // merging it away decremented the union's own ref count to zero and the writer skipped it.
+  const schema = await runOasTest('union-body-array-member.yaml', ['post:/restrictions>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/createRestrictions\(input: RestrictionArrayInput!\)/.test(schema!), 'the argument is the merged input');
+  assert.ok(
+    /input RestrictionArrayInput \{ [^}]*results: \[RestrictionInput\]\n {2}size: Int\n\}/.test(schema!),
+    'and the input type is defined, with the object member fields',
+  );
+});

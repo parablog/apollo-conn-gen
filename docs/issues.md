@@ -539,3 +539,40 @@ instead of `Response`. Cost: it renames confluence's entry type too, so the `REn
 **Refs:** `src/oas/nodes/map.ts` (`updateName`), against `obj.ts` / `comp.ts` / `union.ts`
 (`updateName`). Surfaced while fixing #92; the whole-spec github check that closed #92 is what
 showed the collision is not reachable yet.
+
+## 95 · An array node is named after its parent, so it shares its parent's ref name — ⬜ Open
+**Symptom:** none on its own today; it is what made #94 possible, and anything else keyed by node
+name can trip on it the same way.
+
+**OAS** (confluence — the second member of an input-position `oneOf`):
+```yaml
+ContentRestrictionAddOrUpdateArray:
+  oneOf:
+    - { type: object, properties: { … } }
+    - { type: array, items: { $ref: '#/…/ContentRestrictionUpdate' } }
+```
+
+**Example**:
+```
+# the array member of the union, as built:
+array:#/components/schemas/ContentRestrictionUpdate   # id — from its items, correct
+  name = '#/components/schemas/ContentRestrictionAddOrUpdateArray'   # the *union's* ref name
+```
+
+**Cause:** `Factory.createArrayType` does `new Arr(parent, parent.name)` — an array is a wrapper, so
+it borrows a name rather than minting one. That is harmless while only `Arr.id` (derived from the
+items type) is used to identify it, and wrong for anything reading `.name`: `context.refCount` is
+keyed by ref name, so an `Arr` under a `$ref`'d container is indistinguishable from the container
+itself. #94 is exactly that — a decrement meant for the member landed on the union.
+
+**Known blast radius:** `decRefCount` (guarded in `union.ts` by #94), `context.store`/`types` keyed
+by name, and the writer's `nameKey` (`T.isRef(type.name)`) — an `Arr` never reaches the writer as a
+definition, so that one is theoretical.
+
+**Fix (not done):** an `Arr` under a named parent should carry no ref name of its own — either a
+derived one (`<parent>Items`) or none, with the callers that need a label reading the items type.
+Cost: `Arr.name` is read in traces and in `createArrayType`'s `Res` branch (`<op>Response`), and any
+name change is an identity change (#73) if it ever reaches a `path()`.
+
+**Refs:** `src/oas/nodes/factory.ts` (`createArrayType`), `src/oas/nodes/arr.ts`. Surfaced while
+fixing #94, which guards the one site that bites.

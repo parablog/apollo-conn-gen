@@ -4765,3 +4765,57 @@ until it stops being empty. Updated in `oas-core.test.ts` (two) and `mapper.test
 field, string-valued root, integer-valued root), test
 `test_92_map_of_plain_values_at_the_response_root_expands`. See #70 for the under-a-property twin
 and #90 for the writers.
+
+## 94 · A union request body with an array member is referenced and never defined — ✅ Fixed
+**Symptom:** confluence's two restriction mutations fail compose with
+`INVALID_BODY: unknown type ContentRestrictionAddOrUpdateArrayInput.*.links`. The mutation argument
+is typed `ContentRestrictionAddOrUpdateArrayInput!` and no `input` block for it is written.
+
+**OAS** (confluence — `post`/`put:/wiki/rest/api/content/{id}/restriction`; a body that is either
+the paged object or the bare list):
+```yaml
+ContentRestrictionAddOrUpdateArray:
+  oneOf:
+    - type: object
+      properties: { results: { type: array, items: { $ref: '#/…/ContentRestrictionUpdate' } }, … }
+    - type: array
+      items: { $ref: '#/…/ContentRestrictionUpdate' }
+```
+
+**Example**:
+```graphql
+# before — the argument points at a type that is nowhere in the document
+createContentRestriction(input: ContentRestrictionAddOrUpdateArrayInput!): ContentRestrictionArray
+
+# after
+input ContentRestrictionAddOrUpdateArrayInput {
+  links: JSON  limit: Int  restrictionsHash: String
+  results: [ContentRestrictionUpdateInput]!  size: Int  start: Int
+}
+```
+
+**Cause:** an input-position union is written as one merged object, and merging inlines the members'
+fields — so each member's ref count is decremented, or the writer would emit member definitions
+nothing points at. The array member is built by `Factory.createArrayType` as
+`new Arr(parent, parent.name)`, so it carries **the union's own ref name**. `decRefCount` is keyed by
+name, so that decrement hit the union: 1 → 0. The writer's `count > 0` gate (`io/writer.ts`) then
+skipped the definition while the operation still asked for it.
+
+Both merge paths do the decrement — `generateMergedObject` and `dependencies` — and each had its own
+copy of the same three lines.
+
+**Fix:** one `consolidateMembers` used by both, skipping a member whose `name` equals the union's.
+Decrementing your own name is never right: the count is per name, so it can only ever cancel the
+definition being written.
+
+**Not fixed here:** the array member inheriting its parent's name is itself wrong — anything else
+keyed by node name can trip on it. Filed as #95.
+
+**Measured:** whole-spec confluence generation before and after differs by additions only — the 16
+lines of this one input type, with none of the other 376 definitions touched.
+
+**AST** — none. Emission only; the same nodes are built, one fewer decrement lands.
+
+**Refs:** `src/oas/nodes/union.ts` (`consolidateMembers`). Fixture `union-body-array-member.yaml`,
+test `test_94_union_body_with_an_array_member_keeps_its_input_type`. See #57 for why `dependencies`
+consolidates before reading the merged fields.
