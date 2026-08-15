@@ -26,7 +26,7 @@ test('test_service_prefix_rejects_a_value_that_is_not_a_graphql_name', () => {
   const run = spawnSync('node', [...CLI, '--service-prefix', 'acme-sanity'], { encoding: 'utf-8' });
   assert.notStrictEqual(run.status, 0, 'a prefix that is not a GraphQL name stops the run');
   assert.strictEqual(run.stdout.trim(), '', 'and nothing is written');
-  assert.ok(/Invalid --service-prefix/.test(run.stderr), 'with the offending value named');
+  assert.ok(/--service-prefix.*'acme-sanity' is invalid/.test(run.stderr), 'with the offending value named');
 });
 
 // --- the transform on its own ----------------------------------------------

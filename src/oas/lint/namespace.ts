@@ -1,5 +1,6 @@
-import { Kind, assertName, parse } from 'graphql';
-import type { DefinitionNode, DocumentNode, NameNode, TypeNode } from 'graphql';
+import { Kind, assertName, parse, visit } from 'graphql';
+import type { DefinitionNode, DocumentNode, NameNode } from 'graphql';
+import _ from 'lodash';
 
 // The three names GraphQL keeps for the operation roots: their fields take the prefix, they do not.
 const ROOT_TYPE_NAMES = new Set(['Query', 'Mutation', 'Subscription']);
@@ -19,7 +20,7 @@ export class Namespace {
   public static apply(sdl: string, prefix: string): string {
     // a bad prefix would otherwise produce a document that no longer parses
     assertName(prefix);
-    const typePrefix = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+    const typePrefix = _.upperFirst(prefix);
     const fieldPrefix = prefix.toLowerCase();
 
     const document = parse(sdl);
@@ -98,35 +99,17 @@ export class Namespace {
     }
   }
 
-  // Field and argument types, `implements` entries and union members. Only type nodes are walked,
-  // so a directive's strings are never touched. e.g. `@source(name: "api")` stays as written.
+  // Every place the document *uses* a type is a NamedType node — field and argument types (however
+  // deep the `[…!]!` wrappers go), `implements` entries, union members. A directive's strings are
+  // not type nodes, e.g. (apikey-header-prefix.yaml) `@source(name: "api")` stays as written.
   private static collectTypeReferences(document: DocumentNode, typeRenames: Map<string, string>, edits: Edit[]): void {
-    const reference = (node: TypeNode): void => {
-      const named = Namespace.namedType(node);
-      const renamed = typeRenames.get(named.name.value);
-      if (renamed) {
-        edits.push({ from: named.name.loc!.start, to: named.name.loc!.end, insert: renamed });
-      }
-    };
-
-    for (const definition of document.definitions) {
-      const fields = 'fields' in definition ? (definition.fields ?? []) : [];
-      for (const field of fields) {
-        reference(field.type);
-        const args = 'arguments' in field ? (field.arguments ?? []) : [];
-        for (const argument of args) {
-          reference(argument.type);
+    visit(document, {
+      NamedType(node) {
+        const renamed = typeRenames.get(node.name.value);
+        if (renamed) {
+          edits.push({ from: node.name.loc!.start, to: node.name.loc!.end, insert: renamed });
         }
-      }
-      const interfaces = 'interfaces' in definition ? (definition.interfaces ?? []) : [];
-      interfaces.forEach(reference);
-      const members = 'types' in definition ? (definition.types ?? []) : [];
-      members.forEach(reference);
-    }
-  }
-
-  // `[Pet!]!` is a Pet — the wrappers carry no name, and the inner node keeps its own offsets.
-  private static namedType(node: TypeNode): { name: { value: string; loc?: { start: number; end: number } } } {
-    return node.kind === Kind.NAMED_TYPE ? node : Namespace.namedType(node.type);
+      },
+    });
   }
 }

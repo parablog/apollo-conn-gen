@@ -134,25 +134,17 @@ function hasPerOperationSecurity(def: ReturnType<Oas['getDefinition']>): boolean
  * each `@connect`. Query auth always lives per-`@connect` — `SourceHTTP` has no `queryParams`.
  */
 export class SecurityPlan {
-  private readonly schemes: SecuritySchemesObject;
-  private readonly globalReq: SecurityRequirementObject[] | undefined;
-  private readonly perOpMode: boolean;
-  // C3: the global requirement's dropped-scheme warnings, pre-resolved once. In per-op mode every
-  // inheriting op would re-fire them otherwise; this set identifies them so forOp can skip what's
-  // already been emitted (once) and only surface genuinely op-specific warnings with op context.
+  // C3: the global requirement's dropped-scheme warnings, pre-resolved once so forOp only adds op-specific ones
   private readonly globalWarningBodies: Set<string>;
   private globalWarningsEmitted = false;
 
   private constructor(
-    schemes: SecuritySchemesObject,
-    globalReq: SecurityRequirementObject[] | undefined,
-    perOpMode: boolean,
+    private readonly schemes: SecuritySchemesObject,
+    private readonly globalReq: SecurityRequirementObject[] | undefined,
+    private readonly perOpMode: boolean,
     private readonly skipAuth: boolean = false,
     private readonly authValuePrefix?: string,
   ) {
-    this.schemes = schemes;
-    this.globalReq = globalReq;
-    this.perOpMode = perOpMode;
     this.globalWarningBodies = new Set(globalReq ? resolveAuth(globalReq, schemes).warnings : []);
   }
 

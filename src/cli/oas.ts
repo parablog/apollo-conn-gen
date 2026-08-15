@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { assertName } from 'graphql';
-import { Command, OptionValues } from 'commander';
+import { Command, InvalidArgumentError, OptionValues } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
@@ -72,10 +72,8 @@ function parseServicePrefix(value: string): string {
   try {
     return assertName(value);
   } catch {
-    console.error(
-      `Invalid --service-prefix "${value}": expected a GraphQL name — letters, digits and "_", not starting with a digit.`,
-    );
-    process.exit(1);
+    // Commander prints the option and the offending value, and exits non-zero
+    throw new InvalidArgumentError('Expected a GraphQL name — letters, digits and "_", not starting with a digit.');
   }
 }
 
