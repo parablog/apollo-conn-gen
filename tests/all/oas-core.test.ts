@@ -298,7 +298,7 @@ test('test_023_oas_test_013_testTMF637_TestSimpleRecursion no type found', async
   // two checks in the runOasTest function + 1 here
   // expect.assertions(4);
   try {
-    await runOasTest('TMF637-002-SimpleRecursionTest.yaml', paths, 1, 2, true);
+    await runOasTest('TMF637-002-SimpleRecursionTest.yaml', paths, 1, 2, { shouldFail: true });
   } catch (error) {
     console.error(error);
     assert.ok(error !== undefined);
@@ -477,8 +477,8 @@ test('test_037_oas_test_022_common-room_01', async () => {
   ];
 
   // last 2 args: don't expect to fail, and skip validation
-  await runOasTest('common-room-core.json', paths, 22, 12, false, true);
-  // await runOasTest("common-room-original.json", paths, 9, 19, false, true);
+  await runOasTest('common-room-core.json', paths, 22, 12, { skipValidation: true });
+  // await runOasTest("common-room-original.json", paths, 9, 19, { skipValidation: true });
 });
 
 test('test_038_oas_test_024_TMF632_IndividualIdentification', async () => {
@@ -623,18 +623,18 @@ test('test_049_oas_test_032_mindbody-JSON', async () => {
   // (before that it silently vanished): data: [DataEntry], DataEntry { key, value: JSON }
   const paths = ['get:/health/information>**'];
 
-  await runOasTest(`mindbody.json`, paths, 11, 3, false, true);
+  await runOasTest(`mindbody.json`, paths, 11, 3, { skipValidation: true });
 });
 
 test('test_050_oas_test_033_initial-support-for-put', async () => {
   const paths = ['put:/pet>**'];
 
-  await runOasTest(`petstore.yaml`, paths, 19, 7, false, true);
+  await runOasTest(`petstore.yaml`, paths, 19, 7, { skipValidation: true });
 });
 
 test('test_051_oas_test_034_simple-delete', async () => {
   const paths = ['del:/pet/{petId}>**'];
-  await runOasTest(`petstore.yaml`, paths, 19, 1, false, true);
+  await runOasTest(`petstore.yaml`, paths, 19, 1, { skipValidation: true });
 });
 
 test('test_052_oas_test_035_adobe-commerce-delete-address', async () => {
@@ -669,13 +669,7 @@ test('test_060_oas_test_additionalProperties_support', async () => {
     'openapi.car_configurator_service_(ccs)_int-10.210.0.yaml',
     paths,
     44,
-    23,
-    false,
-    false,
-    undefined,
-    false,
-    false,
-  );
+    23);
 });
 
 test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
@@ -687,13 +681,7 @@ test('test_061_oas_test_vehicleComponents_additionalProperties', async () => {
     'openapi.car_configurator_service_(ccs)_int-10.210.0.yaml',
     paths,
     44,
-    23,
-    false,
-    false,
-    undefined,
-    false,
-    false,
-  );
+    23);
 });
 
 test('test_062_oas_test_images_additionalProperties', async () => {
@@ -705,13 +693,7 @@ test('test_062_oas_test_images_additionalProperties', async () => {
     'openapi.car_configurator_service_(ccs)_int-10.210.0.yaml',
     paths,
     44,
-    5,
-    false,
-    false,
-    undefined,
-    false,
-    false,
-  );
+    5);
 });
 
 test('test_ref_into_paths_pointer_resolves_and_composes', async () => {
@@ -840,19 +822,13 @@ test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
     'petstore.yaml',
     ['get:/user/{username}>**'],
     19,
-    1,
-    false,
-    true,
-    undefined,
-    false,
-    true, // inferEntityResolvers
+    1, { skipValidation: true, inferEntityResolvers: true, ...// inferEntityResolvers
     {
       connectorSpecVersion: 'v0.4',
       federationVersion: 'v2.14',
       composeFederationVersion: '2.14.3',
       emitConnectorErrors: true,
-    },
-  );
+    } });
   assert.ok(schema !== undefined);
   const userIdx = schema!.indexOf('type User');
   const queryIdx = schema!.indexOf('type Query');
@@ -882,7 +858,7 @@ test('test_param_default_boolean_emits_literal', async () => {
 test('test_57_split_collision_first_visited_keeps_the_base_name', async () => {
   // Order.itemStatus and OrderItem.status both want OrderItemStatus; whoever is visited first
   // keeps it, the other bumps to 2 — driven by selection order, never broken by it.
-  const schema = await runOasTest('enum-collisions.yaml', ['get:/orders>**', 'get:/items>**'], 4, 4, false, true);
+  const schema = await runOasTest('enum-collisions.yaml', ['get:/orders>**', 'get:/items>**'], 4, 4, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/enum OrderItemStatus \{\s+open/.test(schema!), "Order's enum keeps the base name");
   assert.ok(/enum OrderItemStatus2 \{\s+packed/.test(schema!), "OrderItem's bumps to 2");
@@ -891,15 +867,15 @@ test('test_57_split_collision_first_visited_keeps_the_base_name', async () => {
 });
 
 test('test_57_split_collision_reversed_order_swaps_the_names', async () => {
-  const schema = await runOasTest('enum-collisions.yaml', ['get:/items>**', 'get:/orders>**'], 4, 4, false, true);
+  const schema = await runOasTest('enum-collisions.yaml', ['get:/items>**', 'get:/orders>**'], 4, 4, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/enum OrderItemStatus \{\s+packed/.test(schema!), "OrderItem's enum keeps the base name");
   assert.ok(/enum OrderItemStatus2 \{\s+open/.test(schema!), "Order's bumps to 2");
 });
 
 test('test_57_no_coselection_no_collision', async () => {
-  const one = await runOasTest('enum-collisions.yaml', ['get:/orders>**'], 4, 2, false, true);
-  const two = await runOasTest('enum-collisions.yaml', ['get:/items>**'], 4, 2, false, true);
+  const one = await runOasTest('enum-collisions.yaml', ['get:/orders>**'], 4, 2, { skipValidation: true });
+  const two = await runOasTest('enum-collisions.yaml', ['get:/items>**'], 4, 2, { skipValidation: true });
   assert.ok(/enum OrderItemStatus \{/.test(one!) && !/OrderItemStatus2/.test(one!), 'stable name alone');
   assert.ok(/enum OrderItemStatus \{/.test(two!) && !/OrderItemStatus2/.test(two!), 'stable name alone');
 });
@@ -910,7 +886,7 @@ test('test_57_component_name_is_reserved_in_both_visit_orders', async () => {
     ['get:/roles>**', 'get:/users>**'],
     ['get:/users>**', 'get:/roles>**'],
   ]) {
-    const schema = await runOasTest('enum-collisions.yaml', paths, 4, 4, false, true);
+    const schema = await runOasTest('enum-collisions.yaml', paths, 4, 4, { skipValidation: true });
     assert.ok(schema !== undefined);
     assert.ok(/type UserRole \{/.test(schema!), 'the component keeps its name');
     assert.ok(/enum UserRole2 \{/.test(schema!), 'User.role bumps past the component');
@@ -922,7 +898,7 @@ test('test_57_component_name_is_reserved_in_both_visit_orders', async () => {
 
 test('test_57_reserved_names_count_even_when_never_stored', async () => {
   // /users alone: UserRole is reserved but never stored — the bump must still walk past it
-  const schema = await runOasTest('enum-collisions.yaml', ['get:/users>**'], 4, 3, false, true);
+  const schema = await runOasTest('enum-collisions.yaml', ['get:/users>**'], 4, 3, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/enum UserRole2 \{/.test(schema!), 'bump consults the spec, not just stored types');
   assert.ok((schema!.match(/enum UserRole2 \{/g) ?? []).length === 1, 'defined exactly once');
@@ -930,7 +906,7 @@ test('test_57_reserved_names_count_even_when_never_stored', async () => {
 
 test('test_57_bump_walks_past_every_reserved_component', async () => {
   // UserRole AND UserRole2 are components; the made-up name has to reach 3
-  const schema = await runOasTest('enum-collisions-deep.yaml', ['get:/users>**'], 1, 2, false, true);
+  const schema = await runOasTest('enum-collisions-deep.yaml', ['get:/users>**'], 1, 2, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/enum UserRole3 \{/.test(schema!), 'both reserved names skipped');
   assert.ok(/role: UserRole3\n/.test(schema!), 'field reads the final name');
@@ -971,7 +947,7 @@ test('test_required_and_nullable_emits_a_nullable_field', async () => {
   // In OpenAPI `required` and `nullable` are orthogonal: `required` says the key is present,
   // `nullable: true` says the value may be null. A field that is both must be NULLABLE in GraphQL —
   // `String!` makes the router error on a legitimately-null value. see docs/FIXED.md #55
-  const schema = await runOasTest('required-nullable.yaml', ['get:/thing>**'], 1, 1, false, true);
+  const schema = await runOasTest('required-nullable.yaml', ['get:/thing>**'], 1, 1, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/reqPlain: String!/.test(schema!), 'required + non-nullable -> String!');
   assert.ok(/optPlain: String\n/.test(schema!), 'optional -> nullable');
@@ -993,10 +969,7 @@ test('test_59_required_nested_array_bang_stays_on_the_line', async () => {
       'get:/matrix>res:r>obj:type:matrixResponse>prop:array:#titles',
     ],
     1,
-    1,
-    false,
-    true,
-  );
+    1, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/processes: \[\[String\]\]!/.test(schema!), 'the ! belongs on the same line as the field');
   assert.ok(!/\n\n\s+titles/.test(schema!), 'and no blank line is left behind either');
@@ -1017,14 +990,14 @@ test('test_61_sanitised_at_type_must_not_collide', { todo: 'both fields emit as 
   // TMF objects carry `@type` (from the Extensible base) next to a business field literally named
   // `type`. Sanitising strips the `@`, nothing checks the result against the sibling names, and
   // the written type ends up with two `type:` lines. see docs/issues.md #61
-  const schema = await runOasTest('TMF717_Customer360-v5.0.0.oas.yaml', ['get:/customer360>**'], 8, 56, false, true);
+  const schema = await runOasTest('TMF717_Customer360-v5.0.0.oas.yaml', ['get:/customer360>**'], 8, 56, { skipValidation: true });
   assert.ok(schema !== undefined);
 });
 
 test('test_required_oneof_null_field_is_kept', async () => {
   // The third way a spec says "may be null": a choice list with a null arm. The null arm comes out
   // and the schema is marked nullable instead; the field used to disappear. see docs/FIXED.md #60
-  const schema = await runOasTest('required-nullable-oneof.yaml', ['get:/thing>**'], 1, 4, false, true);
+  const schema = await runOasTest('required-nullable-oneof.yaml', ['get:/thing>**'], 1, 4, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/reqOneOf: String\n/.test(schema!), 'oneOf [string, null] keeps the field, nullable');
   assert.ok(/optAnyOf: String\n/.test(schema!), 'the anyOf spelling takes the same path');
@@ -1042,7 +1015,7 @@ test('test_required_oneof_null_field_is_kept', async () => {
 test('test_required_and_nullable_31_type_array', async () => {
   // The OAS 3.1 spelling of the same thing: `type: [string, 'null']`. refA and refB share one
   // component, so the second visit sees it already rewritten and must agree. see docs/FIXED.md #55
-  const schema = await runOasTest('required-nullable-31.yaml', ['get:/thing>**'], 1, 1, false, true);
+  const schema = await runOasTest('required-nullable-31.yaml', ['get:/thing>**'], 1, 1, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/reqTypeArray: String\n/.test(schema!), 'required + type [string, null] -> nullable');
   assert.ok(/refA: String\n/.test(schema!), 'first visit through the shared component');
@@ -1177,18 +1150,9 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
     'recursive-cycle.yaml',
     ['get:/nodes>**'],
     1,
-    2,
-    false,
-    true,
-    undefined,
-    false,
-    false,
-    {
-      connectorSpecVersion: 'v0.4',
+    2, { skipValidation: true, connectorSpecVersion: 'v0.4',
       federationVersion: 'v2.14',
-      composeFederationVersion: '2.14.3',
-    },
-  );
+      composeFederationVersion: '2.14.3' });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('# children: [Node] - circular reference omitted'), 'array-items cycle cut in SDL');
   assert.ok(schema!.includes('# parent: Node - circular reference omitted'), 'direct self-cycle cut in SDL');
@@ -1204,7 +1168,7 @@ test('test_bare_scalar_response_not_dropped', async () => {
   // under the old leaf-detection, so the op was silently dropped from the schema entirely — not
   // degraded, not an error, just absent. `deleteWidgetsByWidgetId` returns a bare `true` on
   // success, matching adobe commerce's write-endpoint convention. Composes via rover.
-  const schema = await runOasTest('bare-scalar-response.yaml', ['del:/widgets/{widgetId}>**'], 1, 0, false, true);
+  const schema = await runOasTest('bare-scalar-response.yaml', ['del:/widgets/{widgetId}>**'], 1, 0, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(
     /deleteWidgetsByWidgetId\(widgetId: Int!\): Boolean\b/.test(schema!),
@@ -1231,7 +1195,7 @@ test('test_enum_query_param_is_a_scalar_argument', async () => {
   // An argument can only be a plain value, so petstore's `status` is written as `String`:
   //   status: { in: query, schema: { type: string, enum: [available, pending, sold] } }
   // The list of allowed values must never be written inside the argument. see docs/FIXED.md #53
-  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, false, true);
+  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/petFindByStatus\(status: String/.test(schema!), 'the enum param is a scalar argument');
   assert.ok(!/enum Enum \{/.test(schema!), 'no enum definition inside the argument list');
@@ -1240,7 +1204,7 @@ test('test_enum_query_param_is_a_scalar_argument', async () => {
 test('test_16_optional_response_fields_marked_in_selection', async () => {
   // #16 (petstore /pet/findByStatus): fields outside Pet's `required` list take `?` so an absent
   // key stops warning at runtime; required name/photoUrls stay plain so real gaps still warn.
-  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, false, true);
+  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/\n\s+id\?\n/.test(schema!), 'optional id is marked');
   assert.ok(schema!.includes('\n      name\n'), 'required name stays plain');
@@ -1257,14 +1221,7 @@ test('test_16_optional_markers_fail_composition_below_215', async () => {
     'petstore.yaml',
     ['get:/pet/findByStatus>**'],
     19,
-    4,
-    true,
-    true,
-    undefined,
-    false,
-    false,
-    { composeFederationVersion: '2.14.3', forceRover: true },
-  );
+    4, { shouldFail: true, skipValidation: true, composeFederationVersion: '2.14.3', forceRover: true });
   assert.ok(output !== undefined);
   assert.match(output!, /CONNECTORS_UNRESOLVED_FIELD/, 'composition rejects the marked groups');
   assert.match(output!, /Category\.id|Tag\.id/, 'and names the fields the `?` group left uncredited');
@@ -1276,14 +1233,7 @@ test('test_16_skip_optional_markers_composes_below_215', async () => {
     'petstore.yaml',
     ['get:/pet/findByStatus>**'],
     19,
-    4,
-    false,
-    true,
-    undefined,
-    false,
-    false,
-    { composeFederationVersion: '2.14.3', forceRover: true, skipOptionalMarkers: true },
-  );
+    4, { skipValidation: true, composeFederationVersion: '2.14.3', forceRover: true, skipOptionalMarkers: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('category {'), 'the group is still selected');
   assert.ok(schema!.includes('tags {'), 'and so is the array group');
@@ -1410,7 +1360,7 @@ test('test_same_name_fields_not_cut_as_circular', async () => {
   // docs/FIXED.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
   // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing
   // composition); now it is kept. Exercises BOTH fromProp and Type.add. Composes via rover.
-  const schema = await runOasTest('same-name-fields.yaml', ['get:/thing>**'], 1, 4, false, true);
+  const schema = await runOasTest('same-name-fields.yaml', ['get:/thing>**'], 1, 4, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/\bextension: InnerExtension\b/.test(schema!), 'inner same-named field kept (not cut)');
   assert.ok(/^type InnerExtension /m.test(schema!), 'InnerExtension emitted');
@@ -1421,7 +1371,7 @@ test('test_genuine_cycles_cut_by_route', async () => {
   // docs/FIXED.md #36 companion: a genuine Node self-cycle reached via each route must STILL be cut by
   // object identity, while the shared non-recursive Shared stays expanded under both referencing fields.
   // Composes via rover (default v0.4 / fed 2.14).
-  const schema = await runOasTest('cycles-by-route.yaml', ['get:/nodes>**'], 1, 3, false, true);
+  const schema = await runOasTest('cycles-by-route.yaml', ['get:/nodes>**'], 1, 3, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/# parent: Node - circular reference omitted/.test(schema!), 'direct $ref cycle cut');
   assert.ok(/# children: \[Node\] - circular reference omitted/.test(schema!), 'array-items cycle cut');
@@ -1498,7 +1448,7 @@ test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
   // OAS 3.1 nullable syntax `type: [string, 'null']` (no more `nullable: true`) reached
   // createScalarType as the literal "string,null" and threw. The array collapses to its first
   // non-null entry — GraphQL fields are nullable by default. see docs/FIXED.md #23
-  const schema = await runOasTest('type-array-null.yaml', ['get:/settings>**'], 1, 1, false, true);
+  const schema = await runOasTest('type-array-null.yaml', ['get:/settings>**'], 1, 1, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/projectRootPath: String\b/.test(schema!), 'string-or-null prop becomes String');
   assert.ok(/retries: Int\b/.test(schema!), 'integer-or-null prop becomes Int');
@@ -1508,7 +1458,7 @@ test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
 test('test_enum_fields_selected_and_degraded', async () => {
   // `>**` expansion must include enum props (slack's ok-only stubs collapsed to zero types), and
   // enums without a GraphQL form degrade honestly. see docs/FIXED.md #24
-  const schema = await runOasTest('enum-fields.yaml', ['get:/status>**'], 1, 3, false, true);
+  const schema = await runOasTest('enum-fields.yaml', ['get:/status>**'], 1, 3, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/ok: Boolean!/.test(schema!), 'boolean enum degrades to Boolean');
   assert.ok(/state: State\b/.test(schema!), 'valid string enum keeps its enum type');
@@ -1528,7 +1478,7 @@ test('test_enum_fields_selected_and_degraded', async () => {
 test('test_mutation_params_and_body_share_one_argument_list', async () => {
   // an op with params AND a body emitted two parenthesised lists — `(username: String!)(input:
   // UserInput!)` — which is not valid GraphQL. One list, body last. see docs/FIXED.md #27
-  const schema = await runOasTest('petstore.yaml', ['put:/user/{username}>**'], 19, 2, false, true);
+  const schema = await runOasTest('petstore.yaml', ['put:/user/{username}>**'], 19, 2, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(
     /updateUserByUsername\(username: String!, input: UserInput!\)/.test(schema!),
@@ -1540,7 +1490,7 @@ test('test_mutation_params_and_body_share_one_argument_list', async () => {
 test('test_body_alias_direction_and_default_literals', async () => {
   // request-body selections map jsonKey <- graphqlField (the reverse of responses), string
   // defaults are quoted literals, and 0/false are real defaults. see docs/FIXED.md #28, #29
-  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/things>**'], 3, 3, false, true);
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/things>**'], 3, 3, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/log_destinations: logDestinations \{/.test(schema!), 'body alias maps key <- field');
   assert.ok(!/logDestinations: "log_destinations"/.test(schema!), 'no response-direction alias in the body');
@@ -1552,7 +1502,7 @@ test('test_body_alias_direction_and_default_literals', async () => {
 test('test_body_input_name_matches_definition', async () => {
   // the body arg referenced the raw payload name (`input: ssh_keysItemInput!`) while the input
   // definition emits the sanitised one — the #15 def/ref discipline applies. see #30
-  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/keys>**'], 3, 2, false, true);
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/keys>**'], 3, 2, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/createKeys\(input: SshKeyInput!\)/.test(schema!), 'body arg uses the sanitised input name');
   assert.ok(/input SshKeyInput \{/.test(schema!), 'definition matches the reference');
@@ -1561,7 +1511,7 @@ test('test_body_input_name_matches_definition', async () => {
 test('test_empty_response_schema_synthesizes_success', async () => {
   // a response with no fields to select (googlebooks `Empty`: `type: object, properties: {}`)
   // produced zero types; it now gets the synthetic success response. see #31
-  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/flush>**'], 3, 1, false, true);
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/flush>**'], 3, 1, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/success: Boolean/.test(schema!), 'synthetic success field emitted');
   assert.ok(/success: \$\(true\)/.test(schema!), 'selection sets the boolean literal');
@@ -1574,22 +1524,13 @@ test('test_overrides_rewire_path_and_query_params', async () => {
     'r7r8-selection.yaml',
     ['get:/things>**'],
     1,
-    1,
-    false,
-    true,
-    undefined,
-    false,
-    false,
-    {
-      overrides: {
+    1, { skipValidation: true, overrides: {
         'get:/things': {
           path: '/v2/things/{$config.tenant}',
           queryParams: { ids: 'ids->joinNotNull(";")', page: null, 'api-version': '$("2024-01")' },
           headers: { 'X-Version': '{$config.version}', 'X-Trace': null, 'X-Api-Key': '{$config.apiKey}' },
         },
-      },
-    },
-  );
+      } });
   assert.ok(schema !== undefined);
   assert.ok(/GET: "\/v2\/things\/\{\$config\.tenant\}"/.test(schema!), 'path replaced, $ template untouched');
   assert.ok(/"ids": ids->joinNotNull\(";"\)/.test(schema!), 'param value replaced');
@@ -1603,17 +1544,13 @@ test('test_overrides_rewire_path_and_query_params', async () => {
 test('test_overrides_replace_or_drop_body', async () => {
   // R9: an override body (raw JSONSelection) replaces the inferred `$args.input { … }`
   // mapping — literals and renamed keys included; null drops the body altogether
-  const replaced = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, false, true, undefined, false, false, {
-    overrides: { 'post:/things': { body: 'name: $args.input.name\nsource: $("web")' } },
-  });
+  const replaced = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, { skipValidation: true, overrides: { 'post:/things': { body: 'name: $args.input.name\nsource: $("web")' } } });
   assert.ok(replaced !== undefined);
   assert.ok(/name: \$args\.input\.name/.test(replaced!), 'computed body emitted');
   assert.ok(/source: \$\("web"\)/.test(replaced!), 'literal body field emitted');
   assert.ok(!/\$args\.input \{/.test(replaced!), 'inferred mapping replaced');
 
-  const dropped = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, false, true, undefined, false, false, {
-    overrides: { 'post:/things': { body: null } },
-  });
+  const dropped = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, { skipValidation: true, overrides: { 'post:/things': { body: null } } });
   assert.ok(dropped !== undefined);
   assert.ok(!/body:/.test(dropped!), 'null drops the body');
 });
@@ -1624,16 +1561,7 @@ test('test_base_url_overrides_servers', async () => {
     'r7r8-selection.yaml',
     ['get:/things>**'],
     1,
-    1,
-    false,
-    true,
-    undefined,
-    false,
-    false,
-    {
-      baseURL: 'https://api.example.test/v2',
-    },
-  );
+    1, { skipValidation: true, baseURL: 'https://api.example.test/v2' });
   assert.ok(schema !== undefined);
   assert.ok(/baseURL: "https:\/\/api\.example\.test\/v2"/.test(schema!), 'override wins');
   assert.ok(!/https:\/\/example\.com/.test(schema!), 'spec server URL gone');
@@ -1642,7 +1570,7 @@ test('test_base_url_overrides_servers', async () => {
 test('test_R7_default_coalesces_R8_array_params_join', async () => {
   // R7: defaults coalesce (`tag: tag ?? $("latest")`); R8: non-exploded array params join
   // (`ids->joinNotNull(",")`). Both on the default versions (connect v0.4, fed v2.14).
-  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, false, true);
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/tag: tag \?\? \$\("latest"\)/.test(schema!), 'default coalesces instead of replacing');
   // #16 regression (digitalocean apps_list_alerts): a defaulted-items array must not also take
@@ -1714,14 +1642,12 @@ test('test_directives_cover_fields_and_join_the_import', async () => {
   // @link import. Near-miss names stay clean: `notadminUsers` is not `admin*`, `emailAddress`
   // is not `email`, and the same directive declared twice for `createUsers` is written once.
   const all = ['get:/admin/users>**', 'get:/admin/teams>**', 'get:/notadmin/users>**', 'post:/users>**'];
-  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, false, true, undefined, false, false, {
-    directives: {
+  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, { skipValidation: true, directives: {
       'Mutation.*': ['@tag(name: "require-approval")'],
       'Mutation.createUsers': ['@tag(name: "require-approval")'],
       'Query.admin*': ['@tag(name: "admin")'],
       'User.email': ['@tag(name: "pii-high")', '@authenticated'],
-    },
-  });
+    } });
   assert.ok(schema !== undefined);
   assert.ok(/adminUsers: \[AdminUser\] @tag\(name: "admin"\)\n/.test(schema!), 'glob covers adminUsers');
   assert.ok(/adminTeams: \[Team\] @tag\(name: "admin"\)\n/.test(schema!), 'glob covers adminTeams');
@@ -1738,13 +1664,11 @@ test('test_directives_on_the_type_line_and_input_fields', async () => {
   // R14: a selector with no field part goes on the type line itself; request-body types are
   // declared by their written name, e.g. `CreateUserInput`, not the spec's `CreateUser`
   const all = ['get:/admin/users>**', 'get:/admin/teams>**', 'get:/notadmin/users>**', 'post:/users>**'];
-  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, false, true, undefined, false, false, {
-    directives: {
+  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, { skipValidation: true, directives: {
       User: ['@tag(name: "pii")'],
       CreateUserInput: ['@tag(name: "pii")'],
       'CreateUserInput.email': ['@tag(name: "pii-high")'],
-    },
-  });
+    } });
   assert.ok(schema !== undefined);
   assert.ok(/type User @tag\(name: "pii"\) \{/.test(schema!), 'on the type line');
   assert.ok(/input CreateUserInput @tag\(name: "pii"\) \{/.test(schema!), 'on the input line');
@@ -1756,9 +1680,7 @@ test('test_directives_on_the_type_line_and_input_fields', async () => {
 test('test_directives_on_an_allof_type', async () => {
   // R14: an allOf type is written by its own path (comp, not obj) — the declaration still lands
   const all = ['get:/admin/users>**'];
-  const schema = await runOasTest('r14-directives.yaml', all, 4, 1, false, true, undefined, false, false, {
-    directives: { AdminUser: ['@tag(name: "internal")'] },
-  });
+  const schema = await runOasTest('r14-directives.yaml', all, 4, 1, { skipValidation: true, directives: { AdminUser: ['@tag(name: "internal")'] } });
   assert.ok(schema !== undefined);
   assert.ok(/type AdminUser @tag\(name: "internal"\) \{/.test(schema!), 'on the allOf type line');
 });
@@ -1797,9 +1719,7 @@ test('test_directives_file_from_disk_applies', async () => {
   // `--directives tests/resources/oas/r14-directives.json` — reading it here keeps it working
   const config = JSON.parse(fs.readFileSync(`${oasBasePath}/r14-directives.json`, 'utf-8'));
   const all = ['get:/admin/users>**', 'get:/admin/teams>**', 'get:/notadmin/users>**', 'post:/users>**'];
-  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, false, true, undefined, false, false, {
-    directives: config,
-  });
+  const schema = await runOasTest('r14-directives.yaml', all, 4, 4, { skipValidation: true, directives: config });
   assert.ok(schema !== undefined);
   assert.ok(/createUsers\(input: CreateUserInput!\): User @tag\(name: "require-approval"\)\n/.test(schema!));
   assert.ok(/adminUsers: \[AdminUser\] @tag\(name: "admin"\)\n/.test(schema!));
@@ -1818,9 +1738,7 @@ test('test_overrides_file_from_disk_applies', async () => {
   // the checked-in example file is the one the CLI would load with
   // `--overrides tests/resources/oas/r9-overrides.json` — reading it here keeps it working
   const config = JSON.parse(fs.readFileSync(`${oasBasePath}/r9-overrides.json`, 'utf-8'));
-  const schema = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, false, true, undefined, false, false, {
-    overrides: config,
-  });
+  const schema = await runOasTest('r9-body.yaml', ['post:/things>**'], 1, 2, { skipValidation: true, overrides: config });
   assert.ok(schema !== undefined);
   assert.ok(/POST: "\/v2\/things"/.test(schema!), 'path replaced');
   assert.ok(/name: \$args\.input\.name/.test(schema!), 'computed body emitted');
@@ -1867,7 +1785,7 @@ test('test_directives_wrong_shapes_throw', async () => {
 test('test_63_inline_wrapper_must_not_steal_component_name', async () => {
   // #63: the inline `Parent.body` gets the made-up name `ParentBody` — a real component's name.
   // The made-up name now bumps to `ParentBody2`, so `type ParentBody` is written once.
-  const schema = await runOasTest('inline-wrapper-steals-component-name.yaml', ['post:/things>**'], 1, 6, false, true);
+  const schema = await runOasTest('inline-wrapper-steals-component-name.yaml', ['post:/things>**'], 1, 6, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/body: ParentBody2\n/.test(schema!), 'the wrapper field uses the bumped name');
   assert.ok(/type ParentBody2 \{/.test(schema!), 'the wrapper is defined under the bumped name');
@@ -1997,7 +1915,7 @@ test('test_81_path_tokens_match_declared_params', async () => {
     'put:/labels/{labelName}>**',
     'put:/subscribers/{subscriberId}/add-ons/{addOnId}>**',
   ];
-  const schema = await runOasTest('path-param-mismatch.yaml', paths, 3, 1, false, true);
+  const schema = await runOasTest('path-param-mismatch.yaml', paths, 3, 1, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/apiKeys\(id: String!\)/.test(schema!), 'an undeclared token still becomes an argument');
   assert.ok(/GET: "\/api-keys\/\{\$args\.id\}"/.test(schema!), 'and the URL reads it');

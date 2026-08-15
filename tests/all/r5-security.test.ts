@@ -22,7 +22,7 @@ test('test_R5_security_bearer_emits_authorization_header', async () => {
 test('test_R5_security_skip_auth_omits_all_auth', async () => {
   // Same spec as the bearer test (global bearerAuth), but with --skip-auth: no Authorization
   // header on @source and no auth value anywhere — the scheme is fully ignored.
-  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 6, false, false, undefined, false, false, { skipAuth: true });
+  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 6, { skipAuth: true });
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('Authorization'), 'no Authorization header anywhere with --skip-auth');
   assert.ok(!schema!.includes('{$config.token'), 'no {$config.token} auth value with --skip-auth');
@@ -45,7 +45,7 @@ test('test_R5_security_apikey_header_emits_named_header', async () => {
   const paths = [
     'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>**',
   ];
-  const schema = await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23, false, false, undefined, false, false);
+  const schema = await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 23);
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "x-api-key", value: "{$config.apiKey}" }'),
@@ -183,9 +183,7 @@ test('test_R5_security_per_op_public_emits_no_auth', async () => {
 test('test_R5_security_per_op_override_header_wins_over_auth', async () => {
   // The user-intent overrides channel stays authoritative: an override of the same header name
   // replaces the inferred auth value.
-  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/admin>**'], 3, 1, false, false, undefined, false, false, {
-    overrides: { 'get:/admin': { headers: { Authorization: '{$config.adminToken}' } } },
-  });
+  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/admin>**'], 3, 1, { overrides: { 'get:/admin': { headers: { Authorization: '{$config.adminToken}' } } } });
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "Authorization", value: "{$config.adminToken}" }'),
@@ -197,9 +195,7 @@ test('test_R5_security_per_op_override_header_wins_over_auth', async () => {
 test('test_R5_security_per_op_override_header_is_case_insensitive', async () => {
   // HTTP header names are case-insensitive: a lowercase `authorization` override must replace the
   // resolved `Authorization` auth, not emit a second header that differs only in case.
-  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/admin>**'], 3, 1, false, false, undefined, false, false, {
-    overrides: { 'get:/admin': { headers: { authorization: '{$config.adminToken}' } } },
-  });
+  const schema = await runOasTest('r5-per-op-auth.yaml', ['get:/admin>**'], 3, 1, { overrides: { 'get:/admin': { headers: { authorization: '{$config.adminToken}' } } } });
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "authorization", value: "{$config.adminToken}" }'),
@@ -333,14 +329,7 @@ test('test_87_apikey_header_writes_the_auth_value_prefix', async () => {
     'apikey-header-prefix.yaml',
     ['get:/widgets>**'],
     1,
-    1,
-    false,
-    false,
-    undefined,
-    false,
-    false,
-    { authValuePrefix: 'Token token=' },
-  );
+    1, { authValuePrefix: 'Token token=' });
   assert.ok(schema !== undefined);
   assert.ok(
     /\{ name: "Authorization", value: "Token token=\{\$config\.apiKey\}" \}/.test(schema!),

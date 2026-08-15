@@ -13,7 +13,7 @@ import { captureErrors } from './_setup.js';
 const PRODUCT = 'get:/products/{id}>**';
 
 const run = (paths: string[], batch: BatchConfig, typesSize: number) =>
-  runOasTest('r6-batch.yaml', paths, 9, typesSize, false, false, undefined, false, true, { batch });
+  runOasTest('r6-batch.yaml', paths, 9, typesSize, { inferEntityResolvers: true, batch });
 
 test('test_R6_batch_query_array_emits_queryParams', async () => {
   // ?id=1&id=2 (exploded) -> queryParams: "id: $batch.id", no join
@@ -61,14 +61,7 @@ test('test_R6_batch_petstore_findByNames', async () => {
     'petstore-batch.yaml',
     ['get:/user/{username}>**', 'get:/user/findByNames>**'],
     20,
-    1,
-    false,
-    true,
-    undefined,
-    false,
-    true,
-    { batch: { 'get:/user/findByNames': {} } },
-  );
+    1, { skipValidation: true, inferEntityResolvers: true, batch: { 'get:/user/findByNames': {} } });
   assert.ok(schema!.includes('@key(fields: "username")'), 'User keeps its R1 @key');
   assert.ok(schema!.includes('http: { GET: "/user/findByNames"'), 'batch connector targets the batch endpoint');
   assert.ok(schema!.includes('username: $batch.username'), 'maps the query array to $batch.username');
@@ -90,13 +83,7 @@ test('test_R6_16_composite_key_both_parts_plain', async () => {
     'r6-batch.yaml',
     ['get:/stores/{storeId}/items/{sku}>**'],
     9,
-    1,
-    false,
-    false,
-    undefined,
-    false,
-    true,
-  );
+    1, { inferEntityResolvers: true });
   assert.ok(schema!.includes('@key(fields: "storeId sku")'), 'composite @key emitted');
   assert.ok(schema!.includes('name?\n      sku\n      storeId\n'), 'both key parts plain, the optional field marked');
 });
@@ -106,7 +93,7 @@ test('test_R6_16_composite_key_both_parts_plain', async () => {
 async function expectSkip(paths: string[], batch: BatchConfig, why: RegExp, typesSize: number) {
   let schema: string | undefined;
   const warnings = await captureErrors(async () => {
-    schema = await runOasTest('r6-batch.yaml', paths, 9, typesSize, false, false, undefined, false, true, { batch });
+    schema = await runOasTest('r6-batch.yaml', paths, 9, typesSize, { inferEntityResolvers: true, batch });
   });
   assert.ok(!schema!.includes('$batch'), 'no batch resolver emitted');
   assert.ok(warnings.some((w) => why.test(w)), `expected a "${why}" warning, got: ${warnings.join(' | ')}`);
@@ -142,9 +129,7 @@ test('test_R6_batch_skips_when_no_r1_key', async () => {
   // infer off -> Product has no @key, so a batch resolver can't reuse one
   let schema: string | undefined;
   const warnings = await captureErrors(async () => {
-    schema = await runOasTest('r6-batch.yaml', [PRODUCT, 'post:/products/batch>**'], 9, 2, false, false, undefined, false, false, {
-      batch: { 'post:/products/batch': {} },
-    });
+    schema = await runOasTest('r6-batch.yaml', [PRODUCT, 'post:/products/batch>**'], 9, 2, { batch: { 'post:/products/batch': {} } });
   });
   assert.ok(!schema!.includes('$batch'), 'no batch resolver without an R1 key');
   assert.ok(warnings.some((w) => /no @key/.test(w)), `expected a "no @key" warning, got: ${warnings.join(' | ')}`);

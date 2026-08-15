@@ -15,7 +15,7 @@ test('test_R1_entity_flag_on_positive_emits_key_and_type_resolver', async () => 
     'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:name',
   ];
 
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, true);
+  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, { inferEntityResolvers: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('type Widget @key(fields: "id")'), 'expected @key on Widget');
   assert.ok(schema!.includes('http: { GET: "/widgets/{$this.id}" }'), 'expected type-level $this resolver');
@@ -29,7 +29,7 @@ test('test_R1_entity_flag_off_is_byte_identical', async () => {
     'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:name',
   ];
 
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, false);
+  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1);
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('@key('), 'flag off must not emit @key');
   assert.ok(!schema!.includes('$this'), 'flag off must not emit a $this resolver');
@@ -43,7 +43,7 @@ test('test_R1_entity_flag_on_negative_key_not_selected', async () => {
     'get:/widgets/{id}>res:r>obj:type:#/c/s/Widget>prop:scalar:sku',
   ];
 
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, true);
+  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, { inferEntityResolvers: true });
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('@key('), 'no @key when key field is unselected');
   assert.ok(!schema!.includes('$this'), 'no $this resolver when key field is unselected');
@@ -59,7 +59,7 @@ test('test_R1_entity_op_scoping_only_qualifying_op_resolves', async () => {
     'get:/widgets>res:r>array:#/c/s/Widget>obj:type:#/c/s/Widget>prop:scalar:name',
   ];
 
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, true);
+  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, { inferEntityResolvers: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('type Widget @key(fields: "id")'), 'expected single @key on Widget');
   const resolverCount = schema!.split('{$this.').length - 1;
@@ -77,7 +77,7 @@ test('test_R1_16_entity_selection_keeps_key_plain', async () => {
     'get:/widgets>res:r>array:#/c/s/Widget>obj:type:#/c/s/Widget>prop:scalar:name',
   ];
 
-  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, false, false, undefined, false, true);
+  const schema = await runOasTest('entity-resolver.yaml', paths, 2, 1, { inferEntityResolvers: true });
   assert.ok(schema!.includes('"""\n      id\n      name?'), 'key plain, optional sibling marked, in the entity selection');
   assert.ok(schema!.includes('"""\n      id?\n      name?'), 'the same prop takes ? in the Query selections');
 });
@@ -108,7 +108,7 @@ test('test_R1_entity_multi_key_two_resolvers_sorted', async () => {
     'get:/gadgets/by-sku/{sku}>res:r>obj:type:#/c/s/Gadget>prop:scalar:sku',
   ];
 
-  const schema = await runOasTest('entity-multi-key.yaml', paths, 2, 1, false, false, undefined, false, true);
+  const schema = await runOasTest('entity-multi-key.yaml', paths, 2, 1, { inferEntityResolvers: true });
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('type Gadget @key(fields: "id") @key(fields: "sku")'),

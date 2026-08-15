@@ -61,7 +61,7 @@ test('test_corpus_mut_github', async () => {
 
 test('test_corpus_mut_omni', async () => {
   // 5 types since #85: `201` carries the created group, which brings its own members and meta
-  await runOasTest('omni.yaml', ['post:/scim/v2/groups>**'], 146, 5, false, true);
+  await runOasTest('omni.yaml', ['post:/scim/v2/groups>**'], 146, 5, { skipValidation: true });
 });
 
 test('test_corpus_mut_confluence', async () => {

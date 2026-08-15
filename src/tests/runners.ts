@@ -17,14 +17,14 @@ export async function runOasTest(
   paths: string[],
   pathsSize: number,
   typesSize: number,
-  shouldFail: boolean = false,
-  skipValidation: boolean = false,
-  mapper?: Mapper,
-  skipOptionalArgs: boolean = false,
-  inferEntityResolvers: boolean = false,
   // R2: optional version/compose overrides. Defaults to the shipping versions (connect v0.4 / fed
   // 2.14, real unions); pass connectorSpecVersion/federationVersion/composeFederationVersion to vary.
   opts: {
+    shouldFail?: boolean;
+    skipValidation?: boolean;
+    mapper?: Mapper;
+    skipOptionalArgs?: boolean;
+    inferEntityResolvers?: boolean;
     baseURL?: string;
     overrides?: OverridesConfig;
     batch?: BatchConfig;
@@ -42,16 +42,16 @@ export async function runOasTest(
   } = {},
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
-    skipValidation,
+    skipValidation: opts.skipValidation,
     baseURL: opts.baseURL,
     overrides: opts.overrides,
     batch: opts.batch,
     directives: opts.directives,
     showParentInSelections: false,
-    mapper,
-    skipOptionalArgs,
+    mapper: opts.mapper,
+    skipOptionalArgs: opts.skipOptionalArgs,
     skipOptionalMarkers: opts.skipOptionalMarkers,
-    inferEntityResolvers,
+    inferEntityResolvers: opts.inferEntityResolvers,
     emitConnectorErrors: opts.emitConnectorErrors,
     skipAuth: opts.skipAuth,
     authValuePrefix: opts.authValuePrefix,
@@ -85,7 +85,7 @@ export async function runOasTest(
   fs.writeFileSync(sampleFile, 'type Query { hello: String }', { encoding: 'utf-8', flag: 'w' });
 
   const [result, output] = compose(schemaFile, sampleFile, opts.composeFederationVersion, opts.forceRover);
-  if (shouldFail) {
+  if (opts.shouldFail) {
     assert.ok(!result);
     assert.ok(output !== undefined);
     return output;

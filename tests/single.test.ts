@@ -137,5 +137,5 @@ test('test-single', async () => {
     // 'get:/api/v1/markets/{marketId}/models/{modelId}/configurations/{configurationId}/selectables>res:r>obj:type:#/c/s/VehicleComponentTree>prop:map:vehicleComponents>map:type:VehicleComponentsEntry>obj:type:#/c/s/VehicleComponent>**',
     "get:/api/v1/markets>res:r>array:#/c/s/Market>obj:type:#/c/s/Market>prop:scalar:country",
   ]
-  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 1, false, true, undefined, true);
+  await runOasTest('openapi.car_configurator_service_(ccs)_int-10.210.0.yaml', paths, 44, 1, { skipValidation: true, skipOptionalArgs: true });
 });
