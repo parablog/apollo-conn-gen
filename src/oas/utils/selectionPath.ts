@@ -1,7 +1,13 @@
 import { IType, T } from '../nodes/internal.js';
+import { Naming } from './naming.js';
 import { warn } from '../log/trace.js';
 
 export class SelectionPath {
+  // The selection that takes an operation's whole subtree. e.g. everythingUnder('get:/graph') -> 'get:/graph>**'
+  public static everythingUnder(opId: string): string {
+    return `${opId}${Naming.PATH_SEPARATOR}**`;
+  }
+
   // One selection path segment, matched by id — or, when its name has drifted, by the one node the
   // parent can possibly mean. e.g. (digitalocean.yaml) the same node, spelled two ways:
   //   get:/v2/apps/{app_id}/deployments>res:r>…>prop:array:#deployments

@@ -1,4 +1,5 @@
 import { IType, Obj, Res, T } from './internal.js';
+import { Naming } from '../utils/naming.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 
@@ -92,7 +93,7 @@ export function inferEntityResolvers(
   }
 
   // The root id of every selected path (matches how the writers pick query fields).
-  const selectionRoots = new Set<string>(selection.map((s) => s.split('>')[0]));
+  const selectionRoots = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
   for (const op of gen.paths.values()) {
     if (!T.isOp(op) || op.verb !== 'GET' || !selectionRoots.has(op.id)) {

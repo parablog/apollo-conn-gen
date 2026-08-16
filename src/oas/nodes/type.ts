@@ -16,7 +16,7 @@ export function selectionPrefixes(selection: string[]): Set<string> {
   prefixes = new Set<string>();
   for (const entry of selection) {
     prefixes.add(entry);
-    for (let i = entry.indexOf('>'); i !== -1; i = entry.indexOf('>', i + 1)) {
+    for (let i = entry.indexOf(Naming.PATH_SEPARATOR); i !== -1; i = entry.indexOf(Naming.PATH_SEPARATOR, i + 1)) {
       prefixes.add(entry.slice(0, i));
     }
   }
@@ -68,7 +68,7 @@ export abstract class Type implements IType {
   }
 
   public find(path: string, collection: IType[]): IType | boolean {
-    const parts = path.split('>');
+    const parts = path.split(Naming.PATH_SEPARATOR);
     let current: IType | undefined;
 
     let i = 0;
@@ -122,7 +122,7 @@ export abstract class Type implements IType {
 
   public path(): string {
     const ancestors = this.ancestors();
-    return Naming.abbreviateRef(ancestors.map((t) => t.id).join('>'));
+    return Naming.abbreviateRef(ancestors.map((t) => t.id).join(Naming.PATH_SEPARATOR));
   }
 
   public pathToRoot(): string {

@@ -14,6 +14,7 @@
 //   node --import tsx/esm ./tools/coverage-spec.mts [--spec <file>] [--limit N]
 //        [--concurrency N] [--workers N] [--verbs get|mutations|all]
 import { OasGen } from '../src/index.js';
+import { SelectionPath } from '../src/oas/utils/selectionPath.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -284,7 +285,7 @@ async function runPass(
   // Phase 1 (sequential, CPU): fresh gen per op -> classify generation, collect compose candidates.
   const candidates: { op: string; schema: string }[] = [];
   for (const op of ops) {
-    const sel = `${op}>**`; // full-subtree selection, exactly like the corpus tests / vet-spec
+    const sel = SelectionPath.everythingUnder(op); // full-subtree selection, exactly like the corpus tests / vet-spec
     if (TRACE) process.stderr.write(`    gen ${passKey} ${op}\n`);
     try {
       const g = new OasGen(parser, genOptions(passKey, skip) as any);

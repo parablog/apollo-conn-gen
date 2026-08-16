@@ -267,7 +267,7 @@ export class OasGen {
     let last: IType | undefined;
 
     let i = 0;
-    const parts = path.split('>');
+    const parts = path.split(Naming.PATH_SEPARATOR);
     do {
       const part = Naming.expandRef(parts[i]);
       current = collection.find((t) => t.id === part);

@@ -4,6 +4,7 @@
 // src/versions.ts and the compose() default in src/tests/runners.ts).
 // Usage: node --import tsx/esm ./vet.mts <specFileInResourcesOas>
 import { OasGen } from '../src/index.js';
+import { SelectionPath } from '../src/oas/utils/selectionPath.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -60,7 +61,7 @@ async function load(skipValidation: boolean) {
   // Phase 1: cheap generate pass — collect (id, typesSize) for selections that generate cleanly.
   const cands: { id: string; size: number; clean: boolean }[] = [];
   for (const id of getIds.slice(0, 120)) {
-    const sel = [`${id}>**`];
+    const sel = [SelectionPath.everythingUnder(id)];
     try {
       const types = gen.getTypes(sel);
       if (types.size === 0) continue;
@@ -75,10 +76,10 @@ async function load(skipValidation: boolean) {
   cands.sort((a, b) => Number(b.clean) - Number(a.clean) || b.size - a.size);
   // Phase 2: compose the top candidates until one composes.
   for (const c of cands.slice(0, 30)) {
-    const schema = gen.generateSchema([`${c.id}>**`]);
+    const schema = gen.generateSchema([SelectionPath.everythingUnder(c.id)]);
     if (compose(schema)) {
       console.log(
-        `RESULT ${file} :: OK :: skipValidation=${skip} sel='${c.id}>**' pathsSize=${gen.paths.size} typesSize=${c.size} clean=${c.clean}`,
+        `RESULT ${file} :: OK :: skipValidation=${skip} sel='${SelectionPath.everythingUnder(c.id)}' pathsSize=${gen.paths.size} typesSize=${c.size} clean=${c.clean}`,
       );
       return;
     }

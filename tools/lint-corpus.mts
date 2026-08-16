@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import _ from 'lodash';
 import { OasGen } from '../src/index.js';
+import { SelectionPath } from '../src/oas/utils/selectionPath.js';
 import { lintSelections, SchemaReader } from '../src/oas/lint/index.js';
 import { SelectedFields } from '../src/oas/lint/selectedFields.js';
 import type { LintDiagnostic, SelectedField } from '../src/oas/lint/index.js';
@@ -127,7 +128,7 @@ for (const spec of specs) {
     try {
       perOp = new OasGen(loaded.gen.parser, genOptions(loaded.skipValidation) as never);
       await perOp.visit();
-      sdl = perOp.generateSchema([`${op}>**`]);
+      sdl = perOp.generateSchema([SelectionPath.everythingUnder(op)]);
     } catch {
       continue; // generation failures are the coverage harness's business, not the linter's
     }

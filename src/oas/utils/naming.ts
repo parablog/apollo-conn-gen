@@ -150,6 +150,9 @@ export class Naming {
     return /^[0-9]/.test(camel) ? Naming.NUMBER_PREFIX + camel : camel;
   }
 
+  // What joins the node ids in a selection path, e.g. `get:/graph>res:r>obj:type:#/c/s/Content`
+  public static readonly PATH_SEPARATOR = '>';
+
   // Selection paths abbreviate component refs to stay readable (`#/components/schemas/Space`
   // -> `#/c/s/Space`); expandRef is the inverse, used when matching a path segment back
   // against node ids.

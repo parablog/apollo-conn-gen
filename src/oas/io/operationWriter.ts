@@ -20,7 +20,7 @@ export class OperationWriter {
   }
 
   public writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-    const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
+    const selectionSet = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
     if (_.isEmpty(paths)) return;
@@ -37,7 +37,7 @@ export class OperationWriter {
   }
 
   public writeMutations(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-    const selectionSet = new Set<string>(selection.map((s) => s.split('>')[0]));
+    const selectionSet = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
     if (_.isEmpty(paths)) return;

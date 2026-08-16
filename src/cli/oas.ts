@@ -6,6 +6,7 @@ import { generateFromSelection, promptForSelection } from './oas-helpers/index.j
 import { OasGen } from '../oas/oasGen.js';
 import { BatchConfig, DirectivesConfig, OverridesConfig } from '../oas/oasContext.js';
 import { RulesLoader, OpNameMapper, MapRules, Mapper } from '../oas/mapper/index.js';
+import { SelectionPath } from '../oas/utils/selectionPath.js';
 
 const originalConsole = Object.assign(
   {
@@ -124,7 +125,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
 
   let paths: string[];
   if (opts.skipSelection) {
-    paths = pathSet.map((p) => p.path() + '>**');
+    paths = pathSet.map((p) => SelectionPath.everythingUnder(p.path()));
   } else {
     paths = await promptForSelection(gen, opts, pathSet);
   }
