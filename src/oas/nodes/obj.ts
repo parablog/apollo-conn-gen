@@ -108,10 +108,9 @@ export class Obj extends Type {
     }
 
     const selected = this.selectedProps(selection);
-    // #13: another node of this same schema may still have a field that cycle detection
-    // removed from this one — emit that version of the field in the type definition. The
-    // selections are not affected. see TypesCollector.collect / context.sdlPropOverrides
-    const overrides = context.sdlPropOverrides.get(this);
+    // a field cycle detection removed on another route is not written here either — the comment
+    // takes its place. #89
+    const overrides = context.propOverrides.get(this.id);
 
     for (const prop of selected) {
       const emitted = (overrides?.get(prop.name) as typeof prop) ?? prop;
@@ -125,18 +124,20 @@ export class Obj extends Type {
     context.leave(this);
   }
 
-  // the selected props (a cycle-cut one swapped for its #13 replacement, like generate does)
+  // the selected props (a field removed on another route swapped for its comment, like generate does — #89)
   dependencies(context: OasContext, selection: string[]): IType[] {
-    const overrides = context.sdlPropOverrides.get(this);
+    const overrides = context.propOverrides.get(this.id);
     return this.selectedProps(selection).map((prop) => overrides?.get(prop.name) ?? prop);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [obj::select]', `-> in: ${this.name}`);
 
+    // a route that kept the field writes the same comment as the routes where it was removed. #89
+    const overrides = context.propOverrides.get(this.id);
     const selected = this.selectedProps(selection);
     for (const prop of selected) {
-      prop.select(context, writer, selection);
+      (overrides?.get(prop.name) ?? prop).select(context, writer, selection);
     }
 
     trace(context, '<- [obj::select]', `-> out: ${this.name}`);

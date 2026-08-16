@@ -1383,6 +1383,31 @@ test('test_genuine_cycles_cut_by_route', async () => {
   );
 });
 
+test('test_89_field_removed_on_any_route_is_removed_everywhere', async () => {
+  // #89: a field cycle detection removed on some routes but kept on others was declared in the SDL
+  // (#13's donation) while the removed routes' selections provided nothing — rover wants a declared
+  // field provided at every position the type appears (confluence's relation GETs, `Content.space`).
+  // A field removed on any route is now removed on every route and in the SDL, a comment in its place.
+  const schema = await runOasTest('cycle-cut-on-some-routes.yaml', ['get:/graph>**'], 1, 9);
+  assert.ok(schema !== undefined);
+  // family A: the written Content kept `space`; removed here because homepage's Content lost it
+  assert.ok(/# space: Space - circular reference omitted/.test(schema!), 'space commented in the SDL');
+  assert.ok(!/\n {2}space: Space/.test(schema!), 'and not declared as a real field');
+  assert.ok(/# space: circular reference omitted \(re-visit/.test(schema!), 'the keeping route writes the comment');
+  assert.ok(!/space \{/.test(schema!), 'no route selects space');
+  // family B: the written Doc had `folder` removed; the subject route kept it (the old donation direction)
+  assert.ok(/# folder: Folder - circular reference omitted/.test(schema!), 'folder commented in the SDL');
+  assert.ok(!/\n {2}folder: Folder/.test(schema!), 'and not declared as a real field');
+  assert.ok(/# folder: circular reference omitted \(re-visit/.test(schema!), 'the keeping route writes the comment');
+  assert.ok(!/folder \{/.test(schema!), 'no route selects folder');
+  // guards against removing too much: fields kept on every route stay real in SDL and selection
+  assert.ok(
+    /\btitle: String\b/.test(schema!) && /\bkey: String\b/.test(schema!) && /\bnote: String\b/.test(schema!),
+    'kept-everywhere fields stay declared',
+  );
+  assert.ok(/\btitle\b/.test(schema!) && /\bnote\b/.test(schema!), 'and selected');
+});
+
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
   // emitting `id: !`); coerce it to String. see docs/FIXED.md #11. runOasTest composes via rover.

@@ -4819,3 +4819,69 @@ lines of this one input type, with none of the other 376 definitions touched.
 **Refs:** `src/oas/nodes/union.ts` (`consolidateMembers`). Fixture `union-body-array-member.yaml`,
 test `test_94_union_body_with_an_array_member_keeps_its_input_type`. See #57 for why `dependencies`
 consolidates before reading the merged fields.
+
+
+## 89 · A field cut on some routes but kept on others is declared and never provided — ✅ Fixed
+**Symptom:** confluence's three relation GETs (`/wiki/rest/api/relation/...`) fail compose, each
+with the same single error:
+`CONNECTORS_UNRESOLVED_FIELD: [test_spec] No connector resolves field `Content.space`.`
+
+**OAS** (confluence — `Content`, `Space` and `User` point at each other):
+```yaml
+Content:
+  properties:
+    space: { $ref: '#/components/schemas/Space' }
+Space:
+  properties:
+    homepage: { $ref: '#/components/schemas/Content' }
+User:
+  properties:
+    personalSpace: { $ref: '#/components/schemas/Space' }
+```
+
+**Example** — the op reaches `Content` at six selection positions; two kept `space`, four lost it
+to the cycle cut. The SDL declared the field because some route kept it (#13's donation):
+```graphql
+# before — declared once, provided at two of six positions: rover rejects it
+type Content {
+  space: Space
+}
+
+# after — removed at every position and in the SDL, like a field removed on all routes
+type Content {
+  # space: Space - circular reference omitted
+}
+```
+
+**Cause:**
+- cycle detection (#10) works per route, so two nodes of the same schema can disagree on a field.
+- #13 donated the kept version to the written SDL type; every route's selection kept its own comment.
+- the composer wants a declared field provided at *every* position the type appears, not somewhere.
+- `ancestors` was the control: removed on all routes, commented in the SDL too, composes fine.
+
+**Fix:** a field removed on any route is now removed on every route, instead of declared because
+one route kept it. The comment takes its place everywhere — the SDL, each route's selection, and
+reachability:
+- `TypesCollector.collect` walks the selected nodes once (`consolidateRemovedFields`, the same
+  walk `collectReachable` uses) and stores a `PropCircRef` per removed-and-kept field in
+  `context.propOverrides`, keyed by node **id** so every instance sees it (a ref *name* can
+  collide — #95; ids cannot).
+- `Obj.generate`, `Obj.select` and `Obj.dependencies` all read the same map, so the three stay in
+  lockstep by construction. The select-side lookup is new — its absence was this bug.
+- #13's donation (`findSelectedFieldNode`, `sdlPropOverrides`) is deleted: it only ever fired when
+  a route had lost the field, and that now always means removing it everywhere.
+- One override instance per id is safe: `PropCircRef.select` writes only the name at the runtime
+  indent, and only the written instance ever generates.
+
+Cost, accepted in the issue entry: the field also disappears from the routes that could really
+reach it. Input objects (`obj:input:` ids) get the same treatment — deliberate, same invariant.
+
+**Not fixed here:** `Composed` never consulted the overrides (it didn't consult #13's either); a
+removed-and-kept field surfacing through an allOf would need the same lookup in `comp.ts`.
+
+**AST** — no new node shape; `PropCircRef` now also stands in at positions that kept the field.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`consolidateRemovedFields`), `src/oas/oasContext.ts`
+(`propOverrides`), `src/oas/nodes/obj.ts` (generate/select/dependencies). Fixture
+`cycle-cut-on-some-routes.yaml`, test `test_89_field_removed_on_any_route_is_removed_everywhere`.
+Supersedes #13's donation; see #10 for the cycle cut itself and #26 for the reachability walk.

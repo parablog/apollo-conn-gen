@@ -44,7 +44,7 @@ Invariants the entries below rely on:
 
 ---
 
-## 13 · Path-dependent cycle cuts make same-named instances diverge — 🟡 Mechanism fixed; ops gated behind the R2 union wall
+## 13 · Path-dependent cycle cuts make same-named instances diverge — 🟡 Donation replaced: #89 removes the field everywhere
 **Symptom:** with #10 + #12 in place, Confluence abstract fails compose with
 `SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`.
 
@@ -123,9 +123,11 @@ error. The guard this entry relies on ("every union field is selected on at leas
 from") is not enough: the composer wants the field provided at every position the type appears.
 Written up as #89.
 
-**Refs:** `src/oas/generator/typesCollector.ts` (`collect` + `findSelectedFieldNode`),
-`src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override
-lookup).
+Fixed by #89 (see docs/FIXED.md): the donation is gone — a field removed on some routes but kept
+on others is now removed on every route and in the SDL, so the instances cannot disagree.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`consolidateRemovedFields`), `src/oas/oasContext.ts`
+(`propOverrides`), `src/oas/nodes/obj.ts` (generate/select/dependencies). See docs/FIXED.md #89.
 
 ## 49 · A request body that reaches a big shared model makes composition run out of memory — ⬜ Open
 
@@ -434,83 +436,6 @@ validation gap fixed in router source, not yet in a released plugin.
 
 **Next step:** nothing generator-side. Re-check this op when a supergraph plugin newer than 2.15.1
 ships; if it still fails there, find the router fix commit and reference it here.
-
-## 89 · A field cut on some routes but kept on others is declared and never provided — 🔴 Open
-**Symptom:** three confluence relation ops fail compose, each with the same single error:
-
-```
-CONNECTORS_UNRESOLVED_FIELD: [test_spec] No connector resolves field `Content.space`.
-```
-
-- `get:/wiki/rest/api/relation/{relationName}/from/{sourceType}/{sourceKey}/to/{targetType}`
-- `get:/wiki/rest/api/relation/{relationName}/from/{sourceType}/{sourceKey}/to/{targetType}/{targetKey}`
-- `get:/wiki/rest/api/relation/{relationName}/to/{targetType}/{targetKey}/from/{sourceType}`
-
-They are the whole `CONNECTORS_UNRESOLVED_FIELD` bucket left in the GET sweep once #88 took the
-github op out of it.
-
-**OAS** (confluence — `Content` and `Space` point at each other, and `User` reaches `Space` too):
-```yaml
-Content:
-  properties:
-    space: { $ref: '#/components/schemas/Space' }
-    ancestors: { type: array, items: { $ref: '#/components/schemas/Content' } }
-Space:
-  properties:
-    homepage: { $ref: '#/components/schemas/Content' }
-User:
-  properties:
-    personalSpace: { $ref: '#/components/schemas/Space' }
-```
-
-**Example** — the same type, `Content`, reached at six places in one op's selection. Two keep
-`space`, four lost it to the cycle cut:
-```
-results.source                            space? { … }
-results.target                            space? { … }
-results.source.homepage                   # space: circular reference omitted
-results.source.personalSpace.homepage     # space: circular reference omitted
-results.target.homepage                   # space: circular reference omitted
-results.target.personalSpace.homepage     # space: circular reference omitted
-```
-The SDL declares the field once, because some route kept it:
-```graphql
-type Content {
-  # ancestors: [Content] - circular reference omitted
-  space: Space
-  …
-}
-```
-`ancestors` is the control: it is cut on *every* route, so it is commented in the SDL as well and
-composes fine. Only a field cut on *some* routes breaks.
-
-**Cause:** this is #13's mechanism, and it shows #13's guard is not enough.
-- #13 makes the emitted type the union of the fields surviving across routes, so a field kept on
-  one route is declared.
-- Its stated guard is "every union field is selected on at least the path it came from, so no
-  `CONNECTORS_UNRESOLVED_FIELD`". That holds here — `space` is selected, twice.
-- The composer does not accept that. It wants the field provided everywhere the type appears, not
-  somewhere. Four positions provide nothing, so the field counts as unresolved.
-- So #13 did not remove the divergence, it changed which error it raises: before #13 the selection
-  named a field the SDL lacked (`SELECTED_FIELD_NOT_FOUND`), after #13 the SDL names a field four
-  routes do not provide.
-
-**AST** — no new node shape. `Obj.generate` reads `context.sdlPropOverrides` for the un-cut version
-of the field (`obj.ts`), while every route's `Obj.select` keeps its own `PropCircRef` comment.
-
-**Ways out, none free:**
-- **Intersect instead of union** — a field cut on any route is dropped from the SDL *and* from every
-  route's selection. Small and boring, and it composes. Costs the field on the routes that could
-  really reach it, and inverts #13.
-- **Split the type** — the cut instance is a different shape, so give it its own name. Principled,
-  but `Space.homepage` alone is cut 351 times across confluence's 65 GET ops (#13), so the type
-  count needs measuring before this is affordable.
-- **Leave it** — 3 ops of 2392, on a spec already at 93.8%.
-
-**Refs:** `src/oas/generator/typesCollector.ts` (`collect`, `findSelectedFieldNode`),
-`src/oas/oasContext.ts` (`sdlPropOverrides`), `src/oas/nodes/obj.ts` (`generate` override lookup vs
-`select`), `src/oas/nodes/propCircRef.ts`. See #13 for the mechanism and #26 for the reachability
-walk that has to mirror both.
 
 ## 93 · An inline map at the response root is always called `REntry` — ⬜ Open
 **Symptom:** github `get:/emojis` emits its entry type as `REntry`, which says nothing about the

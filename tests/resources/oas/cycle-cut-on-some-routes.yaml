@@ -1,0 +1,88 @@
+openapi: 3.0.3
+info:
+  title: Cycle cut intersection
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /graph:
+    get:
+      operationId: getGraph
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Graph'
+components:
+  schemas:
+    Graph:
+      type: object
+      properties:
+        link:
+          $ref: '#/components/schemas/Link'
+        relation:
+          $ref: '#/components/schemas/Relation'
+    # family A: the first-collected Content (under source) KEEPS space; the one under
+    # viewer.personalSpace.homepage loses it to the cycle cut — divergent
+    Relation:
+      type: object
+      properties:
+        source:
+          $ref: '#/components/schemas/Content'
+        viewer:
+          $ref: '#/components/schemas/User'
+    Content:
+      type: object
+      properties:
+        id:
+          type: string
+        space:
+          $ref: '#/components/schemas/Space'
+        title:
+          type: string
+    Space:
+      type: object
+      properties:
+        homepage:
+          $ref: '#/components/schemas/Content'
+        key:
+          type: string
+    User:
+      type: object
+      properties:
+        name:
+          type: string
+        personalSpace:
+          $ref: '#/components/schemas/Space'
+    # family B: the first-collected Doc (under author.home.front) has folder CUT; the one
+    # under subject keeps it — the old #13 donation direction, also divergent
+    Link:
+      type: object
+      properties:
+        author:
+          $ref: '#/components/schemas/Member'
+        subject:
+          $ref: '#/components/schemas/Doc'
+    Doc:
+      type: object
+      properties:
+        folder:
+          $ref: '#/components/schemas/Folder'
+        note:
+          type: string
+    Folder:
+      type: object
+      properties:
+        front:
+          $ref: '#/components/schemas/Doc'
+        label:
+          type: string
+    Member:
+      type: object
+      properties:
+        handle:
+          type: string
+        home:
+          $ref: '#/components/schemas/Folder'

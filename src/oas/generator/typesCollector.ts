@@ -5,6 +5,7 @@ import {
   IType,
   // aliased: this file builds plenty of real `Map`s, and the node class would shadow the built-in
   Map as MapNode,
+  Obj,
   Prop,
   PropArray,
   PropCircRef,
@@ -35,7 +36,7 @@ export class TypesCollector {
       let last: IType | undefined;
 
       let i = 0;
-      const parts = path.split('>');
+      const parts = path.split(Naming.PATH_SEPARATOR);
       do {
         const part = Naming.expandRef(parts[i]);
         if (part === '*') {
@@ -89,53 +90,18 @@ export class TypesCollector {
       }
     }
 
-    // One operation can reach the same schema through several routes, and each route builds its
-    // own node for it. Cycle detection (#10) removes a field from a node when that field would
-    // loop back to an ancestor of ITS route — so two nodes for the same schema can end up with
-    // different fields. Only one of them is written to the output schema (the first one found),
-    // but the connector selection is assembled from ALL routes: it can ask for a field the
-    // written node doesn't have, and composition fails (SELECTED_FIELD_NOT_FOUND).
-    //
-    // e.g. confluence `get:/wiki/rest/api/content/{id}/restriction`: `Space` is reached twice —
-    //   via `content`:      that route goes through Content, so Space's `homepage` was removed
-    //   via `restrictions`: it doesn't, so `homepage` is kept — and that route's selection asks for it
-    // both routes are written out in full in the issue entry.
-    //
-    // The routes are already spelled out in `expanded`, so for each removed field we look for a
-    // selection path carrying the real field under the same type id, walk that path to its node,
-    // and tell the writer to emit that version of the field (context.sdlPropOverrides — the TYPE
-    // DEFINITION only; selections are left alone, each route keeps its own "field removed"
-    // comment. Putting the field back into props re-created the loop cycle detection had just
-    // broken: rover CIRCULAR_REFERENCE). Because the replacement comes FROM the selection, a
-    // field nobody selects is never added (CONNECTORS_UNRESOLVED_FIELD, test_040 AdobeCommerce).
-    // see docs/issues.md #13
-    const context = this.gen.context!;
-    for (const kept of pendingTypes.values()) {
-      kept.props.forEach((prop, name) => {
-        if (!(prop instanceof PropCircRef)) {
-          return;
-        }
-        const donor = this.findSelectedFieldNode(kept, name, expanded);
-        if (donor) {
-          let overrides = context.sdlPropOverrides.get(kept);
-          if (!overrides) {
-            overrides = new Map();
-            context.sdlPropOverrides.set(kept, overrides);
-          }
-          overrides.set(name, donor);
-        }
-      });
-    }
-
     // first pass is to consolidate all Composed & Union nodes
     const composed: Array<Composed> = Array.from(pendingTypes.values())
       .filter((t) => t instanceof Composed)
       .map((t) => t as Composed);
 
     for (const comp of composed) {
-      if (!comp.visited) comp.visit(context);
+      if (!comp.visited) comp.visit(this.gen.context!);
       comp.consolidate(expanded).forEach((id) => pendingTypes.delete(id));
     }
+
+    // a field removed on some routes but kept on others is removed on every route. #89
+    this.consolidateRemovedFields(pendingTypes, expanded);
 
     // keep exactly the types the written schema references: confluence emitted `Label` with
     // nothing selecting it, box dropped `Folder--Mini` while still referencing it. see #26
@@ -155,21 +121,25 @@ export class TypesCollector {
     this.expanded = expanded;
   }
 
+  // The selected operations' result and body nodes — where the read-only walks start. #26 #89
+  private selectedRoots(expanded: string[]): IType[] {
+    const opIds = new Set(expanded.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
+    const roots: IType[] = [];
+    for (const op of this.gen.paths.values()) {
+      if (opIds.has(op.id)) {
+        const candidates = [_.get(op, 'resultType'), _.get(op, 'body')] as Array<IType | undefined>;
+        roots.push(...candidates.filter((n): n is IType => !!n));
+      }
+    }
+    return roots;
+  }
+
   // Every type the written schema will point at, walked over each node's own dependencies()
   // from the selected operations' result/body. e.g. `getUser: User` + `User.address: Address`
   // reaches { User, Address }. see #26
   private collectReachable(expanded: string[]): Set<IType> {
     const context = this.gen.context!;
-    const opIds = new Set(expanded.map((p) => p.split('>')[0]));
-
-    const queue: IType[] = [];
-    for (const op of this.gen.paths.values()) {
-      if (opIds.has(op.id)) {
-        const roots = [_.get(op, 'resultType'), _.get(op, 'body')] as Array<IType | undefined>;
-        queue.push(...roots.filter((n): n is IType => !!n));
-      }
-    }
-
+    const queue = this.selectedRoots(expanded);
     const visited = new Set<IType>();
     while (queue.length > 0) {
       const node = queue.pop()!;
@@ -189,29 +159,63 @@ export class TypesCollector {
     return new Set(Array.from(visited).filter(T.isEmittable));
   }
 
-  // A selection path that carries the real `name` field under this type id (`>obj:type:X>prop:…:name>`),
-  // walked to its node — the un-removed version of a field this node lost to a cycle cut. see #13
-  private findSelectedFieldNode(kept: IType, name: string, expanded: string[]): IType | undefined {
-    // selection paths abbreviate component refs (`path()` writes `#/c/s`); match that form
-    const marker = `>${Naming.abbreviateRef(kept.id)}>`;
-    for (const sel of expanded) {
-      const at = sel.indexOf(marker);
-      if (at < 0) {
+  // A field cycle detection (#10) removed on some routes but kept on others is removed on every
+  // route, a comment in its place: the composer wants a declared field provided everywhere the
+  // type appears. see docs/FIXED.md #89 (and #13 for the donation this replaces)
+  //   e.g. (confluence) results.source: Content { space: Space }
+  //                     results.source.homepage: Content { # space — removed }  -> removed on both
+  private consolidateRemovedFields(pendingTypes: Map<string, IType>, expanded: string[]): void {
+    const context = this.gen.context!;
+    // this generation's selection only — no leftovers from an earlier one
+    context.propOverrides.clear();
+
+    // walk the selected nodes, like collectReachable: the same schema reached on two routes is two
+    // nodes, so each route reports its own version of every field
+    const removed = new Map<string, Set<string>>();
+    const kept = new Map<string, Set<string>>();
+    const queue = this.selectedRoots(expanded);
+    const visited = new Set<IType>();
+    while (queue.length > 0) {
+      const node = queue.pop()!;
+      if (visited.has(node)) {
         continue;
       }
-      const segment = sel.slice(at + marker.length).split('>')[0];
-      const isRealProp = segment.startsWith('prop:') && !segment.startsWith('prop:circular-ref');
-      if (!isRealProp || !(segment.endsWith(':' + name) || segment.endsWith(':#' + name))) {
-        continue;
+      visited.add(node);
+      // the overrides map is still empty here, so this reads each node's own selected fields
+      const children = node.dependencies(context, expanded);
+      if (node instanceof Obj) {
+        for (const child of children) {
+          if (child instanceof Prop) {
+            // a PropCircRef is a route that lost the field to a cycle; any other prop kept it
+            const bucket = child instanceof PropCircRef ? removed : kept;
+            let names = bucket.get(node.id);
+            if (!names) {
+              names = new Set();
+              bucket.set(node.id, names);
+            }
+            names.add(child.name);
+          }
+        }
       }
-      const donorPath = sel.slice(0, at + marker.length + segment.length);
-      const stack = new PathsCollector(this.gen).collectPaths(donorPath, Array.from(this.gen.paths.values()));
-      const donor = stack[stack.length - 1];
-      if (donor && !(donor instanceof PropCircRef)) {
-        return donor;
-      }
+      queue.push(...children);
     }
-    return undefined;
+
+    // only a field removed on one route AND kept on another needs an override: removed everywhere
+    // already prints as a comment, kept everywhere needs nothing
+    for (const type of pendingTypes.values()) {
+      type.props.forEach((prop, name) => {
+        if (!removed.get(type.id)?.has(name) || !kept.get(type.id)?.has(name)) {
+          return;
+        }
+        let overrides = context.propOverrides.get(type.id);
+        if (!overrides) {
+          overrides = new Map();
+          context.propOverrides.set(type.id, overrides);
+        }
+        // the route's own comment node when it has one, or the kept field wrapped to print as one
+        overrides.set(name, prop instanceof PropCircRef ? prop : new PropCircRef(type, prop));
+      });
+    }
   }
 }
 
@@ -227,10 +231,10 @@ class PathsCollector {
   }
 
   public static progressiveSplits(input: string): string[] {
-    const parts = input.split('>');
+    const parts = input.split(Naming.PATH_SEPARATOR);
     const results: string[] = [];
     for (let i = 1; i <= parts.length; i++) {
-      results.push(parts.slice(0, i).join('>'));
+      results.push(parts.slice(0, i).join(Naming.PATH_SEPARATOR));
     }
     return results;
   }
@@ -241,7 +245,7 @@ class PathsCollector {
     let last: IType | undefined;
 
     let i = 0;
-    const parts = path.split('>');
+    const parts = path.split(Naming.PATH_SEPARATOR);
     do {
       const part = Naming.expandRef(parts[i]);
 
