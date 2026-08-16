@@ -1,0 +1,21 @@
+openapi: 3.0.3
+info:
+  title: Dangling ref
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /status:
+    get:
+      operationId: getStatus
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+            # the pointer goes nowhere — as published in common-room's del:/user/{email}
+            application/json:
+              schema:
+                $ref: '#../'

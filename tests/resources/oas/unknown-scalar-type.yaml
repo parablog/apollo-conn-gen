@@ -1,0 +1,43 @@
+openapi: 3.0.3
+info:
+  title: Unknown scalar type
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /fields:
+    post:
+      operationId: updateField
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FieldUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+components:
+  schemas:
+    # `url` and `date` are format names in the type slot — not JSON Schema types (the validator
+    # rejects them, which is why this fixture loads with skipValidation)
+    FieldUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          oneOf:
+            - type: string
+            - type: number
+            - type: url
+            - type: date
+    Status:
+      type: object
+      properties:
+        ok:
+          type: boolean

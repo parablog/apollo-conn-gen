@@ -52,9 +52,14 @@ export class Factory {
 
     // resolve first if reference
     if ('$ref' in schema) {
-      // result = new Ref(parent, schema.$ref as string, schema as ReferenceObject);
       ref = schema?.$ref;
       if (ref) schema = context.lookupRef(ref) as SchemaObject;
+      // a $ref that points nowhere is read as free-form JSON instead of stopping the run.
+      //   e.g. (common-room) del:/user/{email} 200: { $ref: '#../' }  see docs/FIXED.md #99
+      if (!schema) {
+        warn(null, '[factory]', `dangling $ref '${ref}' becomes JSON in: ${parent.pathToRoot()}`);
+        return new Scalar(parent, 'JSON', inputSchema as SchemaObject);
+      }
     }
 
     if (!schema) throw new Error('Unknown or undefined schema');
@@ -122,15 +127,15 @@ export class Factory {
       } else if (schema?.enum != null) {
         return new En(parent, 'enum', schema, schema.enum! as string[]);
       }
-      // scalar case
-      else if (GqlUtils.gqlScalar(typeStr as string)) {
-        const scalarType = GqlUtils.getGQLScalarType(schema!);
+      // scalar case — gqlScalar knows `date`/`date-time` mean String, like fromProp's branch below
+      const scalarType = GqlUtils.gqlScalar(typeStr as string);
+      if (scalarType) {
         return new Scalar(parent, scalarType, schema!);
       }
-      // or we have no idea how to handle this
-      else {
-        throw new Error(`Cannot handle property type ${typeStr}, schema: ${JSON.stringify(schema)}`);
-      }
+      // a type that is no JSON Schema type is read as free-form JSON instead of stopping the run.
+      //   e.g. (common-room) value: { oneOf: [{ type: url }, { type: date }] }  see docs/FIXED.md #98
+      warn(null, '[factory]', `unknown scalar type '${typeStr}' becomes JSON in: ${parent.pathToRoot()}`);
+      return new Scalar(parent, 'JSON', schema!);
     } else if (schema?.enum != null) {
       return new En(parent, 'enum', schema, _.get(schema, 'enum') as string[]);
     }

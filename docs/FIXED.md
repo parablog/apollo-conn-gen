@@ -4938,3 +4938,87 @@ produces either; the branch is one more `instanceof` away if one ever does.
 `test_genuine_array_of_arrays_stays_nested` now sees docker's `processes: [[String]]` appear.
 See #47/#92 for the sibling axes and #59 for the emission.
 
+
+## 98 · A made-up value in the type slot stops the whole run — ✅ Fixed
+**Symptom:** two common-room POSTs (`/source/{destinationSourceId}/activity` and `…/user`) crash
+the generator: `Cannot handle property type url`. Had `url` not thrown, `date` would have — one
+call later, as `[getGQLScalarType] Cannot generate type` — so both messages are this one bug.
+
+**OAS** (common-room — format names where a JSON Schema type belongs):
+```yaml
+value:
+  oneOf:
+    - { type: string }
+    - { type: number }
+    - { type: url }     # not a JSON Schema type
+    - { type: date }    # neither; means string + format in a correct spec
+```
+
+**Example**:
+```graphql
+# before — no output at all, the run stopped at the first `url` member
+
+# after — the op generates; the unknown member reads as JSON, `date` as String
+```
+
+**Cause:**
+- `Factory.createScalarType` had no branch for a `type` it doesn't know — it threw.
+- union members and array items reach it through `fromSchema`; a *property* takes `fromProp`,
+  which already answered `String` for `date` — the same schema crashed or passed by position.
+- inside the scalar branch, two tables disagreed: `gqlScalar` knows `date`/`date-time` (String),
+  `getGQLScalarType` has those cases commented out and throws.
+
+**Fix:** the scalar branch uses `gqlScalar`'s own answer (so `date` members emit `String`, like
+props always did), and a type neither table knows reads as free-form `JSON` with a warning naming
+the value and the path. The array invariant throw and the typeless throw stay.
+
+**Care:** never add `url` to `gqlScalar` — `Schemas.holdsPlainValues` delegates to it, so a new
+entry there silently changes which arrays collapse (#86).
+
+**AST** — a `Scalar('JSON')` node where construction previously threw; nothing else moves.
+
+**Refs:** `src/oas/nodes/factory.ts` (`createScalarType`), `src/oas/utils/gql.ts` (the two tables).
+Fixture `unknown-scalar-type.yaml`, test `test_98_union_of_unknown_scalars_still_generates`.
+See #19 for the same degrade on shapeless objects, #23/#33 for earlier unknown-`type` crashes.
+
+## 99 · A $ref that points nowhere stops the whole run — ✅ Fixed
+**Symptom:** common-room's `del:/user/{email}` crashes the generator:
+`Unknown or undefined schema`.
+
+**OAS** (common-room — the 200 response, a truncated pointer next to a healthy sibling):
+```yaml
+responses:
+  '200':
+    content:
+      text/plain:
+        schema: { type: string }
+      application/json:
+        schema: { $ref: '#../' }   # goes nowhere; the 404 suggests Status was meant
+```
+
+**Example**:
+```graphql
+# before — no output at all
+
+# after
+deleteUserByEmail: JSON
+# selection: $
+```
+
+**Cause:**
+- `context.lookupRef('#../')` answers nothing — the pointer is not a component ref and not a
+  valid JSON pointer.
+- `Factory.fromSchema` treated every unresolved schema as a programming error and threw; a
+  spec's own bad pointer took the whole run down with it.
+
+**Fix:** inside the `$ref` branch only, an empty lookup reads as free-form `JSON` with a warning
+naming the ref and the path. The guard for a genuinely undefined input schema stays.
+
+Closes the "tolerate dangling component `$ref`s" gap TEST_CORPUS.md had recorded as open since
+omni — whose refs were stubbed in the fixture instead. The stubs stay; removing them is a
+separate cleanup.
+
+**AST** — a `Scalar('JSON')` node where construction previously threw; nothing else moves.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema`). Fixture `dangling-ref.yaml`, test
+`test_99_dangling_ref_response_degrades_to_json`. See #41 for the sibling `servers[].url` slice.

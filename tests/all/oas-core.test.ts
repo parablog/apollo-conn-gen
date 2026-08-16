@@ -1364,6 +1364,26 @@ test('test_96_nested_list_of_values_under_a_property_is_a_leaf', async () => {
   assert.ok(/neighborIds: neighbor_ids\b/.test(schema!), 'and selected whole, no block after it');
 });
 
+test('test_98_union_of_unknown_scalars_still_generates', async () => {
+  // #98: common-room writes format names in the type slot — value: oneOf [{type: url}, {type: date}]
+  // — and the factory threw on `url` (and would on `date` one call later); both of the vendor's
+  // POST ops crashed before writing anything. An unknown type now reads as JSON, with a warning.
+  const schema = await runOasTest('unknown-scalar-type.yaml', ['post:/fields>**'], 1, 2, { skipValidation: true });
+  assert.ok(schema !== undefined);
+  assert.ok(/input FieldUpdateInput \{/.test(schema!), 'the body input type is written');
+  assert.ok(/name: String/.test(schema!), 'with its plain field');
+  assert.ok(!/\bvalue[:?]/.test(schema!), 'the scalar-only union field stays absent — no `>**` leaf, as before');
+});
+
+test('test_99_dangling_ref_response_degrades_to_json', async () => {
+  // #99: a 200 schema of `$ref: '#../'` — a pointer to nowhere, as published in common-room's
+  // del:/user/{email} — stopped the whole run. The reference now reads as free-form JSON.
+  const schema = await runOasTest('dangling-ref.yaml', ['get:/status>**'], 1, 0, { skipValidation: true });
+  assert.ok(schema !== undefined);
+  assert.ok(/\bstatus: JSON/.test(schema!), 'the op answers free-form JSON');
+  assert.ok(/selection: """\s*\n\s*\$\s*\n/.test(schema!), 'and the selection takes the response whole');
+});
+
 test('test_same_name_fields_not_cut_as_circular', async () => {
   // docs/FIXED.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
   // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing
