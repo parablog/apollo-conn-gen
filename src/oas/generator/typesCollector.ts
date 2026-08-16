@@ -278,7 +278,13 @@ class PathsCollector {
     nodes.forEach((stack) => {
       const root = _.last(stack)!;
       T.traverse(root, (child) => {
-        if (T.isPropScalar(child) || (child instanceof PropArray && child.items instanceof Scalar)) {
+        // a list of lists of plain values is a leaf too — there is nothing below it to select, and
+        // the field vanished with the op when it was the only property. see docs/FIXED.md #96
+        //   e.g. (digitalocean) neighbor_ids: { type: array, items: { type: array, items: integer } }
+        const listOfValues = child instanceof PropArray && child.items instanceof Scalar;
+        const nestedListOfValues =
+          child instanceof PropArray && child.items instanceof Arr && child.items.itemsType instanceof Scalar;
+        if (T.isPropScalar(child) || listOfValues || nestedListOfValues) {
           newSelection.add(child.path());
         } else if (child instanceof PropEn) {
           // enum props are leaves too — without this, `>**` silently drops every enum field

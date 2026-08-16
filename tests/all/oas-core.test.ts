@@ -1346,14 +1346,22 @@ test('test_inline_array_wrapping_another_array_unwraps_to_the_real_element', asy
 test('test_genuine_array_of_arrays_stays_nested', async () => {
   // The guard for the test above: an explicit inner `type: array` is a real list of lists (docker's
   // `top`, one array of column values per process), NOT a wrapper — unwrapping it would publish a
-  // shape the service never sends. `processes` is dropped today for a separate reason (an array of
-  // arrays of plain values has no leaf to select), so what this pins is that it never appears
-  // flattened. Relaxing the unwrap test to accept `type: array` makes it appear, and fails here.
-  // see docs/FIXED.md #52
+  // shape the service never sends. see docs/FIXED.md #52; #96 made `processes` selectable at all.
   const schema = await runOasTest('nested-array-items.yaml', ['get:/matrix>**'], 2, 1);
   assert.ok(schema !== undefined);
   assert.ok(!/processes: \[String\]/.test(schema!), 'the matrix must not be flattened into one list');
+  assert.ok(/processes: \[\[String\]\]/.test(schema!), 'it is declared whole, one list inside the other (#96)');
   assert.ok(/titles: \[String\]/.test(schema!), 'the genuinely flat sibling is unaffected');
+});
+
+test('test_96_nested_list_of_values_under_a_property_is_a_leaf', async () => {
+  // #96: a list of lists of plain values had no leaf case in `>**`, so the field vanished — and
+  // digitalocean's droplet_neighbors_ids, where it is the only property, lost the whole op.
+  //   e.g. neighbor_ids: { type: array, items: { type: array, items: integer } }
+  const schema = await runOasTest('nested-list-of-values.yaml', ['get:/neighbors>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/neighborIds: \[\[Int\]\]/.test(schema!), 'the field is declared as a list of lists');
+  assert.ok(/neighborIds: neighbor_ids\b/.test(schema!), 'and selected whole, no block after it');
 });
 
 test('test_same_name_fields_not_cut_as_circular', async () => {

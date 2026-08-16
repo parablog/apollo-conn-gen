@@ -4885,3 +4885,56 @@ removed-and-kept field surfacing through an allOf would need the same lookup in 
 (`propOverrides`), `src/oas/nodes/obj.ts` (generate/select/dependencies). Fixture
 `cycle-cut-on-some-routes.yaml`, test `test_89_field_removed_on_any_route_is_removed_everywhere`.
 Supersedes #13's donation; see #10 for the cycle cut itself and #26 for the reachability walk.
+
+
+## 96 · A list of lists of plain values under a property has no leaf — ✅ Fixed
+**Symptom:** digitalocean's `get:/v2/reports/droplet_neighbors_ids` comes out empty and the op is
+dropped (GEN-EMPTY in the sweep). Ops with more properties keep composing but lose the field:
+docker's `get:/containers/{id}/top` loses `Processes`, digitalocean's bandwidth op loses `values`.
+
+**OAS** (digitalocean — the response's only property):
+```yaml
+neighbor_ids:
+  type: array
+  items:
+    type: array
+    items: { type: integer }
+  example: [[168671828, 168663509], [168671883, 168671750]]
+```
+
+**Example**:
+```graphql
+# before — no field, and with no other property the whole op went with it
+
+# after
+type V2ReportsDroplet_neighbors_idsResponse {
+  neighborIds: [[Int]]
+}
+# selection: neighborIds: neighbor_ids
+```
+
+**Cause:** `>**` walks the response and keeps the paths of what it can select. The list branch
+requires `items instanceof Scalar`; here `items` is an `Arr` (whose own items are the scalar), so
+no branch fires, no path is kept, and a field without a path is neither selected nor written.
+The leaf table, per position:
+
+| construct | under a property | at the response root |
+|---|---|---|
+| value | prop-scalar branch | #32 |
+| list of values | list branch | #47 |
+| map of values | #70 | #92 |
+| list of lists of values | **this fix** | no corpus example |
+
+**Fix:** the list branch also accepts a list whose items are a list of plain values. One level
+deep, matching every reproduced case; emission needed nothing (#59 already writes `[[Int]]`).
+
+**Not fixed here:** depth ≥ 3, and a list of lists as the whole response — no spec in the corpus
+produces either; the branch is one more `instanceof` away if one ever does.
+
+**AST** — none. The same nodes are built; one more shape counts as a leaf.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`). Fixture
+`nested-list-of-values.yaml`, test `test_96_nested_list_of_values_under_a_property_is_a_leaf`;
+`test_genuine_array_of_arrays_stays_nested` now sees docker's `processes: [[String]]` appear.
+See #47/#92 for the sibling axes and #59 for the emission.
+

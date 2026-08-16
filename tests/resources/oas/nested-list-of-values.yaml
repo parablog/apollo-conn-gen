@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info:
+  title: Nested list of values
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /neighbors:
+    get:
+      operationId: listNeighbors
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NeighborsResponse'
+components:
+  schemas:
+    # the only property is a list of lists of plain values, so losing the field loses the op
+    NeighborsResponse:
+      type: object
+      properties:
+        neighbor_ids:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
