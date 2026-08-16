@@ -1,8 +1,10 @@
 // Shared test setup: mute console noise and expose captureWarnings.
-// Imported first by every split test file so muting is in effect before tests run.
+// Every test file must load this with a bare `import './_setup.js';` — a named import whose
+// binding goes unused is dropped by the transpiler, and the muting with it (r4-errors leaked so).
 console.log = () => {};
 console.warn = () => {};
 console.error = () => {};
+console.info = () => {};
 
 // The suite globally no-ops console.warn (above). Deferred-is-loud cases temporarily install a
 // capturing stub and restore the original in a `finally` so the warnings are actually observable.

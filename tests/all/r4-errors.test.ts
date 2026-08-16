@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { OasGen } from '../../src/index.js';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
-import { captureErrors } from './_setup.js';
+import './_setup.js';
 
 // --- R4 (baseline): @connect(errors: { extensions }) carrying $status, opt-in + v0.2-gated ---
 

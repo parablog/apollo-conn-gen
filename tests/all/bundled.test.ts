@@ -5,6 +5,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import * as esbuild from 'esbuild';
 import { oasBasePath } from '../../src/tests/runners.js';
+import './_setup.js';
 
 // Every other test reads the source files as they are, so none of them sees what the browser build
 // does to the code. see docs/FIXED.md #53
