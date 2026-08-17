@@ -1523,8 +1523,8 @@ they cannot be the same-name/different-type case this targets.)
 overflow in `OASNormalize.convert()`). So no inline self-cycle ever reaches the generator: inline fields
 never falsely cut, and identity still guards the (unreachable-in-practice) self-alias.
 
-**Separate, still open:** a type whose *only* field is a *genuine* cycle still degrades to an empty type
-(e.g. an inline `{ back: $ref Self }`). That is the "never emit a fieldless type" concern, not this fix.
+**Separate — was still open, now fixed as #101:** a type whose *only* field is a *genuine* cycle
+degraded to an empty type (e.g. an inline `{ back: $ref Self }`); the field now reads as JSON.
 
 **Tests:** `tests/resources/oas/same-name-fields.yaml` (false positive, exercises both sites — fails
 before, composes after) and `cycles-by-route.yaml` (a genuine cycle per route, each still cut), both
@@ -5095,3 +5095,72 @@ inline `status` matching a scalar component `Status` still keeps its name (no ty
 `inline-wrapper-vs-component-input.yaml`, test
 `test_100_inline_wrapper_must_not_take_a_later_components_name`. See #12, #57, #63.
 
+
+## 101 · A type whose every field was removed prints a comment-only body — ✅ Fixed
+**Symptom:** two confluence mutations fail compose with `INVALID_GRAPHQL` because the SDL does not
+even parse (`Expected Name, found "}"`):
+- `post:/wiki/rest/api/content/{id}/version` — `type Contributors { # publishers … omitted }`
+- `put:/wiki/rest/api/content/{id}/child/attachment/{attachmentId}` — same shape as
+  `input ContributorsInput`
+
+**OAS** (confluence — the only field re-enters the history it hangs from):
+```yaml
+ContentHistory:
+  properties:
+    contributors: { $ref: '#/components/schemas/Contributors' }
+Contributors:
+  properties:
+    publishers: { $ref: '#/components/schemas/UsersUserKeys' }   # removed on every route
+```
+
+**Example**:
+```graphql
+# before — a body with no real field between the braces; GraphQL refuses to parse it
+contributors: Contributors
+type Contributors {
+  # publishers: UsersUserKeys - circular reference omitted
+}
+# selection:  contributors? { # publishers: circular reference omitted … }
+
+# after — the field reads whole, the definition is never written
+contributors: JSON
+# selection:  contributors?
+```
+
+**Cause:**
+- a removed field is still a prop (`Obj.visitProperties` stores the `PropCircRef`), so every emptiness
+  test read a non-empty map: `PropObj.getValue`'s #19 fallback, `needsBrackets`, `Obj.generate`'s
+  early return.
+- nothing asked "does any field print uncommented", after #89's removals included.
+- #36 had already recorded this exact residue as still open.
+
+**Fix:** one predicate, `T.everyFieldRemoved` — an object with fields where every one prints as a
+cycle comment, judged through `context.propOverrides` so #89 removals count. Three readers keep the
+triple in lockstep:
+- `PropObj.getValue` answers `JSON` (the #19 move: degrade at the field, never write the empty type),
+- `PropObj.select` drops the group — the field reads whole,
+- `PropObj.dependencies` answers nothing, so the #26 walk drops the type and everything only it
+  reached (confluence's `UsersUserKeys`),
+- `Obj.generate` returns before writing the definition, the belt to the reachability suspender.
+
+**Not folded in:**
+- `Composed`/`Union` members — they never consulted the overrides (#89's own scope-out); an
+  member with every field removed surfacing through an allOf needs that lookup in `comp.ts` first.
+- an object with every field removed as array items or a map value (`[Contributors]` would need `[JSON]`) — no
+  corpus example.
+- an object with every field removed as the whole response — it would reference an unwritten name; no corpus
+  example.
+- a hand-written narrow selection that picks only a mixed type's removed fields still prints a
+  comment-only body — unreachable under the full-subtree form.
+- same-id instances where one lost every field and another keeps one: the JSON reference no
+  longer feeds the #89 walk, so the kept twin would miss its removal — no reproducing fixture;
+  its own issue if one surfaces.
+
+**AST** — none. The same nodes are built; four readers answer differently for one shape.
+
+**Measured:** confluence mutations 63/65 -> 65/65; both ops compose. GET sweep untouched.
+
+**Refs:** `src/oas/nodes/typeUtils.ts` (`everyFieldRemoved`), `src/oas/nodes/propObj.ts`,
+`src/oas/nodes/obj.ts`. Fixture `only-field-in-a-cycle.yaml`, test
+`test_101_type_with_every_field_removed_becomes_json`. Closes #36's residue; see #10 for the removal, #19
+for the degrade convention, #26 for the walk, #89 for the removals.

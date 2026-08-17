@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: Only field in a cycle
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /history:
+    get:
+      operationId: getHistory
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/History'
+    post:
+      operationId: addHistory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/History'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/History'
+components:
+  schemas:
+    History:
+      type: object
+      properties:
+        contributors:
+          $ref: '#/components/schemas/Contributors'
+        createdDate:
+          type: string
+    # the only field re-enters History, so it is removed to break the loop and nothing real is
+    # left — as in confluence's ContentHistory.contributors -> Contributors { publishers }
+    Contributors:
+      type: object
+      properties:
+        publishers:
+          $ref: '#/components/schemas/History'

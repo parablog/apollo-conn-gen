@@ -337,8 +337,8 @@ step, and the test above fails if it does not), `Naming.sanitiseField`.
 ## 69 · Sibling names that collide after sanitising are written twice — ⬜ Open
 
 **Symptom:** `INVALID_GRAPHQL: Field prefsBackground already exists` (trello `post:/boards`,
-`put:/boards/{idBoard}`) and duplicate enum values (openfigi `post:/mapping`) — the last 3 ops of
-the mutation sweep's INVALID_GRAPHQL bucket.
+`put:/boards/{idBoard}`). openfigi's duplicate enum values moved to their own entry, #102 — a
+different mechanism (the spec repeats values; no sanitising involved).
 
 **OAS** (trello — the `boards` component carries both spellings of each pref side by side):
 ```yaml
@@ -347,9 +347,6 @@ boards:
     prefs/background: { type: string }
     prefs_background: { type: string }
 ```
-openfigi needs no sanitising at all — `MappingJob.stateCode` literally lists every `enum` value
-twice (`AC, AC, HI, HI, …`).
-
 **Example:**
 ```graphql
 input BoardsInput {
@@ -361,7 +358,6 @@ input BoardsInput {
 **Cause:**
 - Each field name sanitises on its own (`prefs/background` and `prefs_background` both ->
   `prefsBackground`); nothing compares the result against sibling names before writing.
-- Enum values are written as listed — a spec that repeats a value writes it twice.
 - #61 is the same missing check seen from the other direction (`@type` vs `type`).
 - A fix that renames or drops one twin must keep the body mapping in agreement — today it writes
   `prefs_background: prefsBackground` and the `prefs/…` twin against the same field name.
@@ -538,3 +534,31 @@ items:
 
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema` object branch), fixture `slack.yaml`
 (`get:/reactions.get`). See #24 for the other slack empties, #52 for the same artifact under arrays.
+
+
+## 102 · An enum that lists a value twice writes it twice — 📋 Noted
+**Symptom:** openfigi `post:/mapping` fails compose:
+`INVALID_GRAPHQL` on `enum MappingJobStateCode` — 16 values appear twice.
+
+**OAS** (openfigi — the spec itself repeats the values):
+```yaml
+stateCode:
+  enum: [AB, AC, AC, HI, HI, ME, ME, …]
+```
+
+**Example:**
+```graphql
+enum MappingJobStateCode {
+  AB
+  AC
+  AC   # written as listed — invalid
+}
+```
+
+**Cause:** enum values are written as the spec lists them; nothing removes repeats.
+
+**Fix (not done):** drop repeated values where the enum is read (`src/oas/nodes/en.ts`), keeping
+first occurrence order. Split out of #69, whose trello half is a different mechanism (sibling
+names colliding after sanitising).
+
+**Refs:** `src/oas/nodes/en.ts` (`visit`/`generate`), fixture `openfigi.json` (`post:/mapping`).

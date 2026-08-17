@@ -1438,6 +1438,19 @@ test('test_89_field_removed_on_any_route_is_removed_everywhere', async () => {
   assert.ok(/\btitle\b/.test(schema!) && /\bnote\b/.test(schema!), 'and selected');
 });
 
+test('test_101_type_with_every_field_removed_becomes_json', async () => {
+  // #101: a type whose every field was removed printed nothing real between its braces, which does
+  // not parse — confluence post:…/{id}/version and put:…/child/attachment/{attachmentId}. The field
+  // is now free-form JSON, the selection takes it whole, and the definition is never written.
+  const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/history>**', 'post:/history>**'], 2, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bcontributors: JSON\b/.test(schema!), 'the field reads as free-form JSON');
+  assert.ok(!/^type Contributors/m.test(schema!), 'no comment-only type is written');
+  assert.ok(!/^input ContributorsInput/m.test(schema!), 'no comment-only input is written');
+  assert.ok(!/contributors\?? \{/.test(schema!), 'the selection opens no group for it');
+  assert.ok(/^\s+contributors\??$/m.test(schema!), 'and still takes the field');
+});
+
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
   // emitting `id: !`); coerce it to String. see docs/FIXED.md #11. runOasTest composes via rover.

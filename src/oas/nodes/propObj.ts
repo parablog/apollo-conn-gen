@@ -1,4 +1,4 @@
-import { IType, Obj, Union, Prop } from './internal.js';
+import { IType, Obj, Union, Prop, T } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
@@ -57,11 +57,16 @@ export class PropObj extends Prop {
     // compose for now.
     if (_.isEmpty(this.obj?.props)) return 'JSON';
 
+    // every field of the target was removed: no type is written for it, so the field is free-form
+    // JSON. e.g. (confluence) ContentHistory's contributors: { $ref: Contributors } -> JSON  #101
+    if (T.everyFieldRemoved(this.obj, context)) return 'JSON';
+
     return Naming.genTypeName(this.obj!.name!) + (this.obj as Obj).nameSuffix();
   }
 
-  dependencies(): IType[] {
-    return [this.obj];
+  dependencies(context: OasContext): IType[] {
+    // a field written as JSON points at no type, so it keeps nothing reachable (#26). #101
+    return T.everyFieldRemoved(this.obj, context) ? [] : [this.obj];
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
@@ -75,16 +80,22 @@ export class PropObj extends Prop {
       writer.write('?');
     }
 
-    if (this.needsBrackets(this.obj!)) {
+    // a target with every field removed is JSON: the value is taken whole, no block opens. #101
+    //   e.g. (confluence) `contributors?` alone, not `contributors? { # publishers … omitted }`
+    const wholeValue = T.everyFieldRemoved(this.obj, context);
+    const brackets = this.needsBrackets(this.obj!) && !wholeValue;
+    if (brackets) {
       writer.write(' {').write('\n');
       context.enter(this);
     }
 
-    for (const child of this.children) {
-      child.select(context, writer, selection);
+    if (!wholeValue) {
+      for (const child of this.children) {
+        child.select(context, writer, selection);
+      }
     }
 
-    if (this.needsBrackets(this.obj!)) {
+    if (brackets) {
       context.leave(this);
       writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
     }

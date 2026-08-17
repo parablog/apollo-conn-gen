@@ -76,6 +76,12 @@ export class Obj extends Type {
       return;
     }
 
+    // a type with every field removed would print nothing real between its braces, which does
+    // not parse; its references are JSON (propObj), so nothing points here. see docs/FIXED.md #101
+    //   e.g. (confluence) type Contributors { # publishers: … - circular reference omitted }
+    if (T.everyFieldRemoved(this, context)) {
+      return;
+    }
 
     context.enter(this);
     trace(context, '-> [obj::generate]', `-> in: ${this.name}`);

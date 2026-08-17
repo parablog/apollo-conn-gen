@@ -11,6 +11,7 @@ import {
   Prop,
   PropArray,
   PropComp,
+  PropCircRef,
   PropEn,
   PropMap,
   PropObj,
@@ -37,6 +38,17 @@ export class T {
       T.isComposedEmpty(type) ||
       T.isScalarArray(type)
     );
+  }
+  // True when every field of the type was removed (to break a loop, #10, or on every route, #89):
+  // the written body would hold only comments, which GraphQL refuses to parse. see docs/FIXED.md #101
+  //   e.g. (confluence) Contributors: { properties: { publishers: { $ref: UsersUserKeys } } }
+  //        -> publishers loops back and is removed on every route; no field is left
+  public static everyFieldRemoved(type: IType, context: OasContext): boolean {
+    if (!(type instanceof Obj) || type.props.size === 0) {
+      return false;
+    }
+    const overrides = context.propOverrides.get(type.id);
+    return Array.from(type.props.values()).every((prop) => (overrides?.get(prop.name) ?? prop) instanceof PropCircRef);
   }
 
   // Traverses a Composed to check for props. Useful when consolidate has not been invoked.
