@@ -1451,6 +1451,18 @@ test('test_101_type_with_every_field_removed_becomes_json', async () => {
   assert.ok(/^\s+contributors\??$/m.test(schema!), 'and still takes the field');
 });
 
+test('test_102_enum_value_listed_twice_is_written_once', async () => {
+  // #102: openfigi's stateCode lists 16 values twice and the enum wrote them as listed —
+  // `INVALID_GRAPHQL: duplicate value`. A repeated value now keeps its first place only.
+  const schema = await runOasTest('duplicate-enum-values.yaml', ['get:/jobs>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  const block = schema!.match(/enum JobStateCode \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(block !== '', 'the enum is written');
+  assert.strictEqual((block.match(/\bactive\b/g) || []).length, 1, 'a repeated value appears once');
+  assert.strictEqual((block.match(/\bpending\b/g) || []).length, 1, 'in its first position');
+  assert.ok(/pending[\s\S]*active[\s\S]*done/.test(block), 'listed order is kept');
+});
+
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
   // emitting `id: !`); coerce it to String. see docs/FIXED.md #11. runOasTest composes via rover.

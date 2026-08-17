@@ -5164,3 +5164,37 @@ triple in lockstep:
 `src/oas/nodes/obj.ts`. Fixture `only-field-in-a-cycle.yaml`, test
 `test_101_type_with_every_field_removed_becomes_json`. Closes #36's residue; see #10 for the removal, #19
 for the degrade convention, #26 for the walk, #89 for the removals.
+
+
+## 102 · An enum that lists a value twice writes it twice — ✅ Fixed
+**Symptom:** openfigi `post:/mapping` fails compose:
+`INVALID_GRAPHQL` on `enum MappingJobStateCode` — 16 values appear twice.
+
+**OAS** (openfigi — the spec itself repeats the values):
+```yaml
+stateCode:
+  type: string
+  enum: [AB, AC, AC, HI, HI, ME, ME, …]
+```
+
+**Example:**
+```graphql
+# before — written as listed, invalid
+enum MappingJobStateCode { AB, AC, AC, HI, HI }
+
+# after — each value once, first place kept
+enum MappingJobStateCode { AB, AC, HI }
+```
+
+**Cause:** enum values were written exactly as the spec lists them; nothing removed repeats.
+
+**Fix:** the `En` constructor keeps the first occurrence of each value — one place covers every
+way an enum is built (component, inline, param).
+
+**AST** — none. The same node is built with the repeats gone from `items`.
+
+**Measured:** openfigi mutations 0/1 -> 1/1; nothing else in the corpus repeats an enum value.
+
+**Refs:** `src/oas/nodes/en.ts` (constructor). Fixture `duplicate-enum-values.yaml`, test
+`test_102_enum_value_listed_twice_is_written_once`. Split from #69, whose trello half is a
+different mechanism (sibling names colliding after sanitising).

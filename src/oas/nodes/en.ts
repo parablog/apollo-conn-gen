@@ -14,6 +14,9 @@ export class En extends Type {
     public items: string[] = [],
   ) {
     super(parent, name);
+    // a spec that lists a value twice must not write it twice; the first keeps its place.
+    // e.g. (openfigi) stateCode: { enum: [AB, AC, AC, HI, HI, …] }  see docs/FIXED.md #102
+    this.items = Array.from(new Set(items));
   }
 
   get id(): string {

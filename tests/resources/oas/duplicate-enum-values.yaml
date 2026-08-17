@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info:
+  title: Duplicate enum values
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /jobs:
+    get:
+      operationId: listJobs
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+components:
+  schemas:
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        # the list repeats two values, as openfigi's MappingJob.stateCode does
+        stateCode:
+          type: string
+          enum: [pending, active, active, done, pending]

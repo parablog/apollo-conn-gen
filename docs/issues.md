@@ -534,31 +534,3 @@ items:
 
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema` object branch), fixture `slack.yaml`
 (`get:/reactions.get`). See #24 for the other slack empties, #52 for the same artifact under arrays.
-
-
-## 102 · An enum that lists a value twice writes it twice — 📋 Noted
-**Symptom:** openfigi `post:/mapping` fails compose:
-`INVALID_GRAPHQL` on `enum MappingJobStateCode` — 16 values appear twice.
-
-**OAS** (openfigi — the spec itself repeats the values):
-```yaml
-stateCode:
-  enum: [AB, AC, AC, HI, HI, ME, ME, …]
-```
-
-**Example:**
-```graphql
-enum MappingJobStateCode {
-  AB
-  AC
-  AC   # written as listed — invalid
-}
-```
-
-**Cause:** enum values are written as the spec lists them; nothing removes repeats.
-
-**Fix (not done):** drop repeated values where the enum is read (`src/oas/nodes/en.ts`), keeping
-first occurrence order. Split out of #69, whose trello half is a different mechanism (sibling
-names colliding after sanitising).
-
-**Refs:** `src/oas/nodes/en.ts` (`visit`/`generate`), fixture `openfigi.json` (`post:/mapping`).
