@@ -5401,3 +5401,63 @@ selection composes clean (`test_73_curated_multi_op_stripe_selection_composes`, 
 test `test_104_second_inline_oneof_body_renames_instead_of_duplicating`. Latent siblings, not
 biting in the corpus: a Composed allOf body in the same position (comp.ts renames only under a
 Prop). See #100 for the component-name half of this family.
+
+
+## 107 · Two maps' inline value types share one name, and one selection names missing fields — ✅ Fixed
+**Symptom:** the whole-spec github selection composed past #103/#104 and failed on the one
+survivor: `INTERNAL: … Object type `inlineFilesEntry` has no field `content``.
+
+**OAS** (github — two gist models carry a `files` map whose inline value shapes differ):
+```yaml
+base-gist:
+  properties:
+    files:
+      type: object
+      additionalProperties:
+        type: object
+        properties: { filename: …, type: …, language: …, raw_url: …, size: … }
+gist-simple:
+  properties:
+    files:
+      type: object
+      additionalProperties:
+        type: object
+        properties: { filename: …, …, truncated: …, content: … }
+```
+
+**Example:**
+```graphql
+# before — one value type for both shapes; gist-simple's selection asks for content on it
+type inlineFilesEntry { filename … size }        # base-gist's 5 fields, the only definition
+type GistSimpleFilesEntry { key: String, value: inlineFilesEntry }
+
+# after — the value follows its wrapper's resolved name
+type inlineGistSimpleFilesEntry { filename … content truncated }
+type GistSimpleFilesEntry { key: String, value: inlineGistSimpleFilesEntry }
+```
+
+**Cause:**
+- `Map.visit` built the value before its own #78 collision-rename, so the value was baptised
+  `[inline:FilesEntry]` while the wrapper still held the pre-rename name.
+- `[inline:…]` names are exempt from every rename check (#9's premise: never emitted standalone —
+  true for allOf members, false for map values, which are real emitted types).
+- ids are name-derived, so both value objects shared `obj:type:[inline:FilesEntry]` and the
+  collector kept whichever it reached first.
+
+**Fix:** `Map.visit` resolves the wrapper's name first and builds the value after, so the value's
+minted `[inline:<map name>]` carries the resolved wrapper name — definition, `value:` reference and
+selection split together, all read from the same instance. `isExemptFromRename` is untouched: the
+allOf-member exemption keeps its true premise, and Composed-member selection paths don't churn.
+
+**AST** — the same nodes are built; the value under a renamed wrapper mints a different name (and
+so a different id) than before.
+
+**Measured:** full github (845 paths) composes with zero errors — the whole-spec run is clean for
+the first time (84 -> 1 -> 0 across #103/#104/#107). No corpus name is pinned on a map-value
+inline type; per-op runs are unaffected unless the wrapper renames, which was the broken case.
+
+**Refs:** `src/oas/nodes/map.ts` (`visit` ordering), `src/oas/nodes/obj.ts` (`updateName`
+placeholder branch), `src/oas/nodes/typeUtils.ts` (`isExemptFromRename`, unchanged). Fixture
+`map-inline-value-collision.yaml`, test `test_107_inline_map_values_split_with_their_wrappers`.
+See #78 for the wrapper half (its `$ref`-valued fixture never hit this), #9 for the exemption's
+original premise, #95 for the mirror case (a wrapper borrowing a name).

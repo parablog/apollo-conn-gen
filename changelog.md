@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   selection composes without duplicate fields. Issue #103.
 - A `oneOf` request body no longer repeats an object body's input name — github's gist update
   writes `BInputInput` beside `InputInput` instead of defining it twice. Issue #104.
+- A dictionary's inline value type now follows its renamed container — github's two gist models
+  each keep their own `files` values, and the whole github spec composes clean. Issue #107.
 
 ## [0.23.0]
 

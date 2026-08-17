@@ -1,6 +1,5 @@
-# Two inline request bodies in one selection, as github ships them: most write ops carry an
-# inline object body, but some (e.g. patch:/gists/{gist_id}) declare a oneOf — the object body
-# and the union body both wrote `input InputInput`.
+# An inline object body and a oneOf body in one selection, as github's write ops and
+# patch:/gists/{gist_id} ship them — both wrote `input InputInput`.
 openapi: 3.0.3
 info:
   title: Duplicate inline body inputs

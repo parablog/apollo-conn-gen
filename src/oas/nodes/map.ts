@@ -33,9 +33,6 @@ export class Map extends Type {
     context.enter(this);
     trace(context, '-> [map:visit]', 'in ' + this.name);
 
-    this.visitAdditionalProperties(context);
-    this.visited = true;
-
     // two maps can share a field name but hold different values — the second one takes a new name (#9).
     // e.g. (stripe) coupon and restrictions both have a currency_options map  #78
     if (this.name) {
@@ -47,6 +44,12 @@ export class Map extends Type {
         context.store(this.name, this);
       }
     }
+
+    // resolve the name first: an inline value is named `[inline:<map name>]`, so two same-named
+    // maps over different inline shapes must split before the value is built. see docs/FIXED.md #107
+    // e.g. (github) base-gist and gist-simple both hold a files map with different value fields
+    this.visitAdditionalProperties(context);
+    this.visited = true;
 
     trace(context, '<- [map:visit]', 'out ' + this.name);
     context.leave(this);

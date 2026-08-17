@@ -230,9 +230,8 @@ test('test_69_sibling_names_that_clean_to_one_field_write_once', async () => {
 
 
 test('test_103_ref_and_undeclared_path_params_take_positional_by_suffixes', async () => {
-  // #103: github declares path params as $refs, which the By-suffix harvesting never resolved —
-  // `get:/gists` and `get:/gists/{gist_id}` both wrote `Query.gists` and a full-spec selection
-  // failed composition with 83 duplicate root fields. Each token now names itself, positionally.
+  // #103: github's $ref path params never reached the By-suffix, so `get:/gists` and
+  // `get:/gists/{gist_id}` both wrote `Query.gists`. Each token now names itself, positionally.
   const schema = await runOasTest(
     'root-field-name-collisions.yaml',
     [
@@ -263,9 +262,8 @@ test('test_103_ref_and_undeclared_path_params_take_positional_by_suffixes', asyn
 });
 
 test('test_104_second_inline_oneof_body_renames_instead_of_duplicating', async () => {
-  // #104: an inline object body and an inline oneOf body are both named `Input`; Obj guards the
-  // name store but Union did not, so the pair emitted `input InputInput` twice. The union now
-  // takes the same numbered/qualified name a second object body already gets.
+  // #104: an object body and a oneOf body are both named `Input`, and the pair wrote
+  // `input InputInput` twice — the union now renames, as a second object body always did.
   const schema = await runOasTest('duplicate-inline-body-inputs.yaml', ['post:/docs>**', 'post:/notes>**'], 2, 3);
   assert.ok(schema !== undefined);
   assert.strictEqual((schema!.match(/^input InputInput/gm) || []).length, 1, 'InputInput defined once');

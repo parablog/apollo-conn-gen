@@ -1994,6 +1994,24 @@ test('test_78_same_named_maps_over_different_values_split', async () => {
   );
 });
 
+test('test_107_inline_map_values_split_with_their_wrappers', async () => {
+  // #107: both gist models' files maps minted one [inline:FilesEntry] value, so one shape shadowed
+  // the other. The value now follows its wrapper's #78-resolved name. see docs/FIXED.md #107
+  const schema = await runOasTest('map-inline-value-collision.yaml', ['get:/gists>**', 'get:/starred>**'], 2, 6);
+  assert.ok(schema !== undefined);
+  assert.ok(/type inlineFilesEntry \{/.test(schema!), 'the first value keeps the plain name');
+  assert.ok(/type inlineStarredGistFilesEntry \{/.test(schema!), 'the second follows its renamed wrapper');
+  assert.ok(/type FilesEntry \{[^}]*value: inlineFilesEntry/.test(schema!), 'first wrapper references its own value');
+  assert.ok(
+    /type StarredGistFilesEntry \{[^}]*value: inlineStarredGistFilesEntry/.test(schema!),
+    'second wrapper references its own value',
+  );
+  assert.ok(/content/.test(schema!) && /truncated/.test(schema!), 'the shadowed fields are back');
+  assert.ok(!schema!.includes('[inline:'), 'internal inline placeholder must not leak into output');
+  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
+});
+
 test('test_80_union_of_unions_merges_member_fields', async () => {
   // #80: a union whose members are themselves unions merged to an empty type and an empty
   // selection. The members' members now contribute their fields to the merge.
@@ -2180,15 +2198,8 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
 });
 
 test('test_73_curated_multi_op_stripe_selection_composes', async () => {
-  // The real, production 34-operation selection graphos-service-factory/service-catalog/stripe
-  // /manifest.yaml curates from Stripe's spec (pinned here as stripe-curated.yaml, since gen's
-  // own stripe.json is a newer, incompatible snapshot — 2026-07-29 vs this fixture's 2026-06-24).
-  // Composing it failed with 1161 CONNECTORS_UNRESOLVED_FIELD errors before identical union twins
-  // learned to converge on one name (sameSchemaAs, #73): ten ops reaching one anyOf minted ten
-  // structurally-identical copies (SubscriptionItemDiscountsUnion..Union10) and only the unsuffixed
-  // one kept a connector. See docs/issues.md #73.
-  // forceRover: the local patched composer (FIXED.md #16) doesn't reproduce this — only stock
-  // rover, what a real router actually uses, catches it.
+  // stripe's real 34-op production selection failed with 1161 unresolved fields until identical
+  // union twins converged on one name. see docs/issues.md #73 — and forceRover: only stock rover catches it
   const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
   // 365: the 40 numbered twin copies across 9 name families collapse into their canonical types
   const schema = await runOasTest('stripe-curated.yaml', selections, 587, 365, {

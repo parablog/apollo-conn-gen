@@ -1,0 +1,61 @@
+# Two same-named maps with different INLINE value shapes, as github's base-gist and gist-simple
+# `files` maps — the wrappers split (#78) but both values were named [inline:FilesEntry].
+openapi: 3.0.3
+info:
+  title: Map inline value collision
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /gists:
+    get:
+      operationId: listGists
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gist'
+  /starred:
+    get:
+      operationId: listStarred
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarredGist'
+components:
+  schemas:
+    Gist:
+      type: object
+      properties:
+        id:
+          type: string
+        files:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              filename:
+                type: string
+              size:
+                type: integer
+    StarredGist:
+      type: object
+      properties:
+        id:
+          type: string
+        files:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              filename:
+                type: string
+              content:
+                type: string
+              truncated:
+                type: boolean
