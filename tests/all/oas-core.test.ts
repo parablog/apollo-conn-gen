@@ -1113,18 +1113,20 @@ test('test_wrapper_named_after_contained_component_renames_both_owners', async (
   assert.ok(/\bgroup: MembersGroup\b/.test(schema!), 'members selection follows its own rename');
 });
 
-test('test_inline_not_renamed_without_contained_same_named_ref', async () => {
-  // The check is on the wrapper's own contents, not just a matching name: `status` matches a scalar
-  // component (which emits no type) and `label` matches a component this op never reaches — neither
-  // contains a ref to itself, so neither is renamed. see docs/FIXED.md #37.
+test('test_100_scalar_component_keeps_name_object_component_triggers_rename', async () => {
+  // `status` matches scalar component `Status` (no type written) — keeps its name (#37).
+  // `label` matches object component `Label` — renamed even though this op doesn't reach it (#100).
   const schema = await runOasTest('inline-wrapper-vs-component.yaml', ['get:/widget>**'], 3, 3);
   assert.ok(schema !== undefined);
   assert.ok(
     (schema!.match(/^type Status /gm) || []).length === 1,
-    'inline status keeps its name (scalar is not an occupant)',
+    'inline status keeps its name (scalar component writes no type)',
   );
-  assert.ok((schema!.match(/^type Label /gm) || []).length === 1, 'inline label keeps its name (component unreached)');
-  assert.ok(/\bstatus: Status\b/.test(schema!) && /\blabel: Label\b/.test(schema!), 'references keep the bare names');
+  assert.ok(/\bstatus: Status\b/.test(schema!), 'status field references the kept name');
+  assert.ok(!/^type Label /m.test(schema!), 'inline label no longer uses the component name');
+  assert.ok(/Label/.test(schema!), 'the renamed label type still exists in the schema');
+  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions');
 });
 
 test('test_same_key_wrapper_co_emits_safely_across_input_output', async () => {
@@ -1846,6 +1848,26 @@ test('test_63_inline_wrapper_must_not_steal_component_name', async () => {
   const typeNames = [...schema!.matchAll(/^type (\w+)/gm)].map((m) => m[1]);
   const duplicates = [...new Set(typeNames.filter((n, i, a) => a.indexOf(n) !== i))];
   assert.deepEqual(duplicates, [], 'no type is defined twice');
+});
+
+test('test_100_inline_wrapper_must_not_take_a_later_components_name', async () => {
+  // #100: inline `group` and component `Group` both write `GroupInput` — duplicate type.
+  // collidesWithReservedComponentName is the only trigger that catches this shape.
+  const check = (schema: string, label: string) => {
+    const defs = schema.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+    assert.strictEqual(new Set(defs).size, defs.length, `${label}: no duplicates: ${defs.join(', ')}`);
+    assert.ok(/^input GroupInput \{/m.test(schema), `${label}: component keeps its name`);
+    assert.ok(/^input SubjectsGroupInput \{/m.test(schema), `${label}: inline wrapper is container-qualified`);
+    assert.ok(/\bgroup: SubjectsGroupInput\b/.test(schema), `${label}: field references renamed wrapper`);
+  };
+
+  // inline `group` visits before component `Group` (body tree only)
+  const alone = await runOasTest('inline-wrapper-vs-component-input.yaml', ['post:/space>**'], 2, 9);
+  check(alone!, 'inline-first');
+
+  // component `Group` visits first (get:/groups brings it in before the body walk)
+  const both = await runOasTest('inline-wrapper-vs-component-input.yaml', ['get:/groups>**', 'post:/space>**'], 2, 10);
+  check(both!, 'component-first');
 });
 
 test('test_67_allof_decorated_array_body_keeps_the_field', async () => {

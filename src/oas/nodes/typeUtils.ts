@@ -300,16 +300,41 @@ export class T {
     return !!occupant && occupant.constructor !== node.constructor;
   }
 
+  // e.g. (confluence) inline `group` writes `GroupInput`, same as component `Group`. #100
+  public static collidesWithReservedComponentName(node: IType, context: OasContext): boolean {
+    if (!(node instanceof Obj) || T.isExemptFromRename(node)) {
+      return false;
+    }
+    const emitted = Naming.genTypeName(node.name);
+    if (!T.reservedComponentNames(context).has(emitted)) return false;
+    // a scalar component writes no type — no collision. e.g. (inline-wrapper-vs-component) `Status`
+    const schemas = (context.resolvePointer('#/components/schemas') as Record<string, SchemaObject>) ?? {};
+    const component = Object.entries(schemas).find(([name]) => Naming.genTypeName(name) === emitted);
+    return component != null && T.emitsTypeDefinition(component[1]);
+  }
+
+  // ponytail: rebuilds on every call; cache if profiling shows it matters
+  // e.g. (confluence) component schemas `Group`, `GroupCreate` -> reserved `Group`, `GroupCreate`
+  private static reservedComponentNames(context: OasContext): Set<string> {
+    const schemas = context.resolvePointer('#/components/schemas');
+    return new Set(Object.keys((schemas as Record<string, unknown>) ?? {}).map(Naming.genTypeName));
+  }
+
+  // e.g. (inline-wrapper-vs-component) `Status: { type: string }` -> false, `Group: { properties }` -> true
+  private static emitsTypeDefinition(schema: SchemaObject | ReferenceObject): boolean {
+    if ('$ref' in schema) return true;
+    const raw = schema as SchemaObject;
+    const hasStructure = raw.type === 'object' || raw.properties || raw.allOf || raw.oneOf || raw.anyOf;
+    const hasMapShape = raw.additionalProperties && typeof raw.additionalProperties === 'object';
+    return !!(hasStructure || raw.enum || hasMapShape);
+  }
+
   // Qualify a colliding inline name with its container, bumping `2`, `3`… until free.
   // e.g. (googlebooks.yaml) `listPrice` under `offersItem` -> `OffersItemListPrice`. Both parts go
   // through genTypeName so the result is always a valid identifier. see docs/FIXED.md #9
   public static resolveNameConflict(node: IType, context: OasContext): void {
     const base = Naming.genTypeName(T.findNonPropParent(node.parent!).name) + Naming.genTypeName(node.name);
-    // a made-up name must also stay off component names, visited or not — the component cannot
-    // rename itself, so a wrapper that mints its name first steals it and `type X` emits twice.
-    // e.g. (confluence) `Content.body` minted `ContentBody` before the component was reached. #57 #63
-    const schemas = context.resolvePointer('#/components/schemas');
-    const reserved = new Set(Object.keys((schemas as Record<string, unknown>) ?? {}).map(Naming.genTypeName));
+    const reserved = T.reservedComponentNames(context);
     let candidate = base;
     for (let n = 2; context.types.has(candidate) || reserved.has(candidate); n++) {
       if (context.types.has(candidate) && T.canConvergeOn(node, context.types.get(candidate), candidate)) {

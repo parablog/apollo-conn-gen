@@ -5022,3 +5022,76 @@ separate cleanup.
 
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema`). Fixture `dangling-ref.yaml`, test
 `test_99_dangling_ref_response_degrades_to_json`. See #41 for the sibling `servers[].url` slice.
+
+## 100 · Inline wrapper writes a component's type name in input position — ✅ Fixed
+**Symptom:** `the type 'GroupInput' is defined multiple times in the schema` on
+confluence `post:/wiki/rest/api/space` and `post:/wiki/rest/api/space/_private`.
+
+**OAS** (confluence — `SpacePermissionCreate.subjects`, the body's permission entries):
+```yaml
+# SpaceCreate.permissions[]: { $ref: '#/components/schemas/SpacePermissionCreate' }
+SpacePermissionCreate:
+  properties:
+    subjects:
+      properties:
+        group:                       # inline wrapper, writes GroupInput
+          properties:
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/GroupCreate'   # NOT Group
+            size: { type: integer }
+        user:                        # sibling, holds $ref User — #12 catches it
+          properties:
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+```
+The `user` wrapper renames correctly (`SubjectsUserInput`) because it contains `$ref User` and
+`collidesWithContainedComponent` fires. The `group` wrapper holds `$ref GroupCreate` — a different
+name — so neither trigger fires, `group` keeps its name. Component `Group` is reached later through
+`User → personalSpace → Space → permissions → SpacePermission → subjects.group.results → Group`,
+and both write `input GroupInput`.
+
+**Example**:
+```graphql
+# before — duplicate GroupInput, INVALID_GRAPHQL
+input GroupInput { … }  # from inline `group`
+input GroupInput { … }  # from component Group
+
+# after — the wrapper is container-qualified
+input SubjectsGroupInput { size: Int, results: [GroupCreateInput] }
+input GroupInput { id: String, name: String }
+```
+
+**AST** — only the inline `group` node is renamed; the component keeps its name:
+```
+before   post:/space > body:b > … > obj:input:group         (name = group)
+after    post:/space > body:b > … > obj:input:SubjectsGroup  (name = SubjectsGroup)
+```
+
+**Cause:** `Obj.visit` had two rename triggers: `collidesWithStoredType` (checks `context.types`)
+and `collidesWithContainedComponent` (checks refs the wrapper itself holds). Neither consults the
+component-schema namespace when the inline would write the same type name as a component it doesn't
+contain. The `#57` reservation set inside `resolveNameConflict` only constrained the bump loop after
+a trigger had already fired.
+
+**Fix:** a third trigger, `T.collidesWithReservedComponentName`, checks the inline's type name
+against the component-schema namespace. Only components that write a type (objects, composed, enums)
+count — scalars write nothing and cannot collide. The reservation set is extracted into
+`reservedComponentNames`, reused by both the trigger and the bump loop.
+
+**Measured:** whole-op confluence generation before and after differs by exactly two lines — the
+`group:` field's type and the wrapper's definition line (`GroupInput` -> `SubjectsGroupInput`) —
+and the result composes. Nothing else in the 4819-line SDL moves.
+
+`test_inline_not_renamed_without_contained_same_named_ref` was renamed and updated: inline `label`
+matching an object component `Label` is now renamed (it would collide in a multi-op selection);
+inline `status` matching a scalar component `Status` still keeps its name (no type written).
+
+**Refs:** `src/oas/nodes/typeUtils.ts` (`collidesWithReservedComponentName`, `reservedComponentNames`,
+`emitsTypeDefinition`), `src/oas/nodes/obj.ts` (visit). Fixture
+`inline-wrapper-vs-component-input.yaml`, test
+`test_100_inline_wrapper_must_not_take_a_later_components_name`. See #12, #57, #63.
+

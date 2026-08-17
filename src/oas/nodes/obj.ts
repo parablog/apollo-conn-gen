@@ -46,9 +46,11 @@ export class Obj extends Type {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
-    // rename this inline if another shape already owns its name (#9), or it is a wrapper named after the
-    // component it lists (`group` over [Group]) — otherwise the two emit one clashing type. see #12, #37
-    if (T.collidesWithStoredType(this, context) || T.collidesWithContainedComponent(this)) {
+    const collides =
+      T.collidesWithStoredType(this, context) ||
+      T.collidesWithContainedComponent(this) ||
+      T.collidesWithReservedComponentName(this, context);
+    if (collides) {
       T.resolveNameConflict(this, context);
     }
 
@@ -73,6 +75,7 @@ export class Obj extends Type {
       writer.write(Naming.genTypeName(this.name));
       return;
     }
+
 
     context.enter(this);
     trace(context, '-> [obj::generate]', `-> in: ${this.name}`);

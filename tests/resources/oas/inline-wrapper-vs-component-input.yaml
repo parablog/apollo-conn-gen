@@ -1,0 +1,95 @@
+openapi: 3.0.0
+info:
+  title: Inline wrapper writes a component's type name in input position (#100)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # The body's `subjects.group` wrapper writes `GroupInput` — same as component `Group`. The wrapper
+  # holds `GroupCreate` (not `Group`), so collidesWithContainedComponent never fires. #100
+  /space:
+    post:
+      operationId: createSpace
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceCreate'
+      responses:
+        '200':
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+  # Returns Group directly — when selected before /space, component `Group` visits first (the
+  # reverse order). The fix must work regardless of which visits first.
+  /groups:
+    get:
+      operationId: listGroups
+      responses:
+        '200':
+          description: groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+components:
+  schemas:
+    SpaceCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: object
+            properties:
+              subjects:
+                type: object
+                properties:
+                  group:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/GroupCreate'
+                      size:
+                        type: integer
+                  user:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      size:
+                        type: integer
+    Group:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    GroupCreate:
+      type: object
+      properties:
+        name:
+          type: string
+    User:
+      type: object
+      properties:
+        accountId:
+          type: string
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/Group'
