@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.23.0]
+
+### Added
+
+- `--service-prefix acme` namespaces a connector: every name it generates carries the service's,
+  so `type Widget` becomes `type Acme_Widget` and the query field `widgets` becomes
+  `acme_widgets`. Several connectors can then live in one graph without sharing names.
+
+### Fixed
+
+- An operation on the API root, `/`, now has a field name — github's `GET /` becomes `metaRoot`,
+  taken from its operationId. Issue #88.
+- A response that is a dictionary now answers a list of key/value entries, so confluence's
+  `content/{id}/restriction/byOperation` returns its restrictions. Issue #90.
+- A dictionary of plain values as the whole response is no longer dropped, so github's `/emojis`
+  and `/languages` return their entries. Issue #92.
+- A request body that is either an object or a list of the same items keeps its argument defined,
+  so confluence's two `content/{id}/restriction` mutations can send their update. Issue #94.
+- A field that had to be removed in one place to stop a loop is now removed everywhere it
+  appears, so confluence's three relation reads return their results. Issue #89.
+- A field holding a list of lists of plain values is no longer dropped, so digitalocean's
+  `droplet_neighbors_ids` returns its lists and docker's `top` sends its `Processes`. Issue #96.
+- A made-up type such as common-room's `type: url`, or a `$ref` that points nowhere, no longer
+  stops the whole generation — the field is kept as free-form `JSON`. Issues #98, #99.
+- An inline object that would take a component schema's name now gets its own, so confluence's
+  two space mutations can create spaces. Issue #100.
+- A type left with no fields after loop-breaking is kept as free-form `JSON` instead of an empty
+  definition, so confluence's version and attachment mutations work. Issue #101.
+- An enum value the spec lists twice is written once, so openfigi's `post:/mapping` works.
+  Issue #102.
+- Two sibling fields whose names clean to the same one — trello's `prefs/background` and
+  `prefs_background` — are written once, so `post:/boards` and `put:/boards/{idBoard}` work.
+  Issue #69.
+- slack's `reactions.get` answered nothing; its response — an object with a stray `items` level
+  around the real shape — now reads that shape and returns the reactions. Issue #97.
+
 ## [0.22.0]
 
 ### Fixed
