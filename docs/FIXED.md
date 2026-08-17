@@ -5252,3 +5252,47 @@ the other direction (`@type` vs `type`) — TMF-only, out of scope.
 `src/oas/utils/naming.ts` (`sanitiseFieldForSelect`). Fixture `sibling-name-collision.yaml`,
 test `test_69_sibling_names_that_clean_to_one_field_write_once`. See #63 for the numbered-name
 move at type level, #102 for the enum half this entry once bundled.
+
+
+## 97 · slack's reactions.get response is an object stamped on a list, and comes out empty — ✅ Fixed
+**Symptom:** slack's `get:/reactions.get` expanded to zero types and the op was dropped — the last
+GEN-EMPTY in the sweep. Parked at first (archived spec, one occurrence); finished once the corpus
+had no other gap left.
+
+**OAS** (slack — the response root: `type: object`, no `properties`, an `items` beside it):
+```yaml
+type: object
+items:
+  anyOf:
+    - properties: { ok: …, type: { enum: [message] }, channel: …, message: … }
+    - properties: { ok: …, type: { enum: [file] }, file: … }
+    - properties: { ok: …, type: { enum: [file_comment] }, file: …, comment: … }
+```
+
+**Example:**
+```graphql
+# before — the factory built a fieldless object and the op vanished
+
+# after — the items schema is read in its place
+reactionsGet: ReactionsGetResponse
+```
+
+**Cause:**
+- the factory read `type: object`, found no `properties`, and built an object with no fields —
+  the `items` and everything inside it was thrown away.
+- the implied-array reading (#4) skips it: `type` is not array and not empty.
+- #52's unwrap of the same artifact only fires under an array's `items`.
+
+**Fix:** an object with no fields of its own and an `items` beside it reads the items schema as
+the real shape. The example the spec prints next to this construct is a single object — slack's
+`reactions.get` answers one item's reactions — so the wrapper is the same generator artifact #52
+unwraps under arrays, not a real list.
+
+**AST** — the artifact level builds no node; the items schema's nodes stand where it stood.
+
+**Measured:** slack GETs 79/80 -> 80/80; the real op emits 13 types and composes. GEN-EMPTY is
+now zero corpus-wide.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema`). Fixture `object-stamped-on-a-list.yaml`,
+test `test_97_object_stamped_on_a_list_reads_the_items`. See #52 for the artifact under arrays,
+#4 for the implied array.

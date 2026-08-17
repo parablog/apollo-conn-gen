@@ -90,6 +90,12 @@ export class Factory {
     if (_.get(schemaObj, 'items') && (schemaObj.type === 'array' || schemaObj.type == null)) {
       result = this.createArrayType(parent, schemaObj, context);
     }
+    // an object with no fields of its own and an `items` beside it: the example next to slack's
+    // spelling is one object, so the items schema is the real shape. see docs/FIXED.md #97
+    //   e.g. (slack) reactions.get 200: { type: object, items: { anyOf: [ …three objects… ] } }
+    else if (schemaObj.type === 'object' && _.isEmpty(schemaObj.properties) && _.get(schemaObj, 'items')) {
+      result = this.fromSchema(context, parent, _.get(schemaObj, 'items') as SchemaObject);
+    }
     // array case
     else if (
       schemaObj?.type === 'object' ||

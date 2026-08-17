@@ -465,39 +465,3 @@ name change is an identity change (#73) if it ever reaches a `path()`.
 **Refs:** `src/oas/nodes/factory.ts` (`createArrayType`), `src/oas/nodes/arr.ts`. Surfaced while
 fixing #94, which guards the one site that bites.
 
-
-## 97 · slack's reactions.get response is an object stamped on a list, and comes out empty — ⏸ Parked
-**Symptom:** slack's `get:/reactions.get` expands to zero types and the op is dropped — the one
-GEN-EMPTY left in the sweep.
-
-**OAS** (slack — the response root: `type: object`, no `properties`, an `items` beside it):
-```yaml
-type: object
-items:
-  anyOf:
-    - properties: { ok: …, type: { enum: [message] }, channel: …, message: … }
-    - properties: { ok: …, type: { enum: [file] }, file: … }
-    - properties: { ok: …, type: { enum: [file_comment] }, file: …, comment: … }
-```
-
-**Cause:**
-- the factory reads `type: object`, finds no `properties`, and builds a fieldless Obj — the
-  `items`/`anyOf` payload is discarded (`fromSchema`'s object branch).
-- the implied-array branch (#4) skips it: `type` is not array and not empty.
-- #52's unwrap only fires under an array's `items`, not at the response root.
-- an Obj with no props under `Res` gives `>**` nothing to select → zero paths → op dropped.
-
-**Why parked:**
-- the fixture is APIs.guru's mirror of Slack's `slack-api-specs` (spec 1.7.0), archived and
-  unmaintained for years; Slack publishes no OpenAPI today.
-- the construct appears exactly once across the whole corpus.
-- the input contradicts itself: `items` says list, the example beside it is a single object.
-
-**If picked up, two readings:**
-- trust `items`: an object with `items` and no `properties` is an implied array → the response is
-  a list of the anyOf union.
-- trust the example: drop the `items` level and read the `anyOf` as the response object (the #52
-  unwrap, allowed at the response root).
-
-**Refs:** `src/oas/nodes/factory.ts` (`fromSchema` object branch), fixture `slack.yaml`
-(`get:/reactions.get`). See #24 for the other slack empties, #52 for the same artifact under arrays.

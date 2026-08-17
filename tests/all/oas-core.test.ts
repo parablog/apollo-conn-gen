@@ -1463,6 +1463,17 @@ test('test_102_enum_value_listed_twice_is_written_once', async () => {
   assert.ok(/pending[\s\S]*active[\s\S]*done/.test(block), 'listed order is kept');
 });
 
+test('test_97_object_stamped_on_a_list_reads_the_items', async () => {
+  // #97: slack's reactions.get answers `{ type: object, items: { anyOf: […] } }` — an object with
+  // no fields of its own and an `items` beside it. The op generated nothing and was dropped; the
+  // items schema is the real shape (the example next to it is one object), read in its place.
+  const schema = await runOasTest('object-stamped-on-a-list.yaml', ['get:/reaction>**'], 1, 4);
+  assert.ok(schema !== undefined);
+  assert.ok(/reaction: ReactionResponse/.test(schema!), 'the op answers the merged choice');
+  assert.ok(/\bok: Boolean!/.test(schema!) && /message: Message/.test(schema!) && /file: File/.test(schema!),
+    'the members\' fields are merged');
+});
+
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
   // emitting `id: !`); coerce it to String. see docs/FIXED.md #11. runOasTest composes via rover.

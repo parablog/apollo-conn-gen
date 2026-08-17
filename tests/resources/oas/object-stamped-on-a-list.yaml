@@ -1,0 +1,47 @@
+openapi: 3.0.3
+info:
+  title: Object stamped on a list
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /reaction:
+    get:
+      operationId: getReaction
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                # `type: object` with an `items` beside it and no fields of its own — slack's
+                # spec-generator artifact; the example next to it is a single object
+                type: object
+                items:
+                  anyOf:
+                    - type: object
+                      required: [ok, type]
+                      properties:
+                        ok:
+                          type: boolean
+                        type:
+                          type: string
+                          enum: [message]
+                        message:
+                          type: object
+                          properties:
+                            text:
+                              type: string
+                    - type: object
+                      required: [ok, type]
+                      properties:
+                        ok:
+                          type: boolean
+                        type:
+                          type: string
+                          enum: [file]
+                        file:
+                          type: object
+                          properties:
+                            name:
+                              type: string
