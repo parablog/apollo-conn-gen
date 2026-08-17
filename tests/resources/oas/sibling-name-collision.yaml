@@ -1,0 +1,59 @@
+openapi: 3.0.3
+info:
+  title: Sibling name collision
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /boards:
+    post:
+      operationId: createBoard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoardCreate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+components:
+  schemas:
+    # both spellings side by side, as trello's boards component ships them:
+    # the string pair cleans to one prefsBackground; the foo pair differs in shape
+    BoardCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        prefs/background:
+          type: string
+        prefs_background:
+          type: string
+        foo/bar:
+          type: string
+        foo_bar:
+          type: object
+          properties:
+            id:
+              type: string
+    Board:
+      type: object
+      properties:
+        id:
+          type: string
+        prefs/background:
+          type: string
+        prefs_background:
+          type: string
+        foo/bar:
+          type: string
+        foo_bar:
+          type: object
+          properties:
+            id:
+              type: string

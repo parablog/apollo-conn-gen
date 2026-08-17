@@ -72,8 +72,7 @@ export class PropObj extends Prop {
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [prop-obj:select]', 'in ' + this.name + ', obj: ' + this.obj.name);
 
-    const fieldName = this.name;
-    const sanitised = Naming.sanitiseFieldForSelect(fieldName, this.parent?.kind === 'input');
+    const sanitised = this.fieldForSelect();
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
     if (this.isOptionalInSelection(context)) {

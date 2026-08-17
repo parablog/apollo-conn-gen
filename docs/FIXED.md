@@ -5198,3 +5198,57 @@ way an enum is built (component, inline, param).
 **Refs:** `src/oas/nodes/en.ts` (constructor). Fixture `duplicate-enum-values.yaml`, test
 `test_102_enum_value_listed_twice_is_written_once`. Split from #69, whose trello half is a
 different mechanism (sibling names colliding after sanitising).
+
+
+## 69 · Sibling names that collide after sanitising are written twice — ✅ Fixed
+**Symptom:** `INVALID_GRAPHQL: Field prefsBackground already exists` on trello `post:/boards`
+and `put:/boards/{idBoard}` — the last two real failures in the mutation sweep.
+
+**OAS** (trello — the `boards` component carries both spellings of each pref side by side):
+```yaml
+boards:
+  properties:
+    prefs/background: { type: string }
+    prefs_background: { type: string }
+```
+
+**Example:**
+```graphql
+# before — both spellings cleaned to one name and both were written
+input BoardsInput {
+  prefsBackground: String
+  prefsBackground: String
+}
+
+# after — the same shape keeps the first twin; a different shape takes a numbered name
+input BoardsInput {
+  prefsBackground: String
+  fooBar: FooBarInput
+  fooBar2: String        # body: "foo/bar": fooBar2 — the original key stays in the mapping
+}
+```
+
+**Cause:**
+- each field name cleaned on its own (`prefs/background` and `prefs_background` both ->
+  `prefsBackground`); nothing compared the result against sibling names before writing.
+- the body mapping wrote both twins against the same field — a wrong request, not only a
+  compose error.
+
+**Fix:** `Obj.selectedProps` runs the list through `T.resolveFieldNameTwins` — the one list
+`generate`, `select` and `dependencies` all read, so the three agree:
+- same cleaned name and same shape (descriptions aside): the first twin stays, the other is
+  dropped from the type and from the mapping.
+- a different shape takes a numbered name (`fooBar2`), carried on the prop (`renamedTo`) and
+  read by both the field line and the alias — the original JSON key stays on the wire in both
+  directions (body `"foo/bar": fooBar2`, response `fooBar2: $."foo/bar"`).
+
+**AST** — none. The same props are built; emission reads a resolved list and one extra name.
+
+**Measured:** trello mutations 179/181 -> 181/181. #61 is the same missing comparison seen from
+the other direction (`@type` vs `type`) — TMF-only, out of scope.
+
+**Refs:** `src/oas/nodes/obj.ts` (`selectedProps`), `src/oas/nodes/typeUtils.ts`
+(`resolveFieldNameTwins`), `src/oas/nodes/prop.ts` (`renamedTo`, `fieldForSelect`),
+`src/oas/utils/naming.ts` (`sanitiseFieldForSelect`). Fixture `sibling-name-collision.yaml`,
+test `test_69_sibling_names_that_clean_to_one_field_write_once`. See #63 for the numbered-name
+move at type level, #102 for the enum half this entry once bundled.

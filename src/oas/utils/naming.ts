@@ -182,9 +182,11 @@ export class Naming {
     return Naming.FIELD_CONVERTER.convert(fieldName);
   }
 
-  public static sanitiseFieldForSelect(name: string, isInput: boolean = false): string {
+  // `writtenAs` replaces the field side of the alias — a sibling's numbered name from #69.
+  //   e.g. (trello) foo_bar with writtenAs fooBar2 -> `foo_bar: fooBar2`
+  public static sanitiseFieldForSelect(name: string, isInput: boolean = false, writtenAs?: string): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
-    const sanitised = Naming.FIELD_CONVERTER.convert(fieldName);
+    const sanitised = writtenAs ?? Naming.FIELD_CONVERTER.convert(fieldName);
 
     // The JSON key is already a valid identifier identical to the field — no alias needed.
     if (sanitised === name) {

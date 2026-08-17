@@ -334,39 +334,6 @@ rewrite) plus keeping `$this.<sanitised>` consistent with the `@key`.
 `Prop.name`, both raw OAS names today; sanitising `keyFields` for `@key` must keep that check in
 step, and the test above fails if it does not), `Naming.sanitiseField`.
 
-## 69 · Sibling names that collide after sanitising are written twice — ⬜ Open
-
-**Symptom:** `INVALID_GRAPHQL: Field prefsBackground already exists` (trello `post:/boards`,
-`put:/boards/{idBoard}`). openfigi's duplicate enum values moved to their own entry, #102 — a
-different mechanism (the spec repeats values; no sanitising involved).
-
-**OAS** (trello — the `boards` component carries both spellings of each pref side by side):
-```yaml
-boards:
-  properties:
-    prefs/background: { type: string }
-    prefs_background: { type: string }
-```
-**Example:**
-```graphql
-input BoardsInput {
-  prefsBackground: String   # from prefs/background
-  prefsBackground: String   # from prefs_background — same name, invalid
-}
-```
-
-**Cause:**
-- Each field name sanitises on its own (`prefs/background` and `prefs_background` both ->
-  `prefsBackground`); nothing compares the result against sibling names before writing.
-- #61 is the same missing check seen from the other direction (`@type` vs `type`).
-- A fix that renames or drops one twin must keep the body mapping in agreement — today it writes
-  `prefs_background: prefsBackground` and the `prefs/…` twin against the same field name.
-
-**AST:** none expected — a check at write time: two siblings with the same cleaned name and the
-same shape collapse to one; different shapes need a bumped name, as #63 does for types.
-**Refs:** `src/oas/utils/naming.ts` (field sanitising), `src/oas/nodes/en.ts` (enum values), #61
-(the same missing check, found first on `@type` vs `type`), #63 (the bump precedent).
-
 ## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —

@@ -6,6 +6,8 @@ import { Naming } from '../utils/naming.js';
 
 export abstract class Prop extends Type {
   public required: boolean = false;
+  // the numbered field name when a sibling sanitises to the same one; unset for everyone else. #69
+  public renamedTo?: string;
 
   constructor(
     parent: IType | undefined,
@@ -30,7 +32,10 @@ export abstract class Prop extends Type {
       }
     }
 
-    writer.write('  ').write(Naming.sanitiseField(this.name)).write(': ');
+    writer
+      .write('  ')
+      .write(this.renamedTo ?? Naming.sanitiseField(this.name))
+      .write(': ');
 
     this.generateValue(context, writer);
 
@@ -66,5 +71,11 @@ export abstract class Prop extends Type {
 
   generateValue(context: OasContext, writer: Writer): void {
     writer.write(this.getValue(context));
+  }
+
+  // The field as the selection writes it: the JSON key aliased to the written name when they differ.
+  //   e.g. (trello) foo_bar renamed to fooBar2 -> body `foo_bar: fooBar2`, response `fooBar2: foo_bar`
+  protected fieldForSelect(): string {
+    return Naming.sanitiseFieldForSelect(this.name, this.parent?.kind === 'input', this.renamedTo);
   }
 }

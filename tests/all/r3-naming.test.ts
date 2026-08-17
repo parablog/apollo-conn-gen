@@ -211,3 +211,21 @@ test('test_88_root_path_op_takes_a_name', async () => {
   assert.ok(/\bmetaRoot(\(|:)/.test(schema!), 'the GET takes its operationId, meta/root -> metaRoot');
   assert.ok(/\bcreateRoot(\(|:)/.test(schema!), 'the POST has no operationId and falls back to root');
 });
+
+test('test_69_sibling_names_that_clean_to_one_field_write_once', async () => {
+  // #69: trello's boards lists prefs/background and prefs_background side by side; both cleaned
+  // to prefsBackground and both were written — `INVALID_GRAPHQL: duplicate field`. The same shape
+  // now keeps the first twin only; a different shape takes a numbered name, on both sides of the wire.
+  const schema = await runOasTest('sibling-name-collision.yaml', ['post:/boards>**'], 1, 4);
+  assert.ok(schema !== undefined);
+  // one field per cleaned name, in the input and in the response type
+  assert.strictEqual((schema!.match(/prefsBackground: String/g) || []).length, 2, 'one per side, not two');
+  assert.ok(/fooBar: FooBarInput/.test(schema!) && /fooBar2: String/.test(schema!), 'the later shape is numbered');
+  // the dropped twin's key is gone everywhere; the kept one maps once per direction
+  assert.ok(!/prefs\/background/.test(schema!), 'the dropped twin key is gone');
+  assert.strictEqual((schema!.match(/prefs_background: prefsBackground/g) || []).length, 1, 'one body line');
+  assert.strictEqual((schema!.match(/prefsBackground: prefs_background/g) || []).length, 1, 'one response line');
+  // the numbered twin keeps its original key in both directions
+  assert.ok(/"foo\/bar": fooBar2/.test(schema!), 'body pairs the original key with the numbered name');
+  assert.ok(/fooBar2: \$\."foo\/bar"/.test(schema!), 'response pairs the numbered name with the original key');
+});

@@ -341,6 +341,39 @@ export class T {
     return !!(hasStructure || raw.enum || hasMapShape);
   }
 
+  // Siblings whose names clean to one field write once: the same shape keeps the first and drops
+  // the twin; a different shape takes a numbered name both the type and the mapping write. #69
+  //   e.g. (trello) boards: prefs/background + prefs_background -> one prefsBackground
+  public static resolveFieldNameTwins(props: Prop[]): Prop[] {
+    const taken = new Map<string, Prop>();
+    const kept: Prop[] = [];
+    for (const prop of props) {
+      const field = Naming.sanitiseField(prop.name);
+      const holder = taken.get(field);
+      if (!holder) {
+        taken.set(field, prop);
+        kept.push(prop);
+        continue;
+      }
+      if (T.sameFieldShape(holder, prop)) {
+        continue;
+      }
+      let numbered = field + '2';
+      for (let n = 3; taken.has(numbered); n++) {
+        numbered = field + n;
+      }
+      prop.renamedTo = numbered;
+      taken.set(numbered, prop);
+      kept.push(prop);
+    }
+    return kept;
+  }
+
+  // the description does not change what a field holds, so twins differing only there are one shape
+  private static sameFieldShape(a: Prop, b: Prop): boolean {
+    return _.isEqual(_.omit(a.schema, 'description'), _.omit(b.schema, 'description'));
+  }
+
   // Qualify a colliding inline name with its container, bumping `2`, `3`… until free.
   // e.g. (googlebooks.yaml) `listPrice` under `offersItem` -> `OffersItemListPrice`. Both parts go
   // through genTypeName so the result is always a valid identifier. see docs/FIXED.md #9
