@@ -39,11 +39,7 @@ export class Map extends Type {
     // two maps can share a field name but hold different values — the second one takes a new name (#9).
     // e.g. (stripe) coupon and restrictions both have a currency_options map  #78
     if (this.name) {
-      // look up the type already stored under this name, by its raw or written form (#12). When it
-      // belongs to the other side (body vs response) both keep the name — one of them ends in Input.
-      // e.g. (map-input-suffix.yaml) labels is on both sides: LabelsEntryInput and LabelsEntry  #78
-      const stored = context.types.get(this.name) ?? context.types.get(Naming.genTypeName(this.name));
-      const ownedByOtherSide = stored != null && stored.kind !== this.kind;
+      const ownedByOtherSide = T.ownedByOtherSide(this, context);
       if (!ownedByOtherSide && T.collidesWithStoredType(this, context)) {
         T.resolveNameConflict(this, context);
       }

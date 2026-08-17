@@ -19,6 +19,7 @@ import {
   ReferenceObject,
   Res,
   Scalar,
+  Union,
 } from './internal.js';
 import _ from 'lodash';
 import { Naming } from '../utils/naming.js';
@@ -406,6 +407,16 @@ export class T {
     return context.types.get(node.name) ?? context.types.get(Naming.genTypeName(node.name));
   }
 
+  // the name's occupant sits on the other side of the wire — both keep the name, the kind's
+  // nameSuffix splits the emitted forms. see #78, #48
+  // e.g. (quickbooks) the same Line oneOf is the POST body and comes back in the response:
+  //   requestBody -> union:input:Line -> input LineUnionInput { … }
+  //   response    -> union:type:Line  -> type LineUnion { … }
+  public static ownedByOtherSide(node: IType, context: OasContext): boolean {
+    const occupant = T.storedOccupant(node, context);
+    return occupant != null && occupant.kind !== node.kind;
+  }
+
   // the same definition duplicated inline: same name-derived id AND a deeply-equal raw schema —
   // an id mismatch (pointer-named #8, component #12) would emit two definitions of one name.
   // see #18 e.g. (box):
@@ -423,6 +434,11 @@ export class T {
   //   { url: {type: string} } vs { url: {type: string} }                -> same
   //   { url: {type: string} } vs { url: {type: string}, vanity: {…} }  -> different
   private static sameSchemaAs(node: IType, occupant: IType): boolean {
+    // a union carries no single raw schema — its member list and tag are its shape. see #73
+    // e.g. (stripe) ten ops reach subscription_item.discounts: one anyOf, ten identical twins
+    if (node instanceof Union && occupant instanceof Union) {
+      return _.isEqual(node.schemas, occupant.schemas) && node.discriminator === occupant.discriminator;
+    }
     if (!node.schema || !occupant.schema) {
       return false;
     }

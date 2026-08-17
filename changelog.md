@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- A by-id operation now takes its name from its path tokens — github's `GET /gists/{gist_id}`
+  becomes `gistsByGistId` instead of colliding with `GET /gists` — so a whole-spec github
+  selection composes without duplicate fields. Issue #103.
+- A `oneOf` request body no longer repeats an object body's input name — github's gist update
+  writes `BInputInput` beside `InputInput` instead of defining it twice. Issue #104.
+
 ## [0.23.0]
 
 ### Added

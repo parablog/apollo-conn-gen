@@ -1,0 +1,59 @@
+# Two inline request bodies in one selection, as github ships them: most write ops carry an
+# inline object body, but some (e.g. patch:/gists/{gist_id}) declare a oneOf — the object body
+# and the union body both wrote `input InputInput`.
+openapi: 3.0.3
+info:
+  title: Duplicate inline body inputs
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # /docs visits first (path order), so its object body claims `Input` and the union renames
+  /docs:
+    post:
+      operationId: createDoc
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+  /notes:
+    post:
+      operationId: createNote
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    title:
+                      type: string
+                - type: object
+                  properties:
+                    url:
+                      type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+components:
+  schemas:
+    Ack:
+      type: object
+      properties:
+        ok:
+          type: boolean

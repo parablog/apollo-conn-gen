@@ -702,7 +702,7 @@ test('test_ref_into_paths_pointer_resolves_and_composes', async () => {
   // GEN-THROW Schema/response not found for ref #/…. runOasTest composes via rover.
   const schema = await runOasTest('ref-into-paths.yaml', ['get:/gadgets/{widget_id}>**'], 2, 1);
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('gadgets(widgetId: String!)'), 'resolved shared path param became an arg');
+  assert.ok(schema!.includes('gadgetsByWidgetId(widgetId: String!)'), 'resolved shared path param became an arg');
   assert.ok(schema!.includes('GET: "/gadgets/{$args.widgetId}"'), 'param templated against the resolved arg');
 });
 
@@ -2028,7 +2028,7 @@ test('test_81_path_tokens_match_declared_params', async () => {
   ];
   const schema = await runOasTest('path-param-mismatch.yaml', paths, 3, 1, { skipValidation: true });
   assert.ok(schema !== undefined);
-  assert.ok(/apiKeys\(id: String!\)/.test(schema!), 'an undeclared token still becomes an argument');
+  assert.ok(/apiKeysById\(id: String!\)/.test(schema!), 'an undeclared token still becomes an argument');
   assert.ok(/GET: "\/api-keys\/\{\$args\.id\}"/.test(schema!), 'and the URL reads it');
   assert.ok(/\(labelName: String!, userId: String\)/.test(schema!), 'a renamed param answers to its token');
   assert.ok(/PUT: "\/labels\/\{\$args\.labelName\}"/.test(schema!), 'and keeps its place in the URL');
@@ -2177,6 +2177,27 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   assert.ok(files !== undefined);
   assert.ok(/createV1Files: File/.test(files!), 'the multipart upload takes no argument');
   assert.ok(!/body:/.test(files!), 'and maps no body');
+});
+
+test('test_73_curated_multi_op_stripe_selection_composes', async () => {
+  // The real, production 34-operation selection graphos-service-factory/service-catalog/stripe
+  // /manifest.yaml curates from Stripe's spec (pinned here as stripe-curated.yaml, since gen's
+  // own stripe.json is a newer, incompatible snapshot — 2026-07-29 vs this fixture's 2026-06-24).
+  // Composing it failed with 1161 CONNECTORS_UNRESOLVED_FIELD errors before identical union twins
+  // learned to converge on one name (sameSchemaAs, #73): ten ops reaching one anyOf minted ten
+  // structurally-identical copies (SubscriptionItemDiscountsUnion..Union10) and only the unsuffixed
+  // one kept a connector. See docs/issues.md #73.
+  // forceRover: the local patched composer (FIXED.md #16) doesn't reproduce this — only stock
+  // rover, what a real router actually uses, catches it.
+  const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
+  // 365: the 40 numbered twin copies across 9 name families collapse into their canonical types
+  const schema = await runOasTest('stripe-curated.yaml', selections, 587, 365, {
+    skipValidation: true,
+    skipAuth: true,
+    federationVersion: 'v2.13',
+    forceRover: true,
+  });
+  assert.ok(schema !== undefined);
 });
 
 test('test_90_map_at_the_response_root_takes_entries', async () => {

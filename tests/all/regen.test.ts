@@ -93,7 +93,7 @@ function mintPath(gen: OasGen, op: IType, marker: string): string | undefined {
 
 test('test_72_browse_minted_path_resolves', async () => {
   // #72: browsing /v2/apps first renames the deployments subtree, so the tree mints a path saying
-  // inlinev2AppsDeploymentsResponseActiveDeployment where a fresh run says ActiveDeployment.
+  // inlinev2AppsByAppIdDeploymentsResponseActiveDeployment where a fresh run says ActiveDeployment.
   // The walker recovers it from the position: that segment is the list's only item type.
   const gen = await freshGen('digitalocean.yaml');
   deepExpand(gen, gen.paths.get('get:/v2/apps')!);
@@ -101,11 +101,11 @@ test('test_72_browse_minted_path_resolves', async () => {
   deepExpand(gen, deployments);
 
   const minted = mintPath(gen, deployments, 'ActiveDeployment')!;
-  assert.ok(minted.includes('inlinev2AppsDeploymentsResponseActiveDeployment'), 'the browsed tree minted the drifted name');
+  assert.ok(minted.includes('inlinev2AppsByAppIdDeploymentsResponseActiveDeployment'), 'the browsed tree minted the drifted name');
 
   const drifted = gen.generateSchema([minted]);
   const fresh = await freshGen('digitalocean.yaml');
-  const straight = fresh.generateSchema([minted.replace('inlinev2AppsDeploymentsResponseActiveDeployment', 'ActiveDeployment')]);
+  const straight = fresh.generateSchema([minted.replace('inlinev2AppsByAppIdDeploymentsResponseActiveDeployment', 'ActiveDeployment')]);
   assert.strictEqual(drifted, straight, 'the drifted path generates what the fresh spelling does');
 });
 

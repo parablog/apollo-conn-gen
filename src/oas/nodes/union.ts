@@ -74,6 +74,11 @@ export class Union extends Type {
     }
 
     if (this.name != null) {
+      // two unions can share a name but hold different members — the second one takes a new name (#104).
+      // e.g. (github) an object body and a oneOf body are both named Input, and wrote InputInput twice
+      if (!T.ownedByOtherSide(this, context) && T.collidesWithStoredType(this, context)) {
+        T.resolveNameConflict(this, context);
+      }
       context.store(this.name, this);
     }
 

@@ -5296,3 +5296,108 @@ now zero corpus-wide.
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema`). Fixture `object-stamped-on-a-list.yaml`,
 test `test_97_object_stamped_on_a_list_reads_the_items`. See #52 for the artifact under arrays,
 #4 for the implied array.
+
+
+## 103 · github's list and by-id operations share one query field name — ✅ Fixed
+**Symptom:** a whole-spec github selection failed composition with 83 duplicate Query/Mutation
+fields — `get:/gists` and `get:/gists/{gist_id}` both wrote `Query.gists`. Per-op composition
+never sees it: the two fields only meet in one schema when both ops are selected.
+
+**OAS** (github — the by-id op declares its path param by reference):
+```yaml
+/gists/{gist_id}:
+  get:
+    parameters:
+      - $ref: '#/components/parameters/gist-id'   # name: gist_id, in: path, required: true
+```
+
+**Example:**
+```graphql
+# before — the by-id op lands on the list op's name; a multi-token path repeats a suffix
+gists(gistId: String!): GistSimple
+gistsByShaBySha(gistId: String!, sha: String!): GistSimple
+
+# after — each token names itself, in place
+gistsByGistId(gistId: String!): GistSimple
+gistsByGistIdBySha(gistId: String!, sha: String!): GistSimple
+```
+
+**Cause:**
+- `genOperationName` took its `By` suffixes from the declared parameters passing
+  `required && in != header`.
+- a `$ref` parameter has neither field until dereferenced, so it was dropped — no suffix.
+- a token never declared at all contributed nothing either (the latent note under #81).
+- `formatPath` stamped the entire joined suffix on every `{token}`, so one surviving inline
+  param on a multi-token path repeated: `/gists/{gist_id}/{sha}` -> `gistsByShaBySha`.
+
+**Fix:** each `{token}` becomes its own positional suffix, derived from the token text itself —
+declared inline, `$ref`'d, or not at all, the name comes out the same. Non-path params (query,
+cookie) keep contributing after the last token, their old site; a tokenless path keeps dropping
+them, as it always has.
+
+**AST** — none. The same nodes are built; only the names they mint change (`<op>Response` types
+follow the field, from the same function).
+
+**Measured:** full github selection (845 paths): 84 composition errors -> 1 with #104 — the 83
+duplicate root fields all gone; the survivor is #107, previously masked. Renames land only on
+token-bearing paths; user transform-rule files matched against old names stop matching.
+
+**Refs:** `src/oas/utils/naming.ts` (`genOperationName`, `formatPath`). Fixture
+`root-field-name-collisions.yaml`, test
+`test_103_ref_and_undeclared_path_params_take_positional_by_suffixes`. See #81 for the same
+resolution gap at the URL/argument level, #91 for collisions between separate connectors.
+
+
+## 104 · an object body and a oneOf body both write `input InputInput` — ✅ Fixed
+**Symptom:** the last INVALID_GRAPHQL of the whole-spec github run: `input InputInput` defined
+twice — once by an op with an inline object body, once by an op with a `oneOf` body.
+
+**OAS** (github — most write ops carry an inline object body; `patch:/gists/{gist_id}` a oneOf):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        oneOf:
+          - type: object
+            properties: { content: … }
+          - …
+```
+
+**Example:**
+```graphql
+# before — the union body repeats the object body's name
+input InputInput { … }
+input InputInput { #### replacement for Union Input
+
+# after — the union takes the next name, as a second object body already did
+input InputInput { … }
+input BInputInput { #### replacement for Union BInput
+```
+
+**Cause:**
+- an inline body payload is always named `Input` (body.ts), and kind `input` appends the
+  `Input` suffix — every inline body wants the same `InputInput`.
+- `Obj.visit` guards the name store (#9/#12): a second object body renames to `BInputInput`.
+- `Union.visit` stored its name with no check, so a oneOf body after an object body wrote
+  `InputInput` again.
+- the writer's name-level dedup only covers `$ref`-named types.
+
+**Fix:** `Union.visit` runs the same guard `Map` does before storing — a real collision renames
+via `resolveNameConflict`; `$ref`-named and `[inline:…]`-named unions stay exempt, and an
+occupant on the other side of the wire (body vs response, #48) keeps the shared name.
+
+**AST** — none; the union node just carries the resolved name.
+
+**Measured:** with #103, full github composes past INVALID_GRAPHQL entirely (84 -> 1, the
+survivor filed as #107). Single-op output is untouched — no collision, no rename. First cut renamed
+*identical* twins apart too, which split stripe's shared unions ten ways and broke the curated
+34-op selection (1161 unresolved fields — see #73's parked-again note); `sameSchemaAs` now reads a
+union's member list and tag as its shape, so identical twins converge on one name and the curated
+selection composes clean (`test_73_curated_multi_op_stripe_selection_composes`, stock rover).
+
+**Refs:** `src/oas/nodes/union.ts` (`visit`), `src/oas/nodes/typeUtils.ts`
+(`collidesWithStoredType`, `resolveNameConflict`). Fixture `duplicate-inline-body-inputs.yaml`,
+test `test_104_second_inline_oneof_body_renames_instead_of_duplicating`. Latent siblings, not
+biting in the corpus: a Composed allOf body in the same position (comp.ts renames only under a
+Prop). See #100 for the component-name half of this family.

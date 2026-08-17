@@ -225,10 +225,12 @@ export class Naming {
   }
 
   public static genOperationName(path: string, operation: Operation): string {
+    // path tokens name themselves in formatPath (#103); required query and cookie params add theirs here.
+    // e.g. (github) /gists/{gist_id} declares its param as a $ref — the token still names the op
     const parameters = operation.hasParameters()
       ? operation
           .getParameters()
-          .filter((p) => p.required && p.in.toLowerCase() !== 'header')
+          .filter((p) => p.required && !['header', 'path'].includes(p.in.toLowerCase()))
           .map((p) => {
             const paramName = Naming.genParamName(p.name);
             return `By${_.upperFirst(paramName)}`;
@@ -257,9 +259,17 @@ export class Naming {
       return path;
     }
 
-    // Step 1: Remove parameters enclosed in {}.
-    const paramsJoined = parameters.join('');
-    let cleanedPath = path.replace(/\{[^}]*\}/g, paramsJoined);
+    // Step 1: each {token} becomes its own By-suffix, so `/gists` and `/gists/{gist_id}` stay apart;
+    // the non-path suffixes land after the last token, their old site. see docs/FIXED.md #103
+    const nonPathSuffix = parameters.join('');
+    const lastTokenOffset = path.lastIndexOf('{');
+    // each match is one brace-wrapped path segment, captured without its braces:
+    // `/gists/{gist_id}/{sha}` matches `{gist_id}` (token `gist_id`) and `{sha}` (token `sha`)
+    let cleanedPath = path.replace(
+      /\{([^}]*)\}/g,
+      (_match, token, offset) =>
+        'By' + _.upperFirst(Naming.genParamName(token)) + (offset === lastTokenOffset ? nonPathSuffix : ''),
+    );
 
     // Split `#` for GraphQL field names because SDL treats `#` as a comment marker. Box's
     // `/shared_items#web_links` becomes `shared_itemsWeb_links`; the connector HTTP path still

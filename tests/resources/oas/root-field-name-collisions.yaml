@@ -1,0 +1,164 @@
+# Path params declared as $refs (or not at all), as github.yaml ships them: the list op and the
+# by-id op both cleaned to one root field name, and a full-spec selection failed composition.
+openapi: 3.0.3
+info:
+  title: Root field name collisions
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /gists:
+    get:
+      operationId: listGists
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Gist'
+  /gists/{gist_id}:
+    get:
+      operationId: getGist
+      # declared by reference, as github's `#/components/parameters/gist-id`
+      parameters:
+        - $ref: '#/components/parameters/gist-id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gist'
+  /gists/{gist_id}/{sha}:
+    get:
+      operationId: getGistRevision
+      # a $ref and an inline param side by side, as github's `/gists/{gist_id}/{sha}`
+      parameters:
+        - $ref: '#/components/parameters/gist-id'
+        - name: sha
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gist'
+  /repos/{owner}/{repo}/assignees/{assignee}:
+    get:
+      operationId: checkAssignee
+      # all inline, several tokens — the joined-suffix stamping garbled this shape
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assignee
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gist'
+  /orgs:
+    get:
+      operationId: listOrgs
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Gist'
+  /orgs/{org}:
+    get:
+      operationId: getOrg
+      # the token is not declared at all, as omni's `/v1/api-keys/{id}` (see #81)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gist'
+  /users/{id}:
+    get:
+      operationId: getUser
+      # required query and cookie params still contribute suffixes, after the token's
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: active
+          in: query
+          required: true
+          schema:
+            type: boolean
+        - name: session
+          in: cookie
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gist'
+  /search:
+    get:
+      operationId: search
+      # a required query param on a tokenless path has never contributed a suffix
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Gist'
+components:
+  parameters:
+    gist-id:
+      name: gist_id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    Gist:
+      type: object
+      properties:
+        id:
+          type: string
+        description:
+          type: string

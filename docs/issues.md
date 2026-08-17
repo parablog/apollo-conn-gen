@@ -334,7 +334,7 @@ rewrite) plus keeping `$this.<sanitised>` consistent with the `@key`.
 `Prop.name`, both raw OAS names today; sanitising `keyFields` for `@key` must keep that check in
 step, and the test above fails if it does not), `Naming.sanitiseField`.
 
-## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked
+## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked again (stripe trigger fixed)
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —
 so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
@@ -374,8 +374,60 @@ were designed, measured, and set aside:
 **Wake this issue when** a member-list selection actually breaks in real web use — then pick the
 cure knowing which cost hurts less in practice.
 
-**Refs:** `src/oas/nodes/*.ts` (`get id()` per class), `src/oas/generator/typesCollector.ts`,
-#71/#72 (the shipped floor), #12/#22/#9 (the rename machinery).
+**Reactivated (2026-08-17) — the wake condition just fired, for real, on real Stripe.** Not web
+use, but the same mechanism: generating the curated 34-operation selection
+`graphos-service-factory/service-catalog/stripe/manifest.yaml` actually uses in production
+(`tests/resources/oas/stripe-curated.yaml` + `stripe-curated-selection.json`, pinned as fixtures)
+fails `rover supergraph compose` with **1161 `CONNECTORS_UNRESOLVED_FIELD` errors**. 605 of those
+(9 distinct name families) are this issue exactly:
+
+```graphql
+type Stripe_SubscriptionItemDiscountsUnion { #### replacement for Union SubscriptionItemDiscountsUnion
+  checkoutSession: String
+  ... # 12 fields, byte-identical to the block below
+}
+type Stripe_SubscriptionItemDiscountsUnion2 { #### replacement for Union SubscriptionItemDiscountsUnion2
+  checkoutSession: String
+  ... # same 12 fields, same doc-comments, different name
+}
+# ...up to Union10 — 10 structurally-identical copies of one shape, one name each
+```
+
+Only the unsuffixed instance (`SubscriptionItemDiscountsUnion`, no number) keeps a connector that
+resolves it; `Union2` through `Union10` are declared with the real field set but zero connector
+resolves any of them — exactly "a member-list selection actually breaks," now with a concrete,
+reproducible, real-vendor-spec trigger rather than a synthetic one. The other 8 families hit are
+`AccountTaxIdsUnion` (×9), `SourcesDataUnion`/`DataUnion` (×4 each), `InvoiceDiscountsUnion`,
+`InvoiceAccountTaxIdsUnion`, `SubscriptionTypeDiscountsUnion`, `SubscriptionsResourceSubscription…
+AccountTaxIdsUnion`, `LineItemDiscountsUnion` — all the same pattern: one canonical name works, its
+numbered twins don't.
+
+**Not yet separated from this issue: the other ~556 errors.** Types that are *not* duplicate-named
+(e.g. `Stripe_TaxId`, declared exactly once, still 11 unresolved fields) also fail, on types shared
+across several operations (here, `Customer` and the merged `V1CustomersByCustomerResponse`, reached
+from ~6 different curated operations). Traced 5 of the ~6 reachable positions and found complete
+selections at every one — the 6th (not yet found) likely has no selection reaching that field at
+all, which is `#13`'s exact "every position needs its own complete selection" mechanism, not this
+issue's naming collision. `#13`'s own record says that mechanism was fixed by `#89` for Confluence's
+case; whether the fix generalizes to Stripe's shape, or a residual gap remains, needs isolating
+before filing separately — flagged here rather than guessed at.
+
+**Parked again (2026-08-17, same day):** the stripe trigger was not this issue's identity drift —
+it was the in-flight #104 guard renaming *identical* union twins apart (they only ever converged by
+id accident before). `sameSchemaAs` now reads a union's member list and tag as its shape, so
+identical twins converge on one name and only genuinely different unions rename. With that one
+change the curated selection composes with **zero** errors under stock rover — including the ~556
+"unseparated" ones, which were downstream of the same split, not #13/#89's mechanism. Locked in as
+`test_73_curated_multi_op_stripe_selection_composes` (forceRover). The identity-drift core of this
+issue — ids embedding names, browse-order divergence — is untouched and stays parked on the same
+wake condition as before.
+
+**Refs:** `src/oas/nodes/*.ts` (`get id()` per class, `withUniqueName`), `src/oas/generator/typesCollector.ts`,
+#71/#72 (the shipped floor), #12/#22/#9 (the rename machinery), #13/#89 (the other candidate
+mechanism for the unseparated remainder above). Fixtures:
+`tests/resources/oas/stripe-curated.yaml`, `tests/resources/oas/stripe-curated-selection.json` —
+found running `graphos-service-factory/scripts/gen-ts.mjs`, that repo's wrapper comparing TS `gen`
+against `tools/connect-gen`, the Rust fork it currently uses.
 
 ## 79 · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
 
@@ -465,3 +517,158 @@ name change is an identity change (#73) if it ever reaches a `path()`.
 **Refs:** `src/oas/nodes/factory.ts` (`createArrayType`), `src/oas/nodes/arr.ts`. Surfaced while
 fixing #94, which guards the one site that bites.
 
+## 105 · A 3-member anyOf's merged type silently drops a member the selection still names — ⬜ Open
+
+**Symptom:** stripe's real production spec fails `rover supergraph compose` on 3 ops:
+```
+SELECTED_FIELD_NOT_FOUND: [stripe] `@connect(selection:)` on `Query.stripe_listInvoices` contains
+field `deleted`, which does not exist on `Stripe_DiscountsUnion`.
+```
+Same error, same field, on `stripe_getInvoice` and `stripe_searchInvoices` — all three read
+`invoice.discounts`.
+
+**OAS** (stripe — `invoice.properties.discounts.items`, three real members, no shapeless one):
+```yaml
+anyOf:
+  - { type: string, maxLength: 5000 }
+  - { $ref: '#/components/schemas/discount' }
+  - { $ref: '#/components/schemas/deleted_discount' }   # has its own `deleted: true` field, required
+```
+
+**Example** — the emitted type only names 2 members and carries no `deleted` field, but the
+selection three call sites still ask for one:
+```graphql
+#### union degraded to a merged object: DiscountsUnion = String | discount   # only 2, not 3
+type Stripe_DiscountsUnion { #### replacement for Union DiscountsUnion
+  id: String!
+  ...
+  # no `deleted` field anywhere in this type
+}
+```
+```graphql
+        discounts {
+         id
+         ...
+         deleted        # <- this is what fails to resolve
+        }
+```
+
+**Cause: not yet established**, but the trail so far rules out the two most obvious mechanisms:
+- Not the `anyOf: [member, {}]` shapeless-member collapse (`factory.ts:80-87`, docs/FIXED.md #20)
+  — that only fires when exactly one member is non-shapeless (`real.length === 1`); here all three
+  are real object/scalar shapes, so `real.length === 3` and the collapse never triggers.
+- Not `Union.dedupedSelectedProps`'s incompatible-kind guard (`union.ts:222-243`, docs/FIXED.md
+  #39/#44) — that *replaces* a colliding field with a `JSON` scalar, it does not drop the member
+  outright, and `deleted` is absent from the type entirely rather than typed as `JSON`.
+- `Union.visit()` (`union.ts:45-88`) iterates every entry of `this.schemas` unconditionally and
+  calls `this.add(type)` for each — so on paper all three members (String, `discount`,
+  `deleted_discount`) should become children. The merged-object comment showing only two names
+  means one member is gone by the time `generateMergedObject` reads `this.children`, somewhere
+  between `visit()`'s add loop and that read.
+- A structurally identical case, `account_tax_ids` (`String | tax_id | deleted_tax_id`, same
+  shape: scalar + object + "deleted" superset of that object), merges correctly and keeps
+  `deleted: Boolean!` — so this is not "3-member anyOf merges always lose the third member," it is
+  specific to something about `discount`/`deleted_discount`'s shape that `tax_id`/`deleted_tax_id`
+  doesn't share (worth diffing the two ref pairs directly as the next step).
+- Note the parallel, unrelated in-flight change to this same file for #104 (a naming-collision
+  guard in `Union.visit`/`add`) — check for interaction, but the symptom here (a whole member
+  missing, not a rename) doesn't match #104's shape (two same-named inline members colliding).
+
+**Not caught by the existing corpus gate.** `node --import tsx/esm tools/lint-corpus.mts --spec
+stripe.json` walks all 263 ops of the full spec and reports 0 diagnostics — this bug reproduces
+even though the generator's own "the generator should never write a selection its own linter
+rejects" gate passes clean. See #106.
+
+**Refs:** `src/oas/nodes/union.ts` (`visit`, `add`, `generateMergedObject`, `dedupedSelectedProps`,
+`selectedProps`), `src/oas/nodes/factory.ts` (`fromSchema:80-87`, `createContainerType:161-174`).
+Found running the real, curated 34-op Stripe selection from
+`graphos-service-factory/service-catalog/stripe/manifest.yaml` through `scripts/gen-ts.mjs` (that
+repo's wrapper comparing TS `gen` against `tools/connect-gen`, the Rust fork it currently uses).
+
+## 106 · The selection linter checks selections against the spec, not against the emitted type — 📋 Noted, not fixed
+
+**Symptom:** #105 above generates a selection referencing a field (`deleted`) that is real in the
+OAS spec (`deleted_discount.deleted`) but absent from the GraphQL type the emitter actually wrote
+for the merge (`Stripe_DiscountsUnion`) — and the corpus lint gate (`tools/lint-corpus.mts`, which
+runs `lintSelections` over every op of every corpus spec) reports it clean anyway.
+
+**Cause:** `PathInResponseCheck` (`src/oas/lint/README.md`, "Stage 3 — the checks") walks a
+selection path against the operation's real response schema via `ResponseShape`, which answers
+"is this a real field somewhere in the API's response shape" — not "does this field survive on
+the type the emitter actually wrote for this merge." For a plain object those two questions have
+the same answer. For a merged/collapsed union (`Union.isFlat()`, `generateMergedObject`) they can
+diverge: a field can be legitimate on one `anyOf`/`oneOf` member and still be missing from the
+merged type if that member got dropped or its field didn't survive the merge — exactly what #105
+hits. The check is answering the right question for every other node kind and the wrong one for
+this specific case.
+
+**Fix (not done):** add a check (or extend `PathInResponseCheck`) that, for a selection scoped
+under a flat/merged union, also validates against `SchemaReader`'s parsed *emitted* type (already
+available — it's the same document the linter is reading the selection out of) rather than only
+against the spec. This would have caught #105 — and any future instance of the same class — before
+generation, not at `rover compose` time on a real production spec.
+
+**Refs:** `src/oas/lint/README.md` (Stage 3, `PathInResponseCheck`, `ResponseShape.look`),
+`src/oas/lint/schemaReader.ts` (the emitted-type parse this fix would read from),
+`tools/lint-corpus.mts` (the gate that currently passes #105's case clean). Surfaced alongside
+#105, same investigation.
+
+
+
+## 107 · Two maps' inline value types share one name, and one selection names missing fields — ⬜ Open
+
+**Symptom:** the whole-spec github selection composes past INVALID_GRAPHQL after #103/#104, then
+fails connector expansion on the one survivor:
+```
+INTERNAL: … Object type `inlineFilesEntry` has no field `content`
+```
+
+**OAS** (github — two gist models carry a `files` map whose inline value shapes differ):
+```yaml
+base-gist:
+  properties:
+    files:
+      type: object
+      additionalProperties:
+        type: object
+        properties: { filename: …, type: …, language: …, raw_url: …, size: … }
+gist-simple:
+  properties:
+    files:
+      type: object
+      additionalProperties:
+        type: object
+        properties: { filename: …, type: …, language: …, raw_url: …, size: …, truncated: …, content: … }
+```
+
+**Example** — both value shapes emit under one name; the 5-field definition wins, and
+gist-simple's selection still asks for the fields only its own shape has:
+```graphql
+type inlineFilesEntry {   # base-gist's 5 fields — the only definition emitted
+  filename: String
+  …
+}
+type FilesEntry { key: String, value: inlineFilesEntry }
+type GistSimpleFilesEntry { key: String, value: inlineFilesEntry }   # wrong value type
+```
+```graphql
+      files: files?->entries {
+       key
+       value {
+        content?        # <- not on the emitted type
+        truncated?
+        …
+       }
+      }
+```
+
+**Cause (direction):**
+- the map *entry* wrappers disambiguate by parent (`FilesEntry` vs `GistSimpleFilesEntry`,
+  map.ts), but the inline *value* object is named `inlineFiles` from the field alone — two
+  different shapes under same-named fields of different parents collide.
+- same family as #103/#104: a cross-operation name collision only a whole-spec selection meets;
+  per-op generation and the corpus sweeps never put both shapes in one schema.
+
+**Refs:** `src/oas/nodes/map.ts` (entry/value naming). Surfaced by the whole-spec github run that
+closed #103/#104 (84 composition errors -> this one). Distinct from #105 (a member dropped from
+one union) — here two complete types fight over one name.

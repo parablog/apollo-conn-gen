@@ -108,13 +108,11 @@ test('test_R3_oas_formatPath_strips_hash_from_sub_resource_path', () => {
   // underscores stay as-is.
   assert.strictEqual(Naming.formatPath('/items#weblinks', []), 'ItemsWeblinks');
   assert.strictEqual(Naming.formatPath('/shared_items#web_links', []), 'Shared_itemsWeb_links');
-  assert.strictEqual(
-    Naming.formatPath('/items/{item_id}#get_shared_link', ['ByItemId']),
-    'ItemsByItemIdGet_shared_link',
-  );
+  // the {item_id} token names itself now — the parameters arg carries non-path suffixes only. #103
+  assert.strictEqual(Naming.formatPath('/items/{item_id}#get_shared_link', []), 'ItemsByItemIdGet_shared_link');
   // No `#` survives in any field name derived from these paths.
   for (const p of ['/items#weblinks', '/shared_items#web_links', '/files/{file_id}#get_shared_link']) {
-    const name = Naming.formatPath(p, p.includes('{') ? ['ByFileId'] : []);
+    const name = Naming.formatPath(p, []);
     assert.ok(!name.includes('#'), `formatPath(${JSON.stringify(p)}) retained '#': ${name}`);
   }
 });
@@ -228,4 +226,52 @@ test('test_69_sibling_names_that_clean_to_one_field_write_once', async () => {
   // the numbered twin keeps its original key in both directions
   assert.ok(/"foo\/bar": fooBar2/.test(schema!), 'body pairs the original key with the numbered name');
   assert.ok(/fooBar2: \$\."foo\/bar"/.test(schema!), 'response pairs the numbered name with the original key');
+});
+
+
+test('test_103_ref_and_undeclared_path_params_take_positional_by_suffixes', async () => {
+  // #103: github declares path params as $refs, which the By-suffix harvesting never resolved —
+  // `get:/gists` and `get:/gists/{gist_id}` both wrote `Query.gists` and a full-spec selection
+  // failed composition with 83 duplicate root fields. Each token now names itself, positionally.
+  const schema = await runOasTest(
+    'root-field-name-collisions.yaml',
+    [
+      'get:/gists>**',
+      'get:/gists/{gist_id}>**',
+      'get:/gists/{gist_id}/{sha}>**',
+      'get:/repos/{owner}/{repo}/assignees/{assignee}>**',
+      'get:/orgs>**',
+      'get:/orgs/{org}>**',
+      'get:/users/{id}>**',
+      'get:/search>**',
+    ],
+    8,
+    1,
+    { skipValidation: true },
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/gists: \[Gist\]/.test(schema!), 'the list op keeps its bare name');
+  assert.ok(/gistsByGistId\(gistId: String!\)/.test(schema!), 'a $ref path param names the op');
+  assert.ok(/gistsByGistIdBySha\(/.test(schema!), 'one suffix per token, in order');
+  assert.ok(!/ByShaBySha/.test(schema!), 'no suffix stamped on every token');
+  assert.ok(/reposByOwnerByRepoAssigneesByAssignee\(/.test(schema!), 'inline multi-token path reads in place');
+  assert.ok(/orgsByOrg\(/.test(schema!), 'an undeclared token still names the op (#81)');
+  assert.ok(/usersByIdByActiveBySession\(/.test(schema!), 'query and cookie suffixes follow the token');
+  assert.ok(/search\(q: String!\)/.test(schema!), 'a tokenless path still drops non-path suffixes');
+  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
+});
+
+test('test_104_second_inline_oneof_body_renames_instead_of_duplicating', async () => {
+  // #104: an inline object body and an inline oneOf body are both named `Input`; Obj guards the
+  // name store but Union did not, so the pair emitted `input InputInput` twice. The union now
+  // takes the same numbered/qualified name a second object body already gets.
+  const schema = await runOasTest('duplicate-inline-body-inputs.yaml', ['post:/docs>**', 'post:/notes>**'], 2, 3);
+  assert.ok(schema !== undefined);
+  assert.strictEqual((schema!.match(/^input InputInput/gm) || []).length, 1, 'InputInput defined once');
+  assert.ok(/input BInputInput \{ #### replacement for Union BInput/.test(schema!), 'the union body is renamed');
+  assert.ok(/createDocs\(input: InputInput!\)/.test(schema!), 'the object body keeps its name');
+  assert.ok(/createNotes\(input: BInputInput!\)/.test(schema!), 'the union op references the renamed input');
+  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
 });
