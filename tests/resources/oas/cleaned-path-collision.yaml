@@ -1,0 +1,73 @@
+openapi: 3.0.3
+info:
+  title: distinct paths whose cleaned root-field names collide
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # both clean to fooBar: formatPath splits on '-' and '.'
+  /foo-bar:
+    get:
+      operationId: getFooBar
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  a:
+                    type: string
+  /foo.bar:
+    get:
+      operationId: getFooBarDotted
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  b:
+                    type: string
+  # both tokens clean to ByThingId: genParamName splits on any non-alphanumeric
+  /things/{thing_id}:
+    get:
+      operationId: getThingByUnderscoreId
+      parameters:
+        - name: thing_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  c:
+                    type: string
+  /things/{thing.id}:
+    get:
+      operationId: getThingByDottedId
+      parameters:
+        - name: thing.id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: string

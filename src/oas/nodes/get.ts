@@ -19,6 +19,10 @@ type ResponsesByCode = Record<string, ResponseObject | ReferenceObject>;
 export class Get extends Type implements Op {
   public verb: string = 'GET';
 
+  // set by OasGen.buildPaths when another op's cleaned name collides with this one's. #116
+  //   e.g. GET /foo-bar + GET /foo.bar both clean to fooBar — the second becomes fooBar2
+  public renamedTo?: string;
+
   public resultType?: IType;
   public params: Param[] = [];
   public summary?: string;
@@ -101,6 +105,7 @@ export class Get extends Type implements Op {
   }
 
   public getGqlOpName(): string {
+    if (this.renamedTo) return this.renamedTo;
     return Naming.genOperationName(this.operation.path, this.operation);
   }
 

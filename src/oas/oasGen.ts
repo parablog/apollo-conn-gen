@@ -7,7 +7,7 @@ import { OpenAPI } from 'openapi-types';
 import fs from 'fs';
 import { DEFAULT_VERSIONS, validateVersionOptions } from '../versions.js';
 import { BatchConfig, GenerateOptions, OasContext, OverridesConfig } from './oasContext.js';
-import { Factory, IType } from './nodes/internal.js';
+import { Factory, Get, IType, T } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
 import { TypesCollector } from './generator/typesCollector.js';
@@ -216,6 +216,20 @@ export class OasGen {
     const collected = new Map<string, IType>();
     for (const [key, pathItem] of filtered) {
       this.visitPath(context, key, pathItem).forEach((type) => collected.set(type.id, type));
+    }
+
+    // two paths can clean to one root field — the later op takes a numbered name.
+    // e.g. (cleaned-path-collision.yaml) /foo-bar + /foo.bar -> fooBar, fooBar2. see docs/FIXED.md #116
+    const queryFieldNames = new Set<string>();
+    const mutationFieldNames = new Set<string>();
+    for (const type of collected.values()) {
+      const takenNames = T.isMutationType(type) ? mutationFieldNames : queryFieldNames;
+      const op = type as Get;
+      const name = op.getGqlOpName();
+      if (takenNames.has(name)) {
+        op.renamedTo = Naming.numberedName(name, (n) => takenNames.has(n));
+      }
+      takenNames.add(op.getGqlOpName());
     }
 
     return collected;

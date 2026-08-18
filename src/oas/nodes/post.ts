@@ -53,6 +53,7 @@ export class Post extends Get {
   }
 
   public getGqlOpName(): string {
+    if (this.renamedTo) return this.renamedTo;
     return 'create' + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 

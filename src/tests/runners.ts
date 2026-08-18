@@ -38,6 +38,8 @@ export async function runOasTest(
     skipOptionalMarkers?: boolean;
     // the local composer is one fixed build and ignores `federation_version`, so a test that pins an
     // older composition has to go through stock rover to mean anything. see docs/FIXED.md #16
+    // forceRover runs the machine's rover, unpinned: 0.41 failed its ELv2 acceptance before
+    // composing even with --elv2-license accept — check `rover --version` on failures. see #116
     forceRover?: boolean;
   } = {},
 ): Promise<string | undefined> {

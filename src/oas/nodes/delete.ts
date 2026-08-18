@@ -20,6 +20,7 @@ export class Delete extends Post {
   }
 
   public getGqlOpName(): string {
+    if (this.renamedTo) return this.renamedTo;
     return 'delete' + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 }

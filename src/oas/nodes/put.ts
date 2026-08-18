@@ -12,6 +12,7 @@ export class Put extends Post {
   }
 
   public getGqlOpName(): string {
+    if (this.renamedTo) return this.renamedTo;
     return 'update' + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 

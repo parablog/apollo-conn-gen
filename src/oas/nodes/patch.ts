@@ -20,6 +20,7 @@ export class Patch extends Post {
   }
 
   public getGqlOpName(): string {
+    if (this.renamedTo) return this.renamedTo;
     return 'patch' + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 }
