@@ -596,6 +596,32 @@ not a missing nicety, it is an unusable artifact.
 Observed while building the Sanity connector, which needed exactly this and had to hand-roll it: see
 `constellation-connectors/sources/sanity`.
 
+### R15. Selection externalisation — ⬜ Planned
+
+**Why:** selections are flat lists of leaf-path strings whose segments embed *emitted* names.
+That one representation is behind three standing problems: #73 (name-derived ids make stored
+selections fragile to browse order — the parked structural-ids cure lands here), #49 (selection
+size scales with tree size: hubspot lists is 38,300 path strings for "everything under this op",
+measured in FIXED.md #118), and issues.md #119's deferred collect-walk map (the per-path
+re-resolve disappears with the representation). Decided during #118 (2026-08-18): staged —
+the prefix-set fix shipped first; this item is the durable half.
+
+**Shape:** extract selection handling into its own module with **spec-position addressing**
+(paths derived from the OAS document structure, not from emitted node names), and a
+**selectable granularity mode** — the consumer chooses the selection algorithm per run:
+- **operations** — an op is the unit; "everything under this op" is one fact, no field paths.
+  The cheap mode for whole-spec generation and the CLI's `-n` default.
+- **leaf fields** — today's per-field selection, for the web app's field picking and curated
+  production connectors.
+Op-only as the *only* mode was considered and rejected (breaks web field picking, makes
+always-everything the default); as a *chosen* mode it is the right cost model.
+
+**Migration surface to design for:** web app localStorage selections, saved selection JSON
+files (`--load-selections`), test-pinned paths — all carry emitted-name paths today.
+
+**Refs:** docs/issues.md #73 (parked cures, sized), #119; docs/FIXED.md #49-adjacent
+measurements in #118. Related: #13/#89 (path-dependent divergence family).
+
 ---
 
 ## Coverage findings — robustness backlog (from `COVERAGE.md`)

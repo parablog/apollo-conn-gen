@@ -6,8 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Migration note (#103):** every operation with path parameters has a new public field name —
+  each `{token}` now adds its own `By…` suffix in place (`gists/{gist_id}` becomes
+  `gistsByGistId`, previously `gists`). Update transform-rule files and clients pinned to the
+  old names. Additionally (#116), root fields whose cleaned names still collide (`/foo-bar` +
+  `/foo.bar`) now take numbered names (`fooBar`, `fooBar2`) instead of writing duplicates.
+
+### Added
+
+- Coverage reports gain an **all-ops** column: every selected op of a sweep composed as one
+  schema (what production does), beside the per-op numbers — per-op composes are structurally
+  blind to cross-op failures. First catch logged as issue #121.
+
 ### Fixed
 
+- A second inline `allOf` request body with a different shape now takes its own input type
+  instead of converging on the first body's — cleared all 52 `INVALID_BODY` errors in the
+  mutations all-ops sweep (digitalocean, docker, sendgrid). Issue #123.
+- Root fields whose cleaned path names collide are numbered instead of writing the same Query
+  field twice — `/foo-bar` + `/foo.bar` become `fooBar` and `fooBar2`, response types and
+  connectors following along. Issue #116.
+- Sibling keys that clean to one field name are numbered instead of dropped — trello's
+  `prefs/background` and `prefs_background` become `prefsBackground` and `prefsBackground2`,
+  each reading its own wire key; twins folded through allOf or a flattened union no longer
+  write duplicate fields. Issue #113.
+- An object stamped with `items` beside it is now repaired on the property route too — the
+  nested field keeps its items' shape instead of vanishing from type and selection. Issue #114.
 - A mutually-recursive `oneOf` reached through arrays no longer expands forever — hubspot's
   lists filter tree generates in seconds instead of never returning (a union member-set cycle
   cut, plus the #10 prefix-set fix applied to four missed selection filters). Issue #118.

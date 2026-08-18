@@ -5234,7 +5234,7 @@ input BoardsInput {
 - the body mapping wrote both twins against the same field — a wrong request, not only a
   compose error.
 
-**Fix:** `Obj.selectedProps` runs the list through `T.resolveFieldNameTwins` — the one list
+**Fix:** `Obj.selectedProps` runs the list through `T.numberTwinFields` — the one list
 `generate`, `select` and `dependencies` all read, so the three agree:
 - same cleaned name and same shape (descriptions aside): the first twin stays, the other is
   dropped from the type and from the mapping.
@@ -5248,11 +5248,15 @@ input BoardsInput {
 the other direction (`@type` vs `type`) — TMF-only, out of scope.
 
 **Refs:** `src/oas/nodes/obj.ts` (`selectedProps`), `src/oas/nodes/typeUtils.ts`
-(`resolveFieldNameTwins`), `src/oas/nodes/prop.ts` (`renamedTo`, `fieldForSelect`),
+(`numberTwinFields`), `src/oas/nodes/prop.ts` (`renamedTo`, `fieldForSelect`),
 `src/oas/utils/naming.ts` (`sanitiseFieldForSelect`). Fixture `sibling-name-collision.yaml`,
 test `test_69_sibling_names_that_clean_to_one_field_write_once`. See #63 for the numbered-name
 move at type level, #102 for the enum half this entry once bundled.
 
+
+**Revised by #113 (2026-08-18):** same-shape twins are no longer dropped — both are kept, the
+later one numbered (`prefsBackground2`), each aliased to its own wire key. `sameFieldShape` is
+gone with the drop. The test is now `test_69_113_sibling_names_that_clean_to_one_field_are_numbered`.
 
 ## 97 · slack's reactions.get response is an object stamped on a list, and comes out empty — ✅ Fixed
 **Symptom:** slack's `get:/reactions.get` expanded to zero types and the op was dropped — the last
@@ -5579,3 +5583,155 @@ counter: 123 fixed vs 578 with the scans, bound 250). See #10 (both halves are i
 descendants), #119 (residuals). Found via `graphos-service-factory/scripts/gen-ts.mjs` against
 `service-catalog/hubspot/lists.json`; note that wrapper cannot run the hubspot service end-to-end
 yet (multi-spec dir, its task #19) — the acceptance evidence is the raw CLI run above.
+
+## 114 · An object stamped on a list is only repaired on one route — ✅ Fixed
+
+**Symptom:** #97's malformed shape (`type: object` with no fields and an `items` beside it) was
+repaired in `Factory.fromSchema` only. The same shape reached as a nested PROPERTY went through
+`Factory.fromProp`, built a fieldless object, and the field was **dropped entirely** — absent
+from the type and the selection (worse than the "degrades to JSON" the review guessed).
+
+**OAS** (`object-stamped-on-a-list-nested.yaml`):
+```yaml
+broken:
+  type: object            # no properties of its own
+  items:                  # the real shape lives here
+    type: object
+    properties: { id: { type: string }, label: { type: string } }
+```
+
+**Fix:** the repair is one shared predicate, `Schemas.isFieldlessObjectWithItems`
+(`src/oas/utils/schemas.ts`), used at both sites in `src/oas/nodes/factory.ts`: `fromSchema`
+(behavior unchanged) and NEW in `fromProp` — recurse via `fromProp(context, parent, propName,
+items)`, which keeps the prop name, wrapper class, optional marker and cycle checks. Both sites
+now warn `object stamped on a list — reading its items in: <path>` so the recovery is visible.
+
+**Boundary kept:** `items: { anyOf: [...] }` on the prop route still degrades (fromProp has no
+bare-anyOf union branch) — a pre-existing, separate gap; the fromSchema route (#97's original
+slack case) already handles it.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema`, `fromProp`), `src/oas/utils/schemas.ts`.
+Fixture `object-stamped-on-a-list-nested.yaml`, test
+`test_114_nested_object_stamped_on_a_list_reads_the_items`. See #97 (the original route),
+Review §3.
+
+## 113 · Two same-shaped keys clean to one field, and the second key's value is unreachable — ✅ Fixed
+
+**Symptom:** #69 dropped the same-shape twin, so its wire key could never be read or sent; and
+twins folded together by an `allOf` or a flattened `oneOf` merge skipped the resolver entirely
+and wrote the same field twice — invalid GraphQL.
+
+**OAS** (trello — the #69 pair):
+```yaml
+prefs/background:  { type: string }
+prefs_background:  { type: string }
+```
+
+**Decision:** number, never drop. Each twin keeps its own wire key:
+```graphql
+prefsBackground: String      # selection: prefsBackground: prefs_background
+prefsBackground2: String     # selection: prefsBackground2: $."prefs/background"
+```
+
+**Fix** (`src/oas/nodes/typeUtils.ts` `numberTwinFields`): the same-shape early-continue and
+`sameFieldShape` are deleted — every later twin takes the numbered name via the existing
+`prop.renamedTo` machinery (which already flowed into both the SDL line and the selection alias).
+The allocator now respects an existing `renamedTo` so a second pass in a different prop order
+cannot flip which twin holds the base name. Bypass routes covered by reuse: `Composed` gets Obj's
+one-line `selectedProps` override (`src/oas/nodes/comp.ts`), `Union.dedupedSelectedProps` wraps
+its return (`src/oas/nodes/union.ts`) — both previously emitted duplicate fields, so only
+already-invalid output changes there.
+
+**The review's `required`-membership gap** in `sameFieldShape` died with the function.
+
+**Refs:** `src/oas/nodes/typeUtils.ts`, `src/oas/nodes/comp.ts`, `src/oas/nodes/union.ts`.
+Fixtures `sibling-name-collision.yaml`, `sibling-name-collision-merged.yaml`; tests
+`test_69_113_sibling_names_that_clean_to_one_field_are_numbered`,
+`test_113_twin_spellings_across_allof_and_union_members_are_numbered` (tests/all/r3-naming.test.ts).
+See #69 (the revised decision), Review §2.
+
+## 116 · Cleaned path names can still collide, and #103's renames need a migration note — ✅ Fixed
+
+**Symptom:** two distinct paths can clean to one root field and write the same Query field twice
+(invalid GraphQL). #103 only separated token-bearing paths.
+
+**OAS** (`cleaned-path-collision.yaml` — both collision classes):
+```yaml
+/foo-bar:            # formatPath splits on [:\-.+#] — both clean to fooBar
+/foo.bar:
+/things/{thing_id}:  # genParamName splits on any non-alphanumeric — both tokens -> ByThingId
+/things/{thing.id}:
+```
+(Note the issue's original `/foo-bar` vs `/foo_bar` example was wrong — underscores survive
+`formatPath`; only the Response type collided there, and #9's machinery already renamed it.)
+
+**Fix:** a spec-wide numbering pass at the end of `OasGen.buildPaths` (`src/oas/oasGen.ts`):
+per emitted root (Query vs Mutation, via `T.isMutationType`), a later op whose `getGqlOpName()`
+is taken gets `op.renamedTo` — the same minimal-state pattern as `prop.renamedTo` (#69/#113),
+with the numbering loop shared through `Naming.numberedName`. Each `getGqlOpName()` returns
+`renamedTo` first, so downstream `<op>Response` names and connector selections follow the
+numbered name with no further changes. The pass runs over the whole spec (not the selection) in
+the already-sorted path order, so names are stable across selections and regenerations (#71).
+
+**Measured inert elsewhere:** test_103's 8 paths and 17 corpus specs (github, stripe-curated,
+digitalocean, …) produce zero renames from the pass.
+
+**Also from the review:** the #103 migration note is in changelog.md under `[Unreleased]`
+`### Changed`; stripe-curated fixture minimization deferred (its only consumer is a todo test
+pending #73); rover left unpinned — a comment at `forceRover` (src/tests/runners.ts) documents
+the 0.41 ELv2-acceptance failure mode instead of a hard gate.
+
+**Refs:** `src/oas/oasGen.ts` (`buildPaths`), `src/oas/nodes/get.ts`/`post.ts`/`put.ts`/
+`patch.ts`/`delete.ts` (`renamedTo` guard), `src/oas/utils/naming.ts` (`numberedName`).
+Fixture `cleaned-path-collision.yaml`, test `test_116_cleaned_path_names_that_collide_are_numbered`
+(tests/all/r3-naming.test.ts). See #103, #113, Review §5.
+
+## 123 · A second inline `allOf` request body converges on the first body's `Input` name — ✅ Fixed
+
+**Symptom:** whole-spec mutation composes failed `INVALID_BODY` (52 errors: digitalocean ×36,
+docker ×10, sendgrid ×6): a later op's `@connect(http:{body:})` selects fields that don't exist
+on the input type its argument references. Per-op each body was fine — first isolated catch of
+the all-ops column (#122).
+
+**OAS** (`inline-allof-body-collision.yaml` — inline `allOf` bodies, all unnamed → `Input`):
+```yaml
+/alphas:      post: requestBody: schema: { allOf: [ {props: alpha}, {props: alphaExtra} ] }
+/alpha-twins: post: requestBody: schema: { allOf: [ {props: alpha}, {props: alphaExtra} ] }
+/bravos:      post: requestBody: schema: { allOf: [ {props: bravo}, {props: bravoExtra} ] }
+```
+
+**Example** — before, one definition with two disagreeing consumers; after, each shape its own:
+```graphql
+input InputInput { alpha: String alphaExtra: String }
+createAlphas(input: InputInput!)       # keeps the name
+createAlphaTwins(input: InputInput!)   # identical body still converges on it
+createBravos(input: BInputInput!)      # different body renames — was InputInput → INVALID_BODY
+```
+
+**Cause:** inline `Obj` bodies rename on collision and `Union` bodies are store-guarded
+(#104/#112) — `Composed.visitAllOfNode` stored its name unconditionally, so a second inline
+`allOf` body converged on the first's stored name with no shape check.
+
+**Fix:** the same `ownedByOtherSide` / `collidesWithStoredType` / `resolveNameConflict` block
+`Union.visit` got for #104/#112, at `visitAllOfNode`'s store site, scoped to
+`this.parent instanceof Body`. Identical bodies still converge (`isSameInlineDefinition`: same
+id + equal schemas); a different one takes `BInput`, `BInput2`, … (#104's family). The op's
+argument line and its `body:` selection follow automatically (both read the body payload node).
+
+**Measured-inert evidence (why the guard is Body-scoped):** applied globally the block is NOT
+inert — prop-parented inline comps that converge silently today rename (box churns ~1700/~1300
+lines GET/mutations, digitalocean GET 256). Body-scoped, 9 probe specs × both verb sets are
+byte-identical; only the intended body renames appear in digitalocean/docker/sendgrid.
+Post-fix sweep: docker and sendgrid all-ops flip to OK, `WHOLE:INVALID_BODY` leaves the
+histogram, every per-op number unchanged, LINT-CORPUS 0 diagnostics. digitalocean's clear
+unmasks `CONNECTORS_UNRESOLVED_FIELD` ×5 (`LoadBalancerRegion.*`) — logged as #124, not part
+of this fix.
+
+**Known residual corner (documented, not fixed):** a non-Body `Composed` named `Input` could
+still overwrite a body comp's stored entry (its store stays unconditional). No corpus spec hits
+it; the all-ops column would catch one.
+
+**Refs:** `src/oas/nodes/comp.ts` (`visitAllOfNode` store guard), `src/oas/nodes/union.ts`
+(#104/#112 twin block), `src/oas/nodes/typeUtils.ts` (helpers reused as-is). Fixture
+`inline-allof-body-collision.yaml`, test `test_123_second_inline_allof_body_renames_instead_of_converging`
+(tests/all/r3-naming.test.ts). See #104, #112, #122, #124.

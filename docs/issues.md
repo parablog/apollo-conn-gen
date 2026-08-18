@@ -5,7 +5,7 @@ cite an entry instead of carrying the full rationale inline. Every entry has an 
 showing the input schema that triggers it, a concrete **before → after** example, and an **AST:**
 note stating how (or whether) the node tree changed.
 
-**This file holds the open entries only.** The 81 fixed ones live in `docs/FIXED.md`. Ids are
+**This file holds the open entries only.** The 85 fixed ones live in `docs/FIXED.md`. Ids are
 global and never reused, so `#N` means the same entry in both files:
 - open — `// see docs/issues.md #N`
 - fixed — `// see docs/FIXED.md #N`
@@ -834,72 +834,18 @@ is one of the flags the wrapper always passes, which is why it hit this immediat
 silent-bad-output path.
 
 
-## 113 · Two same-shaped keys clean to one field, and the second key's value is unreachable — ⬜ Open, decision needed
+## 115 · Enum dedup is only tested inline, and the raw enum list keeps its doubles — ✅ Covered (2026-08-18, coverage-only)
 
-**Symptom:** none new — this questions #69's chosen behaviour, raised by the 17 Aug 2026
-five-commit review of `98c6707`.
+- the untested routes were already correct (every construction path passes the `En` constructor's
+  dedup): pinned by `test_115_enum_dedup_holds_on_ref_component_and_input_routes`
+  (fixture `duplicate-enum-values-routes.yaml`) — $ref'd component enum + input-position reuse.
+- `schema.enum` normalization declined: writing `En.items` back would mutate the shared
+  `lookupRef` `SchemaObject` instance and change `sameSchemaAs` convergence — two enums differing
+  only in duplicate patterns would start converging. Not output-identical-safe.
+- writing the coverage found #120: a bare `$ref`-enum response drops its whole operation.
 
-**OAS** (trello — the #69 fixture pair):
-```yaml
-prefs/background:  { type: string }
-prefs_background:  { type: string }
-```
-
-- #69 keeps the first twin and drops the second when the shapes match; the dropped KEY still
-  exists on the wire, so its value can never be read or sent.
-- the review proposes numbering instead (`prefsBackground`, `prefsBackground2`), never dropping.
-- that reverses a deliberate #69 decision, and `test_69_…write_once` pins the drop — needs an
-  explicit call before any code.
-- two side gaps recorded with it: `sameFieldShape` ignores the parent's `required` list, and the
-  resolver only runs via `Obj.selectedProps` — fields merged through allOf or a flattened union
-  bypass it.
-
-**Refs:** `src/oas/nodes/typeUtils.ts` (`resolveFieldNameTwins`, `sameFieldShape`),
-`docs/FIXED.md` #69. Review §2.
-
-## 114 · An object stamped on a list is only repaired on one route — ⬜ Open
-
-**Symptom:** none reproduced yet — flagged by the review of `d0d6662` (#97's fix).
-
-**OAS** (slack — #97's shape, `type: object` with `items` beside it):
-```yaml
-type: object
-items:
-  anyOf: [ … ]
-```
-
-- the repair lives in `Factory.fromSchema`; the same shape reached through `Factory.fromProp`
-  still builds a fieldless object and the field degrades to JSON.
-- recursing into `items` also drops the outer ref name, nullability and annotations.
-- no diagnostic says the generator repaired a malformed shape.
-- needs its own repro (a nested property with this shape) before any code.
-
-**Refs:** `src/oas/nodes/factory.ts` (`fromSchema`, `fromProp`), `docs/FIXED.md` #97. Review §3.
-
-## 115 · Enum dedup is only tested inline, and the raw enum list keeps its doubles — 📋 Noted
-
-- #102's test covers an inline enum property only; a `$ref`'d component enum, a top-level enum
-  response, and input-position reuse are untested.
-- the dedup lives on `En.items`; `schema.enum` keeps the doubles, so anything comparing raw
-  schemas sees a different list than what is emitted.
-
-**Refs:** `src/oas/nodes/en.ts`, `docs/FIXED.md` #102. Review §1.
-
-## 116 · Cleaned path names can still collide, and #103's renames need a migration note — ⬜ Open
-
-**Symptom:** none in the corpus — flagged by the review of `75d4461`.
-
-- `/foo-bar` and `/foo_bar` both clean to `fooBar`; #103 only separates token-bearing paths.
-- a general fix is an allocator over every root field name after cleaning — the R12 folder-input
-  work plans the same collision surface.
-- #103 renames every parameterized op's public field name; the changelog marks it Fixed, but a
-  release should carry a Changed/migration note for existing users and transform-rule files.
-- also from the same review: the stripe-curated fixture is 6.3 MB (a minimized twin would do),
-  and the forceRover test depends on the machine's rover (their rover 0.41 failed ELv2
-  acceptance before composing) — pin or document the version.
-
-**Refs:** `src/oas/utils/naming.ts` (`formatPath`), `ROADMAP.md` R12,
-`tests/resources/oas/stripe-curated.yaml`. Review §5.
+**Refs:** `src/oas/nodes/en.ts`, `docs/FIXED.md` #102, #120. Review §1. No code change, so the
+entry stays here rather than moving to FIXED.md.
 
 ## 117 · Union convergence ignores the discriminator mapping — 📋 Noted
 
@@ -932,4 +878,99 @@ non-blocking (full HubSpot lists run is 18.9s), and deferred:
   (wildcard `*`, #72 recovery, insertion order) and not worth it at current scale
 
 **Refs:** docs/FIXED.md #118 (the measurements), `src/oas/log/trace.ts`, #73 (why `path()` must
-not be memoized globally).
+not be memoized globally). The fourth bullet becomes moot under ROADMAP.md R15 (selection
+externalisation), which replaces the representation these costs live in.
+
+## 120 · A bare `$ref`-enum response drops the whole operation — ⬜ Open
+
+**Symptom:** an op whose 200 response is a component enum directly (no object wrapper) vanishes
+from the schema — no field, no error. Found writing #115's coverage.
+
+**OAS** (`duplicate-enum-values-routes.yaml`):
+```yaml
+/status:
+  get:
+    responses:
+      '200':
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StateCode' }   # a bare enum
+StateCode: { type: string, enum: [pending, active, done] }
+```
+
+**Example** — `type Query` contains `jobs` but no `status` field at all; the enum itself IS
+visited and stored (trace shows `enum:visit`), only the selection walk loses it.
+
+**Cause:** the leaf cases in `collectExpandedPaths`'s traverse (`src/oas/generator/typesCollector.ts`)
+cover `PropScalar`, `PropEn`, `PropCircRef`, `Scalar` under a `Res`, and lists of values — a bare
+`En` under a `Res` matches none, so the op yields zero selection paths and is dropped. The exact
+mechanism #32 (bare scalar) and #47 (bare scalar array) fixed for their shapes; the enum case was
+never covered (#24 only fixed `PropEn` leaves).
+
+**Test:** `test_115_bare_enum_response_must_not_drop_the_operation` (`tests/all/oas-core.test.ts`,
+`{ todo: ... }`) — flips green when fixed.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (the leaf cases), docs/FIXED.md #32 #47 #24.
+
+## 121 · A `oneOf` component used top-level by one op and nested by another fails the combined compose — ⬜ Open
+
+**Symptom:** each op composes alone; generate BOTH into one schema and rover rejects it with
+`GROUP_SELECTION_IS_NOT_OBJECT ×2`. Found building the all-ops coverage column — the first
+committed per-op-green/whole-red case.
+
+**OAS** (`per-op-green-whole-red.yaml`):
+```yaml
+/media:  get -> $ref Media                      # top level: real union + ->match (has discriminator)
+/shelf:  get -> { featured: $ref Media, ... }   # nested: isFlat -> merged object
+Media:   oneOf [Book, Movie], discriminator kind
+```
+
+- one component, two forms: the top-level position emits `union Media = Book | Movie` with a
+  `->match` selection; the nested position needs the flat merge (#25/#38).
+- combined, the two nodes share the component's name and one form wins the definition while the
+  other position's selection still speaks its own form — the `->match` group lands on a
+  non-object.
+- per-op coverage is 100% on this spec; only the all-ops column sees it (COVERAGE.md legend).
+
+**Test:** `test_coverage_all_ops_column_catches_per_op_green_whole_red`
+(`tests/all/coverage-tool.test.ts`) pins the DETECTION — when this entry is fixed, the fixture
+turns green and that test moves to a then-current red case (or a synthetic one).
+
+**Refs:** `src/oas/nodes/union.ts` (`isFlat`, `isTopLevelResponse`), docs/FIXED.md #25 #38 #48
+(the union-form family), #13/#89 (position-dependent divergence). Fixture
+`tests/resources/oas/per-op-green-whole-red.yaml`.
+
+## 122 · All-ops sweep findings: four cross-op failure classes invisible to per-op coverage — ⬜ Open (umbrella)
+
+**Symptom:** first sweeps with the all-ops column (2026-08-18): six spec/verb combos are per-op
+100% and red combined. Umbrella entry — a class gets its own number when someone picks it up.
+
+| class | where | first read |
+|---|---|---|
+| `INVALID_BODY` ×52 | digitalocean ×36, docker ×10, sendgrid ×6 — mutations only | ✅ fixed by #123 — digitalocean's all-ops now surfaces `CONNECTORS_UNRESOLVED_FIELD` (previously masked, see #124) |
+| `SATISFIABILITY_ERROR` | asana ×12 GET / ×30 mutations | composition-level: shared types reachable from several roots with disagreeing fields |
+| `GRAPH_QL_ERROR` + `SELECTED_FIELD_NOT_FOUND` | box ×34 GET / ×18 mutations | the SELECTED_FIELD_NOT_FOUND part smells like #13/#89 position divergence at cross-op scale |
+| `INVALID_GRAPHQL` ×2 | digitalocean GET | likely a cross-op duplicate definition — smallest, easiest isolate |
+
+- launch_library `GRAPH_QL_ERROR ×2` is the known #79 upstream op riding along — not new.
+- #121 (union top-level + nested) is the already-isolated member of this family.
+
+**Refs:** COVERAGE.md / COVERAGE-mutations.md `all-ops` column + `WHOLE:` histogram buckets,
+`tools/coverage-spec.mts` (`runWholeSpec`), #121, #13/#89, #104/#112.
+
+## 124 · digitalocean all-ops mutations: no connector resolves the `LoadBalancerRegion` fields — ⬜ Open
+
+**Symptom:** the whole-spec mutations compose of digitalocean.yaml fails with 5 build errors,
+one per field of a single type — previously masked by #123's `INVALID_BODY` errors:
+```
+CONNECTORS_UNRESOLVED_FIELD: No connector resolves field `LoadBalancerRegion.available`.
+It must have a `@connect` directive or appear in `@connect(selection:)`.
+```
+(same for `.features`, `.name`, `.sizes`, `.slug` — the report column counts ×10 occurrences.)
+
+- Per-op, all 145 mutation ops still compose 100% — a cross-op-only failure (#122 family).
+- The type is emitted, but no selected op's connector selection covers its fields.
+- Not chased as part of #123; first read pending.
+
+**Refs:** COVERAGE-mutations.md `all-ops` column (`digitalocean.yaml`), #122 (umbrella), #123
+(the unmasking fix). Probe: whole-spec mutations schema of `digitalocean.yaml` via rover.
