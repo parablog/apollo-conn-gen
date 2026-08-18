@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: Duplicate enum values on the untested routes
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /status:
+    get:
+      operationId: getStatus
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateCode'
+  /jobs:
+    get:
+      operationId: listJobs
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+    post:
+      operationId: createJob
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Job'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+components:
+  schemas:
+    # the component repeats two values, as openfigi's MappingJob.stateCode does
+    StateCode:
+      type: string
+      enum: [pending, active, active, done, done]
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        state:
+          $ref: '#/components/schemas/StateCode'
