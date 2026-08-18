@@ -15,6 +15,7 @@
 //        [--concurrency N] [--workers N] [--verbs get|mutations|all]
 import { OasGen } from '../src/index.js';
 import { SelectionPath } from '../src/oas/utils/selectionPath.js';
+import { wholeVerdict } from './coverage-verdict.mjs';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -98,10 +99,13 @@ const workers = parseInt(getArg('--workers', String(Math.min(8, Math.max(1, os.c
 const verbsSel = getArg('--verbs', 'get'); // get | mutations | all
 // each --verbs sweep gets its own report file so a later run doesn't clobber an earlier one.
 const opsLabel = verbsSel === 'get' ? 'GET' : verbsSel === 'mutations' ? 'mutation' : 'all';
-const outFile = verbsSel === 'get' ? 'COVERAGE.md' : `COVERAGE-${verbsSel}.md`;
+// COV_OUT redirects the report (tests point it at a temp dir so a suite run never clobbers the real file)
+const outFile = process.env.COV_OUT ?? (verbsSel === 'get' ? 'COVERAGE.md' : `COVERAGE-${verbsSel}.md`);
 // --specs a.yaml,b.json sweeps just that subset, e.g. probing a fix across the two specs it touches
 const someSpecs = getArg('--specs');
 const specs = onlySpec ? [onlySpec] : someSpecs ? someSpecs.split(',') : ALL_SPECS;
+// --whole off skips the all-ops column's generate+compose (default on)
+const wholeSel = getArg('--whole', 'on') !== 'off';
 const passKeys = ['abstract'] as (keyof typeof PASSES)[];
 
 // Whole (spec, pass) combinations that infinite-loop the generator — skipped so the sweep can
@@ -119,6 +123,8 @@ const TRACE = !!process.env.COV_TRACE;
 // `Number` so a typo (`=30s`) falls back to the default instead of becoming NaN, which fires the
 // deadline at once and scores every op in the sweep as a timeout.
 const COMPOSE_TIMEOUT_MS = Number(process.env.COV_COMPOSE_TIMEOUT) || 30_000;
+// the all-ops compose is one legitimately big schema (stripe: 263 ops) — its own, longer deadline
+const WHOLE_TIMEOUT_MS = Number(process.env.COV_WHOLE_TIMEOUT) || 120_000;
 // Above this SDL size we compose one at a time — eight rovers on a 300K schema each is what ate 60 GB.
 const BIG_SCHEMA_BYTES = 200_000;
 // A fresh dir per run (same reason as runners.ts): the GET and mutations sweeps name their files
@@ -152,7 +158,13 @@ async function loadBase(file: string): Promise<{ gen: OasGen; skip: boolean } | 
   return null;
 }
 
-async function compose(op: string, schema: string, fed: string, idx: number): Promise<{ ok: boolean; code?: string }> {
+async function compose(
+  op: string,
+  schema: string,
+  fed: string,
+  idx: number | string,
+  timeoutMs: number = COMPOSE_TIMEOUT_MS,
+): Promise<{ ok: boolean; code?: string; out?: string }> {
   if (TRACE) process.stderr.write(`    compose ${idx} ${op}\n`);
   const schemaFile = path.join(tmp, `schema-${idx}.graphql`);
   const sgFile = path.join(tmp, `supergraph-${idx}.yaml`);
@@ -179,7 +191,7 @@ async function compose(op: string, schema: string, fed: string, idx: number): Pr
       /* no children left */
     }
     running.child.kill('SIGKILL');
-  }, COMPOSE_TIMEOUT_MS);
+  }, timeoutMs);
   try {
     await running;
     return timedOut ? { ok: false, code: 'TIMEOUT' } : { ok: true };
@@ -192,7 +204,7 @@ async function compose(op: string, schema: string, fed: string, idx: number): Pr
     // name in the "Caused by:" body (e.g. INVALID_URL, SATISFIABILITY_ERROR, INVALID_GRAPHQL).
     const inner = out.match(/^\s*([A-Z][A-Z0-9_]{3,}):/m);
     const outer = out.match(/\[(E[0-9]+)\]/);
-    return { ok: false, code: inner ? inner[1] : outer ? outer[1] : 'OTHER' };
+    return { ok: false, code: inner ? inner[1] : outer ? outer[1] : 'OTHER', out };
   } finally {
     clearTimeout(deadline);
   }
@@ -223,6 +235,8 @@ type PassResult = {
   composeFail: number;
   buckets: Map<string, Bucket>;
   skipped?: string;
+  // the all-ops column: every selected op of this sweep composed as ONE schema. see COVERAGE.md legend
+  whole?: string;
 };
 
 // Normalize a generator exception into a root-cause class: drop the op-specific tail (` <- get:…`),
@@ -326,14 +340,62 @@ async function runPass(
       verdicts[op] = `COMPOSE-FAIL [${res.code}]`;
     }
   }
-  // per-op verdict dump for before/after attribution: COV_DUMP=/path/prefix
-  if (process.env.COV_DUMP) {
-    fs.writeFileSync(
-      `${process.env.COV_DUMP}.${file.replace(/[^a-z0-9]+/gi, '_')}.${passKey}.json`,
-      JSON.stringify(verdicts, null, 1),
-    );
+  // per-op verdict dump for before/after attribution: COV_DUMP=/path/prefix. The all-ops verdict
+  // joins the same file under the "whole" key once sweepSpec has it (dumpVerdicts re-writes).
+  dumpVerdicts(file, passKey, verdicts);
+  return { result: r, verdicts };
+}
+
+function dumpVerdicts(file: string, passKey: string, verdicts: Record<string, string>): void {
+  if (!process.env.COV_DUMP) return;
+  fs.writeFileSync(
+    `${process.env.COV_DUMP}.${file.replace(/[^a-z0-9]+/gi, '_')}.${passKey}.json`,
+    JSON.stringify(verdicts, null, 1),
+  );
+}
+
+// The all-ops run: ONE generation with every selected op, ONE compose — what production
+// (gen-ts.mjs) does, and what per-op composes structurally cannot see (cross-op collisions,
+// shared types selected from several positions).
+async function runWholeSpec(
+  parser: any,
+  ops: string[],
+  passKey: keyof typeof PASSES,
+  skip: boolean,
+  slots: Int32Array,
+  buckets: Map<string, Bucket>,
+): Promise<string> {
+  // zero ops for this verb set is normal in a per-verb sweep, not a failure
+  if (ops.length === 0) return '—';
+  const sels = ops.map((op) => SelectionPath.everythingUnder(op));
+  let schema: string;
+  try {
+    const g = new OasGen(parser, genOptions(passKey, skip) as any);
+    await g.visit();
+    const types = g.getTypes(sels);
+    schema = g.generateSchema(sels);
+    if (types.size === 0 && !/type (Query|Mutation) \{/.test(schema)) {
+      addBucket(buckets, 'WHOLE:GEN-EMPTY', 'all ops');
+      return 'GEN-EMPTY';
+    }
+  } catch (e: any) {
+    addBucket(buckets, `WHOLE:GEN-THROW: ${genKey(e)}`, 'all ops');
+    return 'GEN-THROW';
   }
-  return r;
+  // always the single-slot path: the all-ops schema is the memory-risk class (#49), whatever its size
+  const res = await withSlot(slots, 1, 1, () =>
+    compose(`all-ops(${ops.length})`, schema, PASSES[passKey].fed, `whole-${passKey}`, WHOLE_TIMEOUT_MS),
+  );
+  if (res.ok) return 'OK';
+  if (res.code === 'TIMEOUT') {
+    addBucket(buckets, 'WHOLE:TIMEOUT', 'all ops');
+    return 'FAIL [TIMEOUT]';
+  }
+  const { verdict, codes } = wholeVerdict(res.out ?? '');
+  for (const code of codes) {
+    addBucket(buckets, `WHOLE:${code}`, 'all ops');
+  }
+  return verdict;
 }
 
 // ---- main -----------------------------------------------------------------
@@ -389,10 +451,15 @@ async function sweepSpec(file: string, slots: Int32Array): Promise<SpecOutcome> 
       process.stderr.write(`  ${file} [${pk}] SKIPPED — ${reason}\n`);
       continue;
     }
-    const pr = await runPass(file, gen.parser, ops, pk, skip, slots);
+    const { result: pr, verdicts } = await runPass(file, gen.parser, ops, pk, skip, slots);
+    if (wholeSel) {
+      pr.whole = await runWholeSpec(gen.parser, ops, pk, skip, slots, pr.buckets);
+      verdicts['whole'] = pr.whole;
+      dumpVerdicts(file, pk, verdicts);
+    }
     rep.passes[pk] = pr;
     process.stderr.write(
-      `  ${file} [${pk}] ${ops.length} ops${skip ? ' (skipValidation)' : ''}: ok=${pr.ok} degraded=${pr.degraded} genEmpty=${pr.genEmpty} genThrow=${pr.genThrow} composeFail=${pr.composeFail} (${pct(pr.ok, pr.total)})\n`,
+      `  ${file} [${pk}] ${ops.length} ops${skip ? ' (skipValidation)' : ''}: ok=${pr.ok} degraded=${pr.degraded} genEmpty=${pr.genEmpty} genThrow=${pr.genThrow} composeFail=${pr.composeFail} (${pct(pr.ok, pr.total)})${pr.whole ? ` whole=${pr.whole}` : ''}\n`,
     );
   }
   return { rep, extraBuckets };
@@ -457,16 +524,16 @@ function pct(n: number, d: number): string {
 
 // ---- markdown report ------------------------------------------------------
 function passTable(pk: keyof typeof PASSES): string {
-  const head = `| Spec | GET ops | OK | DEGRADED | GEN-empty | GEN-throw | COMPOSE-fail | pass-rate |\n|---|--:|--:|--:|--:|--:|--:|--:|`;
+  const head = `| Spec | ${opsLabel} ops | OK | DEGRADED | GEN-empty | GEN-throw | COMPOSE-fail | pass-rate | all-ops |\n|---|--:|--:|--:|--:|--:|--:|--:|---|`;
   // incremental writes happen while workers are still sweeping — rows fill in as they finish
   const rows = reports
     .flatMap((rp) => (rp === undefined ? [] : [rp]))
     .map((rp) => {
       const p = rp.passes[pk];
-      if (!p) return `| ${rp.file}${rp.skip ? ' †' : ''} | ${rp.ops} | — | — | — | — | — | LOAD-FAIL |`;
+      if (!p) return `| ${rp.file}${rp.skip ? ' †' : ''} | ${rp.ops} | — | — | — | — | — | LOAD-FAIL | — |`;
       if (p.skipped)
-        return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | — | — | — | — | — | HANG (${p.skipped}) |`;
-      return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | ${p.ok} | ${p.degraded} | ${p.genEmpty} | ${p.genThrow} | ${p.composeFail} | ${pct(p.ok, p.total)} |`;
+        return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | — | — | — | — | — | HANG (${p.skipped}) | — |`;
+      return `| ${rp.file}${rp.skip ? ' †' : ''} | ${p.total} | ${p.ok} | ${p.degraded} | ${p.genEmpty} | ${p.genThrow} | ${p.composeFail} | ${pct(p.ok, p.total)} | ${p.whole ?? '—'} |`;
     });
   return [head, ...rows].join('\n');
 }
@@ -488,6 +555,11 @@ is generated and rover-composed once (real unions, the shipping default). **† 
 Buckets: **OK** generated + composed · **DEGRADED** retired (was the consolidate downgrade — now 0) ·
 **GEN-empty** no types produced · **GEN-throw** generator threw
 (incl. GEN-HANG, a sync infinite loop) · **COMPOSE-fail** rover rejected the schema. pass-rate = OK / ${opsLabel} ops.
+
+**all-ops** = every selected ${opsLabel} op of this sweep composed as ONE schema — what production
+(\`gen-ts.mjs\`) does, and what per-op composes cannot see (cross-op collisions, shared types
+selected from several positions). Per-verb, not full-spec: the combined read+write compose is only
+measured by a \`--verbs all\` run. \`FAIL [<code> ×<n>]\` counts that code's own occurrences.
 \n## Coverage (real unions, connect ${PASSES.abstract.connectorSpecVersion}, fed ${PASSES.abstract.fed})\n\n${passTable('abstract')}\n
 ## Gap histogram (all specs, all selected passes)
 

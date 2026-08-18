@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info: { title: per-op green whole red candidate, version: "1.0.0" }
+servers: [{ url: https://api.example.com }]
+paths:
+  /media:
+    get:
+      operationId: getMedia
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+  /shelf:
+    get:
+      operationId: getShelf
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name: { type: string }
+                  featured:
+                    $ref: '#/components/schemas/Media'
+components:
+  schemas:
+    Media:
+      oneOf:
+        - $ref: '#/components/schemas/Book'
+        - $ref: '#/components/schemas/Movie'
+      discriminator:
+        propertyName: kind
+    Book:
+      type: object
+      properties:
+        kind: { type: string }
+        pages: { type: integer }
+    Movie:
+      type: object
+      properties:
+        kind: { type: string }
+        minutes: { type: integer }
