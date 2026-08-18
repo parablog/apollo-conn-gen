@@ -1,0 +1,45 @@
+openapi: 3.0.3
+info:
+  title: map value anyOf enum-or-string
+  version: "1.0.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /content/convert-ids-to-types:
+    post:
+      operationId: convertContentIdsToContentTypes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contentIds]
+              properties:
+                contentIds:
+                  type: array
+                  items:
+                    anyOf:
+                      - type: string
+                      - type: number
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentIdToContentTypeResponse"
+components:
+  schemas:
+    ContentIdToContentTypeResponse:
+      type: object
+      properties:
+        results:
+          type: object
+          description: content id -> content type
+          additionalProperties:
+            anyOf:
+              - type: string
+                enum: [page, blogpost, attachment, footer-comment, inline-comment]
+              - type: string
+                description: custom content types

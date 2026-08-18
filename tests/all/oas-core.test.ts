@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { DirectivesConfig, OasGen } from '../../src/index.js';
-import { T } from '../../src/oas/nodes/internal.js';
+import { Prop, T } from '../../src/oas/nodes/internal.js';
 import './_setup.js';
 
 /// OAS TESTS
@@ -1165,6 +1165,71 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   assert.ok((schema!.match(/label/g) || []).length >= 3, 'Shared.label selected under both fields');
 });
 
+test('test_118_recursive_oneof_clique_terminates', () => {
+  // #118: 7 mutually-recursive oneOf members reached through per-branch-named arrays. The
+  // instance cut (#10) never fires (recursion closes through the member LIST, not one schema),
+  // so expansion enumerates every ordering of the clique and effectively never returns. A sync
+  // busy loop ignores node:test timeouts, so run it in a child process spawnSync can SIGTERM.
+  const script = `
+    import { OasGen } from './src/index.js';
+    const gen = await OasGen.fromFile('tests/resources/oas/recursive-oneof-array-branches.yaml',
+      { skipValidation: true, showParentInSelections: false });
+    await gen.visit();
+    console.log('COUNT=' + gen.expanded(['get:/lists/{id}>**']).length);
+  `;
+  const res = spawnSync('node', ['--import', 'tsx/esm', '--input-type=module', '-e', script], {
+    timeout: 60_000,
+    encoding: 'utf-8',
+  });
+  assert.strictEqual(res.status, 0, 'expansion did not terminate within 60s (pre-#118 behavior)');
+  const count = Number(/COUNT=(\d+)/.exec(res.stdout)?.[1]);
+  assert.ok(count > 0 && count < 5_000, `expanded selection stays bounded, got ${count}`);
+});
+
+test('test_118_recursive_oneof_clique_cut_output', async () => {
+  // #118, output side: the no-discriminator union degrades to one merged object, and every
+  // branch's re-entry of the same 7-way member set is cut — commented in BOTH SDL and selection,
+  // like #10's instance cuts. The shared tag field itself survives the merge.
+  const schema = await runOasTest('recursive-oneof-array-branches.yaml', ['get:/lists/{id}>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type FilterBranchUnion'), 'merged union object emitted');
+  for (const branch of ['or', 'and', 'notAll', 'notAny', 'restricted', 'unifiedEvents', 'association']) {
+    assert.ok(
+      schema!.includes(`# ${branch}Branches: [filterBranchUnion] - circular reference omitted`),
+      `${branch}Branches cut in SDL`,
+    );
+    assert.ok(
+      schema!.includes(`# ${branch}Branches: circular reference omitted`),
+      `${branch}Branches cut commented in selection`,
+    );
+  }
+  assert.ok(/\bfilterBranchType: OrBranchFilterBranchType\b/.test(schema!), 'tag field kept on the merge');
+});
+
+test('test_118_prefix_set', async () => {
+  // #118, cost side: Union/Composed selection filters must use the #10 prefix set, not a
+  // selection scan per prop — the scan rebuilds prop.path() per entry per prop (55M calls on
+  // hubspot lists). Deterministic pin: count path() calls, not wall time. Measured on this
+  // fixture: 123 with the prefix set, 578 with the scans it replaced.
+  const orig = Prop.prototype.path;
+  let calls = 0;
+  Prop.prototype.path = function (this: Prop) {
+    calls++;
+    return orig.call(this);
+  };
+  try {
+    const gen = await OasGen.fromFile(`${oasBasePath}/recursive-oneof-array-branches.yaml`, {
+      skipValidation: true,
+      showParentInSelections: false,
+    });
+    await gen.visit();
+    gen.generateSchema(['get:/lists/{id}>**']);
+  } finally {
+    Prop.prototype.path = orig;
+  }
+  assert.ok(calls < 250, `selection filters scan per prop again (${calls} path() calls, expected < 250)`);
+});
+
 test('test_bare_scalar_response_not_dropped', async () => {
   // A response that resolves directly to a scalar (no property wrapper) has nothing selectable
   // under the old leaf-detection, so the op was silently dropped from the schema entirely — not
@@ -2197,19 +2262,120 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   assert.ok(!/body:/.test(files!), 'and maps no body');
 });
 
-test('test_73_curated_multi_op_stripe_selection_composes', async () => {
-  // stripe's real 34-op production selection failed with 1161 unresolved fields until identical
-  // union twins converged on one name. see docs/issues.md #73 — and forceRover: only stock rover catches it
-  const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
+test(
+  'test_73_curated_multi_op_stripe_selection_composes',
+  {
+    todo: 'CORRECTION 2026-08-18: this was wrongly marked passing — the test never pinned composeFederationVersion, so it silently under-validated against a mismatched default (2.15.1 vs the v2.13 this schema declares). Pinning it shows real errors again. See docs/issues.md #73.',
+  },
+  async () => {
+    // stripe's real 34-op production selection failed with 1161 unresolved fields; #104's fix made
+    // identical union twins converge on one name, but under a correctly-pinned federation version
+    // real CONNECTORS_UNRESOLVED_FIELD errors remain (TaxId, several MetadataEntry variants).
+    // see docs/issues.md #73 — and forceRover: only stock rover catches it
+    const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
   // 365: the 40 numbered twin copies across 9 name families collapse into their canonical types
+  // composeFederationVersion MUST match federationVersion — compose()'s own default (2.15.1)
+  // doesn't match what gen emits here (v2.13), and a mismatch doesn't fail cleanly, it makes
+  // rover silently validate less (confirmed: this exact schema went from real errors to a clean
+  // pass with no version-mismatch complaint at all — see docs/issues.md #109's methodology note).
   const schema = await runOasTest('stripe-curated.yaml', selections, 587, 365, {
     skipValidation: true,
     skipAuth: true,
     federationVersion: 'v2.13',
+    composeFederationVersion: '2.13.0',
     forceRover: true,
   });
   assert.ok(schema !== undefined);
-});
+  },
+);
+
+// The three tests below use the exact same "every path" selection the corresponding real
+// manifest produces (none of confluence/omni/pagerduty's manifests set operations.include) —
+// not a hand-picked subtree. gen's own tests/all/corpus.test.ts also carries confluence.json/
+// omni.yaml, but that file is gitignored (.gitignore: "published specs carry example secrets…
+// kept on disk only, not committed") and those two fixtures are stale, different-version
+// snapshots (confluence.json is REST v1/89 paths vs the real v2/213 paths here; omni.yaml is
+// 90 paths vs 163) tested only against narrow hand-picked subtrees, never the full spec — so
+// this is the first tracked, shared test any of these three specs have had at all.
+test(
+  'test_108_confluence_full_production_selection',
+  { todo: 'a map value that is anyOf[enum, string] drops its whole property — see docs/issues.md #108' },
+  async () => {
+    const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/confluence-full-selection.json`, 'utf-8'));
+    const schema = await runOasTest('confluence-full.json', selections, 213, 327, {
+      skipValidation: true,
+      skipAuth: true,
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.14.0',
+    });
+    assert.ok(schema !== undefined);
+  },
+);
+
+test(
+  'test_109_omni_full_production_selection',
+  { todo: '359 CONNECTORS_UNRESOLVED_FIELD across 71 types, cause not established — see docs/issues.md #109' },
+  async () => {
+    const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
+    const schema = await runOasTest('omni-full.json', selections, 163, 419, {
+      skipValidation: true,
+      skipAuth: true,
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.14.0',
+    });
+    assert.ok(schema !== undefined);
+  },
+);
+
+test(
+  'test_110_pagerduty_full_production_selection',
+  { todo: 'an array of a shapeless $ref in a request body is dropped instead of degrading to [JSON] — see docs/issues.md #110' },
+  async () => {
+    // PagerDuty had no corpus entry at all before this — not stale, simply untested.
+    const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/pagerduty-full-selection.json`, 'utf-8'));
+    const schema = await runOasTest('pagerduty-full.json', selections, 95, 333, {
+      skipValidation: true,
+      skipAuth: true,
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.14.0',
+    });
+    assert.ok(schema !== undefined);
+  },
+);
+
+test(
+  'test_108_map_with_anyof_enum_or_string_values_drops_the_map_and_selection',
+  { todo: 'the map property is dropped entirely, leaving an empty type and an empty selection — see docs/issues.md #108' },
+  async () => {
+    // Confluence's real `POST /content/convert-ids-to-types`: response is one property, a map
+    // whose values are `anyOf: [enum-of-strings, plain-string]`. Generating confluence's full,
+    // unfiltered spec (graphos-service-factory/scripts/gen-ts.mjs) writes `type
+    // ContentIdToContentTypeResponse { }` — zero fields, invalid GraphQL on its own — and an empty
+    // `selection: """ """`. Combined with --service-prefix (Namespace.apply parses the raw SDL
+    // before prefixing it) this crashes the whole CLI with an uncaught GraphQLError instead of a
+    // clean, actionable message.
+    const schema = await runOasTest('map-value-anyof-enum-string.yaml', ['post:/content/convert-ids-to-types>**'], 1, 2);
+    assert.ok(schema !== undefined);
+    assert.ok(!/type ContentIdToContentTypeResponse \{\s*\}/.test(schema!), 'the map property should not vanish, leaving an empty type');
+  },
+);
+
+test(
+  'test_110_array_of_shapeless_ref_body_prop_is_not_dropped',
+  { todo: 'the whole request-body property vanishes instead of degrading to [JSON] — see docs/issues.md #110' },
+  async () => {
+    // PagerDuty's real `PUT /incidents/{id}/merge`: request body has one property,
+    // `source_incidents`, an array of `$ref: IncidentReference` where IncidentReference is
+    // shapeless (`{ type: object, additionalProperties: true }`). A bare shapeless ref correctly
+    // degrades to JSON (factory.ts's documented fallback) — but as an array's `items` inside a
+    // request body, the whole property is dropped instead, leaving `input InputInput { }` and
+    // `body: """ $args.input { } """` — both empty. Same crash-under-service-prefix interaction
+    // as #108 (Namespace.apply parses the raw, already-invalid SDL before prefixing it).
+    const schema = await runOasTest('array-of-shapeless-ref-body-prop.yaml', ['put:/incidents/{id}/merge>**'], 1, 2);
+    assert.ok(schema !== undefined);
+    assert.ok(!/input InputInput \{\s*\}/.test(schema!), 'source_incidents should degrade to [JSON], not vanish');
+  },
+);
 
 test('test_90_map_at_the_response_root_takes_entries', async () => {
   // #90: a response body that is itself a dictionary had no field name to hang the arrow off, so

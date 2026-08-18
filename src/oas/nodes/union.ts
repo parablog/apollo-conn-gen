@@ -1,4 +1,4 @@
-import { Arr, Composed, Factory, Get, IType, Param, Prop, PropScalar, Res, T, Type } from './internal.js';
+import { Arr, Composed, Factory, Get, IType, Param, Prop, PropScalar, Res, T, Type, selectionPrefixes } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -76,10 +76,15 @@ export class Union extends Type {
     if (this.name != null) {
       // two unions can share a name but hold different members — the second one takes a new name (#104).
       // e.g. (github) an object body and a oneOf body are both named Input, and wrote InputInput twice
-      if (!T.ownedByOtherSide(this, context) && T.collidesWithStoredType(this, context)) {
+      const ownedByOtherSide = T.ownedByOtherSide(this, context);
+      if (!ownedByOtherSide && T.collidesWithStoredType(this, context)) {
         T.resolveNameConflict(this, context);
       }
-      context.store(this.name, this);
+      // same store guard as Map (#78): a response union must not take the entry over from a body
+      // union — the next body union would read its own name as free and keep it. see #112
+      if (!ownedByOtherSide && !context.types.has(this.name)) {
+        context.store(this.name, this);
+      }
     }
 
     this.visited = true;
@@ -254,7 +259,9 @@ export class Union extends Type {
       if (child instanceof Composed && child.schema.allOf != null && !child.consolidated) {
         child.consolidate(selection);
       }
-      return Array.from(child.props.values()).some((p) => selection.find((s) => s.startsWith(p.path())));
+      // prefix-set membership, not a scan per prop — 55M path() rebuilds on hubspot lists. #10 #118
+      const prefixes = selectionPrefixes(selection);
+      return Array.from(child.props.values()).some((p) => prefixes.has(p.path()));
     });
   }
 
@@ -411,6 +418,7 @@ export class Union extends Type {
 
     const ids: Set<IType> = new Set();
     const props: Prop[] = [];
+    const prefixes = selectionPrefixes(selection);
     const discriminator = this.discriminator;
 
     this.children?.forEach((child) => {
@@ -424,7 +432,7 @@ export class Union extends Type {
       }
 
       Array.from(child.props.values())
-        .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
+        .filter((prop) => prefixes.has(prop.path()))
         .forEach((prop) => props.push(prop));
 
       // props.push(...child.props.values());
@@ -473,6 +481,7 @@ export class Union extends Type {
 
   public selectedProps(selection: string[]) {
     const collected: Prop[] = [];
+    const prefixes = selectionPrefixes(selection);
 
     this.children.forEach((child) => {
       // a member that is itself a union has no fields of its own — take its members' fields.
@@ -482,7 +491,7 @@ export class Union extends Type {
         return;
       }
       Array.from(child.props.values())
-        .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
+        .filter((prop) => prefixes.has(prop.path()))
         .forEach((prop) => collected.push(prop));
     });
 

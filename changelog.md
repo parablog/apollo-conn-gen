@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- A mutually-recursive `oneOf` reached through arrays no longer expands forever — hubspot's
+  lists filter tree generates in seconds instead of never returning (a union member-set cycle
+  cut, plus the #10 prefix-set fix applied to four missed selection filters). Issue #118.
+
 - A by-id operation now takes its name from its path tokens — github's `GET /gists/{gist_id}`
   becomes `gistsByGistId` instead of colliding with `GET /gists` — so a whole-spec github
   selection composes without duplicate fields. Issue #103.
@@ -15,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   writes `BInputInput` beside `InputInput` instead of defining it twice. Issue #104.
 - A dictionary's inline value type now follows its renamed container — github's two gist models
   each keep their own `files` values, and the whole github spec composes clean. Issue #107.
+- A response union no longer takes a body union's stored name, so a later body union renames
+  instead of keeping a name already in use. Issue #112.
 
 ## [0.23.0]
 

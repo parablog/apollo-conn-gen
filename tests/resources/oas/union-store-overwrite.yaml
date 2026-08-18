@@ -1,0 +1,83 @@
+# Three unions land on the name `Input`: body, response ($ref component), body again — the
+# response union took the stored entry over, and the third kept a name the first already emitted.
+openapi: 3.0.3
+info:
+  title: Union store overwrite
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /alphas:
+    post:
+      operationId: createAlpha
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    alpha:
+                      type: string
+                - type: object
+                  properties:
+                    beta:
+                      type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+  /bravos:
+    get:
+      operationId: listBravos
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Input'
+  /gammas:
+    post:
+      operationId: createGamma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    gamma:
+                      type: string
+                - type: object
+                  properties:
+                    delta:
+                      type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+components:
+  schemas:
+    # a component literally named Input, returned by get:/bravos — the other side of the name
+    Input:
+      oneOf:
+        - type: object
+          properties:
+            left:
+              type: string
+        - type: object
+          properties:
+            right:
+              type: string
+    Ack:
+      type: object
+      properties:
+        ok:
+          type: boolean

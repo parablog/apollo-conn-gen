@@ -164,6 +164,12 @@ export class Factory {
       // none and writes an empty block (digitalocean's create-record body). see docs/FIXED.md #50
       //   schema: { anyOf: [ { allOf: [ … ] }, { … } ] }
       const members = schema.oneOf || schema.anyOf || [];
+      // re-entering the same member set on this path is the union form of a cycle — without this
+      // cut a mutually-recursive clique expands once per member ordering and never returns. #118
+      const cyclicUnion = this.cyclicUnionAncestor(parent, members as SchemaObject[]);
+      if (cyclicUnion) {
+        return this.fromRefCircRef(parent, cyclicUnion, ref ?? cyclicUnion.name);
+      }
       result = new Union(
         parent,
         ref || _.get(schema, 'name'),
@@ -417,7 +423,12 @@ export class Factory {
 
     // Cut only a real loop: a field pointing back to a type we already passed through. Compare the schema,
     // not the field name — different types reuse field names (e.g. Adobe `extension_attributes`). docs/FIXED.md #36
-    const cyclic = this.cyclicAncestor(parent, schemaObj);
+    const unionMembers = (schemaObj.oneOf ?? schemaObj.anyOf) as SchemaObject[] | undefined;
+
+    // the union-set form of the same loop: PropComp builds its Union without createContainerType. #118
+    const cyclic =
+      this.cyclicAncestor(parent, schemaObj) ??
+      (unionMembers ? this.cyclicUnionAncestor(parent, unionMembers) : undefined);
     if (cyclic) {
       prop = new PropCircRef(parent, prop);
     }
@@ -463,6 +474,32 @@ export class Factory {
   private static cyclicAncestor(parent: IType, schema?: SchemaObject): IType | undefined {
     if (!schema) return undefined;
     return parent.ancestors().find((a) => a.schema === schema);
+  }
+
+  // A union's cycle identity: its sorted member-$ref set. Undefined when any non-null member is
+  // inline or <2 are $refs — keeps e.g. (stripe) `anyOf: [string, $ref]` out of the cut. see docs/FIXED.md #118
+  private static unionRefSignature(members: (SchemaObject | ReferenceObject)[]): string | undefined {
+    const real = members.filter((m) => m && (m as SchemaObject).type !== 'null');
+    const refs = real
+      .filter((m) => (m as ReferenceObject).$ref != null)
+      .map((m) => (m as ReferenceObject).$ref as string);
+    if (refs.length < 2 || refs.length !== real.length) return undefined;
+    return refs.slice().sort().join('|');
+  }
+
+  // Union analog of cyclicAncestor (#10): mutual recursion through a oneOf clique closes through
+  // the member LIST, which a Union carries as raw $refs, never as one `.schema`. see docs/FIXED.md #118
+  //   e.g. (hubspot lists) OrBranch.orBranches items: oneOf [OrBranch, AndBranch, …] — the same
+  //   7-way member set re-entered under every branch, never the same single schema.
+  private static cyclicUnionAncestor(
+    parent: IType,
+    members: (SchemaObject | ReferenceObject)[],
+  ): Union | undefined {
+    const signature = this.unionRefSignature(members);
+    if (!signature) return undefined;
+    return parent
+      .ancestors()
+      .find((a) => a instanceof Union && this.unionRefSignature(a.schemas) === signature) as Union | undefined;
   }
 
   /** Build the `fromSchema` circular sentinel (commented in both SDL + selection). see docs/FIXED.md #10 */

@@ -1,0 +1,160 @@
+openapi: 3.0.3
+info:
+  # Reproduces issue #118 as committed: each branch names its array differently, so no
+  # name-based cut ever matches and expansion enumerates every ordering of the 7-clique.
+  title: mutually-recursive oneOf branches behind per-branch-named arrays (hubspot lists shape)
+  version: "1.0.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /lists/{id}:
+    get:
+      operationId: getList
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicObjectList"
+components:
+  schemas:
+    PublicObjectList:
+      type: object
+      properties:
+        listId:
+          type: string
+        filterBranch:
+          oneOf:
+            - $ref: "#/components/schemas/OrBranch"
+            - $ref: "#/components/schemas/AndBranch"
+            - $ref: "#/components/schemas/NotAllBranch"
+            - $ref: "#/components/schemas/NotAnyBranch"
+            - $ref: "#/components/schemas/RestrictedBranch"
+            - $ref: "#/components/schemas/UnifiedEventsBranch"
+            - $ref: "#/components/schemas/AssociationBranch"
+    OrBranch:
+      type: object
+      properties:
+        filterBranchType:
+          type: string
+          enum: [OR]
+        orBranches:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/OrBranch"
+              - $ref: "#/components/schemas/AndBranch"
+              - $ref: "#/components/schemas/NotAllBranch"
+              - $ref: "#/components/schemas/NotAnyBranch"
+              - $ref: "#/components/schemas/RestrictedBranch"
+              - $ref: "#/components/schemas/UnifiedEventsBranch"
+              - $ref: "#/components/schemas/AssociationBranch"
+    AndBranch:
+      type: object
+      properties:
+        filterBranchType:
+          type: string
+          enum: [AND]
+        andBranches:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/OrBranch"
+              - $ref: "#/components/schemas/AndBranch"
+              - $ref: "#/components/schemas/NotAllBranch"
+              - $ref: "#/components/schemas/NotAnyBranch"
+              - $ref: "#/components/schemas/RestrictedBranch"
+              - $ref: "#/components/schemas/UnifiedEventsBranch"
+              - $ref: "#/components/schemas/AssociationBranch"
+    NotAllBranch:
+      type: object
+      properties:
+        filterBranchType:
+          type: string
+          enum: [NOT_ALL]
+        notAllBranches:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/OrBranch"
+              - $ref: "#/components/schemas/AndBranch"
+              - $ref: "#/components/schemas/NotAllBranch"
+              - $ref: "#/components/schemas/NotAnyBranch"
+              - $ref: "#/components/schemas/RestrictedBranch"
+              - $ref: "#/components/schemas/UnifiedEventsBranch"
+              - $ref: "#/components/schemas/AssociationBranch"
+    NotAnyBranch:
+      type: object
+      properties:
+        filterBranchType:
+          type: string
+          enum: [NOT_ANY]
+        notAnyBranches:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/OrBranch"
+              - $ref: "#/components/schemas/AndBranch"
+              - $ref: "#/components/schemas/NotAllBranch"
+              - $ref: "#/components/schemas/NotAnyBranch"
+              - $ref: "#/components/schemas/RestrictedBranch"
+              - $ref: "#/components/schemas/UnifiedEventsBranch"
+              - $ref: "#/components/schemas/AssociationBranch"
+    RestrictedBranch:
+      type: object
+      properties:
+        filterBranchType:
+          type: string
+          enum: [RESTRICTED]
+        restrictedBranches:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/OrBranch"
+              - $ref: "#/components/schemas/AndBranch"
+              - $ref: "#/components/schemas/NotAllBranch"
+              - $ref: "#/components/schemas/NotAnyBranch"
+              - $ref: "#/components/schemas/RestrictedBranch"
+              - $ref: "#/components/schemas/UnifiedEventsBranch"
+              - $ref: "#/components/schemas/AssociationBranch"
+    UnifiedEventsBranch:
+      type: object
+      properties:
+        filterBranchType:
+          type: string
+          enum: [UNIFIED_EVENTS]
+        unifiedEventsBranches:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/OrBranch"
+              - $ref: "#/components/schemas/AndBranch"
+              - $ref: "#/components/schemas/NotAllBranch"
+              - $ref: "#/components/schemas/NotAnyBranch"
+              - $ref: "#/components/schemas/RestrictedBranch"
+              - $ref: "#/components/schemas/UnifiedEventsBranch"
+              - $ref: "#/components/schemas/AssociationBranch"
+    AssociationBranch:
+      type: object
+      properties:
+        filterBranchType:
+          type: string
+          enum: [ASSOCIATION]
+        associationBranches:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/OrBranch"
+              - $ref: "#/components/schemas/AndBranch"
+              - $ref: "#/components/schemas/NotAllBranch"
+              - $ref: "#/components/schemas/NotAnyBranch"
+              - $ref: "#/components/schemas/RestrictedBranch"
+              - $ref: "#/components/schemas/UnifiedEventsBranch"
+              - $ref: "#/components/schemas/AssociationBranch"

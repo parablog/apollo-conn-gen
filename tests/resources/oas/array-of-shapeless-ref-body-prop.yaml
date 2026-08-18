@@ -1,0 +1,42 @@
+openapi: 3.0.3
+info:
+  title: array of shapeless $ref items in a request body
+  version: "1.0.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /incidents/{id}/merge:
+    put:
+      operationId: mergeIncidents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_incidents]
+              properties:
+                source_incidents:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/IncidentReference"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+components:
+  schemas:
+    IncidentReference:
+      type: object
+      additionalProperties: true

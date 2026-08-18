@@ -1,4 +1,4 @@
-import { Factory, Get, IType, Param, Prop, ReferenceObject, Res, T, Type } from './internal.js';
+import { Factory, Get, IType, Param, Prop, ReferenceObject, Res, T, Type, selectionPrefixes } from './internal.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';
@@ -154,8 +154,10 @@ export class Composed extends Type {
       ids.add(node.id);
 
       if (selection.length > 0) {
+        // prefix-set membership, not a scan per prop — 55M path() rebuilds on hubspot lists. #10 #118
+        const prefixes = selectionPrefixes(selection);
         node.props.forEach((prop) => {
-          if (selection.find((s) => s.startsWith(prop.path()))) {
+          if (prefixes.has(prop.path())) {
             props.set(prop.name, prop);
           }
         });

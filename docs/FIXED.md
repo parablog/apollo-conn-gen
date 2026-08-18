@@ -5461,3 +5461,121 @@ placeholder branch), `src/oas/nodes/typeUtils.ts` (`isExemptFromRename`, unchang
 `map-inline-value-collision.yaml`, test `test_107_inline_map_values_split_with_their_wrappers`.
 See #78 for the wrapper half (its `$ref`-valued fixture never hit this), #9 for the exemption's
 original premise, #95 for the mirror case (a wrapper borrowing a name).
+
+
+## 112 · A response union takes the stored entry from a body union, and the next body keeps a used name — ✅ Fixed
+**Symptom:** found by the 17 Aug 2026 five-commit review, reproduced on `75d4461`: with three
+unions landing on one name — body, response, body — the third body union kept the name the first
+had already emitted, and its connector selected fields the emitted input doesn't have.
+
+**OAS** (union-store-overwrite.yaml — the response comes from a component literally named Input):
+```yaml
+/alphas:  post -> requestBody oneOf [ {alpha}, {beta} ]     # input union, named Input
+/bravos:  get  -> $ref: '#/components/schemas/Input'        # oneOf component, the other side
+/gammas:  post -> requestBody oneOf [ {gamma}, {delta} ]    # input union, named Input again
+```
+
+**Example:**
+```graphql
+# before — createGammas sends gamma/delta against a type that defines alpha/beta
+input InputInput { alpha … beta }
+createGammas(input: InputInput!): Ack
+
+# after — the third union renames off the first, as #104 intends
+input BInputInput { gamma … delta }
+createGammas(input: BInputInput!): Ack
+```
+
+**Cause:**
+- #104's guard skips the rename when the stored type is the other side of the wire — right —
+  but then stored unconditionally, so the response union took the entry over.
+- the next body union compared itself against the response union, read the name as
+  other-side-shared, and kept it.
+- `Map.visit` (#78) already guards the store the same way it guards the rename; Union didn't.
+
+**Fix:** the same store guard as Map: an other-side type never takes the entry, and a name
+already stored is not overwritten. A registry keyed by name AND side would remove this class
+outright — noted as a follow-up, not done (the guard covers the reproduced failure).
+
+**AST** — none; only which node the name's registry entry points at changes.
+
+**Measured:** the three-union fixture composes; github whole-spec and stripe curated stay at
+zero errors.
+
+**Refs:** `src/oas/nodes/union.ts` (`visit`), `src/oas/nodes/map.ts` (the guard mirrored),
+`src/oas/nodes/typeUtils.ts` (`ownedByOtherSide`). Fixture `union-store-overwrite.yaml`, test
+`test_112_response_union_must_not_take_the_stored_entry_from_a_body_union`. See #104 for the
+rename half, #78 for the pattern.
+
+## 118 · A mutually-recursive `oneOf` reached through arrays never finishes expanding — ✅ Fixed
+
+**Symptom:** HubSpot's real `GET /crm/lists/2026-03/{listId}` (and the plain list endpoint) never
+returned — the first entry in this log where the CLI process itself had to be killed. The fixture
+form (7 branch types whose per-branch-named arrays all hold the same 7-way `oneOf`) hung >60s on a
+~100-line spec.
+
+**OAS** (hubspot lists — `filterBranch` is a `oneOf` of 7 branch types; each branch's array holds
+the *same* 7-way `oneOf` again):
+```yaml
+OrBranch:
+  properties:
+    orBranches:            # each branch names its array differently (or/and/notAll/…)
+      type: array
+      items:
+        oneOf: [OrBranch, AndBranch, NotAllBranch, NotAnyBranch, RestrictedBranch,
+                UnifiedEventsBranch, AssociationBranch]   # 7-way, mutually recursive
+```
+
+**Cause** — two independent defects, one entry (mirrors #10's pair exactly):
+
+1. **No union-level cycle cut.** The #10 cut (`Factory.cyclicAncestor`) compares one resolved
+   `SchemaObject` along `ancestors()` — but mutual recursion through a `oneOf` clique closes
+   through the member LIST, which a `Union` carries as raw `$ref`s (`Union.schemas`; it never sets
+   `.schema`). So no path ever matched, and the tree enumerated every simple ordering of the
+   clique — factorial in clique size. On real HubSpot a name-based accident in `Type.add` happened
+   to bound it at 56 branch objects (vacuous `schema === schema` on undefined); with per-branch
+   array prop names (the common AND/OR filter-group spelling) even that never fires and expansion
+   is genuinely factorial.
+2. **Quadratic selection matching, again.** Post-cut, the op still yields a 38,300-entry
+   selection, and four sites missed by #10's `selectionPrefixes` fix re-ran
+   `selection.find((s) => s.startsWith(prop.path()))` per prop — 55.7M `path()` rebuilds, ~94s of
+   a 97.6s run (`Union.selectedMembers`/`consolidate`/`selectedProps`, `Composed.consolidate`).
+   The full 30-op spec exceeded 600s. (An earlier "0% CPU stall" report was a measurement
+   artifact: `node --import tsx/esm` runs as a supervisor+worker pair with identical command
+   lines, and the idle ~6MB supervisor was sampled while the worker ran at 99% — sample tsx
+   workers by CPU/RSS or ppid, never by name.)
+
+**Fix:**
+
+1. Union member-set signature cut (`src/oas/nodes/factory.ts`): `unionRefSignature` (sorted
+   member-`$ref` set; undefined when any non-null member is inline or <2 refs — keeps stripe's
+   `anyOf [string, $ref]` out) + `cyclicUnionAncestor` (first ancestor `Union` with the same
+   signature, path-scoped like #10 — sibling reuse is never cut). Applied at
+   `createContainerType`'s union branch (returns the #10 `RefCircRef` sentinel) and `fromProp`'s
+   epilogue (wraps in `PropCircRef`, covering the inline-oneOf `PropComp` constructions). The
+   instance cut stays checked first at both sites.
+2. The four missed sites use `selectionPrefixes(selection)` membership instead of the scan
+   (`src/oas/nodes/union.ts`, `src/oas/nodes/comp.ts`; re-exported through `internal.ts`).
+
+**Measured:** fixture >60s hang → 0.5s. Real `{listId}` op: never terminates → 104s after fix 1
+→ 5.4s after fix 2 (38,300 entries, unchanged). Full 30-op lists.json CLI run: >600s timeout →
+18.9s exit 0 (confirmed independently at 19.4s). Whole suite byte-identical (371 pass / 0 fail /
+7 pre-existing todos).
+
+**AST** — shape change only where the new cut fires (deep duplicate branches become the existing
+#10 sentinel nodes); an instrumented sweep of every union-heavy green fixture (TMF632/637/666/717,
+box, github, omni, quickbooks, stripe-curated at 4M nodes, union-shared) found zero chains where
+the new cut fires — existing outputs untouched, `id`/`path()` semantics untouched.
+
+**Residuals** deferred to #119 (trace-arg cost, a `.some` path() hoist, dead `T.print` calls, a
+path→node map for the collect walk — none needed for the bound).
+
+**Refs:** `src/oas/nodes/factory.ts` (`unionRefSignature`, `cyclicUnionAncestor`),
+`src/oas/nodes/union.ts` / `src/oas/nodes/comp.ts` (prefix sets), `src/oas/nodes/type.ts`
+(`selectionPrefixes`, #10). Fixture `recursive-oneof-array-branches.yaml`; tests
+`test_118_recursive_oneof_clique_terminates` (spawnSync 60s canary),
+`test_118_recursive_oneof_clique_cut_output`, `test_118_prefix_set` (deterministic `path()` call
+counter: 123 fixed vs 578 with the scans, bound 250). See #10 (both halves are its direct
+descendants), #119 (residuals). Found via `graphos-service-factory/scripts/gen-ts.mjs` against
+`service-catalog/hubspot/lists.json`; note that wrapper cannot run the hubspot service end-to-end
+yet (multi-spec dir, its task #19) — the acceptance evidence is the raw CLI run above.

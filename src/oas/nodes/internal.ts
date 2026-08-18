@@ -33,7 +33,7 @@ import { T } from './typeUtils.js';
 import { Op } from './op.js';
 
 export * from './iType.js';
-export { Type } from './type.js';
+export { Type, selectionPrefixes } from './type.js';
 export { type ReferenceObject } from './referenceObject.js';
 export { Prop } from './prop.js';
 export { Param } from './param.js';

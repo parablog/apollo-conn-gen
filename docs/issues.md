@@ -5,7 +5,7 @@ cite an entry instead of carrying the full rationale inline. Every entry has an 
 showing the input schema that triggers it, a concrete **before → after** example, and an **AST:**
 note stating how (or whether) the node tree changed.
 
-**This file holds the open entries only.** The 80 fixed ones live in `docs/FIXED.md`. Ids are
+**This file holds the open entries only.** The 81 fixed ones live in `docs/FIXED.md`. Ids are
 global and never reused, so `#N` means the same entry in both files:
 - open — `// see docs/issues.md #N`
 - fixed — `// see docs/FIXED.md #N`
@@ -334,7 +334,7 @@ rewrite) plus keeping `$this.<sanitised>` consistent with the `@key`.
 `Prop.name`, both raw OAS names today; sanitising `keyFields` for `@key` must keep that check in
 step, and the test above fails if it does not), `Naming.sanitiseField`.
 
-## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked again (stripe trigger fixed)
+## 73 · Node ids embed emitted names, so visit order changes selection identity — 🔴 Reopened (stripe trigger only partly fixed)
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —
 so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
@@ -412,22 +412,35 @@ issue's naming collision. `#13`'s own record says that mechanism was fixed by `#
 case; whether the fix generalizes to Stripe's shape, or a residual gap remains, needs isolating
 before filing separately — flagged here rather than guessed at.
 
-**Parked again (2026-08-17, same day):** the stripe trigger was not this issue's identity drift —
-it was the in-flight #104 guard renaming *identical* union twins apart (they only ever converged by
-id accident before). `sameSchemaAs` now reads a union's member list and tag as its shape, so
-identical twins converge on one name and only genuinely different unions rename. With that one
-change the curated selection composes with **zero** errors under stock rover — including the ~556
-"unseparated" ones, which were downstream of the same split, not #13/#89's mechanism. Locked in as
-`test_73_curated_multi_op_stripe_selection_composes` (forceRover). The identity-drift core of this
-issue — ids embedding names, browse-order divergence — is untouched and stays parked on the same
-wake condition as before.
+**Parked again (2026-08-17, same day) — later found wrong, see the 2026-08-18 correction below.**
+The claim at the time was: the stripe trigger was not this issue's identity drift — it was the
+in-flight #104 guard renaming *identical* union twins apart (they only ever converged by id
+accident before). `sameSchemaAs` now reads a union's member list and tag as its shape, so identical
+twins converge on one name. The claim that this made the curated selection compose with **zero**
+errors, including the ~556 "unseparated" ones, was **wrong** — see below.
+
+**Correction (2026-08-18).** The "zero errors" test result was a false positive: the test never
+pinned `composeFederationVersion`, so `compose()`'s own default (`2.15.1`, `src/tests/runners.ts`)
+didn't match the `v2.13` this schema's `@link` declares. A federation-version mismatch doesn't fail
+loudly — it makes rover silently validate less (the same trap documented in #109's methodology
+note, found independently the same day on Omni: the identical schema went from 359 errors to 19
+with zero version-mismatch complaint). Re-run with `composeFederationVersion: '2.13.0'` pinned to
+actually match, the real count is **453 `CONNECTORS_UNRESOLVED_FIELD` errors** — not zero. #104's
+fix is real and did cut the total from 1161 to 453 (the duplicate-named-twin families it targets
+are gone from the list), but the ~556 "unseparated" errors flagged above were never resolved; they
+were undercounted, not fixed. `test_73_curated_multi_op_stripe_selection_composes` and
+`test_corpus_stripe_curated_production_selection` are both back to `{ todo: ... }`, both showing
+the real 453. The identity-drift core of this issue — ids embedding names, browse-order divergence
+— was never touched and stays open on the same "member-list selection breaks in real use" trigger,
+now with an accurate count instead of a false all-clear.
 
 **Refs:** `src/oas/nodes/*.ts` (`get id()` per class, `withUniqueName`), `src/oas/generator/typesCollector.ts`,
-#71/#72 (the shipped floor), #12/#22/#9 (the rename machinery), #13/#89 (the other candidate
-mechanism for the unseparated remainder above). Fixtures:
-`tests/resources/oas/stripe-curated.yaml`, `tests/resources/oas/stripe-curated-selection.json` —
-found running `graphos-service-factory/scripts/gen-ts.mjs`, that repo's wrapper comparing TS `gen`
-against `tools/connect-gen`, the Rust fork it currently uses.
+#71/#72 (the shipped floor), #12/#22/#9 (the rename machinery), #13/#89 (a candidate mechanism for
+the remaining 453, still not isolated), #109 (the same federation-version methodology trap, found
+independently the same day). Fixtures: `tests/resources/oas/stripe-curated.yaml`,
+`tests/resources/oas/stripe-curated-selection.json` — found running
+`graphos-service-factory/scripts/gen-ts.mjs`, that repo's wrapper comparing TS `gen` against
+`tools/connect-gen`, the Rust fork it currently uses.
 
 ## 79 · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
 
@@ -614,3 +627,309 @@ generation, not at `rover compose` time on a real production spec.
 #105, same investigation.
 
 
+
+## 108 · A map whose values are `anyOf: [enum, string]` drops the whole property — ⬜ Open
+
+**Symptom:** confluence's real `POST /content/convert-ids-to-types` generates a response type with
+zero fields — invalid GraphQL on its own — and an empty selection. Generating confluence's full,
+unfiltered spec writes it straight to the schema (no crash, just broken output); adding
+`--service-prefix` crashes the whole CLI instead, because `Namespace.apply` `parse()`s the raw SDL
+before prefixing it, and an uncaught `GraphQLError` takes the process down with it rather than a
+clean, actionable message:
+```
+GraphQLError: Syntax Error: Expected Name, found "}".
+```
+
+**OAS** (confluence — a map whose values pick between an enum and a plain string):
+```yaml
+ContentIdToContentTypeResponse:
+  properties:
+    results:
+      type: object
+      additionalProperties:
+        anyOf:
+          - { type: string, enum: [page, blogpost, attachment, footer-comment, inline-comment] }
+          - { type: string, description: "Custom content types" }
+```
+
+**Example** — the property (and its whole selection) disappear rather than degrading to `JSON`:
+```graphql
+type ContentIdToContentTypeResponse {
+}
+```
+```graphql
+      selection: """
+      """
+```
+
+**Cause:** not yet established — not investigated past confirming the trigger shape (a map value
+type that is itself `anyOf`, not a plain scalar/`$ref`) and reproducing it standalone. Likely
+related to #93/#95's family (map value-type resolution edge cases) but not confirmed to be the
+same code path.
+
+**Not caught by any corpus gate** (same situation as #105/#106): confluence's own corpus test
+(`test_corpus_confluence`, `corpus.test.ts`) only selects `get:/wiki/rest/api/audit>**`, nowhere
+near this operation — full-spec generation is what surfaces it.
+
+**Test:** `test_108_map_with_anyof_enum_or_string_values_drops_the_map_and_selection`
+(`tests/all/oas-core.test.ts`, `{ todo: ... }`) — minimal fixture
+`tests/resources/oas/map-value-anyof-enum-string.yaml`, isolated from the real confluence op
+(request body included, since without one the whole operation vanishes rather than emitting the
+empty type — a second, smaller oddity worth noting but not chased down here).
+
+**Refs:** `src/oas/nodes/map.ts` (value-type resolution). Found running
+`graphos-service-factory/scripts/gen-ts.mjs` against confluence's real, full `openapi.json` — that
+repo's wrapper comparing TS `gen` against `tools/connect-gen`, the Rust fork it currently uses.
+
+## 109 · Omni's full spec fails with 359 unresolved fields, and one traced case has a selection that looks complete — ⬜ Open
+
+**Symptom:** generating Omni's real, full, unfiltered `openapi.json` (no operation curation — this
+manifest has no `operations.include`) and composing with stock rover fails with **359
+`CONNECTORS_UNRESOLVED_FIELD` errors across 71 distinct types**. Confirmed independent of
+`--service-prefix`, `--transform-rules`, and everything the wrapper's own post-processing does —
+plain `-n --skip-auth --federation-version v2.13` on the raw spec reproduces the identical count.
+**Not #73's mechanism**: zero of the 71 failing types carry a numbered-duplicate suffix.
+
+**Methodology note, so this isn't miscounted again:** the `supergraph.yaml`'s `federation_version`
+must match what the schema's own `@link` declares (rover otherwise silently under-reports —
+composing the *same* schema against a mismatched `federation_version: =2.13.0` vs the schema's own
+`v2.14` link dropped the count from 359 to 19, with no version-mismatch error at all. Confirmed by
+composing the identical file both ways.)
+
+**OAS/Example** — one traced case, `POST /api/v1/ai/generate-query`, response
+`AiGenerateQueryResponse { error: Error, query: AiSemanticQuery, ... }`. Both `Error` and
+`AiSemanticQuery` are reached from exactly one position (grepped every `: Error`/`: AiSemanticQuery`
+field-type reference in the raw SDL — one each), and that position's `@connect(selection:)`
+reads, verbatim:
+```graphql
+selection: """
+ baseView?
+ error? {
+  detail
+  message
+ }
+ query? {
+  fields
+  filters: filters?->entries { key value }
+  limit?
+  sorts? { columnName: column_name sortDescending: sort_descending }
+  table?
+  keyString: $."[key: string]"?
+ }
+ result: result?->entries { key value }
+ topic?
+ workbookUrl?
+"""
+```
+Every field `Error`/`AiSemanticQuery`/`AiQuerySort` declare is named here, spelled the same way, in
+the same nesting — yet rover still reports all of them unresolved. This is not the same shape as
+the previously-fixed `CONNECTORS_UNRESOLVED_FIELD` cases in this log (`#13`/`#89`, `#73`) — those
+were genuinely missing or divergent selections; here the selection reads correct by inspection.
+
+**Cause: not yet established.** Not investigated past the one traced case above — whether the
+mechanism is a `result: result?->entries` interaction (a map/`->entries` selection sitting
+alongside the plain nested-object selections in the same block — `#93`/`#106`-adjacent territory),
+a parse/attach failure on this specific `@connect` block that silently drops it from validation
+while still emitting its types, or something else entirely. The other 70 failing types (mostly
+around Omni's `Ai*`/`Scim*`/pagination shapes) haven't been individually traced — no claim that
+they share this case's exact mechanism, only that none of them are `#73`'s numbered-duplicate
+pattern.
+
+**Refs:** none pinned yet — needs the tracing above extended to more of the 71 types before a code
+location can be named with confidence. Found running `graphos-service-factory/scripts/gen-ts.mjs`
+against Omni's real, full `openapi.json` (`service-catalog/omni/`) — that repo's wrapper comparing
+TS `gen` against `tools/connect-gen`, the Rust fork it currently uses. No fixture pinned yet;
+Omni's real spec is large (`service-catalog/omni/openapi.json`) and hasn't been reduced to a
+minimal standalone repro the way `#108`'s was.
+
+**Methodology gotcha worth keeping, found alongside this**: composing the same schema with a
+`supergraph.yaml` `federation_version` that *doesn't* match the schema's own `@link` version
+doesn't fail — rover silently validates less and under-reports. Dropped this exact case from 359
+to 19 errors with no version-mismatch complaint at all. Always match them when comparing error
+counts across runs.
+
+## 110 · An array of a shapeless `$ref` in a request body is dropped, not degraded to `[JSON]` — ⬜ Open
+
+**Symptom:** PagerDuty's real `PUT /incidents/{id}/merge` generates `input InputInput { }` — zero
+fields — and `body: """ $args.input { } """` — empty. Same crash-under-`--service-prefix`
+interaction as `#108` (`Namespace.apply` `parse()`s the raw, already-invalid SDL before prefixing
+it, so an uncaught `GraphQLError` takes the whole CLI down instead of a clean message).
+
+**OAS** (pagerduty — the body's one property is an array of a shapeless ref):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        properties:
+          source_incidents:
+            type: array
+            items: { $ref: '#/components/schemas/IncidentReference' }
+IncidentReference:
+  type: object
+  additionalProperties: true   # no declared properties — "shapeless"
+```
+
+**Cause:** a bare shapeless ref correctly degrades to the `JSON` scalar (`factory.ts`'s documented
+fallback, confirmed working standalone) — but as an array's `items` *inside a request body*
+specifically, the property disappears instead of degrading to `[JSON]`. Not investigated past
+confirming the trigger shape and that a direct (non-array, non-body) shapeless ref does not hit
+this. Whether it's array-specific, body-specific, or both together, is open.
+
+**Not caught by any corpus gate** (same situation as `#105`/`#106`/`#108`): PagerDuty's own corpus
+test (`test_corpus_omni`... no — PagerDuty has no dedicated `corpus.test.ts` entry at all; its
+coverage comes entirely from the real committed connector's own test suite, which the Rust-based
+`service-catalog/pagerduty/` was built against, not TS).
+
+**Test:** `test_110_array_of_shapeless_ref_body_prop_is_not_dropped` (`tests/all/oas-core.test.ts`,
+`{ todo: ... }`) — minimal fixture `tests/resources/oas/array-of-shapeless-ref-body-prop.yaml`.
+
+**Refs:** `src/oas/nodes/factory.ts` (`isShapelessObject` fallback — works standalone, not here),
+`src/oas/nodes/arr.ts`, `src/oas/nodes/body.ts`. Found running
+`graphos-service-factory/scripts/gen-ts.mjs` against PagerDuty's real, full `openapi.json` — same
+wrapper as `#108`/`#109`.
+
+## 111 · `--service-prefix` crashes the whole CLI on SDL its own generator already wrote invalid — ⬜ Open
+
+**Symptom:** whenever the raw, pre-prefix SDL is already invalid GraphQL (an empty `type`/`input`
+body — `#108`, `#110`, and presumably any future case in the same family), adding
+`--service-prefix` turns a silent bad-output bug into a hard process crash:
+```
+GraphQLError: Syntax Error: Expected Name, found "}".
+    at syntaxError (…/graphql/error/syntaxError.js:31:10)
+    …
+Node.js v26.7.0
+```
+Without `--service-prefix`, the same input just prints the (already broken) SDL and exits 0 — no
+crash, no error, silently wrong. Neither behavior is right, but the crash is the more urgent one:
+it takes the whole CLI process down with an unhandled exception and a raw stack trace instead of
+"gen failed to produce valid GraphQL for operation X, see below."
+
+**Cause:** `Namespace.apply(sdl, prefix)` (`src/oas/lint/namespace.ts`) calls graphql-js's `parse(sdl)`
+to find byte offsets for the rename splice, with nothing catching a `GraphQLError` if the input
+doesn't parse. `OasGen.generateSchema()` runs `Namespace.apply` last, unconditionally, whenever
+`servicePrefix` is set (`src/oas/oasGen.ts`) — there is no validity check on the generator's own
+output between generation and this parse.
+
+**Fix (not done):** two independent, complementary things:
+1. `Namespace.apply` should catch the parse failure and raise an actionable error naming the
+   `--service-prefix` interaction, not let a raw `GraphQLError`/stack trace reach the user.
+2. Separately (arguably higher-leverage, since it fixes both the crash and the silent-bad-output
+   case at once): `generateSchema()` could validate its own output is parseable GraphQL before
+   returning, and fail there with a clear message pointing at whichever operation produced the
+   invalid type — `#108`/`#110` are two known root causes for how the SDL gets there, but this
+   entry is about the missing safety net once it does, not about preventing every possible cause.
+
+**Test:** not yet written standalone — reproduced today via `#108`'s and `#110`'s fixtures with
+`--service-prefix` added (both crash identically). Worth a small dedicated fixture (any spec that
+generates an empty type/input) + test once someone picks this up, rather than relying on those two
+staying reproducible forever.
+
+**Refs:** `src/oas/lint/namespace.ts` (`Namespace.apply`), `src/oas/oasGen.ts` (`generateSchema`,
+where the unconditional call happens). Cross-cutting over `#108`/`#110` — fixing either of those
+root causes narrows this issue's blast radius but doesn't close it; the missing safety net is
+independent of which spec shape trips it. Found running
+`graphos-service-factory/scripts/gen-ts.mjs` (same wrapper as `#108`/`#109`/`#110`) — `--service-prefix`
+is one of the flags the wrapper always passes, which is why it hit this immediately rather than the
+silent-bad-output path.
+
+
+## 113 · Two same-shaped keys clean to one field, and the second key's value is unreachable — ⬜ Open, decision needed
+
+**Symptom:** none new — this questions #69's chosen behaviour, raised by the 17 Aug 2026
+five-commit review of `98c6707`.
+
+**OAS** (trello — the #69 fixture pair):
+```yaml
+prefs/background:  { type: string }
+prefs_background:  { type: string }
+```
+
+- #69 keeps the first twin and drops the second when the shapes match; the dropped KEY still
+  exists on the wire, so its value can never be read or sent.
+- the review proposes numbering instead (`prefsBackground`, `prefsBackground2`), never dropping.
+- that reverses a deliberate #69 decision, and `test_69_…write_once` pins the drop — needs an
+  explicit call before any code.
+- two side gaps recorded with it: `sameFieldShape` ignores the parent's `required` list, and the
+  resolver only runs via `Obj.selectedProps` — fields merged through allOf or a flattened union
+  bypass it.
+
+**Refs:** `src/oas/nodes/typeUtils.ts` (`resolveFieldNameTwins`, `sameFieldShape`),
+`docs/FIXED.md` #69. Review §2.
+
+## 114 · An object stamped on a list is only repaired on one route — ⬜ Open
+
+**Symptom:** none reproduced yet — flagged by the review of `d0d6662` (#97's fix).
+
+**OAS** (slack — #97's shape, `type: object` with `items` beside it):
+```yaml
+type: object
+items:
+  anyOf: [ … ]
+```
+
+- the repair lives in `Factory.fromSchema`; the same shape reached through `Factory.fromProp`
+  still builds a fieldless object and the field degrades to JSON.
+- recursing into `items` also drops the outer ref name, nullability and annotations.
+- no diagnostic says the generator repaired a malformed shape.
+- needs its own repro (a nested property with this shape) before any code.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema`, `fromProp`), `docs/FIXED.md` #97. Review §3.
+
+## 115 · Enum dedup is only tested inline, and the raw enum list keeps its doubles — 📋 Noted
+
+- #102's test covers an inline enum property only; a `$ref`'d component enum, a top-level enum
+  response, and input-position reuse are untested.
+- the dedup lives on `En.items`; `schema.enum` keeps the doubles, so anything comparing raw
+  schemas sees a different list than what is emitted.
+
+**Refs:** `src/oas/nodes/en.ts`, `docs/FIXED.md` #102. Review §1.
+
+## 116 · Cleaned path names can still collide, and #103's renames need a migration note — ⬜ Open
+
+**Symptom:** none in the corpus — flagged by the review of `75d4461`.
+
+- `/foo-bar` and `/foo_bar` both clean to `fooBar`; #103 only separates token-bearing paths.
+- a general fix is an allocator over every root field name after cleaning — the R12 folder-input
+  work plans the same collision surface.
+- #103 renames every parameterized op's public field name; the changelog marks it Fixed, but a
+  release should carry a Changed/migration note for existing users and transform-rule files.
+- also from the same review: the stripe-curated fixture is 6.3 MB (a minimized twin would do),
+  and the forceRover test depends on the machine's rover (their rover 0.41 failed ELv2
+  acceptance before composing) — pin or document the version.
+
+**Refs:** `src/oas/utils/naming.ts` (`formatPath`), `ROADMAP.md` R12,
+`tests/resources/oas/stripe-curated.yaml`. Review §5.
+
+## 117 · Union convergence ignores the discriminator mapping — 📋 Noted
+
+**OAS** (the shape that would trip it — two same-member unions, mappings differ):
+```yaml
+discriminator:
+  propertyName: kind
+  mapping: { a: '#/…/TypeA' }   # vs  mapping: { a: '#/…/TypeB' }
+```
+
+- `sameSchemaAs` compares a union's members and `discriminator` (the property name) but not the
+  `mapping` block, so two such unions would converge on one type.
+- theoretical: no spec in the corpus produces it; needs a same-side, same-name, same-members,
+  mapping-only-differs repro before code.
+
+**Refs:** `src/oas/nodes/typeUtils.ts` (`sameSchemaAs`), `docs/FIXED.md` #73/#104. Review §5.
+
+## 119 · Residual path()-cost hotspots left after #118 — 📋 Noted
+
+#118's fix removed the costs that broke the 5-minute bound; these four were measured, found
+non-blocking (full HubSpot lists run is 18.9s), and deferred:
+
+- eager trace args: `OasGen.expand`/`Type.expand` build `path()` strings for `trace()` even when
+  the CLI no-op'd `console.log` (~10s residual at 30-op scale) — needs a look at how library
+  consumers enable tracing before any gate ships
+- `side.path()` re-computed inside a `.some` callback at `typesCollector.ts:333` (~9M calls)
+- dead `const tree = T.print(this)` whole-subtree string builds at `comp.ts:149`/`:207`
+- the collect walk re-resolves each expanded path from the root (~1.4s) — a path→node map carried
+  out of `collectExpandedPaths` would remove it, but it is the only structurally risky change
+  (wildcard `*`, #72 recovery, insertion order) and not worth it at current scale
+
+**Refs:** docs/FIXED.md #118 (the measurements), `src/oas/log/trace.ts`, #73 (why `path()` must
+not be memoized globally).

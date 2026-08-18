@@ -261,6 +261,27 @@ test('test_103_ref_and_undeclared_path_params_take_positional_by_suffixes', asyn
   assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
 });
 
+test('test_112_response_union_must_not_take_the_stored_entry_from_a_body_union', async () => {
+  // #112: a response union sharing a body union's name took the stored entry over, so the next
+  // body union kept a name the first already emitted — its connector selected missing fields.
+  const schema = await runOasTest(
+    'union-store-overwrite.yaml',
+    ['post:/alphas>**', 'get:/bravos>**', 'post:/gammas>**'],
+    3,
+    4,
+  );
+  assert.ok(schema !== undefined);
+  assert.strictEqual((schema!.match(/^input InputInput/gm) || []).length, 1, 'first body keeps the name, once');
+  assert.ok(/createAlphas\(input: InputInput!\)/.test(schema!), 'first body references it');
+  assert.ok(/^type Input \{/m.test(schema!), 'the response union keeps the shared name on its side');
+  const renamed = schema!.match(/input BInputInput \{[^]*?^\}/m)?.[0] ?? '';
+  assert.ok(/gamma/.test(renamed) && /delta/.test(renamed), 'the third union renames and keeps its members');
+  assert.ok(!/alpha/.test(renamed), 'and does not inherit the first body\'s members');
+  assert.ok(/createGammas\(input: BInputInput!\)/.test(schema!), 'its op references the renamed input');
+  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
+});
+
 test('test_104_second_inline_oneof_body_renames_instead_of_duplicating', async () => {
   // #104: an object body and a oneOf body are both named `Input`, and the pair wrote
   // `input InputInput` twice — the union now renames, as a second object body always did.
