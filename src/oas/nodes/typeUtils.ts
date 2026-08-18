@@ -342,37 +342,32 @@ export class T {
     return !!(hasStructure || raw.enum || hasMapShape);
   }
 
-  // Siblings whose names clean to one field write once: the same shape keeps the first and drops
-  // the twin; a different shape takes a numbered name both the type and the mapping write. #69
-  //   e.g. (trello) boards: prefs/background + prefs_background -> one prefsBackground
-  public static resolveFieldNameTwins(props: Prop[]): Prop[] {
+  // Siblings whose names clean to one field are never dropped: each keeps its own wire key, and
+  // later twins take numbered names both the type and the mapping write. see docs/FIXED.md #69 #113
+  //   e.g. (trello) boards: prefs/background + prefs_background -> prefsBackground, prefsBackground2
+  public static numberTwinFields(props: Prop[]): Prop[] {
     const taken = new Map<string, Prop>();
     const kept: Prop[] = [];
     for (const prop of props) {
+      // a name allocated on an earlier pass stays put — reallocating in another prop order could
+      // flip which twin holds the base name between generate and select. #113
+      if (prop.renamedTo) {
+        taken.set(prop.renamedTo, prop);
+        kept.push(prop);
+        continue;
+      }
       const field = Naming.sanitiseField(prop.name);
-      const holder = taken.get(field);
-      if (!holder) {
+      if (!taken.has(field)) {
         taken.set(field, prop);
         kept.push(prop);
         continue;
       }
-      if (T.sameFieldShape(holder, prop)) {
-        continue;
-      }
-      let numbered = field + '2';
-      for (let n = 3; taken.has(numbered); n++) {
-        numbered = field + n;
-      }
+      const numbered = Naming.numberedName(field, (n) => taken.has(n));
       prop.renamedTo = numbered;
       taken.set(numbered, prop);
       kept.push(prop);
     }
     return kept;
-  }
-
-  // the description does not change what a field holds, so twins differing only there are one shape
-  private static sameFieldShape(a: Prop, b: Prop): boolean {
-    return _.isEqual(_.omit(a.schema, 'description'), _.omit(b.schema, 'description'));
   }
 
   // Qualify a colliding inline name with its container, bumping `2`, `3`… until free.
@@ -381,14 +376,9 @@ export class T {
   public static resolveNameConflict(node: IType, context: OasContext): void {
     const base = Naming.genTypeName(T.findNonPropParent(node.parent!).name) + Naming.genTypeName(node.name);
     const reserved = T.reservedComponentNames(context);
-    let candidate = base;
-    for (let n = 2; context.types.has(candidate) || reserved.has(candidate); n++) {
-      if (context.types.has(candidate) && T.canConvergeOn(node, context.types.get(candidate), candidate)) {
-        break;
-      }
-      candidate = `${base}${n}`;
-    }
-    node.name = candidate;
+    const taken = (name: string) =>
+      (context.types.has(name) || reserved.has(name)) && !T.canConvergeOn(node, context.types.get(name), name);
+    node.name = taken(base) ? Naming.numberedName(base, taken) : base;
   }
 
   // only inline types named after a property key get renamed (#9 Obj, #7/#22 Composed). The rest

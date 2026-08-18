@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info:
+  title: twin field spellings folded together by allOf and a flattened oneOf
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /merged:
+    get:
+      operationId: getMerged
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PartA'
+                  - $ref: '#/components/schemas/PartB'
+  /choice:
+    get:
+      operationId: getChoice
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ChoiceA'
+                  - $ref: '#/components/schemas/ChoiceB'
+components:
+  schemas:
+    PartA:
+      type: object
+      properties:
+        name:
+          type: string
+        prefs/background:
+          type: string
+    PartB:
+      type: object
+      properties:
+        id:
+          type: string
+        prefs_background:
+          type: string
+    ChoiceA:
+      type: object
+      properties:
+        x:
+          type: string
+        foo-bar:
+          type: string
+    ChoiceB:
+      type: object
+      properties:
+        y:
+          type: string
+        foo_bar:
+          type: string

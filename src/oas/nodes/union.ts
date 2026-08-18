@@ -242,8 +242,12 @@ export class Union extends Type {
       }
     }
 
-    return Array.from(firstByName.entries()).map(([name, prop]) =>
-      incompatible.has(name) ? new PropScalar(prop.parent!, name, 'JSON', {}) : prop,
+    // two members can spell the same field differently — number the later twin instead of writing
+    // it twice. e.g. (trello) boards: prefs/background + prefs_background. see docs/FIXED.md #113
+    return T.numberTwinFields(
+      Array.from(firstByName.entries()).map(([name, prop]) =>
+        incompatible.has(name) ? new PropScalar(prop.parent!, name, 'JSON', {}) : prop,
+      ),
     );
   }
 

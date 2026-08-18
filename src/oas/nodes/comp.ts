@@ -142,6 +142,12 @@ export class Composed extends Type {
     trace(context, '<- [comp::select]', `-> out: ${this.name}`);
   }
 
+  // allOf can fold two spellings of one field onto this type — number the later twin, as a plain
+  // object does. e.g. (trello) boards: prefs/background + prefs_background. see docs/FIXED.md #113
+  public override selectedProps(selection: string[]) {
+    return T.numberTwinFields(super.selectedProps(selection));
+  }
+
   public consolidate(selection: string[]): Set<string> {
     const ids: Set<string> = new Set();
     let props: Map<string, Prop> = new Map();

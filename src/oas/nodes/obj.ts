@@ -136,7 +136,7 @@ export class Obj extends Type {
   // siblings that clean to one field name write once — generate, select and dependencies all
   // read this list, so the three agree. e.g. (trello) prefs/background + prefs_background  #69
   public override selectedProps(selection: string[]) {
-    return T.resolveFieldNameTwins(super.selectedProps(selection));
+    return T.numberTwinFields(super.selectedProps(selection));
   }
 
   // the selected props (a field removed on another route swapped for its comment, like generate does — #89)

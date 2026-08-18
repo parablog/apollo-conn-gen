@@ -210,24 +210,43 @@ test('test_88_root_path_op_takes_a_name', async () => {
   assert.ok(/\bcreateRoot(\(|:)/.test(schema!), 'the POST has no operationId and falls back to root');
 });
 
-test('test_69_sibling_names_that_clean_to_one_field_write_once', async () => {
-  // #69: trello's boards lists prefs/background and prefs_background side by side; both cleaned
-  // to prefsBackground and both were written — `INVALID_GRAPHQL: duplicate field`. The same shape
-  // now keeps the first twin only; a different shape takes a numbered name, on both sides of the wire.
+test('test_69_113_sibling_names_that_clean_to_one_field_are_numbered', async () => {
+  // #69 wrote colliding twins once by dropping the same-shape one — its wire key became
+  // unreachable. #113 revises that: no twin is ever dropped, later ones take numbered names,
+  // and every wire key keeps its own alias on both sides of the wire.
   const schema = await runOasTest('sibling-name-collision.yaml', ['post:/boards>**'], 1, 4);
   assert.ok(schema !== undefined);
-  // one field per cleaned name, in the input and in the response type
-  assert.strictEqual((schema!.match(/prefsBackground: String/g) || []).length, 2, 'one per side, not two');
-  assert.ok(/fooBar: FooBarInput/.test(schema!) && /fooBar2: String/.test(schema!), 'the later shape is numbered');
-  // the dropped twin's key is gone everywhere; the kept one maps once per direction
-  assert.ok(!/prefs\/background/.test(schema!), 'the dropped twin key is gone');
-  assert.strictEqual((schema!.match(/prefs_background: prefsBackground/g) || []).length, 1, 'one body line');
-  assert.strictEqual((schema!.match(/prefsBackground: prefs_background/g) || []).length, 1, 'one response line');
-  // the numbered twin keeps its original key in both directions
+  // both twins present, per side (input and response type)
+  assert.strictEqual((schema!.match(/prefsBackground: String/g) || []).length, 2, 'base twin, once per side');
+  assert.strictEqual((schema!.match(/prefsBackground2: String/g) || []).length, 2, 'numbered twin, once per side');
+  assert.ok(/fooBar: FooBarInput/.test(schema!) && /fooBar2: String/.test(schema!), 'different shapes still number');
+  // no wire key is unreachable: each twin maps to its own key in both directions
+  assert.strictEqual((schema!.match(/prefs_background: prefsBackground\b/g) || []).length, 1, 'base body line');
+  assert.strictEqual((schema!.match(/"prefs\/background": prefsBackground2/g) || []).length, 1, 'numbered body line');
+  assert.strictEqual((schema!.match(/prefsBackground: prefs_background\?/g) || []).length, 1, 'base response line');
+  assert.strictEqual((schema!.match(/prefsBackground2: \$\."prefs\/background"\?/g) || []).length, 1, 'numbered response line');
+  // the pre-existing numbered pair keeps working the same way
   assert.ok(/"foo\/bar": fooBar2/.test(schema!), 'body pairs the original key with the numbered name');
   assert.ok(/fooBar2: \$\."foo\/bar"/.test(schema!), 'response pairs the numbered name with the original key');
 });
 
+
+test('test_113_twin_spellings_across_allof_and_union_members_are_numbered', async () => {
+  // #113's bypass routes: twins folded together by an allOf, or by a flattened oneOf's merge,
+  // skipped Obj's resolver and wrote the same field twice — invalid GraphQL. Both routes now
+  // run the same numbering, each twin aliased to its own wire key.
+  const schema = await runOasTest('sibling-name-collision-merged.yaml', ['get:/merged>**', 'get:/choice>**'], 2, 2);
+  assert.ok(schema !== undefined);
+  assert.strictEqual((schema!.match(/prefsBackground: String/g) || []).length, 1, 'allOf base twin once');
+  assert.strictEqual((schema!.match(/prefsBackground2: String/g) || []).length, 1, 'allOf numbered twin once');
+  assert.ok(/prefsBackground: \$\."prefs\/background"\?/.test(schema!), 'allOf base keeps its key');
+  assert.ok(/prefsBackground2: prefs_background\?/.test(schema!), 'allOf numbered keeps its key');
+  assert.strictEqual((schema!.match(/fooBar: String/g) || []).length, 1, 'union base twin once');
+  assert.strictEqual((schema!.match(/fooBar2: String/g) || []).length, 1, 'union numbered twin once');
+  assert.ok(/fooBar: \$\."foo-bar"\?/.test(schema!) && /fooBar2: foo_bar\?/.test(schema!), 'union keys kept');
+  const defs = schema!.match(/^\s{2}\w+2?: String$/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate fields: ' + defs.join(', '));
+});
 
 test('test_103_ref_and_undeclared_path_params_take_positional_by_suffixes', async () => {
   // #103: github's $ref path params never reached the By-suffix, so `get:/gists` and

@@ -224,6 +224,15 @@ export class Naming {
     return key.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
   }
 
+  // First free of base2, base3, … — one numbering loop for every rename. see docs/FIXED.md #113 #116
+  public static numberedName(base: string, isTaken: (name: string) => boolean): string {
+    let numbered = base + '2';
+    for (let n = 3; isTaken(numbered); n++) {
+      numbered = base + n;
+    }
+    return numbered;
+  }
+
   public static genOperationName(path: string, operation: Operation): string {
     // path tokens name themselves in formatPath (#103); required query and cookie params add theirs here.
     // e.g. (github) /gists/{gist_id} declares its param as a $ref — the token still names the op
