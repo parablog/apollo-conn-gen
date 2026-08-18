@@ -1539,6 +1539,17 @@ test('test_97_object_stamped_on_a_list_reads_the_items', async () => {
     'the members\' fields are merged');
 });
 
+test('test_114_nested_object_stamped_on_a_list_reads_the_items', async () => {
+  // #114: #97's repair only ran in fromSchema, so the same malformed shape one level down — a
+  // PROPERTY that is `type: object` with no fields and an `items` beside it — dropped the field
+  // entirely (absent from the type AND the selection), worse than degrading to JSON.
+  const schema = await runOasTest('object-stamped-on-a-list-nested.yaml', ['get:/widgets>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/broken: Broken/.test(schema!), 'the field survives and points at a real type');
+  assert.ok(/type Broken \{[^}]*id: String[^}]*label: String[^}]*\}/.test(schema!), 'items fields are read');
+  assert.ok(/broken\? \{/.test(schema!), 'the selection keeps the field group');
+});
+
 test('test_anyof_param_coerced_to_string_arg', async () => {
   // A path/query param typed as anyOf/oneOf has no single GraphQL arg type (it would become a union,
   // emitting `id: !`); coerce it to String. see docs/FIXED.md #11. runOasTest composes via rover.

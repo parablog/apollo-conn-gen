@@ -93,7 +93,8 @@ export class Factory {
     // an object with no fields of its own and an `items` beside it: the example next to slack's
     // spelling is one object, so the items schema is the real shape. see docs/FIXED.md #97
     //   e.g. (slack) reactions.get 200: { type: object, items: { anyOf: [ …three objects… ] } }
-    else if (schemaObj.type === 'object' && _.isEmpty(schemaObj.properties) && _.get(schemaObj, 'items')) {
+    else if (Schemas.isFieldlessObjectWithItems(schemaObj)) {
+      warn(null, '[factory]', `object stamped on a list — reading its items in: ${parent.pathToRoot()}`);
       result = this.fromSchema(context, parent, _.get(schemaObj, 'items') as SchemaObject);
     }
     // array case
@@ -298,6 +299,12 @@ export class Factory {
     // An `allOf` that only decorates one non-object schema IS that schema — merging it as an
     // object gives zero fields and the field vanishes. e.g. (digitalocean) tags:
     //   { allOf: [ $ref -> { type: array, items: {type: string} }, { description: … } ] } -> [String]  #67
+    // the same #97 shape one level down dropped the field entirely on this route. see #114
+    if (Schemas.isFieldlessObjectWithItems(schemaObj)) {
+      warn(null, '[factory]', `object stamped on a list — reading its items in: ${parent.pathToRoot()}`);
+      return this.fromProp(context, parent, propName, _.get(schemaObj, 'items') as SchemaObject);
+    }
+
     const allOfSchema = this.findAllOfSchema(context, schemaObj);
     if (allOfSchema) {
       schemaObj = allOfSchema;

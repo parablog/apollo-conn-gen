@@ -26,6 +26,12 @@ export class Schemas {
     return noShape && objectOrUntyped && _.isEmpty(s.properties) && typeof s.additionalProperties !== 'object';
   }
 
+  // True for `type: object` with no fields and an `items` schema beside it — the items are the
+  // real shape. e.g. (slack) reactions.get 200: { type: object, items: { anyOf: [...] } }. see docs/FIXED.md #97 #114
+  public static isFieldlessObjectWithItems(schema: SchemaObject): boolean {
+    return schema.type === 'object' && _.isEmpty(schema.properties) && _.get(schema, 'items') != null;
+  }
+
   // True when a schema takes any key the caller wants, instead of naming its fields.
   //   e.g. (docker-engine) Labels: { type: object, additionalProperties: { type: string } }
   public static isMap(schema: SchemaObject): boolean {

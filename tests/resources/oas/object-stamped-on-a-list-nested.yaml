@@ -1,0 +1,31 @@
+openapi: 3.0.3
+info:
+  title: object stamped on a list, nested under a property
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  # slack's #97 shape, one level down: an object with no fields and an items
+                  # beside it -- the items schema is the real shape
+                  broken:
+                    type: object
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
