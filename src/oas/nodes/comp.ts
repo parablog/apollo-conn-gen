@@ -1,4 +1,4 @@
-import { Factory, Get, IType, Param, Prop, ReferenceObject, Res, T, Type, selectionPrefixes } from './internal.js';
+import { Body, Factory, Get, IType, Param, Prop, ReferenceObject, Res, T, Type, selectionPrefixes } from './internal.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';
@@ -207,7 +207,19 @@ export class Composed extends Type {
     }
 
     const tree = T.print(this);
-    context.store(this.name, this);
+    // two inline allOf bodies can share a name but hold different fields — the second one
+    // takes a new name instead of reusing the first one's stored input type. see docs/FIXED.md #123
+    if (this.parent instanceof Body) {
+      const ownedByOtherSide = T.ownedByOtherSide(this, context);
+      if (!ownedByOtherSide && T.collidesWithStoredType(this, context)) {
+        T.resolveNameConflict(this, context);
+      }
+      if (!ownedByOtherSide && !context.types.has(this.name)) {
+        context.store(this.name, this);
+      }
+    } else {
+      context.store(this.name, this);
+    }
     trace(context, '<- [composed::all-of]', `out: '${this.name}' of: ${allOfs.length} - refs: ${refs}`);
   }
 

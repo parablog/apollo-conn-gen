@@ -1,0 +1,52 @@
+openapi: 3.0.3
+info: { title: allOf bodies all named Input, version: "1.0.0" }
+servers: [{ url: https://api.example.com }]
+paths:
+  /alphas:
+    post:
+      operationId: createAlpha
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  properties:
+                    alpha: { type: string }
+                - type: object
+                  properties:
+                    alphaExtra: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { id: { type: string } } } } } }
+  /alpha-twins:
+    post:
+      operationId: createAlphaTwin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  properties:
+                    alpha: { type: string }
+                - type: object
+                  properties:
+                    alphaExtra: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { id: { type: string } } } } } }
+  /bravos:
+    post:
+      operationId: createBravo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  properties:
+                    bravo: { type: string }
+                - type: object
+                  properties:
+                    bravoExtra: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { id: { type: string } } } } } }

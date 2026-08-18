@@ -282,6 +282,26 @@ test('test_112_response_union_must_not_take_the_stored_entry_from_a_body_union',
   assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
 });
 
+test('test_123_second_inline_allof_body_renames_instead_of_converging', async () => {
+  // #123: docker/digitalocean/sendgrid mutations all-ops. Obj bodies rename (#104), Union
+  // bodies are guarded (#112); Composed bodies silently took the first body's stored name.
+  const schema = await runOasTest(
+    'inline-allof-body-collision.yaml',
+    ['post:/alphas>**', 'post:/alpha-twins>**', 'post:/bravos>**'],
+    3,
+    5,
+  );
+  assert.ok(schema !== undefined);
+  assert.strictEqual((schema!.match(/^input InputInput/gm) || []).length, 1, 'InputInput defined once');
+  assert.ok(/input InputInput \{[^}]*alpha[^}]*\}/.test(schema!), 'first body keeps the name and its fields');
+  assert.ok(/createAlphas\(input: InputInput!\)/.test(schema!), 'first op references it');
+  assert.ok(/createAlphaTwins\(input: InputInput!\)/.test(schema!), 'an identical body converges on the same input');
+  assert.ok(/input BInputInput \{[^}]*bravo[^}]*\}/.test(schema!), 'a different body is renamed and keeps its own fields');
+  assert.ok(/createBravos\(input: BInputInput!\)/.test(schema!), 'the renamed op references its own input');
+  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
+});
+
 test('test_104_second_inline_oneof_body_renames_instead_of_duplicating', async () => {
   // #104: an object body and a oneOf body are both named `Input`, and the pair wrote
   // `input InputInput` twice — the union now renames, as a second object body always did.
