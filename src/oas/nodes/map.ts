@@ -4,6 +4,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 
 export class Map extends Type {
   public valueType?: IType;
@@ -176,6 +177,16 @@ export class Map extends Type {
     }
 
     trace(context, '-> [map::additionalProps]', 'processing additional properties');
+
+    // a choice of nothing but plain values builds an invalid scalar-only Union; read it as JSON.
+    // e.g. (confluence) additionalProperties: { anyOf: [enum-of-strings, plain-string] }  #108
+    if (Schemas.holdsPlainValues(context, additionalProps)) {
+      this.valueType = new Scalar(this, 'JSON', additionalProps);
+      this.add(this.valueType);
+      this.valueType.visit(context);
+      trace(context, '<- [map::additionalProps]', 'out value type: JSON (plain-values choice)');
+      return;
+    }
 
     this.valueType = Factory.fromSchema(context, this, additionalProps);
     this.add(this.valueType);
