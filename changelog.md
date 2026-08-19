@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.24.0]
+
 ### Changed
 
 - **Migration note (#103):** every operation with path parameters has a new public field name —
@@ -13,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `gistsByGistId`, previously `gists`). Update transform-rule files and clients pinned to the
   old names. Additionally (#116), root fields whose cleaned names still collide (`/foo-bar` +
   `/foo.bar`) now take numbered names (`fooBar`, `fooBar2`) instead of writing duplicates.
+- **Composition requirement:** composing this schema needs the supergraph composition plugin at
+  version **2.15.0 or later** if the spec has any map/dictionary value — an older plugin silently
+  under-validates `->entries` selections with no available workaround, and rejects connectors that
+  are actually correct (this is what issues #73 and #109 turned out to be, not generator bugs).
+  Optional-field (`?`) selections have the same gap below 2.15 but can be avoided with
+  `--skip-optional-markers` (composes down to 2.14.3); default-value (`??`) selections need 2.14
+  at minimum regardless, with no flag to avoid them. In practice, almost any real spec has a map
+  value somewhere, so 2.15+ is the requirement to plan for.
 
 ### Added
 
@@ -47,6 +57,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   each keep their own `files` values, and the whole github spec composes clean. Issue #107.
 - A response union no longer takes a body union's stored name, so a later body union renames
   instead of keeping a name already in use. Issue #112.
+- A map value that is a choice of only enum/scalar values no longer drops the whole property —
+  confluence's `POST /content/convert-ids-to-types` returns its `results`. Issue #108.
+- An array item that is a shapeless `$ref` in a request body now degrades to `JSON` instead of
+  vanishing — pagerduty's incident-merge mutation can send `source_incidents`. Issue #110.
+- An inline `allOf` property that mints a name matching a real, unrelated component now renames
+  instead of colliding with it — pagerduty's `IncidentNote.user` no longer redefines `User`
+  twice. Issue #126.
+- A parameter default value now matches its declared type instead of the spec's raw JSON type —
+  omni's `count` parameter (declared `string`, defaulting to the number `100`) now quotes it
+  correctly instead of failing composition. Issue #127.
+- A field no operation ever actually selects is now consistently left out of the schema instead
+  of appearing as a real, always-unresolvable field — extends the existing "removed on some
+  routes" fix to fields removed on every route, and to `allOf` types, not just plain objects.
+  Issue #125.
 
 ## [0.23.0]
 
