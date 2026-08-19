@@ -1159,13 +1159,17 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
   // schema already on the expansion path and emitted as a comment in BOTH the SDL and the selection.
   // A shared non-recursive component (Shared, referenced twice from sibling fields) must NOT be cut.
   // see docs/FIXED.md #10. runOasTest composes via rover.
+  // forceRover + 2.15.1: extra?/meta? both open a nested-object block ("extra? { label? }") —
+  // the #16 optional-marker gap below composition 2.15, same as #73/#108/#109/#110. Without
+  // forceRover this silently composed via the local patched binary instead. See #128.
   const schema = await runOasTest(
     'recursive-cycle.yaml',
     ['get:/nodes>**'],
     1,
     2, { skipValidation: true, connectorSpecVersion: 'v0.4',
       federationVersion: 'v2.14',
-      composeFederationVersion: '2.14.3' });
+      composeFederationVersion: '2.15.1',
+      forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('# children: [Node] - circular reference omitted'), 'array-items cycle cut in SDL');
   assert.ok(schema!.includes('# parent: Node - circular reference omitted'), 'direct self-cycle cut in SDL');

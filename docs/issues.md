@@ -835,19 +835,25 @@ local build ignores `federation_version` entirely (patched past 2.15). A test th
 composes against that older plugin — its pin is inert, and it silently passes regardless of real
 pre-2.15 incompatibilities.
 
-**Confirmed instances, both already fixed:** `test_108_confluence_full_production_selection` and
-`test_110_pagerduty_full_production_selection` both had this gap (see their `docs/FIXED.md`
+**Confirmed instances, all three already fixed:** `test_108_confluence_full_production_selection`
+and `test_110_pagerduty_full_production_selection` both had this gap (see their `docs/FIXED.md`
 2026-08-19 corrections) — real composition at `2.14.0` failed for real (confluence: 322
 `CONNECTORS_UNRESOLVED_FIELD`, the same #14/#16 mechanism #109 hit; pagerduty: a `nom` parser
 error on `??` default-coalesce syntax, a different specific gap in the same category). `test_73`
 and `test_109` already set `forceRover: true`, so they were never affected — this is exactly their
 same root-cause mistake, just not propagated everywhere it needed to be.
 
-**Not yet audited (found by a cheap grep, not exhaustive):**
-- `test_entity_resolver_with_errors_emits_wellformed_schema`,
-  `test_recursive_schema_cut_composes_abstract_pass` — both pin a version without `forceRover:
-  true`. Lower suspected risk (version matches their own `v2.14` declaration, and neither scenario
-  obviously hits `?`/`->entries`/`??`), but not confirmed either way.
+A third instance, `test_recursive_schema_cut_composes_abstract_pass`, was checked and also had it —
+real composition at `2.14.3` failed with `CONNECTORS_UNRESOLVED_FIELD: No connector resolves field
+'Shared.label'`. Traced to the generated selection: `extra? { label? }` / `meta? { label? }` — the
+#16 optional-marker-on-nested-object gap, same mechanism as the others, just via a different
+fixture (`recursive-cycle.yaml`'s `Shared` type, reached through two optional sibling fields).
+Fixed the same way: `forceRover: true` + `composeFederationVersion: '2.15.1'`.
+
+`test_entity_resolver_with_errors_emits_wellformed_schema` was also checked — genuinely clean,
+passes with `forceRover: true` forcing real composition at `2.14.3`. No issue.
+
+**Not yet audited:**
 - Every other test that pins `composeFederationVersion` was found only by grepping for that
   literal string — a test that *should* pin a version but doesn't set `forceRover` and silently
   composes against the local patched build (already past 2.15) wouldn't show up in that grep at
