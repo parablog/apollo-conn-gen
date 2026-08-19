@@ -201,14 +201,18 @@ export class Factory {
 
   // What a list holds. An object with no fields becomes JSON — an empty type would take the whole
   // field with it. e.g. archivedChannels: { type: array, items: { type: object } } -> [JSON]. #56
-  public static fromArrayItems(context: OasContext, parent: IType, items: SchemaObject): IType {
-    if (Schemas.isShapelessObject(items)) {
-      return new Scalar(parent, 'JSON', items);
+  public static fromArrayItems(context: OasContext, parent: IType, items: SchemaObject | ReferenceObject): IType {
+    // a $ref'd shapeless object is still shapeless — resolve before checking, same idiom as get.ts.
+    // e.g. (pagerduty) items: { $ref: IncidentReference }, IncidentReference: { additionalProperties: true }  #110
+    // resolvePointer, not lookupRef: a sniff that may discard the ref must not bump refCount.
+    const resolved = '$ref' in items ? (context.resolvePointer(items.$ref!) as SchemaObject) : items;
+    if (resolved && Schemas.isShapelessObject(resolved)) {
+      return new Scalar(parent, 'JSON', resolved);
     }
     // a list holding one of several plain values is JSON too — a union of scalars has no fields to
     // select, so the whole field used to disappear. e.g. (confluence) post:/content/convert-ids-to-types
     //   contentIds: { type: array, items: { anyOf: [string, number] } }  ->  [JSON]      #86
-    if (Schemas.holdsPlainValues(context, items)) {
+    if (!('$ref' in items) && Schemas.holdsPlainValues(context, items)) {
       return new Scalar(parent, 'JSON', items);
     }
     return Factory.fromSchema(context, parent, items);
