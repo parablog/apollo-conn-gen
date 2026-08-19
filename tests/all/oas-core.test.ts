@@ -2383,7 +2383,8 @@ test(
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
-      composeFederationVersion: '2.14.0',
+      composeFederationVersion: '2.15.1',
+      forceRover: true,
     });
     assert.ok(schema !== undefined);
   },
@@ -2424,7 +2425,8 @@ test(
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
-      composeFederationVersion: '2.14.0',
+      composeFederationVersion: '2.15.1',
+      forceRover: true,
     });
     assert.ok(schema !== undefined);
   },
