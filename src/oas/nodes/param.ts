@@ -1,4 +1,4 @@
-import { Factory, IType, ReferenceObject, Type } from './internal.js';
+import { Factory, IType, ReferenceObject, Scalar, Type } from './internal.js';
 import { ParameterObject, SchemaObject } from 'oas/types';
 import _ from 'lodash';
 import { trace } from '../log/trace.js';
@@ -106,8 +106,14 @@ export class Param extends Type {
   // default (a dangling ` = ` is a compose syntax error, an omitted default is always valid). #17
   private writeDefaultValue(writer: Writer): void {
     const value = this.defaultValue;
+    // an OAS param can declare `type: string` with a JSON number/boolean default (spec-authoring
+    // slip) — writing it unquoted mismatches the arg's own String type. #127
+    //   e.g. (omni) count: { type: string, default: 100 } -> String = "100", not String = 100
+    const scalar = this.resultType instanceof Scalar ? this.resultType.name : undefined;
 
-    if (typeof value === 'number') {
+    if (scalar === 'String' && (typeof value === 'number' || typeof value === 'boolean')) {
+      writer.write(' = "').write(String(value)).write('"');
+    } else if (typeof value === 'number') {
       writer.write(' = ').write(value.toString());
     } else if (typeof value === 'boolean') {
       writer.write(' = ').write(value ? 'true' : 'false');
