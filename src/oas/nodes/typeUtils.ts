@@ -319,8 +319,9 @@ export class T {
   }
 
   // e.g. (confluence) inline `group` writes `GroupInput`, same as component `Group`. #100
+  // Obj and Composed both mint inline names from a property key (#9, #7) and can collide this way.
   public static collidesWithReservedComponentName(node: IType, context: OasContext): boolean {
-    if (!(node instanceof Obj) || T.isExemptFromRename(node)) {
+    if (!(node instanceof Obj || node instanceof Composed) || T.isExemptFromRename(node)) {
       return false;
     }
     const emitted = Naming.genTypeName(node.name);

@@ -44,9 +44,13 @@ export class Composed extends Type {
       trace(context, '[comp]', '   in composed schema: ' + this.name);
     }
 
-    // a PropComp-named inline allOf (#7) that clashes with a stored type of a different class
-    // must rename — otherwise the same type name is defined twice. see docs/FIXED.md #22
-    if (this.parent instanceof Prop && T.collidesAcrossNodeClasses(this, context)) {
+    // a PropComp-named inline allOf (#7) that clashes with a stored type of a different class, or
+    // reserves the name of a real (same-class) component, must rename. see docs/FIXED.md #22, #126
+    //   e.g. (pagerduty) IncidentNote.user: allOf[...] mints "User" — same name as the real User component
+    if (
+      this.parent instanceof Prop &&
+      (T.collidesAcrossNodeClasses(this, context) || T.collidesWithReservedComponentName(this, context))
+    ) {
       T.resolveNameConflict(this, context);
     }
 
