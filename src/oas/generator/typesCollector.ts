@@ -17,6 +17,8 @@ import {
   T,
 } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
+import { trace } from '../log/trace.js';
+import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { SelectionPath } from '../utils/selectionPath.js';
 
@@ -103,18 +105,24 @@ export class TypesCollector {
     // a field removed on some routes but kept on others is removed on every route. #89
     this.consolidateRemovedFields(pendingTypes, expanded);
 
-    // keep exactly the types the written schema references: confluence emitted `Label` with
-    // nothing selecting it, box dropped `Folder--Mini` while still referencing it. see #26
-    const reachable = this.collectReachable(expanded);
-    for (const [id, type] of Array.from(pendingTypes.entries())) {
-      if (!reachable.has(type)) {
-        pendingTypes.delete(id);
+    // keep exactly the types the written schema references (#26) — e.g. stripe's TaxId is reached
+    // only as `[TaxId]` inside Customer.taxIds, never as any op's own top-level result, so it's
+    // missing from pendingTypes until this loop adds it.
+    for (let removedAny = true; removedAny; ) {
+      const reachable = this.collectReachable(expanded);
+      for (const [id, type] of Array.from(pendingTypes.entries())) {
+        if (!reachable.has(type)) {
+          pendingTypes.delete(id);
+        }
       }
-    }
-    for (const type of reachable) {
-      if (!pendingTypes.has(type.id)) {
-        pendingTypes.set(type.id, type);
+      for (const type of reachable) {
+        if (!pendingTypes.has(type.id)) {
+          pendingTypes.set(type.id, type);
+        }
       }
+      // #125 needs that same final set, and can itself shrink it — commenting out the one field
+      // that reached a type drops that type too — so re-run both until a pass changes nothing.
+      removedAny = this.removeFieldsNeverSelected(pendingTypes, expanded) > 0;
     }
 
     this.types = pendingTypes;
@@ -169,8 +177,63 @@ export class TypesCollector {
     // this generation's selection only — no leftovers from an earlier one
     context.propOverrides.clear();
 
-    // walk the selected nodes, like collectReachable: the same schema reached on two routes is two
-    // nodes, so each route reports its own version of every field
+    // a field removed on one route AND kept on another needs an override — removed everywhere
+    // already prints as a comment, kept everywhere needs nothing
+    const { kept, removed } = this.walkKeptAndRemoved(expanded);
+    for (const type of pendingTypes.values()) {
+      type.props.forEach((prop, name) => {
+        if (!removed.get(type.id)?.has(name) || !kept.get(type.id)?.has(name)) {
+          return;
+        }
+        this.commentOutField(context, type, prop, name);
+      });
+    }
+  }
+
+  // #125: extends #89 to a field that no route ever lost to a cycle — it just never appears in
+  // any route's own selection, e.g. `Customer.sources` declared but no connector selects it.
+  // Same fix as #89: comment it out everywhere. Returns how many fields this pass commented out.
+  private removeFieldsNeverSelected(pendingTypes: Map<string, IType>, expanded: string[]): number {
+    const context = this.gen.context!;
+    const { kept } = this.walkKeptAndRemoved(expanded);
+    let removedCount = 0;
+    for (const type of pendingTypes.values()) {
+      if (!T.isFieldOwner(type)) {
+        continue;
+      }
+      // the type's own declared field names, skipping ones already commented out
+      const declared = type
+        .dependencies(context, expanded)
+        .filter((dep): dep is Prop => dep instanceof Prop && !(dep instanceof PropCircRef));
+      for (const prop of declared) {
+        if (kept.get(type.id)?.has(prop.name)) {
+          continue;
+        }
+        this.commentOutField(context, type, prop, prop.name);
+        removedCount++;
+      }
+    }
+    if (removedCount > 0) {
+      trace(context, '[collector::removeFieldsNeverSelected]', `commented out ${removedCount} field(s)`);
+    }
+    return removedCount;
+  }
+
+  // swap this field for a comment everywhere the type is printed — #89's own mechanism, reused here.
+  private commentOutField(context: OasContext, type: IType, prop: Prop, name: string): void {
+    let overrides = context.propOverrides.get(type.id);
+    if (!overrides) {
+      overrides = new Map();
+      context.propOverrides.set(type.id, overrides);
+    }
+    overrides.set(name, prop instanceof PropCircRef ? prop : new PropCircRef(type, prop));
+  }
+
+  // same walk as collectReachable, but records what each visited type's own fields are: e.g.
+  // (confluence) Content is reached at 6 positions, kept "space" at 2 -> kept.get('Content') has
+  // "space"; lost it to a cycle at the other 4 -> removed.get('Content') has "space" too.
+  private walkKeptAndRemoved(expanded: string[]): { kept: Map<string, Set<string>>; removed: Map<string, Set<string>> } {
+    const context = this.gen.context!;
     const removed = new Map<string, Set<string>>();
     const kept = new Map<string, Set<string>>();
     const queue = this.selectedRoots(expanded);
@@ -181,9 +244,8 @@ export class TypesCollector {
         continue;
       }
       visited.add(node);
-      // the overrides map is still empty here, so this reads each node's own selected fields
       const children = node.dependencies(context, expanded);
-      if (node instanceof Obj) {
+      if (T.isFieldOwner(node)) {
         for (const child of children) {
           if (child instanceof Prop) {
             // a PropCircRef is a route that lost the field to a cycle; any other prop kept it
@@ -199,23 +261,7 @@ export class TypesCollector {
       }
       queue.push(...children);
     }
-
-    // only a field removed on one route AND kept on another needs an override: removed everywhere
-    // already prints as a comment, kept everywhere needs nothing
-    for (const type of pendingTypes.values()) {
-      type.props.forEach((prop, name) => {
-        if (!removed.get(type.id)?.has(name) || !kept.get(type.id)?.has(name)) {
-          return;
-        }
-        let overrides = context.propOverrides.get(type.id);
-        if (!overrides) {
-          overrides = new Map();
-          context.propOverrides.set(type.id, overrides);
-        }
-        // the route's own comment node when it has one, or the kept field wrapped to print as one
-        overrides.set(name, prop instanceof PropCircRef ? prop : new PropCircRef(type, prop));
-      });
-    }
+    return { kept, removed };
   }
 }
 

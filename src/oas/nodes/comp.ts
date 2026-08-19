@@ -97,9 +97,13 @@ export class Composed extends Type {
         }
         writer.write(' {\n');
 
+        // a field cycle detection removed on another route is not written here either — the comment
+        // takes its place, same as obj.ts. #89
+        const overrides = context.propOverrides.get(this.id);
         for (const prop of selected) {
-          trace(context, '   [comp::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-          prop.generate(context, writer, selection);
+          const emitted = (overrides?.get(prop.name) as typeof prop) ?? prop;
+          trace(context, '   [comp::generate]', `-> property: ${emitted.name} (parent: ${emitted.parent!.name})`);
+          emitted.generate(context, writer, selection);
         }
 
         writer.write('}\n\n');
@@ -111,11 +115,12 @@ export class Composed extends Type {
   }
 
   // the selected props, once the allOf members are folded in (same shape select writes)
-  dependencies(_context: OasContext, selection: string[]): IType[] {
+  dependencies(context: OasContext, selection: string[]): IType[] {
     if (this.schema.allOf != null && !this.consolidated) {
       this.consolidate(selection);
     }
-    return this.selectedProps(selection);
+    const overrides = context.propOverrides.get(this.id);
+    return this.selectedProps(selection).map((prop) => overrides?.get(prop.name) ?? prop);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
@@ -126,10 +131,12 @@ export class Composed extends Type {
 
     const composedSchema = this.schema;
     if (composedSchema.allOf != null) {
+      // a route that kept the field writes the same comment as the routes where it was removed. #89
+      const overrides = context.propOverrides.get(this.id);
       const selected = this.selectedProps(selection);
 
       for (const prop of selected) {
-        prop.select(context, writer, selection);
+        (overrides?.get(prop.name) ?? prop).select(context, writer, selection);
       }
     } else if (composedSchema.oneOf != null) {
       if (this.children.length === 1) {

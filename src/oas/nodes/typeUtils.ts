@@ -83,6 +83,11 @@ export class T {
     return type instanceof PropScalar;
   }
 
+  // Obj and Composed both declare a named field set reconciled through context.propOverrides (#89, #125).
+  public static isFieldOwner(node: IType): node is Obj | Composed {
+    return node instanceof Obj || node instanceof Composed;
+  }
+
   // every operation node (Get, Post, Put, Patch, Delete) derives from Get
   public static isOp(type: IType): type is IType & Op {
     return type instanceof Get;
