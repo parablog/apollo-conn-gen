@@ -103,6 +103,7 @@ export class Factory {
       schemaObj?.oneOf ||
       schemaObj?.allOf ||
       schemaObj?.anyOf ||
+      Schemas.isMap(schemaObj) ||
       !_.isEmpty(schemaObj.properties)
     ) {
       result = this.createContainerType(parent, schemaObj, ref);
@@ -368,8 +369,11 @@ export class Factory {
           prop = propComp;
         } else if (Schemas.isMap(schemaObj)) {
           if (T.isParentAnInput(parent)) {
-            // send it as JSON instead
-            prop = new PropScalar(parent, propName, 'JSON', schemaObj);
+            // GraphQL input types can't take arbitrary keys, so a map in input position has no
+            // typed shape to write — send it as JSON instead. #133
+            const reason = "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+            warn(context, '[factory]', reason);
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
           } else {
             // Map property: object with only additionalProperties
             const mapType: Map = new Map(parent, ref || propName, schemaObj);
@@ -425,7 +429,10 @@ export class Factory {
       prop = propComp;
     } else if (Schemas.isMap(schemaObj)) {
       if (T.isParentAnInput(parent)) {
-        prop = new PropScalar(parent, propName, 'JSON', schemaObj);
+        // same as the typed branch above, reached here because this schema has no `type` key. #133
+        const reason = "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+        warn(context, '[factory]', reason);
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
       } else {
         // Map property: object with only additionalProperties (no explicit type)
         const mapType: Map = new Map(parent, ref || propName, schemaObj);
@@ -435,9 +442,11 @@ export class Factory {
       const propType: IType = new Obj(parent, ref || propName, schemaObj);
       prop = new PropObj(parent, propName, schemaObj, propType);
     }
-    // default case, we don't know what to do so we'll create a scalar of type JSON
+    // default case: no type, no oneOf/allOf, not a map, no properties — an unrecognised shape. #133
     else {
-      prop = new PropScalar(parent, propName, 'JSON', schemaObj);
+      const reason = "this field's shape didn't match any known pattern and defaulted to JSON — worth checking the source OAS schema.";
+      warn(context, '[factory]', reason);
+      prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
     }
 
     // Cut only a real loop: a field pointing back to a type we already passed through. Compare the schema,

@@ -83,4 +83,12 @@ export class Schemas {
 
     return members.some(isPlainValue) && members.some(isRealObject);
   }
+
+  // Marks a schema about to degrade to JSON, so the reason lands in the SDL, not just the console
+  // log. e.g. (docker-engine) Labels: { additionalProperties: { type: string } } in a request body
+  // -> `labels: JSON` gets a "NEEDS ATTENTION: ..." docstring. see docs/FIXED.md #133
+  public static withDegradeNote(schema: SchemaObject, reason: string): SchemaObject {
+    const note = `NEEDS ATTENTION: ${reason}`;
+    return { ...schema, description: schema.description ? `${schema.description}\n\n${note}` : note };
+  }
 }

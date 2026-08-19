@@ -13,10 +13,11 @@ import {
   selectionPrefixes,
 } from './internal.js';
 import { SchemaObject } from 'oas/types';
-import { trace } from '../log/trace.js';
+import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 
 export class Union extends Type {
   public schemas: SchemaObject[];
@@ -258,9 +259,15 @@ export class Union extends Type {
     // two members can spell the same field differently — number the later twin instead of writing
     // it twice. e.g. (trello) boards: prefs/background + prefs_background. see docs/FIXED.md #113
     return T.numberTwinFields(
-      Array.from(firstByName.entries()).map(([name, prop]) =>
-        incompatible.has(name) ? new PropScalar(prop.parent!, name, 'JSON', {}) : prop,
-      ),
+      Array.from(firstByName.entries()).map(([name, prop]) => {
+        if (!incompatible.has(name)) {
+          return prop;
+        }
+        const reason =
+          'different branches of a merged type declare this field differently, and no single GraphQL type fits both — sent as raw JSON.';
+        warn(null, '[union]', reason);
+        return new PropScalar(prop.parent!, name, 'JSON', Schemas.withDegradeNote({}, reason));
+      }),
     );
   }
 

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
+import _ from 'lodash';
 import { OasGen } from '../../src/index.js';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { captureWarnings } from './_setup.js';
@@ -346,11 +347,12 @@ test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
 });
 
 // see docs/FIXED.md #44
-test('test_R2_union_merge_kind_collision_degrades_to_json', async () => {
+test('test_R2_union_merge_kind_collision_degrades_to_json', async (t) => {
   // StatusEnumKind and StatusStringKind both have a "status" field, but of incompatible KINDS
   // (enum vs plain string) — not just different targets of the same kind (that's the test above,
   // #39). Neither kind can be arbitrarily kept: the field must degrade to the untyped JSON scalar
   // fallback, and the enum type must not leak into the schema at all.
+  const errSpy = t.mock.method(console, 'error');
   const schema = await runOasTest(
     'r2-union-nested-in-list.yaml',
     ['get:/kind-collision-list>**'],
@@ -362,6 +364,18 @@ test('test_R2_union_merge_kind_collision_degrades_to_json', async () => {
   assert.ok(/status: JSON/.test(schema!), 'the incompatible field degrades to the JSON scalar fallback');
   assert.ok(!/status: String/.test(schema!), 'the string kind must not be kept either');
   assert.ok(!/active/.test(schema!) && !/inactive/.test(schema!), 'the enum kind\'s own type must not leak in');
+
+  // #133: the merged field carries a note explaining the degrade, and warn() logs the same reason.
+  const kindCollisionReason =
+    'different branches of a merged type declare this field differently, and no single GraphQL type fits both — sent as raw JSON.';
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(kindCollisionReason)}"\\n {2}status: JSON`).test(schema!),
+    'status carries a NEEDS ATTENTION note immediately above the field',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[union]' && c.arguments[2] === kindCollisionReason),
+    'warn() fires with the [union] tag and the exact reason text',
+  );
 });
 
 // see docs/FIXED.md #48

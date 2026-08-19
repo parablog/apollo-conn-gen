@@ -1,0 +1,21 @@
+openapi: 3.0.3
+info:
+  title: Unrecognised shape
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /mysteries:
+    get:
+      operationId: getMysteries
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mystery:
+                    # no type, oneOf/allOf, additionalProperties, or properties: fromProp's A9 catch-all
+                    example: anything

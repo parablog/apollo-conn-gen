@@ -32,6 +32,7 @@ paths:
                       $ref: '#/components/schemas/HostPort'
                 labels:
                   type: object
+                  description: key/value labels attached to the snapshot
                   additionalProperties:
                     type: string
                 tags:

@@ -624,6 +624,39 @@ measurements in #118. Related: #13/#89 (path-dependent divergence family).
 
 ---
 
+### R16. JSON-degrade schema comments (Phase 2+: the remaining 13 sites) — ⬜ Planned
+
+**Why:** extends the `warn-on-scalar-degrade` standing rule (Fernando, 2026-08-19) into the
+generated schema itself, not just build logs — a field silently typed `JSON` gives no signal to
+whoever reads the schema (or any GraphQL tooling) that the shape didn't map cleanly and is worth a
+second look. An exhaustive survey of `src/oas/` found **17 live JSON-degrade sites** total, across
+`factory.ts` (9), `map.ts` (4, +1 dead line), `union.ts` (2), `propObj.ts` (2). Phase 1 covers only
+the 4 sites (`factory.ts`'s A7/A8/A9, `union.ts`'s C2) that reuse `Prop.generate()`'s existing
+description mechanism with zero new plumbing. This item is the other 13.
+
+**Shape:** two groups, each needing its own new writer plumbing:
+- **11 sites produce a bare `Scalar` node or write the literal string `'JSON'` directly into a
+  type/operation body** — no existing comment channel at all. Landing position varies and needs a
+  design per shape: `Map.generate()`'s `value:` line (its own type body, not a `Prop`), a `Union`'s
+  zero-field merge written straight into an operation's return-type slot (natural home: extend the
+  operation-level docstring in `get.ts`/`post.ts`, already computed before `resultType.generate()`
+  runs), a `Param`'s degraded arg type (GraphQL supports argument descriptions syntactically, never
+  used anywhere in this codebase today), and several bare-`Scalar` sites in `factory.ts` whose
+  landing spot depends entirely on the caller (`Res` return type, `Union` member, `Map` value,
+  `Param` type).
+- **2 sites (`propObj.ts:58`, `propObj.ts:62`)** decide "this is JSON" *inside* `getValue()`, which
+  runs after `Prop.generate()` has already written the description — needs a new overridable hook
+  on the `Prop` base class (e.g. `effectiveDescription()`) rather than a static field read.
+
+One site (`map.ts`'s `additionalProperties: {}` branch) is flagged as ambiguous rather than a clear
+"forced" degrade — arguably the API author's own explicit "value can be anything" declaration, not
+a generator limitation, so its wording (if any) should read softer than the rest.
+
+**Refs:** `docs/issues.md #132` (the filed entry tracking these 13 sites as deferred, with exact
+line numbers); `docs/FIXED.md #133` (Phase 1, the 4 sites already done).
+
+---
+
 ## Coverage findings — robustness backlog (from `COVERAGE.md`)
 
 `tools/coverage-spec.mts` runs **every GET op** of the corpus through generate + rover-compose

@@ -544,77 +544,9 @@ name change is an identity change (#73) if it ever reaches a `path()`.
 **Refs:** `src/oas/nodes/factory.ts` (`createArrayType`), `src/oas/nodes/arr.ts`. Surfaced while
 fixing #94, which guards the one site that bites.
 
-## 105 · A 3-member anyOf's merged type silently drops a member the selection still names — ⬜ Open
-
-**Symptom:** stripe's real production spec fails `rover supergraph compose` on 3 ops:
-```
-SELECTED_FIELD_NOT_FOUND: [stripe] `@connect(selection:)` on `Query.stripe_listInvoices` contains
-field `deleted`, which does not exist on `Stripe_DiscountsUnion`.
-```
-Same error, same field, on `stripe_getInvoice` and `stripe_searchInvoices` — all three read
-`invoice.discounts`.
-
-**OAS** (stripe — `invoice.properties.discounts.items`, three real members, no shapeless one):
-```yaml
-anyOf:
-  - { type: string, maxLength: 5000 }
-  - { $ref: '#/components/schemas/discount' }
-  - { $ref: '#/components/schemas/deleted_discount' }   # has its own `deleted: true` field, required
-```
-
-**Example** — the emitted type only names 2 members and carries no `deleted` field, but the
-selection three call sites still ask for one:
-```graphql
-#### union degraded to a merged object: DiscountsUnion = String | discount   # only 2, not 3
-type Stripe_DiscountsUnion { #### replacement for Union DiscountsUnion
-  id: String!
-  ...
-  # no `deleted` field anywhere in this type
-}
-```
-```graphql
-        discounts {
-         id
-         ...
-         deleted        # <- this is what fails to resolve
-        }
-```
-
-**Cause: not yet established**, but the trail so far rules out the two most obvious mechanisms:
-- Not the `anyOf: [member, {}]` shapeless-member collapse (`factory.ts:80-87`, docs/FIXED.md #20)
-  — that only fires when exactly one member is non-shapeless (`real.length === 1`); here all three
-  are real object/scalar shapes, so `real.length === 3` and the collapse never triggers.
-- Not `Union.dedupedSelectedProps`'s incompatible-kind guard (`union.ts:222-243`, docs/FIXED.md
-  #39/#44) — that *replaces* a colliding field with a `JSON` scalar, it does not drop the member
-  outright, and `deleted` is absent from the type entirely rather than typed as `JSON`.
-- `Union.visit()` (`union.ts:45-88`) iterates every entry of `this.schemas` unconditionally and
-  calls `this.add(type)` for each — so on paper all three members (String, `discount`,
-  `deleted_discount`) should become children. The merged-object comment showing only two names
-  means one member is gone by the time `generateMergedObject` reads `this.children`, somewhere
-  between `visit()`'s add loop and that read.
-- A structurally identical case, `account_tax_ids` (`String | tax_id | deleted_tax_id`, same
-  shape: scalar + object + "deleted" superset of that object), merges correctly and keeps
-  `deleted: Boolean!` — so this is not "3-member anyOf merges always lose the third member," it is
-  specific to something about `discount`/`deleted_discount`'s shape that `tax_id`/`deleted_tax_id`
-  doesn't share (worth diffing the two ref pairs directly as the next step).
-- Note the parallel, unrelated in-flight change to this same file for #104 (a naming-collision
-  guard in `Union.visit`/`add`) — check for interaction, but the symptom here (a whole member
-  missing, not a rename) doesn't match #104's shape (two same-named inline members colliding).
-
-**Not caught by the existing corpus gate.** `node --import tsx/esm tools/lint-corpus.mts --spec
-stripe.json` walks all 263 ops of the full spec and reports 0 diagnostics — this bug reproduces
-even though the generator's own "the generator should never write a selection its own linter
-rejects" gate passes clean. See #106.
-
-**Refs:** `src/oas/nodes/union.ts` (`visit`, `add`, `generateMergedObject`, `dedupedSelectedProps`,
-`selectedProps`), `src/oas/nodes/factory.ts` (`fromSchema:80-87`, `createContainerType:161-174`).
-Found running the real, curated 34-op Stripe selection from
-`graphos-service-factory/service-catalog/stripe/manifest.yaml` through `scripts/gen-ts.mjs` (that
-repo's wrapper comparing TS `gen` against `tools/connect-gen`, the Rust fork it currently uses).
-
 ## 106 · The selection linter checks selections against the spec, not against the emitted type — 📋 Noted, not fixed
 
-**Symptom:** #105 above generates a selection referencing a field (`deleted`) that is real in the
+**Symptom:** docs/FIXED.md #105 generates a selection referencing a field (`deleted`) that is real in the
 OAS spec (`deleted_discount.deleted`) but absent from the GraphQL type the emitter actually wrote
 for the merge (`Stripe_DiscountsUnion`) — and the corpus lint gate (`tools/lint-corpus.mts`, which
 runs `lintSelections` over every op of every corpus spec) reports it clean anyway.
@@ -916,4 +848,41 @@ regression. Do not attempt casually; needs its own design pass, same rigor as `#
 (`collidesAcrossNodeClasses`, `sameSchemaAs`). See `#22`'s `FIXED.md` entry (the same-class scope
 decision and its box regression, "Care" note), `#126` (the sibling, already-fixed real-component
 case), `#129` (the measurement-tool bug found while investigating this).
+
+## 132 · Most JSON-degrade sites still give no signal in the generated schema, only the build log — ⬜ Open (umbrella)
+
+**Symptom:** `warn()` logs why a field gave up and became `JSON`, but that reason never reaches the
+schema itself — anyone reading the SDL (or GraphQL tooling: Studio, GraphiQL, introspection) sees a
+bare `JSON` field with no clue why. `docs/FIXED.md #133` fixed 4 of the 17 live sites found by an
+exhaustive survey of `src/oas/` — the ones that could reuse `Prop.generate()`'s existing
+`schema.description -> """..."""` mechanism with no new plumbing. Umbrella entry for the other 13,
+each needing its own new-plumbing design; a site gets its own number when someone picks it up.
+
+| site | where | why it needs new plumbing |
+|---|---|---|
+| `factory.ts:61` | `fromSchema`, dangling `$ref` | bare `Scalar`, no `Prop` at all — landing spot depends entirely on the caller (`Res`, `Union` member, `Map` value, `Param` type) |
+| `factory.ts:115` | `fromSchema`, shapeless object (#19) | same — bare `Scalar`, no caller-independent landing spot |
+| `factory.ts:146` | `createScalarType`, unrecognised scalar `type` (#98) | same |
+| `factory.ts:212` | `fromArrayItems`, shapeless array item (#56) | the note belongs on the *field* (`[JSON]`), not the item — needs threading up into the owning `PropArray`'s schema |
+| `factory.ts:219` | `fromArrayItems`, all-plain choice (#86) | same |
+| `factory.ts:225` | `fromArrayItems`, mixed plain+object choice (#131) | same |
+| `map.ts:95` | `Map.generate()`, list value with no named item type | writes straight into the `value:` line of the map's own generated type — not a `Prop` |
+| `map.ts:117` | `Map.valueTypeName`, empty `Obj`/`Composed` value (#19/#70) | same |
+| `map.ts:172` | `visitAdditionalProperties`, `additionalProperties: {}` | same, **and** arguably not a forced degrade — the API author explicitly said "value can be anything," so any wording here should read softer than the rest |
+| `map.ts:184` | `visitAdditionalProperties`, all-plain choice (#108) | same |
+| `union.ts:144` | `Union.generate()`, merged type with no selected fields (#80) | writes straight into an operation's return-type slot; natural home is the operation-level docstring in `get.ts`/`post.ts`, already computed before `resultType.generate()` runs |
+| `propObj.ts:58` (D1) | `getValue()`, every field stripped from the object (#101) | decided *inside* `getValue()`, which runs after `Prop.generate()` has already written `this.schema.description` — needs a new overridable hook on `Prop` |
+| `propObj.ts:62` (D2) | `getValue()`, every field removed on every route (#101) | same |
+
+One dead line found in the same survey, not counted above: `map.ts:102`'s `else { writer.write('JSON') }`
+can't fire — a `Map` node only ever gets built when `Schemas.isMap()` already confirmed
+`additionalProperties` is a real object schema, so `visitAdditionalProperties`'s early-return guard
+that would leave `valueType` unset never triggers for a real `Map`.
+
+**AST:** none of the 13 — this only changes what a `Prop`/writer emits alongside an already-JSON
+field, never which node kind gets built.
+
+**Refs:** `ROADMAP.md` "R16" (this survey's own shape notes, kept there since it's still planned
+work), `docs/FIXED.md #133` (the 4 sites already done, same design: `warn()` and the schema note
+share one reason string, `Schemas.withDegradeNote`).
 

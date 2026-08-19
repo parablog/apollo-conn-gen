@@ -2252,9 +2252,10 @@ test('test_68_map_value_names_the_type_it_points_at', async () => {
   assert.ok(!/ManifestInput|EntryInput/.test(schema!), 'and no map input type is written at all');
 });
 
-test('test_84_body_map_is_sent_as_json', async () => {
+test('test_84_body_map_is_sent_as_json', async (t) => {
   // #84: a body map was written as key/value pairs and mapped with `->entries`, which needs an
   // object — the router refused it and the field never left. The body sends the object itself now.
+  const errSpy = t.mock.method(console, 'error');
   const schema = await runOasTest('map-input-suffix.yaml', ['post:/snapshots>**', 'get:/snapshots>**'], 2, 6);
   assert.ok(schema !== undefined);
   assert.ok(/labels: JSON\n/.test(schema!), 'a map of strings is one JSON field');
@@ -2269,6 +2270,65 @@ test('test_84_body_map_is_sent_as_json', async () => {
 
   // a map that is not in a body is untouched: this one is a query param, JSON since #40
   assert.ok(/snapshots\(filter: JSON\)/.test(schema!), 'a query param that is a map stays as it was');
+
+  // #133: an input-position map carries a description explaining the JSON degrade, and warn() logs
+  // the same reason. `labels` already has its own OAS description — withDegradeNote must append to
+  // it, not replace it, so both survive in the docstring block.
+  const mapDegradeReason =
+    "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+  assert.ok(
+    new RegExp(
+      `"""\\n {2}key/value labels attached to the snapshot\\n\\nNEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReason)}\\n {2}"""\\n {2}labels: JSON`,
+    ).test(schema!),
+    'labels keeps its original description and gains the NEEDS ATTENTION note',
+  );
+  // portBindings has no OAS description of its own — the note stands alone, on one line.
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReason)}"\\n {2}portBindings: JSON`).test(schema!),
+    'portBindings carries a NEEDS ATTENTION note immediately above the field',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === mapDegradeReason),
+    'warn() fires with the [factory] tag and the exact reason text',
+  );
+});
+
+test('test_untyped_input_map_degrades_to_json_with_note', async (t) => {
+  // #133: a body map reached with no `type` key at all (fromProp's untyped branch, A8) degrades to
+  // JSON the same as the typed case (A7), with the same note and warn() call.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('untyped-input-map.yaml', ['post:/widgets>**'], 1, 2);
+  assert.ok(schema !== undefined);
+
+  const mapDegradeReason =
+    "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReason)}"\\n {2}settings: JSON`).test(schema!),
+    'settings carries a NEEDS ATTENTION note immediately above the field',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === mapDegradeReason),
+    'warn() fires with the [factory] tag and the exact reason text',
+  );
+});
+
+test('test_unrecognised_shape_degrades_to_json_with_note', async (t) => {
+  // #133: a property whose schema matches no known pattern (no type, oneOf/allOf, map, or
+  // properties — A9) degrades to JSON with a note explaining that, and warn() logs the same reason.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('unrecognised-shape.yaml', ['get:/mysteries>**'], 1, 1);
+  assert.ok(schema !== undefined);
+
+  const unrecognisedReason =
+    "this field's shape didn't match any known pattern and defaulted to JSON — worth checking the source OAS schema.";
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(unrecognisedReason)}"\\n {2}mystery: JSON`).test(schema!),
+    'mystery carries a NEEDS ATTENTION note immediately above the field',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === unrecognisedReason),
+    'warn() fires with the [factory] tag and the exact reason text',
+  );
 });
 
 test('test_66_array_body_references_item_input_type', async () => {
@@ -2369,6 +2429,10 @@ test(
       forceRover: true,
     });
     assert.ok(schema !== undefined);
+    // #105: locks in that discounts stays degraded to JSON and the union that used to drop
+    // `deleted` (see docs/FIXED.md #105/#131) never comes back.
+    assert.equal(schema!.match(/discounts: \[JSON\]!/g)?.length, 4, 'every discounts field is [JSON]!');
+    assert.ok(!/DiscountsUnion/.test(schema!), 'no merged discounts union is emitted');
   },
 );
 

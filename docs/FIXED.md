@@ -6120,3 +6120,132 @@ failing test) — a separate follow-up if one turns up, not folded in here.
 `array-of-anyof-string-or-object-loses-string-branch.yaml`, test
 `test_array_of_string_or_object_loses_the_string_case`. See #86, #108 (the same "degrade to JSON"
 precedent, the all-plain case this generalizes).
+
+## 105 · A 3-member anyOf's merged type silently drops a member the selection still names — ✅ Fixed, as a side effect of #131
+
+**Symptom:** stripe's real production spec fails `rover supergraph compose` on 3 ops:
+```
+SELECTED_FIELD_NOT_FOUND: [stripe] `@connect(selection:)` on `Query.stripe_listInvoices` contains
+field `deleted`, which does not exist on `Stripe_DiscountsUnion`.
+```
+Same error, same field, on `stripe_getInvoice` and `stripe_searchInvoices` — all three read
+`invoice.discounts`.
+
+**OAS** (stripe — `invoice.properties.discounts.items`, three real members, no shapeless one):
+```yaml
+anyOf:
+  - { type: string, maxLength: 5000 }
+  - { $ref: '#/components/schemas/discount' }
+  - { $ref: '#/components/schemas/deleted_discount' }   # has its own `deleted: true` field, required
+```
+
+**Cause was never pinned down as its own mechanism** — #131 was found and fixed the same day for
+a different reported field (PagerDuty/Stripe's `owners: anyOf[string, Owner, DeletedOwner]`,
+`expand[]`-style fields in general), and it turned out to be the exact same trigger shape as this
+entry's `discounts`: a list item mixing one plain scalar with real object members. #131's new
+`Schemas.holdsMixedPlainAndObjectValues` check (see `docs/FIXED.md #131`) now degrades `discounts`
+straight to `[JSON]` before the buggy merged union is ever built, so the union that used to drop
+`deleted` is never constructed. This entry stays honest about that: no dedicated fix landed here,
+and the original investigation's own leads were dead ends —
+- Not the `anyOf: [member, {}]` shapeless-member collapse (`factory.ts:80-87`, #20) — all three
+  members here are real object/scalar shapes.
+- Not `Union.dedupedSelectedProps`'s incompatible-kind guard (`union.ts:222-243`, #39/#44) — that
+  replaces a colliding field with `JSON`, it does not drop the member outright.
+- One real structural difference was found and ruled out: `discount`/`deleted_discount` has its
+  own nested 3-member `anyOf` (`customer: anyOf[string, $ref customer, $ref deleted_customer]`),
+  unlike the structurally similar working case `tax_id`/`deleted_tax_id` (plain scalars only). That
+  nesting turned out not to matter — #131's fix fires on the outer array-item shape regardless of
+  what the object members contain.
+
+**Verified against the real, tracked fixture** (`tests/resources/oas/stripe-curated.yaml`), two
+ways:
+- `test_73_curated_multi_op_stripe_selection_composes` passes cleanly.
+- The generated schema's `invoice`/`subscription`/`subscription_item`/`invoice_line_item`
+  `discounts` fields all read `[JSON]!`, and `DiscountsUnion`/`InvoiceDiscountsUnion` appear
+  nowhere in the schema — reverting #131's `holdsMixedPlainAndObjectValues` check brings both union
+  types back, confirming the assertion is load-bearing.
+
+**Refs:** see `docs/FIXED.md #131` for the fix itself. `src/oas/nodes/union.ts` (`visit`, `add`,
+`generateMergedObject`), `src/oas/nodes/factory.ts` (`fromArrayItems`). #106 (the selection-linter
+gap #105 surfaced) is a separate, still-open issue — its blind spot is real for other cases even
+though this one is fixed.
+
+## 133 · Four JSON-degrade sites now flag themselves in the generated schema, not just the build log — ✅ Fixed
+
+**Symptom:** `warn()` already logged why a field gave up and became `JSON` (the standing rule from
+2026-08-19), but that reason never reached anyone reading the schema itself — Apollo Studio,
+GraphiQL, introspection, or a person scrolling the SDL saw a bare `JSON` field with no clue why.
+
+**OAS** (docker-engine-shaped map in a request body — `factory.ts`'s A7):
+```yaml
+labels:
+  type: object
+  additionalProperties: { type: string }
+```
+
+**Example:**
+```graphql
+# before
+labels: JSON
+
+# after
+"""
+NEEDS ATTENTION: a map (object with arbitrary keys) can't be an input type in GraphQL — sent
+as raw JSON instead of a typed structure.
+"""
+labels: JSON
+```
+The same text also reaches `warn()`, from one shared local variable at each site — a test asserting
+the docstring and a test asserting the log line check the same string, so they cannot drift apart.
+
+**Fix:** new `Schemas.withDegradeNote(schema, reason)` (`src/oas/utils/schemas.ts`, next to
+`isMap`/`holdsMixedPlainAndObjectValues`) returns a copy of the schema with
+`"NEEDS ATTENTION: <reason>"` appended to its `description` (or set as the whole description, if it
+had none) — never mutated in place, since `context.lookupRef` can hand the same `SchemaObject`
+instance to other callers. `Prop.generate()` already writes `this.schema.description` before the
+field's value (`prop.ts:20-33`); the 4 sites below just had to pass the noted schema into the `Prop`
+they were already constructing, no new writer plumbing:
+- `factory.ts` **A7**/**A8** (`fromProp`, the typed and untyped branches of the same trigger): a map
+  in GraphQL input position — same reason text both times.
+- `factory.ts` **A9** (`fromProp`'s catch-all): a property whose shape matched no known pattern.
+- `union.ts` **C2** (`dedupedSelectedProps`): two merged union members give the same field name
+  incompatible kinds (see #39/#44) — `warn(null, '[union]', reason)`, matching this codebase's own
+  precedent for a site with no `context` in scope (`factory.ts:60`'s dangling-`$ref` warn).
+
+**Also fixed, found while building A8's fixture (unrelated to the note feature):** an
+`additionalProperties`-only schema with **no `type` key** made `Factory.fromSchema` throw
+(`createScalarType`'s catch-all `throw new Error('Cannot handle schema ...')`) instead of resolving
+to a map — `fromSchema`'s container-type dispatch only recognised `Schemas.isMap()` when
+`type: 'object'` was also present. Confirmed pre-existing: the same untyped-map fixture crashes
+identically against unmodified `factory.ts`, with or without this phase's change. Fix: added
+`Schemas.isMap(schemaObj)` to that dispatch condition (`factory.ts`, the `fromSchema` container-type
+check) — an untyped map now takes the same `createContainerType` -> `Map` route the typed case
+already took. One line, no behaviour change for any schema that already carried a `type`.
+
+**Confirmed `withDegradeNote` appends, not replaces:** `map-input-suffix.yaml`'s `labels` property
+was given a real OAS `description` (`key/value labels attached to the snapshot`); the generated
+field carries both the original text and the new note in one `"""..."""` block, in that order.
+
+**Tests** (each: SDL assertion for the docstring + `console.error` spy asserting `warn()`'s exact
+3-argument call shape — `arguments[1]` the file tag, `arguments[2]` the reason, not a substring
+check, since `runOasTest`'s own success-path `console.error(schema)` dump would otherwise also
+contain the reason text once it's embedded in the SDL):
+- `test_84_body_map_is_sent_as_json` (`map-input-suffix.yaml`) — A7, plus the append-not-replace check.
+- `test_untyped_input_map_degrades_to_json_with_note` (new fixture `untyped-input-map.yaml`) — A8.
+- `test_unrecognised_shape_degrades_to_json_with_note` (new fixture `unrecognised-shape.yaml`) — A9.
+- `test_R2_union_merge_kind_collision_degrades_to_json` (`r2-union-nested-in-list.yaml`,
+  `tests/all/r2-abstract.test.ts`) — C2.
+
+Reverting `Schemas.withDegradeNote` and its 4 call sites reproduces every one of these assertions
+failing (confirmed, not assumed) — including A8, which reproduces the pre-existing `fromSchema`
+crash rather than a missing-docstring assertion failure, since that bug blocks generation entirely.
+
+**Not done here:** 13 more JSON-degrade sites across `factory.ts`, `map.ts`, `union.ts`, `propObj.ts`
+give no schema-level signal yet — each needs its own new writer plumbing (no `Prop` to hang a
+description on, or the decision happens after the description already wrote). Tracked as
+`docs/issues.md #132`, not folded in here.
+
+**Refs:** `src/oas/utils/schemas.ts` (`withDegradeNote`), `src/oas/nodes/factory.ts` (`fromProp`,
+`fromSchema`), `src/oas/nodes/union.ts` (`dedupedSelectedProps`). See #39/#44 (C2's kind-collision
+precedent), #131 (the `withDegradeNote`-adjacent `holdsMixedPlainAndObjectValues`, same file), #132
+(the 13 deferred sites).
