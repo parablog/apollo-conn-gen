@@ -232,7 +232,10 @@ export class TypesCollector {
   // same walk as collectReachable, but records what each visited type's own fields are: e.g.
   // (confluence) Content is reached at 6 positions, kept "space" at 2 -> kept.get('Content') has
   // "space"; lost it to a cycle at the other 4 -> removed.get('Content') has "space" too.
-  private walkKeptAndRemoved(expanded: string[]): { kept: Map<string, Set<string>>; removed: Map<string, Set<string>> } {
+  private walkKeptAndRemoved(expanded: string[]): {
+    kept: Map<string, Set<string>>;
+    removed: Map<string, Set<string>>;
+  } {
     const context = this.gen.context!;
     const removed = new Map<string, Set<string>>();
     const kept = new Map<string, Set<string>>();

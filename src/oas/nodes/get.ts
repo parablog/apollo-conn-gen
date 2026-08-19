@@ -231,9 +231,8 @@ export class Get extends Type implements Op {
     // a response schema with no fields to select (googlebooks `Empty`: description +
     // `properties: {}`) — synthesize the same `success: Boolean` response as a missing body. #31
     // resolvePointer, not lookupRef: a sniff that may discard the ref must not bump refCount.
-    const resolved = '$ref' in schema
-      ? (context.resolvePointer((schema as ReferenceObject).$ref!) as SchemaObject)
-      : schema;
+    const resolved =
+      '$ref' in schema ? (context.resolvePointer((schema as ReferenceObject).$ref!) as SchemaObject) : schema;
     if (resolved && (Schemas.isEmpty(resolved) || Schemas.isShapelessObject(resolved))) {
       schema = SYN_SUCCESS_RESPONSE.content!['application/json'].schema as SchemaObject;
     }

@@ -1,4 +1,16 @@
-import { Body, Factory, Get, IType, Param, Prop, ReferenceObject, Res, T, Type, selectionPrefixes } from './internal.js';
+import {
+  Body,
+  Factory,
+  Get,
+  IType,
+  Param,
+  Prop,
+  ReferenceObject,
+  Res,
+  T,
+  Type,
+  selectionPrefixes,
+} from './internal.js';
 import { SchemaObject } from 'oas/types';
 
 import { trace } from '../log/trace.js';

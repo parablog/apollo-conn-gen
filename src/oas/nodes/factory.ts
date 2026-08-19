@@ -502,15 +502,12 @@ export class Factory {
   // the member LIST, which a Union carries as raw $refs, never as one `.schema`. see docs/FIXED.md #118
   //   e.g. (hubspot lists) OrBranch.orBranches items: oneOf [OrBranch, AndBranch, …] — the same
   //   7-way member set re-entered under every branch, never the same single schema.
-  private static cyclicUnionAncestor(
-    parent: IType,
-    members: (SchemaObject | ReferenceObject)[],
-  ): Union | undefined {
+  private static cyclicUnionAncestor(parent: IType, members: (SchemaObject | ReferenceObject)[]): Union | undefined {
     const signature = this.unionRefSignature(members);
     if (!signature) return undefined;
-    return parent
-      .ancestors()
-      .find((a) => a instanceof Union && this.unionRefSignature(a.schemas) === signature) as Union | undefined;
+    return parent.ancestors().find((a) => a instanceof Union && this.unionRefSignature(a.schemas) === signature) as
+      | Union
+      | undefined;
   }
 
   /** Build the `fromSchema` circular sentinel (commented in both SDL + selection). see docs/FIXED.md #10 */
