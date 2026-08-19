@@ -5786,6 +5786,15 @@ No other type moves.
 `test_108_map_with_anyof_enum_or_string_values_drops_the_map_and_selection`. See #86, #93/#95
 (map value-type family).
 
+**Correction (2026-08-19).** `test_108_confluence_full_production_selection` pinned
+`composeFederationVersion: '2.14.0'` but, unlike `test_73`/`test_109`, never set `forceRover:
+true` — `compose()` prefers a local patched composer binary when present, and that binary ignores
+`federation_version` entirely, so the `2.14.0` pin was inert: the test never actually composed
+against a real pre-2.15 plugin. Adding `forceRover: true` at `2.14.0` fails for real (322
+`CONNECTORS_UNRESOLVED_FIELD` errors — the same #14/#16 mechanism #109 documents), confirming this
+map fix was never the issue; composing at `2.15.1` (the suite's normal default) passes clean. Same
+mistake as #109, just not propagated to this test.
+
 
 ## 109 · Omni's full spec failed with hundreds of unresolved fields — misdiagnosed; the real cause was a stale composer-version pin — ✅ Fixed
 
@@ -5856,6 +5865,15 @@ this code ran for that case, so it's unaffected.
 **Refs:** `src/oas/nodes/factory.ts` (`fromArrayItems`), `src/oas/nodes/get.ts` (the resolve-before-check
 precedent). Fixture `array-of-shapeless-ref-body-prop.yaml`, test
 `test_110_array_of_shapeless_ref_body_prop_is_not_dropped`.
+
+**Correction (2026-08-19).** `test_110_pagerduty_full_production_selection` had the same inert-pin
+bug as #108: `composeFederationVersion: '2.14.0'` without `forceRover: true`, so it never composed
+against a real pre-2.15 plugin. Adding `forceRover: true` at `2.14.0` fails for real — but on a
+different error than #108/#109's field-resolution cascade: `INVALID_SELECTION`, a `nom` parser
+error on `Query.incidents`'s selection, at the `??` default-coalesce syntax (`enabled: enabled ??
+$(false)`) — a pre-2.15 plugin's connectors parser doesn't recognize it. Composing at `2.15.1`
+passes clean. Same category as #108/#109 (composing below 2.15 breaks on syntax/behavior the older
+plugin doesn't support), different specific gap.
 
 
 ## 125 · A field declared but never actually selected reached the SDL as a real, unprovided field — ✅ Fixed

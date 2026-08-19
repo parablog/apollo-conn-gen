@@ -826,3 +826,39 @@ It must have a `@connect` directive or appear in `@connect(selection:)`.
 **Refs:** COVERAGE-mutations.md `all-ops` column (`digitalocean.yaml`), #122 (umbrella), #123
 (the unmasking fix). Probe: whole-spec mutations schema of `digitalocean.yaml` via rover.
 
+## 128 · A pinned `composeFederationVersion` without `forceRover` composes against the wrong plugin — ⬜ Open (audit)
+
+**Symptom:** `compose()` (`src/tests/runners.ts`) prefers a gitignored local patched composer
+(`tools/local/apollo-federation-cli`) over real Rover unless `forceRover: true` is set — and that
+local build ignores `federation_version` entirely (patched past 2.15). A test that pins
+`composeFederationVersion` below 2.15 without also setting `forceRover: true` never actually
+composes against that older plugin — its pin is inert, and it silently passes regardless of real
+pre-2.15 incompatibilities.
+
+**Confirmed instances, both already fixed:** `test_108_confluence_full_production_selection` and
+`test_110_pagerduty_full_production_selection` both had this gap (see their `docs/FIXED.md`
+2026-08-19 corrections) — real composition at `2.14.0` failed for real (confluence: 322
+`CONNECTORS_UNRESOLVED_FIELD`, the same #14/#16 mechanism #109 hit; pagerduty: a `nom` parser
+error on `??` default-coalesce syntax, a different specific gap in the same category). `test_73`
+and `test_109` already set `forceRover: true`, so they were never affected — this is exactly their
+same root-cause mistake, just not propagated everywhere it needed to be.
+
+**Not yet audited (found by a cheap grep, not exhaustive):**
+- `test_entity_resolver_with_errors_emits_wellformed_schema`,
+  `test_recursive_schema_cut_composes_abstract_pass` — both pin a version without `forceRover:
+  true`. Lower suspected risk (version matches their own `v2.14` declaration, and neither scenario
+  obviously hits `?`/`->entries`/`??`), but not confirmed either way.
+- Every other test that pins `composeFederationVersion` was found only by grepping for that
+  literal string — a test that *should* pin a version but doesn't set `forceRover` and silently
+  composes against the local patched build (already past 2.15) wouldn't show up in that grep at
+  all, and isn't ruled out here.
+
+**Also open:** this repo cannot confirm what composer version graphos-service-factory's production
+deploy actually runs — every `2.13`/`2.14` reference found while investigating this traced back to
+this repo's own test pins, not to a citation of the real production config. A green result at
+`2.15.1` is necessary but not sufficient for release-readiness until that's confirmed (either
+Fernando confirms it directly, or it's found in graphos-service-factory's own config).
+
+**Refs:** `src/tests/runners.ts` (`compose()`, `localComposer()`), `docs/FIXED.md` #108, #109, #110
+(the confirmed instances and the shared #14/#16 mechanism), #73 (the same mistake, independently).
+
