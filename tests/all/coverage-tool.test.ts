@@ -32,10 +32,11 @@ test('test_coverage_all_ops_column_catches_per_op_green_whole_red', () => {
   assert.strictEqual(perOp.length, 2, 'two per-op verdicts');
   assert.ok(perOp.every(([, v]) => v === 'OK'), 'every op composes alone: ' + JSON.stringify(dump));
   // pins the DETECTION; when #121 is fixed this flips to OK and the fixture/test move on
-  assert.match(dump.whole, /^FAIL \[GROUP_SELECTION_IS_NOT_OBJECT ×2\]/, 'the combined compose is caught');
+  // ×1, not ×2: #129 fixed compose() double-counting every error (e.message re-embedded stderr).
+  assert.match(dump.whole, /^FAIL \[GROUP_SELECTION_IS_NOT_OBJECT ×1\]/, 'the combined compose is caught');
   const report = fs.readFileSync(path.join(dir, 'out.md'), 'utf-8');
   assert.ok(report.includes('| all-ops |'), 'report has the column');
-  assert.ok(/per-op-green-whole-red\.yaml \|.*\| 100\.0% \| FAIL \[GROUP_SELECTION_IS_NOT_OBJECT ×2\]/.test(report),
+  assert.ok(/per-op-green-whole-red\.yaml \|.*\| 100\.0% \| FAIL \[GROUP_SELECTION_IS_NOT_OBJECT ×1\]/.test(report),
     'row shows per-op green next to all-ops red');
 });
 
