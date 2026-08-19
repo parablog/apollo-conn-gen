@@ -5,7 +5,7 @@ cite an entry instead of carrying the full rationale inline. Every entry has an 
 showing the input schema that triggers it, a concrete **before → after** example, and an **AST:**
 note stating how (or whether) the node tree changed.
 
-**This file holds the open entries only.** The 85 fixed ones live in `docs/FIXED.md`. Ids are
+**This file holds the open entries only.** The 107 fixed ones live in `docs/FIXED.md`. Ids are
 global and never reused, so `#N` means the same entry in both files:
 - open — `// see docs/issues.md #N`
 - fixed — `// see docs/FIXED.md #N`
@@ -334,7 +334,7 @@ rewrite) plus keeping `$this.<sanitised>` consistent with the `@key`.
 `Prop.name`, both raw OAS names today; sanitising `keyFields` for `@key` must keep that check in
 step, and the test above fails if it does not), `Naming.sanitiseField`.
 
-## 73 · Node ids embed emitted names, so visit order changes selection identity — 🔴 Reopened (stripe trigger only partly fixed)
+## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked (stripe trigger fixed 2026-08-19; identity-drift core still open, untested)
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —
 so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
@@ -441,6 +441,20 @@ independently the same day). Fixtures: `tests/resources/oas/stripe-curated.yaml`
 `tests/resources/oas/stripe-curated-selection.json` — found running
 `graphos-service-factory/scripts/gen-ts.mjs`, that repo's wrapper comparing TS `gen` against
 `tools/connect-gen`, the Rust fork it currently uses.
+
+**Correction (2026-08-19).** The 453 `CONNECTORS_UNRESOLVED_FIELD` errors above were themselves a
+second methodology artifact, not a real generator defect: the test pinned `composeFederationVersion:
+'2.13.0'` to match the schema's declared `@link` version, on the premise that they "MUST match."
+That premise was wrong — composition tooling is backward-compatible with older `@link` declarations
+by design, and pinning below 2.15 loses two already-fixed-upstream credits (`docs/FIXED.md` #14's
+`->entries` map transform, #16's `field? { nested }` optional marker), which is what actually
+produced the cascade of unresolved fields. Composing the same, byte-identical generated SDL at
+`2.15.1` instead gives **zero** errors — confirmed directly (`test_73_curated_multi_op_stripe_selection_composes`
+now passes, un-todo'd, `composeFederationVersion: '2.15.1'`). This issue's own identity-drift
+mechanism (ids embedding names, browse-order divergence) was neither proven nor disproven by this —
+it stays open here as a separate, untested concern, parked until something exercises it for real
+again. See #109's matching 2026-08-19 correction — the same version-pin mistake, found the same day
+on a second schema.
 
 ## 79 · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
 
@@ -625,169 +639,6 @@ generation, not at `rover compose` time on a real production spec.
 `src/oas/lint/schemaReader.ts` (the emitted-type parse this fix would read from),
 `tools/lint-corpus.mts` (the gate that currently passes #105's case clean). Surfaced alongside
 #105, same investigation.
-
-
-
-## 108 · A map whose values are `anyOf: [enum, string]` drops the whole property — ⬜ Open
-
-**Symptom:** confluence's real `POST /content/convert-ids-to-types` generates a response type with
-zero fields — invalid GraphQL on its own — and an empty selection. Generating confluence's full,
-unfiltered spec writes it straight to the schema (no crash, just broken output); adding
-`--service-prefix` crashes the whole CLI instead, because `Namespace.apply` `parse()`s the raw SDL
-before prefixing it, and an uncaught `GraphQLError` takes the process down with it rather than a
-clean, actionable message:
-```
-GraphQLError: Syntax Error: Expected Name, found "}".
-```
-
-**OAS** (confluence — a map whose values pick between an enum and a plain string):
-```yaml
-ContentIdToContentTypeResponse:
-  properties:
-    results:
-      type: object
-      additionalProperties:
-        anyOf:
-          - { type: string, enum: [page, blogpost, attachment, footer-comment, inline-comment] }
-          - { type: string, description: "Custom content types" }
-```
-
-**Example** — the property (and its whole selection) disappear rather than degrading to `JSON`:
-```graphql
-type ContentIdToContentTypeResponse {
-}
-```
-```graphql
-      selection: """
-      """
-```
-
-**Cause:** not yet established — not investigated past confirming the trigger shape (a map value
-type that is itself `anyOf`, not a plain scalar/`$ref`) and reproducing it standalone. Likely
-related to #93/#95's family (map value-type resolution edge cases) but not confirmed to be the
-same code path.
-
-**Not caught by any corpus gate** (same situation as #105/#106): confluence's own corpus test
-(`test_corpus_confluence`, `corpus.test.ts`) only selects `get:/wiki/rest/api/audit>**`, nowhere
-near this operation — full-spec generation is what surfaces it.
-
-**Test:** `test_108_map_with_anyof_enum_or_string_values_drops_the_map_and_selection`
-(`tests/all/oas-core.test.ts`, `{ todo: ... }`) — minimal fixture
-`tests/resources/oas/map-value-anyof-enum-string.yaml`, isolated from the real confluence op
-(request body included, since without one the whole operation vanishes rather than emitting the
-empty type — a second, smaller oddity worth noting but not chased down here).
-
-**Refs:** `src/oas/nodes/map.ts` (value-type resolution). Found running
-`graphos-service-factory/scripts/gen-ts.mjs` against confluence's real, full `openapi.json` — that
-repo's wrapper comparing TS `gen` against `tools/connect-gen`, the Rust fork it currently uses.
-
-## 109 · Omni's full spec fails with 359 unresolved fields, and one traced case has a selection that looks complete — ⬜ Open
-
-**Symptom:** generating Omni's real, full, unfiltered `openapi.json` (no operation curation — this
-manifest has no `operations.include`) and composing with stock rover fails with **359
-`CONNECTORS_UNRESOLVED_FIELD` errors across 71 distinct types**. Confirmed independent of
-`--service-prefix`, `--transform-rules`, and everything the wrapper's own post-processing does —
-plain `-n --skip-auth --federation-version v2.13` on the raw spec reproduces the identical count.
-**Not #73's mechanism**: zero of the 71 failing types carry a numbered-duplicate suffix.
-
-**Methodology note, so this isn't miscounted again:** the `supergraph.yaml`'s `federation_version`
-must match what the schema's own `@link` declares (rover otherwise silently under-reports —
-composing the *same* schema against a mismatched `federation_version: =2.13.0` vs the schema's own
-`v2.14` link dropped the count from 359 to 19, with no version-mismatch error at all. Confirmed by
-composing the identical file both ways.)
-
-**OAS/Example** — one traced case, `POST /api/v1/ai/generate-query`, response
-`AiGenerateQueryResponse { error: Error, query: AiSemanticQuery, ... }`. Both `Error` and
-`AiSemanticQuery` are reached from exactly one position (grepped every `: Error`/`: AiSemanticQuery`
-field-type reference in the raw SDL — one each), and that position's `@connect(selection:)`
-reads, verbatim:
-```graphql
-selection: """
- baseView?
- error? {
-  detail
-  message
- }
- query? {
-  fields
-  filters: filters?->entries { key value }
-  limit?
-  sorts? { columnName: column_name sortDescending: sort_descending }
-  table?
-  keyString: $."[key: string]"?
- }
- result: result?->entries { key value }
- topic?
- workbookUrl?
-"""
-```
-Every field `Error`/`AiSemanticQuery`/`AiQuerySort` declare is named here, spelled the same way, in
-the same nesting — yet rover still reports all of them unresolved. This is not the same shape as
-the previously-fixed `CONNECTORS_UNRESOLVED_FIELD` cases in this log (`#13`/`#89`, `#73`) — those
-were genuinely missing or divergent selections; here the selection reads correct by inspection.
-
-**Cause: not yet established.** Not investigated past the one traced case above — whether the
-mechanism is a `result: result?->entries` interaction (a map/`->entries` selection sitting
-alongside the plain nested-object selections in the same block — `#93`/`#106`-adjacent territory),
-a parse/attach failure on this specific `@connect` block that silently drops it from validation
-while still emitting its types, or something else entirely. The other 70 failing types (mostly
-around Omni's `Ai*`/`Scim*`/pagination shapes) haven't been individually traced — no claim that
-they share this case's exact mechanism, only that none of them are `#73`'s numbered-duplicate
-pattern.
-
-**Refs:** none pinned yet — needs the tracing above extended to more of the 71 types before a code
-location can be named with confidence. Found running `graphos-service-factory/scripts/gen-ts.mjs`
-against Omni's real, full `openapi.json` (`service-catalog/omni/`) — that repo's wrapper comparing
-TS `gen` against `tools/connect-gen`, the Rust fork it currently uses. No fixture pinned yet;
-Omni's real spec is large (`service-catalog/omni/openapi.json`) and hasn't been reduced to a
-minimal standalone repro the way `#108`'s was.
-
-**Methodology gotcha worth keeping, found alongside this**: composing the same schema with a
-`supergraph.yaml` `federation_version` that *doesn't* match the schema's own `@link` version
-doesn't fail — rover silently validates less and under-reports. Dropped this exact case from 359
-to 19 errors with no version-mismatch complaint at all. Always match them when comparing error
-counts across runs.
-
-## 110 · An array of a shapeless `$ref` in a request body is dropped, not degraded to `[JSON]` — ⬜ Open
-
-**Symptom:** PagerDuty's real `PUT /incidents/{id}/merge` generates `input InputInput { }` — zero
-fields — and `body: """ $args.input { } """` — empty. Same crash-under-`--service-prefix`
-interaction as `#108` (`Namespace.apply` `parse()`s the raw, already-invalid SDL before prefixing
-it, so an uncaught `GraphQLError` takes the whole CLI down instead of a clean message).
-
-**OAS** (pagerduty — the body's one property is an array of a shapeless ref):
-```yaml
-requestBody:
-  content:
-    application/json:
-      schema:
-        properties:
-          source_incidents:
-            type: array
-            items: { $ref: '#/components/schemas/IncidentReference' }
-IncidentReference:
-  type: object
-  additionalProperties: true   # no declared properties — "shapeless"
-```
-
-**Cause:** a bare shapeless ref correctly degrades to the `JSON` scalar (`factory.ts`'s documented
-fallback, confirmed working standalone) — but as an array's `items` *inside a request body*
-specifically, the property disappears instead of degrading to `[JSON]`. Not investigated past
-confirming the trigger shape and that a direct (non-array, non-body) shapeless ref does not hit
-this. Whether it's array-specific, body-specific, or both together, is open.
-
-**Not caught by any corpus gate** (same situation as `#105`/`#106`/`#108`): PagerDuty's own corpus
-test (`test_corpus_omni`... no — PagerDuty has no dedicated `corpus.test.ts` entry at all; its
-coverage comes entirely from the real committed connector's own test suite, which the Rust-based
-`service-catalog/pagerduty/` was built against, not TS).
-
-**Test:** `test_110_array_of_shapeless_ref_body_prop_is_not_dropped` (`tests/all/oas-core.test.ts`,
-`{ todo: ... }`) — minimal fixture `tests/resources/oas/array-of-shapeless-ref-body-prop.yaml`.
-
-**Refs:** `src/oas/nodes/factory.ts` (`isShapelessObject` fallback — works standalone, not here),
-`src/oas/nodes/arr.ts`, `src/oas/nodes/body.ts`. Found running
-`graphos-service-factory/scripts/gen-ts.mjs` against PagerDuty's real, full `openapi.json` — same
-wrapper as `#108`/`#109`.
 
 ## 111 · `--service-prefix` crashes the whole CLI on SDL its own generator already wrote invalid — ⬜ Open
 
@@ -974,3 +825,4 @@ It must have a `@connect` directive or appear in `@connect(selection:)`.
 
 **Refs:** COVERAGE-mutations.md `all-ops` column (`digitalocean.yaml`), #122 (umbrella), #123
 (the unmasking fix). Probe: whole-spec mutations schema of `digitalocean.yaml` via rover.
+

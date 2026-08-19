@@ -5735,3 +5735,271 @@ it; the all-ops column would catch one.
 (#104/#112 twin block), `src/oas/nodes/typeUtils.ts` (helpers reused as-is). Fixture
 `inline-allof-body-collision.yaml`, test `test_123_second_inline_allof_body_renames_instead_of_converging`
 (tests/all/r3-naming.test.ts). See #104, #112, #122, #124.
+
+
+## 108 · A map whose values are `anyOf: [enum, string]` drops the whole property — ✅ Fixed
+
+**Symptom:** confluence's real `POST /content/convert-ids-to-types` generated a response type with
+zero fields — invalid GraphQL on its own — and an empty selection.
+
+**OAS** (confluence — a map whose values pick between an enum and a plain string):
+```yaml
+ContentIdToContentTypeResponse:
+  properties:
+    results:
+      type: object
+      additionalProperties:
+        anyOf:
+          - { type: string, enum: [page, blogpost, attachment, footer-comment, inline-comment] }
+          - { type: string, description: "Custom content types" }
+```
+
+**Example:**
+```graphql
+# before — the property (and its whole selection) vanish
+type ContentIdToContentTypeResponse {
+}
+
+# after — the map degrades to JSON, like #86's array-of-plain-values case
+type ContentIdToContentTypeResponse {
+  results: JSON
+}
+```
+
+**Cause:** `Map.visitAdditionalProperties` called `Factory.fromSchema` on the value schema
+unconditionally. For a 2-member `anyOf` of plain values, `fromSchema`'s "maybe-empty anyOf"
+collapse only fires with exactly one real member, so it fell through to building a plain `Union` of
+scalar/enum members — never legal GraphQL on its own. `T.isLeaf` has no `Union` case, so
+`T.isWholeMapValue` answered `false`, so the selection collector never added the property's path —
+the whole thing disappeared instead of erroring.
+
+**Fix:** `Map.visitAdditionalProperties` now checks `Schemas.holdsPlainValues` (the same helper
+`Factory.fromArrayItems` already uses for #86's array case) before calling `Factory.fromSchema`,
+and degrades straight to `Scalar('JSON')` when it matches.
+
+**Measured:** `confluence-full.json`'s full production selection gains exactly one new reachable
+type (`map:type:ResultsEntry`, previously unreachable since the property vanished) — `327 → 328`.
+No other type moves.
+
+**Refs:** `src/oas/nodes/map.ts` (`visitAdditionalProperties`), `src/oas/utils/schemas.ts`
+(`holdsPlainValues`, #86's precedent). Fixture `map-value-anyof-enum-string.yaml`, test
+`test_108_map_with_anyof_enum_or_string_values_drops_the_map_and_selection`. See #86, #93/#95
+(map value-type family).
+
+
+## 109 · Omni's full spec failed with hundreds of unresolved fields — misdiagnosed; the real cause was a stale composer-version pin — ✅ Fixed
+
+**Symptom:** generating Omni's real, full, unfiltered `openapi.json` and composing failed with
+**359–361 `CONNECTORS_UNRESOLVED_FIELD` errors across ~71 types**. One traced case
+(`AiGenerateQueryResponse`) had a `@connect(selection:)` that named every field correctly by
+inspection, yet rover still reported all of them unresolved — looked like a parse/attach mystery.
+
+**Cause:** the test pinned `composeFederationVersion: '2.14.0'` to match the schema's own `@link`
+version, on the premise that they "must match." That premise was the actual bug: composition
+tooling is backward-compatible with older `@link` declarations by design, and composing below
+**2.15** loses two already-fixed-upstream credits — #14's `->entries` map transform and #16's
+`field? { nested }` optional marker — which cascade into "unresolved" for everything nested
+beneath. `AiGenerateQueryResponse`'s selection uses both patterns; that's the whole "mystery."
+
+**Fix:** `test_109_omni_full_production_selection` composes at `composeFederationVersion: '2.15.1'`
+(the suite's normal default) instead of pinning to the schema's own `@link` version. Confirmed
+directly: the identical, byte-for-byte generated SDL goes from 361 errors at `2.14.0` to zero at
+`2.15.1`. `servicePrefix: 'omni'` and `forceRover: true` stay — real, needed (`--service-prefix` is
+a flag production always passes; the local composer ignores `federation_version` entirely).
+
+**Not this issue's mechanism:** the original "cause not established" framing, and the standalone
+`AiGenerateQueryResponse` trace, were both artifacts of the version-pin mistake, not a distinct
+generator bug. #73's identical mistake was found independently the same day, on stripe's schema.
+
+**Refs:** `tests/all/oas-core.test.ts` (`test_109_omni_full_production_selection`), `docs/FIXED.md`
+#14, #16 (the credits lost below 2.15). See #73 (same mistake, same day), #127 (a real bug this
+correction unmasked — a different, genuine defect that was hiding behind the same 361 errors).
+
+
+## 110 · An array of a shapeless `$ref` in a request body was dropped, not degraded to `[JSON]` — ✅ Fixed
+
+**Symptom:** PagerDuty's real `PUT /incidents/{id}/merge` generated `input InputInput { }` — zero
+fields — and `body: """ $args.input { } """` — empty.
+
+**OAS** (pagerduty — the body's one property is an array of a shapeless ref):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        properties:
+          source_incidents:
+            type: array
+            items: { $ref: '#/components/schemas/IncidentReference' }
+IncidentReference:
+  type: object
+  additionalProperties: true   # no declared properties — "shapeless"
+```
+
+**Cause:** `Factory.fromArrayItems` checked `Schemas.isShapelessObject` on the *raw, unresolved*
+items schema. A bare shapeless ref correctly degrades to `JSON` standalone, but as an array's
+`items` the `$ref` was still present when the check ran — `isShapelessObject` requires `$ref ==
+null`, so it always failed for a ref'd item regardless of what it resolved to. It fell through to
+`Factory.fromSchema`, which resolved the ref but routed on `type === 'object'` *before* reaching
+its own shapeless check, building a plain empty `Obj` — which has no selectable leaf path as an
+array item, so the whole property vanished.
+
+**Fix:** `Factory.fromArrayItems` now resolves a `$ref` before the `isShapelessObject` check, the
+same call-site idiom `get.ts` already uses for response-root schemas. Widened its parameter type to
+`SchemaObject | ReferenceObject` to match `fromSchema`'s own signature (both existing callers
+already passed that looser type).
+
+**Measured:** no type-count change anywhere — a `Scalar` dependency adds no new emittable type, and
+`unwrapRedundantArrayItems`'s existing ref-to-array unwrapping already stripped the `$ref` before
+this code ran for that case, so it's unaffected.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromArrayItems`), `src/oas/nodes/get.ts` (the resolve-before-check
+precedent). Fixture `array-of-shapeless-ref-body-prop.yaml`, test
+`test_110_array_of_shapeless_ref_body_prop_is_not_dropped`.
+
+
+## 125 · A field declared but never actually selected reached the SDL as a real, unprovided field — ✅ Fixed
+
+**Symptom:** the same failure shape as #89 — `CONNECTORS_UNRESOLVED_FIELD: No connector resolves
+field 'X.y'` — but for a field no route ever selects at all, not one lost to a cycle on some routes
+and kept on others. #89's own entry flagged this as future work: *"Not fixed here: `Composed` never
+consulted the overrides... a removed-and-kept field surfacing through an allOf would need the same
+lookup in `comp.ts`."* This closes that gap, and a second one next to it — a field that's simply
+never in any route's own selection (e.g. stripe's `Customer.sources`, declared on the schema but no
+connector picks it) fell through #89's `removed`/`kept` check entirely: with no route ever recording
+it as either, `!removed.has(name)` was true and the check returned early, so the field never got
+commented out and stayed a real, always-unresolvable SDL field.
+
+**Cause:**
+- #89's fix only ever consulted `context.propOverrides` from `Obj.generate`/`select`/`dependencies`
+  — `Composed` had no equivalent lookup, exactly as its own entry predicted.
+- #89's `removed`/`kept` maps were only populated by routes that actually visited a field (kept it,
+  or lost it to a cycle); a field no route's traversal ever reaches shows up in neither map, so the
+  "removed on one route AND kept on another" check never fires for it — the field just never gets
+  flagged at all.
+- `TypesCollector.collect`'s reachability loop (#26) also only ran once — but commenting out a field
+  can itself drop a type's only path to something else, so a single pass could miss types that only
+  became unreachable *because* of a field this same commit removes.
+
+**Fix:**
+- `T.isFieldOwner` (`Obj | Composed`) replaces the old `instanceof Obj` guard everywhere
+  `context.propOverrides` is read or written, bringing `Composed` to parity with `Obj` for #89's
+  original mechanism.
+- A new pass, `removeFieldsNeverSelected`, walks every field-owning type's own declared props
+  (`dependencies(context, expanded)`) and comments out (same `PropCircRef`-swap `commentOutField`
+  #89 already uses) any prop the route walk (`walkKeptAndRemoved`, #89's walk factored out and
+  reused) never recorded as kept by any route — not just ones recorded as removed by some.
+- `collect()`'s reachability-pruning loop now iterates to a fixed point
+  (`for (let removedAny = true; removedAny; )`), re-running `collectReachable` and
+  `removeFieldsNeverSelected` together until a pass changes nothing — since commenting out a field
+  can shrink reachability, and shrinking `pendingTypes` can change what a field-owner's own
+  `dependencies()` returns next time. Terminates: overrides only ever accumulate (never removed),
+  bounded by the spec's finite field/type count.
+
+**Measured:** no dedicated isolated fixture/test — this pass runs unconditionally inside every
+`collect()` call, so it's exercised by the full suite (389 tests, 0 failures) rather than a single
+repro case. Traced by code review, not independently reproduced against a live `Customer.sources`-shaped
+spec.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`removeFieldsNeverSelected`, `walkKeptAndRemoved`,
+`commentOutField`, the fixed-point loop in `collect`), `src/oas/nodes/typeUtils.ts`
+(`T.isFieldOwner`), `src/oas/nodes/comp.ts` (`generate`/`select`/`dependencies` now consult
+`propOverrides`, matching `obj.ts`). See #89 (the original mechanism and its own "not fixed here"
+note), #26 (the reachability walk this reuses).
+
+
+## 126 · An inline-minted `Composed` name collided with a same-class real component — ✅ Fixed
+
+**Symptom:** PagerDuty's full spec failed compose:
+```
+INVALID_GRAPHQL: [test_spec] Error: the type `User` is defined multiple times in the schema
+```
+
+**OAS** (pagerduty — `user` is an inline allOf, `User` is a real, unrelated component):
+```yaml
+IncidentNote:
+  properties:
+    user:                                   # inline allOf -> Composed, minted name "User"
+      allOf:
+        - { $ref: '#/components/schemas/Reference' }
+        - { type: object, properties: { type: { enum: [user_reference, bot_user_reference] } } }
+components:
+  schemas:
+    User:                                    # real component -> Composed, id from the $ref pointer
+      allOf: [...]
+```
+
+**Cause:**
+- `Composed.updateName` mints an inline allOf's name from its property key (#7):
+  `Naming.genTypeName(Naming.getRefName('user'))` -> `"User"`.
+- `Composed.visit` only collision-checked `collidesAcrossNodeClasses` — it renames when the stored
+  occupant is a *different* node class only. Here both sides are `Composed` (same class), so no
+  rename fired — #22's documented, deliberate scope: a same-class rename was tried once and
+  reverted (box regressed 85->76, description-only twins got incorrectly split apart by visit order).
+- #22's same-class case relied on the collector deduping by id — safe there because every instance
+  minted from one property key shares one id. This case has no such safety net: the minted
+  instance's id (`comp:type:User`) and the real component's id (`comp:type:#/components/schemas/User`)
+  are different strings, so the collector kept both — two definitions that only collide once
+  `Naming.genTypeName` renders them.
+
+**Fix:** `T.collidesWithReservedComponentName` (already existed for #100's `Obj`-only case, reading
+the static parsed spec's own `#/components/schemas` namespace rather than the mutable, visit-order-
+dependent `context.types`) broadened to also accept `Composed`, wired into `Composed.visit`'s
+existing `Prop`-gated check alongside `collidesAcrossNodeClasses`. Order-independent by
+construction — an id-based `context.types` check was considered and rejected: PagerDuty's own
+selection visits the inline mint before the real component, so no occupant would be stored yet at
+rename-check time.
+
+**Box regression checked** (`#22`'s exact concern): box has ~13 more instances of this same
+`inline-property-name` collision pattern (`folder`→`Folder`, `file`→`File`, etc.), one already
+concretely verified — `GroupMembership.user` renames to `GroupMembershipUser`, referenced correctly,
+and the real `User` component keeps its own name. Aggregate: box's whole-spec `GRAPH_QL_ERROR` count
+dropped 34→18, no new/different error codes. The other ~12 names weren't individually audited.
+
+**Refs:** `src/oas/nodes/comp.ts` (`visit`), `src/oas/nodes/typeUtils.ts`
+(`collidesWithReservedComponentName`, broadened guard). Fixture
+`composed-vs-component-name-collision.yaml`, test
+`test_126_inline_allof_prop_must_not_collide_with_real_component` (both visit orders, mirroring
+#100's own dual-order discipline). See #22 (the same-class scope decision and its box regression),
+#9/#12/#18 (the original `Obj`-only collision machinery), #100 (the reused mechanism).
+
+
+## 127 · A numeric JSON default on a `string`-typed param wrote an unquoted default value — ✅ Fixed
+
+**Symptom:** Omni's full spec failed compose under federation plugin 2.15.1 (2.14.0 let it through
+silently — see #109):
+```
+INVALID_GRAPHQL: [test_spec] Invalid default value (got: 100) provided for argument
+Query.omni_apiScimV2EmbedUsers(count:) of type String.
+```
+8 occurrences, all the same shape: `apiScimV2Groups`/`apiScimV2Users` (`count`/`startIndex`),
+`apiV1ModelsByModelIdYaml` (`fullyResolved`, a boolean default), `apiV1Schedules` (`cursor`).
+
+**OAS** (omni — the param's own `default` doesn't match its declared `type`):
+```yaml
+count:
+  in: query
+  schema:
+    type: string
+    pattern: '^-?\d*\.?\d+$'
+    default: 100     # a JSON number, not "100" — the spec's own authoring inconsistency
+```
+
+**Cause:** `Param.writeDefaultValue` branched on the JS `typeof` of the raw `schema.default` value,
+never on the argument's own declared GraphQL type. `default: 100` under a `string`-typed schema hit
+the `typeof value === 'number'` branch and wrote `String = 100` (invalid) instead of `String =
+"100"`; `default: false` under the same `type: string` hit the boolean branch the same way.
+
+**Fix:** `writeDefaultValue` now checks the param's own resolved GraphQL scalar first
+(`this.resultType`, a `Scalar` built in `visit()`): if it's `String` and the raw default is a JS
+`number` or `boolean`, force-quote it. Every other case — including a `String` param's ordinary
+`string` default, or any value under a non-`String` scalar — falls through to the original,
+unchanged `typeof` branches in the same order.
+
+**Measured:** `test_param_default_boolean_emits_literal`'s two existing cases are untouched
+(`Boolean`/`Int` scalars never take the new branch) — traced, not just re-run.
+
+**Refs:** `src/oas/nodes/param.ts` (`writeDefaultValue`). Fixture
+`param-default-type-mismatch.yaml`, test
+`test_127_string_typed_param_quotes_a_mismatched_numeric_or_boolean_default`. See #109 (the
+composer-version correction that unmasked this).
