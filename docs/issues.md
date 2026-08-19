@@ -868,3 +868,52 @@ Fernando confirms it directly, or it's found in graphos-service-factory's own co
 **Refs:** `src/tests/runners.ts` (`compose()`, `localComposer()`), `docs/FIXED.md` #108, #109, #110
 (the confirmed instances and the shared #14/#16 mechanism), #73 (the same mistake, independently).
 
+## 130 · Two unrelated inline shapes sharing one property-key-derived name — box.yaml's real #126 residue — ⬜ Open
+
+**Symptom:** after `#129`'s correction, box.yaml's whole-spec compose genuinely fails on 9 GET / 5
+mutation `GRAPH_QL_ERROR`s — real, not #126's already-fixed pattern (checked: none collide with a
+real top-level component). Two clusters:
+
+**Cluster A — "AssignedTo"** (4 GET errors, all 5 mutation errors):
+```yaml
+TaskAssignment:
+  properties:
+    assigned_to:
+      allOf: [{ $ref: '#/components/schemas/User--Mini' }, { description: ... }]   # small shape
+LegalHoldPolicyAssignment:
+  properties:
+    assigned_to:
+      allOf: [{ oneOf: [File, Folder, WebLink] }, { description: ... }]            # big shape
+```
+Both are inline `allOf`s on a property literally named `assigned_to` (the `oneOf` sits *inside* the
+outer `allOf`, so both mint as `Composed`, not `Union`) — `Composed.updateName` names both
+`"AssignedTo"`. Only the big File/Folder/WebLink-derived definition survives; selections expecting
+the small shape's `login` field (e.g. `taskAssignmentCollection.entries.assignedTo.login`) no
+longer match anything.
+
+**Cluster B — "Fields"** (the other 5 GET errors, `metadata_templates*` ops): two unrelated
+array-item objects both named from the property key `fields` — one with
+`{description, displayName, hidden, id, key, options, type}`, one with just `{key, sort_direction}`.
+Only the smaller shape survives; the `metadata_templates*` ops' selections expecting the larger
+shape's fields no longer match.
+
+**Cause:** this is `#22`'s original, deliberately-unfixed scope — a same-class collision (both
+`Composed`, or both `Obj`) between two *unrelated* inline shapes that happen to mint the same
+property-key-derived name, not a collision with a real top-level component (which `#126`'s
+`collidesWithReservedComponentName` already handles). `#22`'s own entry documents why this is hard:
+a same-class rename was tried once and reverted — box regressed 85→76 because description-only
+differences made otherwise-identical twins look different under deep-equality, and visit order
+decided which twin got renamed, orphaning the other's references.
+
+**Not yet designed:** any real fix needs to solve the exact problem `#22` backed away from —
+distinguish "these two same-named things are genuinely different" from "these two are the same
+shape modulo a `description` field" — without the visit-order fragility that caused the box
+regression. Do not attempt casually; needs its own design pass, same rigor as `#126`'s own
+(narrow, existing-mechanism-first) approach.
+
+**Refs:** `tests/resources/oas/box.yaml` (`TaskAssignment`, `LegalHoldPolicyAssignment`,
+`metadata_templates*`), `src/oas/nodes/comp.ts` (`Composed.updateName`), `src/oas/nodes/typeUtils.ts`
+(`collidesAcrossNodeClasses`, `sameSchemaAs`). See `#22`'s `FIXED.md` entry (the same-class scope
+decision and its box regression, "Care" note), `#126` (the sibling, already-fixed real-component
+case), `#129` (the measurement-tool bug found while investigating this).
+
