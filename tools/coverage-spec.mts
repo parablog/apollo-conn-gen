@@ -199,7 +199,10 @@ async function compose(
     if (timedOut) {
       return { ok: false, code: 'TIMEOUT' };
     }
-    const out = `${e.stdout ?? ''}\n${e.stderr ?? ''}\n${e.message ?? ''}`;
+    // not e.message too: child_process.exec's rejection embeds the full stderr text a second
+    // time inside .message ("Command failed: <cmd>\n<stderr>") — wholeVerdict's tally counted
+    // every real error twice as a result. stdout/stderr alone still carry everything real.
+    const out = `${e.stdout ?? ''}\n${e.stderr ?? ''}`;
     // rover wraps everything in a generic [E029]; the actionable code is the federation error
     // name in the "Caused by:" body (e.g. INVALID_URL, SATISFIABILITY_ERROR, INVALID_GRAPHQL).
     const inner = out.match(/^\s*([A-Z][A-Z0-9_]{3,}):/m);

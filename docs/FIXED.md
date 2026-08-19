@@ -5926,6 +5926,37 @@ spec.
 note), #26 (the reachability walk this reuses).
 
 
+## 129 · The all-ops coverage sweep double-counted every compose error — ✅ Fixed
+
+**Symptom:** found auditing #126's box.yaml numbers — `COVERAGE.md`'s `all-ops` column reported
+`box.yaml` at `GRAPH_QL_ERROR ×18` (GET) / `×10` (mutations); real `rover supergraph compose`
+against the same generated schema reported `error[E029]: Encountered 9 build errors` / `5 build
+errors`. Confirmed systemic on two other specs too: asana's reported `×12` was really 6, digitalocean's
+reported `×2` was really 1 — every spec's `all-ops` figure in `COVERAGE.md`/`COVERAGE-mutations.md`
+was exactly 2x the real count.
+
+**Cause:** `compose()` (`tools/coverage-spec.mts`) built its captured error text as
+`${e.stdout}\n${e.stderr}\n${e.message}`. Node's `child_process.exec` (promisified) constructs a
+failed exec's `.message` as `"Command failed: <cmd>\n" + stderr` — i.e. `.message` already
+re-embeds the full `stderr` text. `wholeVerdict()` (`tools/coverage-verdict.mts`) then does a
+*global* regex scan (`matchAll`) over that concatenated string to tally each error code's
+occurrences, so every real error line was counted once via `stderr` and again via the copy inside
+`message` — doubling every tally. Per-op composition (`compose()`'s own `inner`/`outer` code
+extraction, a few lines below) wasn't affected — it only reads the *first* match, so which code got
+reported per-op was still correct; only the aggregate `all-ops` counts were wrong.
+
+**Fix:** drop `e.message` from the concatenated string — `e.stdout`/`e.stderr` alone already carry
+everything real, and `.message` is a redundant wrapper for this specific rejection shape.
+
+**Effect on prior measurements:** any `all-ops` count recorded in `docs/issues.md`/`docs/FIXED.md`
+before 2026-08-19 is 2x inflated (e.g. #126's own "34→18" was really "17→9" — corrected in that
+entry). Historical *comparisons* (before/after a fix) stay directionally valid since both sides were
+inflated equally; absolute counts don't.
+
+**Refs:** `tools/coverage-spec.mts` (`compose()`), `tools/coverage-verdict.mts` (`wholeVerdict`).
+Found and fixed while auditing #126's box.yaml residue.
+
+
 ## 126 · An inline-minted `Composed` name collided with a same-class real component — ✅ Fixed
 
 **Symptom:** PagerDuty's full spec failed compose:
@@ -5972,7 +6003,12 @@ rename-check time.
 `inline-property-name` collision pattern (`folder`→`Folder`, `file`→`File`, etc.), one already
 concretely verified — `GroupMembership.user` renames to `GroupMembershipUser`, referenced correctly,
 and the real `User` component keeps its own name. Aggregate: box's whole-spec `GRAPH_QL_ERROR` count
-dropped 34→18, no new/different error codes. The other ~12 names weren't individually audited.
+dropped **17→9** (2026-08-19 correction: the tool that measured this, `tools/coverage-spec.mts`,
+double-counted every error — the entry originally read "34→18"; both figures were 2x inflated, see
+`#129`). No new/different error codes. The other ~12 names weren't individually audited. The 9
+remaining errors are a *different*, already-known problem — `#22`'s own same-class inline-vs-inline
+collision (two unrelated shapes sharing one property-key-derived name, not colliding with a real
+component), confirmed unrelated to this fix's scope. See `#22`'s reopened entry.
 
 **Refs:** `src/oas/nodes/comp.ts` (`visit`), `src/oas/nodes/typeUtils.ts`
 (`collidesWithReservedComponentName`, broadened guard). Fixture
