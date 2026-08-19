@@ -853,6 +853,17 @@ test('test_param_default_boolean_emits_literal', async () => {
   assert.ok(!/=\s*[,)]/.test(schema!), 'no dangling = remains');
 });
 
+test('test_127_string_typed_param_quotes_a_mismatched_numeric_or_boolean_default', async () => {
+  // #127: omni declares count: { type: string, default: 100 } (a JSON number under a string
+  // schema — spec-authoring inconsistency). writeDefaultValue used to branch on the default's own
+  // JS type, writing `String = 100` (invalid) instead of `String = "100"`. Composition 2.14.0
+  // didn't validate this strictly; 2.15.1 does (see docs/FIXED.md #127, #109).
+  const schema = await runOasTest('param-default-type-mismatch.yaml', ['get:/items>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/count: String = "100"/.test(schema!), 'numeric default on a string param is quoted');
+  assert.ok(/fullyResolved: String = "false"/.test(schema!), 'boolean default on a string param is quoted');
+});
+
 // --- #57: made-up enum names — collisions, ordering, and cross-selection stability -----------
 
 test('test_57_split_collision_first_visited_keeps_the_base_name', async () => {
@@ -2008,6 +2019,37 @@ test('test_100_inline_wrapper_must_not_take_a_later_components_name', async () =
   check(both!, 'component-first');
 });
 
+test('test_126_inline_allof_prop_must_not_collide_with_real_component', async () => {
+  // #126: Notes.user is an inline allOf minted "User" (#7) — same name as the real, unrelated User
+  // component. Both are Composed (same node class), so collidesAcrossNodeClasses (#22) never fires;
+  // collidesWithReservedComponentName (#100) is the only trigger that catches this shape for Composed.
+  const check = (schema: string, label: string) => {
+    const defs = schema.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
+    assert.strictEqual(new Set(defs).size, defs.length, `${label}: no duplicates: ${defs.join(', ')}`);
+    assert.ok(/^type User \{/m.test(schema), `${label}: real component keeps its name`);
+    assert.ok(/^type NotesUser \{/m.test(schema), `${label}: inline allOf is container-qualified`);
+    assert.ok(/\buser: NotesUser\b/.test(schema), `${label}: field references the renamed type`);
+  };
+
+  // inline user visits first, real User component second
+  const inlineFirst = await runOasTest(
+    'composed-vs-component-name-collision.yaml',
+    ['get:/notes>**', 'get:/users>**'],
+    2,
+    3,
+  );
+  check(inlineFirst!, 'inline-first');
+
+  // real User component visits first, inline user second
+  const componentFirst = await runOasTest(
+    'composed-vs-component-name-collision.yaml',
+    ['get:/users>**', 'get:/notes>**'],
+    2,
+    3,
+  );
+  check(componentFirst!, 'component-first');
+});
+
 test('test_67_allof_decorated_array_body_keeps_the_field', async () => {
   // #67: a property whose allOf only decorates an array lost the field, leaving an empty input.
   // The array now IS the field; required + nullable stays nullable (#55).
@@ -2301,28 +2343,25 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
 
 test(
   'test_73_curated_multi_op_stripe_selection_composes',
-  {
-    todo: 'CORRECTION 2026-08-18: this was wrongly marked passing — the test never pinned composeFederationVersion, so it silently under-validated against a mismatched default (2.15.1 vs the v2.13 this schema declares). Pinning it shows real errors again. See docs/issues.md #73.',
-  },
   async () => {
+    // RELEASE BLOCKER — see docs/issues.md #73. Was a todo, un-todo'd 2026-08-18: this bug blocks
+    // shipping stripe as a real connector and must not ship silently green. Do not re-add
+    // `{ todo: ... }` here — fix the bug or explicitly get sign-off to reopen it as non-blocking.
+    //
     // stripe's real 34-op production selection failed with 1161 unresolved fields; #104's fix made
-    // identical union twins converge on one name, but under a correctly-pinned federation version
-    // real CONNECTORS_UNRESOLVED_FIELD errors remain (TaxId, several MetadataEntry variants).
-    // see docs/issues.md #73 — and forceRover: only stock rover catches it
+    // identical union twins converge on one name. #73's own CONNECTORS_UNRESOLVED_FIELD errors
+    // turned out to be a composeFederationVersion-below-2.15 artifact (#14/#16), not a real bug —
+    // see docs/issues.md #73's 2026-08-19 correction. 365: the 40 numbered twin copies across 9
+    // name families collapse into their canonical types.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
-  // 365: the 40 numbered twin copies across 9 name families collapse into their canonical types
-  // composeFederationVersion MUST match federationVersion — compose()'s own default (2.15.1)
-  // doesn't match what gen emits here (v2.13), and a mismatch doesn't fail cleanly, it makes
-  // rover silently validate less (confirmed: this exact schema went from real errors to a clean
-  // pass with no version-mismatch complaint at all — see docs/issues.md #109's methodology note).
-  const schema = await runOasTest('stripe-curated.yaml', selections, 587, 365, {
-    skipValidation: true,
-    skipAuth: true,
-    federationVersion: 'v2.13',
-    composeFederationVersion: '2.13.0',
-    forceRover: true,
-  });
-  assert.ok(schema !== undefined);
+    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 365, {
+      skipValidation: true,
+      skipAuth: true,
+      federationVersion: 'v2.13',
+      composeFederationVersion: '2.15.1',
+      forceRover: true,
+    });
+    assert.ok(schema !== undefined);
   },
 );
 
@@ -2336,10 +2375,11 @@ test(
 // this is the first tracked, shared test any of these three specs have had at all.
 test(
   'test_108_confluence_full_production_selection',
-  { todo: 'a map value that is anyOf[enum, string] drops its whole property — see docs/issues.md #108' },
   async () => {
+    // RELEASE BLOCKER — fixed, see docs/FIXED.md #108. Do not re-add `{ todo: ... }` here without
+    // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/confluence-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('confluence-full.json', selections, 213, 327, {
+    const schema = await runOasTest('confluence-full.json', selections, 213, 328, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -2351,14 +2391,22 @@ test(
 
 test(
   'test_109_omni_full_production_selection',
-  { todo: '359 CONNECTORS_UNRESOLVED_FIELD across 71 types, cause not established — see docs/issues.md #109' },
   async () => {
+    // RELEASE BLOCKER — fixed, see docs/FIXED.md #109. Do not re-add `{ todo: ... }` here without
+    // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
+    //
+    // servicePrefix is required: without it this test silently skipped the one CLI flag
+    // production always passes (graphos-service-factory's wrapper always sets --service-prefix).
+    // 420: docs/FIXED.md #126 renames omni's 5 inline pageInfo allOf wrappers (same id, one dedup)
+    // off PageInfo's name.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('omni-full.json', selections, 163, 419, {
+    const schema = await runOasTest('omni-full.json', selections, 163, 420, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
-      composeFederationVersion: '2.14.0',
+      composeFederationVersion: '2.15.1',
+      forceRover: true,
+      servicePrefix: 'omni',
     });
     assert.ok(schema !== undefined);
   },
@@ -2366,8 +2414,10 @@ test(
 
 test(
   'test_110_pagerduty_full_production_selection',
-  { todo: 'an array of a shapeless $ref in a request body is dropped instead of degrading to [JSON] — see docs/issues.md #110' },
   async () => {
+    // RELEASE BLOCKER — fixed, see docs/FIXED.md #110. Do not re-add `{ todo: ... }` here without
+    // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
+    //
     // PagerDuty had no corpus entry at all before this — not stale, simply untested.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/pagerduty-full-selection.json`, 'utf-8'));
     const schema = await runOasTest('pagerduty-full.json', selections, 95, 333, {
@@ -2382,8 +2432,10 @@ test(
 
 test(
   'test_108_map_with_anyof_enum_or_string_values_drops_the_map_and_selection',
-  { todo: 'the map property is dropped entirely, leaving an empty type and an empty selection — see docs/issues.md #108' },
   async () => {
+    // RELEASE BLOCKER — fixed, see docs/FIXED.md #108. Do not re-add `{ todo: ... }` here without
+    // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
+    //
     // Confluence's real `POST /content/convert-ids-to-types`: response is one property, a map
     // whose values are `anyOf: [enum-of-strings, plain-string]`. Generating confluence's full,
     // unfiltered spec (graphos-service-factory/scripts/gen-ts.mjs) writes `type
@@ -2391,7 +2443,7 @@ test(
     // `selection: """ """`. Combined with --service-prefix (Namespace.apply parses the raw SDL
     // before prefixing it) this crashes the whole CLI with an uncaught GraphQLError instead of a
     // clean, actionable message.
-    const schema = await runOasTest('map-value-anyof-enum-string.yaml', ['post:/content/convert-ids-to-types>**'], 1, 2);
+    const schema = await runOasTest('map-value-anyof-enum-string.yaml', ['post:/content/convert-ids-to-types>**'], 1, 3);
     assert.ok(schema !== undefined);
     assert.ok(!/type ContentIdToContentTypeResponse \{\s*\}/.test(schema!), 'the map property should not vanish, leaving an empty type');
   },
@@ -2399,8 +2451,10 @@ test(
 
 test(
   'test_110_array_of_shapeless_ref_body_prop_is_not_dropped',
-  { todo: 'the whole request-body property vanishes instead of degrading to [JSON] — see docs/issues.md #110' },
   async () => {
+    // RELEASE BLOCKER — fixed, see docs/FIXED.md #110. Do not re-add `{ todo: ... }` here without
+    // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
+    //
     // PagerDuty's real `PUT /incidents/{id}/merge`: request body has one property,
     // `source_incidents`, an array of `$ref: IncidentReference` where IncidentReference is
     // shapeless (`{ type: object, additionalProperties: true }`). A bare shapeless ref correctly

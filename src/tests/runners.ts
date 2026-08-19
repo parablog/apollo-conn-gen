@@ -41,6 +41,9 @@ export async function runOasTest(
     // forceRover runs the machine's rover, unpinned: 0.41 failed its ELv2 acceptance before
     // composing even with --elv2-license accept — check `rover --version` on failures. see #116
     forceRover?: boolean;
+    // production always passes --service-prefix; a test that skips this can go green while the
+    // real, prefixed output still fails to compose. See docs/FIXED.md #109.
+    servicePrefix?: string;
   } = {},
 ): Promise<string | undefined> {
   const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
@@ -59,6 +62,7 @@ export async function runOasTest(
     authValuePrefix: opts.authValuePrefix,
     connectorSpecVersion: opts.connectorSpecVersion,
     federationVersion: opts.federationVersion,
+    servicePrefix: opts.servicePrefix,
   });
   await gen.visit();
 
