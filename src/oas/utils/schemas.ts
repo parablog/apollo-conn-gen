@@ -63,4 +63,24 @@ export class Schemas {
     // one member left is #20's case: the choice collapses to it, and that still works
     return members.length > 1 && members.every(isPlainValue);
   }
+
+  // True when a choice mixes a plain value with a real object — an "expandable" field: unexpanded
+  // the API sends a bare ID string, expanded it sends the full object. #131
+  //   e.g. (stripe/pagerduty) anyOf: [{ type: string }, $ref Owner, $ref DeletedOwner] -> true
+  public static holdsMixedPlainAndObjectValues(context: OasContext, schema: SchemaObject): boolean {
+    const choice = (schema.oneOf ?? schema.anyOf) as (SchemaObject | ReferenceObject)[] | undefined;
+    if (!choice) {
+      return false;
+    }
+
+    const members = choice
+      .map((member) => ('$ref' in member ? (context.lookupRef(member.$ref!) as SchemaObject) : member))
+      .filter((member) => member != null && !('$ref' in member) && member.type !== 'null');
+
+    const isPlainValue = (member: SchemaObject) =>
+      member.enum != null || (typeof member.type === 'string' && GqlUtils.gqlScalar(member.type) !== false);
+    const isRealObject = (member: SchemaObject) => !isPlainValue(member) && !Schemas.isShapelessObject(member);
+
+    return members.some(isPlainValue) && members.some(isRealObject);
+  }
 }

@@ -6057,3 +6057,66 @@ unchanged `typeof` branches in the same order.
 `param-default-type-mismatch.yaml`, test
 `test_127_string_typed_param_quotes_a_mismatched_numeric_or_boolean_default`. See #109 (the
 composer-version correction that unmasked this).
+
+
+## 131 · A mixed anyOf[string, object] array item silently drops the string branch — ✅ Fixed
+
+**Symptom:** an "expandable" API field — unexpanded, a bare ID string per item; expanded, full
+objects — loses the string branch entirely, generating a selection that assumes every item is an
+object. At runtime, the unexpanded response comes back empty/wrong instead of the ID string a
+caller actually needs. Found via graphos-service-factory's PagerDuty/Stripe connector-unit tests.
+
+**OAS** (the real shape of Stripe's `expand[]`, and PagerDuty's equivalent):
+```yaml
+owners:
+  type: array
+  items:
+    anyOf:
+      - { type: string, maxLength: 5000 }
+      - $ref: '#/components/schemas/Owner'        # { id, name }
+      - $ref: '#/components/schemas/DeletedOwner'  # { id, deleted }
+```
+
+**Example:**
+```graphql
+# before — the string branch vanishes; every item is assumed to be an object
+owners: [OwnersUnion]
+# selection: owners? { id? name? deleted? }
+
+# after — a mixed choice degrades to JSON, like #86's all-plain case
+owners: [JSON]
+# selection: owners?
+```
+
+**Cause:** `Factory.fromArrayItems` only degraded an `anyOf`/`oneOf` array item to `JSON` when
+*every* member was a plain value (`Schemas.holdsPlainValues`) — correctly, by that check's own
+design. A *mixed* choice (2 of 3 members real objects here) fell through to `Factory.fromSchema` ->
+`createContainerType`, building a plain, discriminator-less `Union`. `Union.consolidate()` walks
+each member's own `.props` into one merged object; the `String` Scalar member has no `.props`, so
+it contributed nothing — the merge silently kept only the object members' fields
+(`{ id, name, deleted }`), and the selection assumed every item matched that shape. The general
+case of #108 (map value `anyOf` of only plain values), inverted: #108 was *all* members plain,
+correctly caught; this is a *mix*, which `holdsPlainValues`'s `every` deliberately doesn't touch.
+
+**Fix:** new `Schemas.holdsMixedPlainAndObjectValues` (true when a choice has at least one plain
+member and at least one real, non-shapeless object member), checked in `Factory.fromArrayItems`
+right after the existing `holdsPlainValues` check — degrades straight to `Scalar('JSON')`, the
+same "can't cleanly represent in GraphQL" answer #19/#77/#86/#108/#110 already established, instead
+of a real 3-way union with a synthetic scalar-wrapper member (a much bigger change, not attempted).
+
+**Measured:** the fixture's `owners` field drops from 2 reachable types (`Thing` + the merged
+`ownersUnion`) to 1 (`Thing` only) — the union no longer gets built at all once the array item
+degrades directly to a scalar.
+
+**Not touched — confirmed safe, not just assumed:** `Factory.fromSchema` itself and every other
+caller through it (`Map` values, `Union` members, `Param` types, `Composed`/allOf members, plain
+non-array properties). `Factory.fromProp`'s branches don't check `anyOf` either, so a plain
+property shaped this way already falls to its own `PropScalar(..., 'JSON', ...)` catch-all today.
+Whether those other paths can hit the same mixed-anyOf defect is undemonstrated (no repro, no
+failing test) — a separate follow-up if one turns up, not folded in here.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromArrayItems`), `src/oas/utils/schemas.ts`
+(`holdsMixedPlainAndObjectValues`, next to `holdsPlainValues`). Fixture
+`array-of-anyof-string-or-object-loses-string-branch.yaml`, test
+`test_array_of_string_or_object_loses_the_string_case`. See #86, #108 (the same "degrade to JSON"
+precedent, the all-plain case this generalizes).

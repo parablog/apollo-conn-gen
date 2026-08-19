@@ -1,0 +1,48 @@
+openapi: 3.0.0
+info:
+  title: array-of-anyof-string-or-object test
+  version: "1.0"
+paths:
+  /things/{id}:
+    get:
+      operationId: getThing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Thing:
+      type: object
+      properties:
+        id: { type: string }
+        # Real APIs often do this: an "expandable" field. By default the API sends back just the
+        # ID as a plain string. Only if you ask for it (e.g. Stripe's expand[]=discounts) do you
+        # get the full object back instead. So a real response can have EITHER shape.
+        # Example real response, not expanded: "owners": ["own_1", "own_2"]
+        # Example real response, expanded:      "owners": [{"id": "own_1", "name": "Ada"}]
+        owners:
+          type: array
+          items:
+            anyOf:
+              - { type: string, maxLength: 5000 }
+              - $ref: '#/components/schemas/Owner'
+              - $ref: '#/components/schemas/DeletedOwner'
+    Owner:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+    DeletedOwner:
+      type: object
+      properties:
+        id: { type: string }
+        deleted: { type: boolean }

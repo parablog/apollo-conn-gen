@@ -207,12 +207,20 @@ export class Factory {
     // resolvePointer, not lookupRef: a sniff that may discard the ref must not bump refCount.
     const resolved = '$ref' in items ? (context.resolvePointer(items.$ref!) as SchemaObject) : items;
     if (resolved && Schemas.isShapelessObject(resolved)) {
+      warn(context, '[factory]', `items in array have types that declare no fields - returning JSON type`);
       return new Scalar(parent, 'JSON', resolved);
     }
     // a list holding one of several plain values is JSON too — a union of scalars has no fields to
     // select, so the whole field used to disappear. e.g. (confluence) post:/content/convert-ids-to-types
     //   contentIds: { type: array, items: { anyOf: [string, number] } }  ->  [JSON]      #86
     if (!('$ref' in items) && Schemas.holdsPlainValues(context, items)) {
+      warn(context, '[factory]', `items in array have mixed array types - returning JSON type`);
+      return new Scalar(parent, 'JSON', items);
+    }
+    // a mixed choice (plain value + real object) merges away the plain branch's fields if left to
+    // Union — e.g. (stripe) owners: { items: { anyOf: [string, $ref Owner] } } -> [JSON]      #131
+    if (!('$ref' in items) && Schemas.holdsMixedPlainAndObjectValues(context, items)) {
+      warn(context, '[factory]', `items in array have both plain and object values - returning JSON type`);
       return new Scalar(parent, 'JSON', items);
     }
     return Factory.fromSchema(context, parent, items);

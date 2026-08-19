@@ -2328,7 +2328,7 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   // #83: 326 of the 445 dropped bodies are stripe's, and every one of them is a form — each used to
   // come out with nothing to send. `metadata` comes out `JSON` because stripe writes it as an
   // anyOf, not as a map, so #84 does not reach it.
-  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 102);
+  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 97);
   assert.ok(customers !== undefined);
   assert.ok(/createV1Customers\(input: InputInput!\)/.test(customers!), 'stripe takes its form body');
   assert.ok(
@@ -2355,10 +2355,13 @@ test(
     // stripe's real 34-op production selection failed with 1161 unresolved fields; #104's fix made
     // identical union twins converge on one name. #73's own CONNECTORS_UNRESOLVED_FIELD errors
     // turned out to be a composeFederationVersion-below-2.15 artifact (#14/#16), not a real bug —
-    // see docs/issues.md #73's 2026-08-19 correction. 365: the 40 numbered twin copies across 9
-    // name families collapse into their canonical types.
+    // see docs/issues.md #73's 2026-08-19 correction. 359: the 40 numbered twin copies across 9
+    // name families collapse into their canonical types, and #131's fix removes 3 mixed-anyOf
+    // array-item unions (discountsUnion, account_tax_idsUnion, InvoiceDiscountsUnion — each used
+    // to silently merge away its string branch) plus 3 more types only they reached — see
+    // docs/FIXED.md #131.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
-    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 365, {
+    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 359, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.13',
@@ -2471,6 +2474,29 @@ test(
     const schema = await runOasTest('array-of-shapeless-ref-body-prop.yaml', ['put:/incidents/{id}/merge>**'], 1, 2);
     assert.ok(schema !== undefined);
     assert.ok(!/input InputInput \{\s*\}/.test(schema!), 'source_incidents should degrade to [JSON], not vanish');
+  },
+);
+
+test(
+  'test_array_of_string_or_object_loses_the_string_case',
+  async () => {
+    // Real, currently failing bug -- not a todo. Array items typed as anyOf[string, object,
+    // object] merge into an object-only type, so the selection assumes every item is an object.
+    // Breaks on real API responses that send a plain string (e.g. Stripe discounts when not
+    // using expand[]). See graphos-service-factory's PagerDuty/Stripe connector-unit test run,
+    // 2026-08-19.
+    // Example: an API field that is normally just an ID string, but becomes a full object when
+    // you ask for it to be "expanded". A response can look like either:
+    //   "owners": ["own_1", "own_2"]              <- normal
+    //   "owners": [{ "id": "own_1", "name": "Ada" }]  <- expanded
+    const schema = await runOasTest(
+      'array-of-anyof-string-or-object-loses-string-branch.yaml',
+      ['get:/things/{id}>**'],
+      1,
+      1,
+    );
+    assert.ok(schema !== undefined);
+    assert.ok(/owners: \[JSON\]/.test(schema!), 'a mixed string/object choice degrades to JSON, not a merged object');
   },
 );
 
