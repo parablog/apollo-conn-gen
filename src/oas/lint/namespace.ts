@@ -23,7 +23,14 @@ export class Namespace {
     const typePrefix = _.upperFirst(prefix);
     const fieldPrefix = prefix.toLowerCase();
 
-    const document = parse(sdl);
+    // generateSchema() already validates its own output before this runs — but that guard doesn't
+    // cover an SDL edited by --directives, or a future caller of apply() that skips it. #111
+    let document: DocumentNode;
+    try {
+      document = parse(sdl);
+    } catch (e) {
+      throw new Error(`[--service-prefix] input SDL is not valid GraphQL: ${(e as Error).message}`);
+    }
     const typeRenames = Namespace.typeRenames(document, typePrefix);
 
     const edits: Edit[] = [];

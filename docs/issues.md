@@ -572,51 +572,6 @@ generation, not at `rover compose` time on a real production spec.
 `tools/lint-corpus.mts` (the gate that currently passes #105's case clean). Surfaced alongside
 #105, same investigation.
 
-## 111 · `--service-prefix` crashes the whole CLI on SDL its own generator already wrote invalid — ⬜ Open
-
-**Symptom:** whenever the raw, pre-prefix SDL is already invalid GraphQL (an empty `type`/`input`
-body — `#108`, `#110`, and presumably any future case in the same family), adding
-`--service-prefix` turns a silent bad-output bug into a hard process crash:
-```
-GraphQLError: Syntax Error: Expected Name, found "}".
-    at syntaxError (…/graphql/error/syntaxError.js:31:10)
-    …
-Node.js v26.7.0
-```
-Without `--service-prefix`, the same input just prints the (already broken) SDL and exits 0 — no
-crash, no error, silently wrong. Neither behavior is right, but the crash is the more urgent one:
-it takes the whole CLI process down with an unhandled exception and a raw stack trace instead of
-"gen failed to produce valid GraphQL for operation X, see below."
-
-**Cause:** `Namespace.apply(sdl, prefix)` (`src/oas/lint/namespace.ts`) calls graphql-js's `parse(sdl)`
-to find byte offsets for the rename splice, with nothing catching a `GraphQLError` if the input
-doesn't parse. `OasGen.generateSchema()` runs `Namespace.apply` last, unconditionally, whenever
-`servicePrefix` is set (`src/oas/oasGen.ts`) — there is no validity check on the generator's own
-output between generation and this parse.
-
-**Fix (not done):** two independent, complementary things:
-1. `Namespace.apply` should catch the parse failure and raise an actionable error naming the
-   `--service-prefix` interaction, not let a raw `GraphQLError`/stack trace reach the user.
-2. Separately (arguably higher-leverage, since it fixes both the crash and the silent-bad-output
-   case at once): `generateSchema()` could validate its own output is parseable GraphQL before
-   returning, and fail there with a clear message pointing at whichever operation produced the
-   invalid type — `#108`/`#110` are two known root causes for how the SDL gets there, but this
-   entry is about the missing safety net once it does, not about preventing every possible cause.
-
-**Test:** not yet written standalone — reproduced today via `#108`'s and `#110`'s fixtures with
-`--service-prefix` added (both crash identically). Worth a small dedicated fixture (any spec that
-generates an empty type/input) + test once someone picks this up, rather than relying on those two
-staying reproducible forever.
-
-**Refs:** `src/oas/lint/namespace.ts` (`Namespace.apply`), `src/oas/oasGen.ts` (`generateSchema`,
-where the unconditional call happens). Cross-cutting over `#108`/`#110` — fixing either of those
-root causes narrows this issue's blast radius but doesn't close it; the missing safety net is
-independent of which spec shape trips it. Found running
-`graphos-service-factory/scripts/gen-ts.mjs` (same wrapper as `#108`/`#109`/`#110`) — `--service-prefix`
-is one of the flags the wrapper always passes, which is why it hit this immediately rather than the
-silent-bad-output path.
-
-
 ## 115 · Enum dedup is only tested inline, and the raw enum list keeps its doubles — ✅ Covered (2026-08-18, coverage-only)
 
 - the untested routes were already correct (every construction path passes the `En` constructor's
@@ -843,4 +798,98 @@ field, never which node kind gets built.
 **Refs:** `ROADMAP.md` "R16" (this survey's own shape notes, kept there since it's still planned
 work), `docs/FIXED.md #133` (the 4 sites already done, same design: `warn()` and the schema note
 share one reason string, `Schemas.withDegradeNote`).
+
+## 135 · A drift-recovered path segment answers empty when nothing re-derives its `.path()` string — ⬜ Open
+
+**Symptom:** found as a side effect of landing #111's new "own output must parse" safety net — a
+previously-green test, `test_72_browse_minted_path_resolves` (`tests/all/regen.test.ts`), turned out
+to have been comparing two empty, invalid schemas against each other the whole time. Its own helper,
+`mintPath`, walks a fully-expanded digitalocean.yaml tree and returns the path to the *first* scalar
+leaf whose path contains a marker string (`ActiveDeployment` in this test) — after browsing
+`/v2/apps` first (which claims the name `ActiveDeployment` for a same-shaped type reached from
+*that* op), the deployments op's own `ActiveDeployment` drift-renames to
+`inlinev2AppsByAppIdDeploymentsResponseActiveDeployment` (see #72's own naming-collision fix).
+Passing `generateSchema([minted])` — that one drifted, fully-qualified scalar path, no `>**`
+wildcard — produces `type ActiveDeployment {\n}\n`: the type is emitted, but `cause` (the field the
+path names) is missing entirely.
+
+**Root-caused** (correcting this entry's earlier "not yet root-caused" note — the prior hypothesis,
+that the reachability loop's fixed point converges to nothing, was wrong; verified empirically
+instead of assumed): a **plain, un-drifted** bare leaf selection works fine on its own (confirmed
+against `petstore.yaml`'s `Pet.name`, and against `digitalocean.yaml`'s `ActiveDeployment.cause`
+when `/v2/apps` is never browsed first, so no rename ever happens) — this is specific to the
+drift-recovery case:
+- `SelectionPath.resolveSegment` DOES recover the drifted segment to the right node (confirmed:
+  the recovered `ActiveDeployment` object visits correctly and populates all 15 of its real props).
+- But the selection array passed to `generateSchema` still holds the **literal, stale string**
+  `minted` mints — containing the *drifted* segment name
+  (`inlinev2AppsByAppIdDeploymentsResponseActiveDeployment`), which only existed in the browsed
+  tree that had the naming collision.
+- `Type.selectedProps` (`src/oas/nodes/type.ts`) checks selection membership by recomputing each
+  prop's **own, fresh** `.path()` and testing it against the selection's prefix set
+  (`selectionPrefixes`). The freshly-recovered node's `.path()` uses *its own* (un-drifted, or
+  differently-drifted) name for that segment — never the stale string that found it — so `cause`'s
+  fresh path never matches `minted`, and `ActiveDeployment.selectedProps([minted])` returns empty.
+- With a `>**` glob, this can't happen: `PathsCollector.collectExpandedPaths` rebuilds the whole
+  selection from the SAME live traversal (`T.traverse` + each child's own `.path()` call), so the
+  string and the node it names are always in sync. The mismatch is only possible for a bare,
+  pre-computed literal path string — which is also why this needed a *browsed-then-drifted* setup
+  to surface at all; a plain fresh selection's string always already matches.
+
+**Workaround applied to `test_72` (not a fix for the general case):** glob the drifted segment's
+whole subtree (`>**`) instead of selecting its one leaf directly — this still exercises the thing
+the test is about (a drift-recovered segment resolves to the same generation a fresh canonical name
+does), while sidestepping the stale-string mismatch since `>**` always re-derives its own paths.
+`test_72_browse_minted_path_resolves` un-`{ todo }`'d, passing again.
+
+**Not done:** the general fix — make a bare, literal selection-path string survive recovery (e.g.
+re-deriving each selected node's own fresh `.path()` back into the selection array after resolution,
+instead of trusting the caller's original string past that point). No corpus case is known to hit
+this outside `test_72`'s own drift setup; a `--paths` CLI invocation always selects at least a full
+operation subtree (`SelectionPath.everythingUnder`, always `>**`), so this needs a browsed, renamed,
+*and* leaf-only-selected combination to reach — unconfirmed whether that's reachable outside tests.
+
+**Refs:** `tests/all/regen.test.ts` (`mintPath`, `test_72_browse_minted_path_resolves`),
+`src/oas/nodes/type.ts` (`selectedProps`, `selectionPrefixes`), `src/oas/utils/selectionPath.ts`
+(`resolveSegment`, the recovery this interacts with). Found while verifying #111's fix against the
+full suite.
+
+## 136 · A selection naming only the bare operation (no property path, no `>**`) silently answers an empty schema — ⬜ Open
+
+**Symptom:** found while re-verifying #134's write-up against the current code (it turned out #134
+was already fixed — see `docs/FIXED.md #134` — so #111's own regression fixture no longer reproduces
+#134's mechanism, and had to be re-diagnosed to find out what it *actually* still exercises). A
+selection that names only the operation itself, with no property path segment and no `>**` glob —
+`generateSchema(['get:/widgets/{id}'])` — answers a fully blank return type:
+```graphql
+widgetsById(id: String!): 
+  @connect(... selection: """ """)
+```
+— invalid GraphQL on its own, same visible symptom as #134's original report, but a different cause.
+
+**Cause:** `Get.visit()` (`src/oas/nodes/get.ts`) builds the operation's `resultType` (a `Res` node)
+but deliberately does **not** call `.visit()` on it — `visitResponseContent`'s own comment marks
+this `// PENDING: do not visit anymore`, moving that to whenever the *selection's own walk* reaches
+it. `TypesCollector`'s collect loop (`src/oas/generator/typesCollector.ts`) only calls
+`gen.expand()` on nodes it walks *past* — for a selection whose only segment is the operation
+itself, the walk never goes past it, so `Res.visit()` never runs and `Res.response` (its own
+`this.response = type` line) never gets set. `Res.dependencies()` then returns `[]`
+(`res.ts`: `return this.response ? [this.response] : []`), so `collectReachable`'s BFS from the
+selected roots finds nothing past the `Res` wrapper. It fails **silently**, not with the internal
+consistency error one might expect (`collectReachable: unvisited type ... — the collect walk missed
+a reference`) — that check only fires for `T.isContainer` nodes, and `Res`'s id (`res:r`) is
+deliberately excluded from `isContainer` (`obj:`/`comp:`/`union:`/`map:` only), so an unvisited `Res`
+passes the guard and just contributes nothing.
+
+**Not done.** No fix attempted — same reasoning as #134's original framing: this is now the
+mechanism `test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing`
+(`tests/all/oas-core.test.ts`) actually relies on to keep producing invalid SDL (via
+`[...gen.paths.keys()]`, a bare op-key selection, on `oneof-scalar-members-empties-response-type.yaml`)
+now that #134 itself is fixed. Fixing this would need its own regression fixture before being picked
+up, for the same reason #134's did.
+
+**Refs:** `src/oas/nodes/get.ts` (`visitResponseContent`, the disabled eager visit),
+`src/oas/nodes/res.ts` (`visit`, `dependencies`), `src/oas/generator/typesCollector.ts`
+(`collectReachable`), `src/oas/nodes/typeUtils.ts` (`isContainer`). #111 (the safety net this was
+found re-verifying), `docs/FIXED.md #134` (the issue this replaces as #111's load-bearing fixture).
 

@@ -1,5 +1,6 @@
 import Oas from 'oas';
 import OASNormalize from 'oas-normalize';
+import { GraphQLError, parse } from 'graphql';
 import { Operation, Webhook } from 'oas/operation';
 import { HttpMethods, OASDocument } from 'oas/types';
 import { OpenAPI } from 'openapi-types';
@@ -172,11 +173,43 @@ export class OasGen {
       this.selections = writer.generateWith(this.collector.types, this.collector.expanded);
 
       const schema = writer.flush();
+      // The generator's own output must be valid GraphQL before anything downstream (Directives,
+      // Namespace) tries to parse it — both do so unconditionally, and an uncaught GraphQLError
+      // there crashes the whole process instead of naming the real problem. #111
+      try {
+        parse(schema);
+      } catch (e) {
+        throw new Error(`[gen] generated an invalid GraphQL schema: ${OasGen.describeParseError(e)}`);
+      }
       // R14: directives the user declared go in after generation, over the finished document
       const directed = this.options.directives ? Directives.apply(schema, this.options.directives) : schema;
       // last, so `--directives` selectors keep naming the types as the generator wrote them
-      return this.options.servicePrefix ? Namespace.apply(directed, this.options.servicePrefix) : directed;
+      const final = this.options.servicePrefix ? Namespace.apply(directed, this.options.servicePrefix) : directed;
+
+      // The gate above only covers the generator's own output — a user-supplied directive string is
+      // spliced in only checked for a leading "@", never parsed, and can still break valid SDL. #111
+      //   e.g. { "Widget": ["@tag(name: \"unterminated"] } -> `type Widget @tag(name: "unterminated {`
+      if (this.options.directives || this.options.servicePrefix) {
+        try {
+          parse(final);
+        } catch (e) {
+          throw new Error(`[gen] --directives or --service-prefix produced invalid GraphQL: ${OasGen.describeParseError(e)}`);
+        }
+      }
+      return final;
     });
+  }
+
+  // GraphQLError carries line/column in `.locations`, not in `.message` — add it so a thrown parse
+  // failure names where in the (often thousand-line) schema the problem is, not just what it is.
+  //   e.g. "Syntax Error: Unterminated string." -> "Syntax Error: Unterminated string. (at 5:39)"
+  private static describeParseError(e: unknown): string {
+    const message = (e as Error).message;
+    if (!(e instanceof GraphQLError) || !e.locations?.length) {
+      return message;
+    }
+    const at = e.locations.map((l) => `${l.line}:${l.column}`).join(', ');
+    return `${message} (at ${at})`;
   }
 
   // Runs a generation on a fresh context and fresh path nodes, then puts back the ones the web's

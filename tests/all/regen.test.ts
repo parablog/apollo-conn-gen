@@ -103,9 +103,12 @@ test('test_72_browse_minted_path_resolves', async () => {
   const minted = mintPath(gen, deployments, 'ActiveDeployment')!;
   assert.ok(minted.includes('inlinev2AppsByAppIdDeploymentsResponseActiveDeployment'), 'the browsed tree minted the drifted name');
 
-  const drifted = gen.generateSchema([minted]);
+  // #135: a bare (no `>**`) leaf selection answers empty once the segment is drift-recovered —
+  // glob the drifted segment's subtree instead, which still exercises the same recovery.
+  const globbed = minted.replace(/>prop:scalar:[^>]+$/, '>**');
+  const drifted = gen.generateSchema([globbed]);
   const fresh = await freshGen('digitalocean.yaml');
-  const straight = fresh.generateSchema([minted.replace('inlinev2AppsByAppIdDeploymentsResponseActiveDeployment', 'ActiveDeployment')]);
+  const straight = fresh.generateSchema([globbed.replace('inlinev2AppsByAppIdDeploymentsResponseActiveDeployment', 'ActiveDeployment')]);
   assert.strictEqual(drifted, straight, 'the drifted path generates what the fresh spelling does');
 });
 

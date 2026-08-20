@@ -1923,6 +1923,23 @@ test('test_directives_bad_declarations_throw', async () => {
   assert.throws(() => gen.generateSchema(['get:/notadmin/users>**']), /must map to directive strings/);
 });
 
+test('test_111_directives_apply_corrupting_sdl_is_caught_by_the_final_gate', async () => {
+  // #111's first gate only checks the generator's own output, before Directives.apply runs.
+  // Directives.apply's own `isDirectiveString` check only requires a leading "@" — never that the
+  // string parses — so a malformed one is spliced straight into otherwise-valid SDL. Second gate,
+  // after Directives.apply/Namespace.apply, catches this: valid SDL in, broken SDL out.
+  const gen = await OasGen.fromFile(`${oasBasePath}/r14-directives.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+    directives: { AdminUser: ['@tag(name: "unterminated'] },
+  });
+  await gen.visit();
+  assert.throws(
+    () => gen.generateSchema(['get:/admin/users>**']),
+    /\[gen\] --directives or --service-prefix produced invalid GraphQL/,
+  );
+});
+
 test('test_directives_file_from_disk_applies', async () => {
   // R14: the checked-in example file is the one the CLI would load with
   // `--directives tests/resources/oas/r14-directives.json` — reading it here keeps it working
@@ -2541,6 +2558,28 @@ test(
     assert.ok(!/input InputInput \{\s*\}/.test(schema!), 'source_incidents should degrade to [JSON], not vanish');
   },
 );
+
+test('test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing', async () => {
+  // RELEASE BLOCKER — fixed, see docs/FIXED.md #111. Do not re-add `{ todo: ... }` here without
+  // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
+  //
+  // The selection below is the bare operation key alone — no property path, no `>**` — which never
+  // visits the op's own response type (docs/issues.md #136) and leaves `getWidget`'s return type
+  // blank in the generated SDL: invalid GraphQL on its own. (The fixture's `oneOf`-of-plain-values
+  // `kind` field, #134, is fixed now — this test no longer depends on that mechanism.) Before #111,
+  // generating that SDL with `servicePrefix` set crashed the whole process with an uncaught
+  // GraphQLError; without a prefix, it silently returned the broken SDL. `generateSchema()` now
+  // validates its own output either way and throws one clear, actionable error instead.
+  const file = 'oneof-scalar-members-empties-response-type.yaml';
+
+  const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, { skipValidation: true });
+  await gen.visit();
+  assert.throws(() => gen.generateSchema([...gen.paths.keys()]), /\[gen\] generated an invalid GraphQL schema/);
+
+  const prefixed = await OasGen.fromFile(`${oasBasePath}/${file}`, { skipValidation: true, servicePrefix: 'acme' });
+  await prefixed.visit();
+  assert.throws(() => prefixed.generateSchema([...prefixed.paths.keys()]), /\[gen\] generated an invalid GraphQL schema/);
+});
 
 test(
   'test_array_of_string_or_object_loses_the_string_case',

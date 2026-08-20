@@ -354,15 +354,23 @@ export class Factory {
         !_.isEmpty(schemaObj.properties)
       ) {
         if (schemaObj.oneOf) {
-          const inner: PropComp = new PropComp(parent, propName, schemaObj);
-          inner.comp = new Union(
-            inner,
-            ref || _.get(schemaObj, 'name'),
-            schemaObj.oneOf as SchemaObject[],
-            false,
-            _.get(schemaObj, 'discriminator'),
-          );
-          prop = inner;
+          if (Schemas.holdsPlainValues(context, schemaObj)) {
+            // a oneOf of only plain scalars/enums has no object member a union can hold — same
+            // empty-type family as #108 (map)/#110 (array item), just at a plain property. #134
+            const reason = "a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.";
+            warn(context, '[factory]', reason);
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
+          } else {
+            const inner: PropComp = new PropComp(parent, propName, schemaObj);
+            inner.comp = new Union(
+              inner,
+              ref || _.get(schemaObj, 'name'),
+              schemaObj.oneOf as SchemaObject[],
+              false,
+              _.get(schemaObj, 'discriminator'),
+            );
+            prop = inner;
+          }
         } else if (schemaObj.allOf) {
           const propComp: PropComp = new PropComp(parent, propName, schemaObj);
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
@@ -420,9 +428,16 @@ export class Factory {
     // otherwise let's use the properties instead and assume an Obj
     // TODO: repeated code
     else if (schemaObj.oneOf) {
-      const inner: PropComp = new PropComp(parent, propName, schemaObj);
-      inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
-      prop = inner;
+      if (Schemas.holdsPlainValues(context, schemaObj)) {
+        // same guard as the typed branch above, reached here because this schema has no `type` key. #134
+        const reason = "a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.";
+        warn(context, '[factory]', reason);
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
+      } else {
+        const inner: PropComp = new PropComp(parent, propName, schemaObj);
+        inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
+        prop = inner;
+      }
     } else if (schemaObj.allOf) {
       const propComp: PropComp = new PropComp(parent, propName, schemaObj);
       propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);

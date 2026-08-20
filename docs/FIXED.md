@@ -6304,3 +6304,152 @@ seen.
 **Refs:** `src/tests/runners.ts` (`compose()`, `localComposer()`), `tests/all/oas-core.test.ts`,
 `tests/all/r2-abstract.test.ts`. #108, #109, #110 (the confirmed instances and the shared #14/#16
 mechanism), #73 (the same mistake, independently).
+
+## 111 · `--service-prefix` crashes the whole CLI on SDL its own generator already wrote invalid — ✅ Fixed
+
+**Symptom:** whenever the raw, pre-prefix SDL is already invalid GraphQL (an empty `type`/`input`
+body — `#108`, `#110`, and presumably any future case in the same family), adding
+`--service-prefix` turned a silent bad-output bug into a hard process crash:
+```
+GraphQLError: Syntax Error: Expected Name, found "}".
+    at syntaxError (…/graphql/error/syntaxError.js:31:10)
+    …
+Node.js v26.7.0
+```
+Without `--service-prefix`, the same input just printed the (already broken) SDL and exited 0 — no
+crash, no error, silently wrong.
+
+**Cause:** `OasGen.generateSchema()` (`src/oas/oasGen.ts`) never validated its own raw output was
+parseable GraphQL before optionally piping it through `Directives.apply()`/`Namespace.apply()`
+(`src/oas/lint/directives.ts`, `src/oas/lint/namespace.ts`) — both call graphql-js's `parse(sdl)`
+completely unconditionally, no try/catch. An uncaught `GraphQLError` from whichever ran first took
+the whole process down with a raw stack trace instead of naming the real problem.
+
+**New finding, not in the original report:** `Directives.apply` has the *identical* unguarded-parse
+crash risk as `Namespace.apply` — it also calls `parse(sdl)` with zero error handling. It had never
+been hit in practice because nobody had combined `--directives` with a spec that produces invalid
+SDL. A fix scoped only to `--service-prefix` would have left this sibling crash site open.
+
+**Fresh repro:** a plain object property whose schema is a bare `oneOf` of scalar/enum members —
+`Factory.fromProp` used to build a `Union` of those members unconditionally, with no
+`Schemas.holdsPlainValues`-style guard (unlike `fromArrayItems`'s own map/array-item equivalents,
+#108/#110/#131). A union of scalars has no selectable leaf form, so the property's path never
+reached the flattened selection list, the whole owning type became unreachable, and the operation's
+own return type printed blank: `widgetsById(id: String!): ` — invalid GraphQL on its own. Filed as
+**#134**, reused here as this fix's regression fixture. #134 is now itself fixed (see its own
+`docs/FIXED.md` entry) — this issue's own test found a second, independent way to reach the same
+symptom once #134 stopped reproducing it (see "Second review round" below).
+
+**Fix (two independent gates, not one — Codex review, round two):**
+1. `generateSchema()` validates `writer.flush()`'s raw output with `parse()` right after generation,
+   before `Directives.apply`/`Namespace.apply` run — the first line of defense, closing the crash
+   and the silent-bad-output path for the generator's own output.
+2. A **second** gate validates the *final* string `generateSchema()` is about to return, after both
+   `Directives.apply` and `Namespace.apply` have run (when either is configured). Reason: each of
+   those only validates *its own input* before editing it — neither re-checks what its own
+   splice/insertion logic produced. Real, reachable gap found by inspection, not invented: a
+   user-supplied `--directives` string is only checked for a leading `@`
+   (`Directives.parseDeclaration`'s `isDirectiveString`), never parsed — a malformed one (e.g.
+   `{ "Widget": ["@tag(name: \"unterminated"] }`) is spliced straight into otherwise-valid SDL
+   (`type Widget @tag(name: "unterminated {`), and used to reach `Directives.apply`'s own return
+   value unvalidated.
+3. `Namespace.apply` still wraps its own `parse(sdl)` call (explicitly asked for in #111's original
+   report, so it stays regardless of the two gates above). `Directives.apply`'s equivalent wrap —
+   added in the first round, never requested by the original report — was **reverted**: once (2)
+   lands, a bug in its own splice logic is caught by the final-output gate anyway, so the extra wrap
+   was speculative defense-in-depth with no repro proving it necessary.
+4. Both gates' thrown message now includes the `GraphQLError`'s `.locations` (line/column) —
+   previously dropped, even though graphql-js computes it, leaving a syntax error unlocatable in an
+   often-thousand-line schema.
+
+**Second review round — what Codex's first-pass review caught:** the original round shipped only
+gate (1) and both wraps; a second, closer review found the final-output gate (2) was missing
+entirely (nothing re-validated what `Directives`/`Namespace` themselves produced), the
+`Directives.apply` wrap was unrequested scope creep, `test_72_browse_minted_path_resolves` had been
+left `{ todo }`'d rather than actually fixed, and `#134`'s open/closed write-up needed independent
+re-verification against the code (see `docs/issues.md #136` for what that check found).
+
+**Verified:** `test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing`
+(`tests/all/oas-core.test.ts`) exercises the fixture both with and without `servicePrefix`, asserting
+the first gate's clear error in both cases. `test_111_directives_apply_corrupting_sdl_is_caught_by_
+the_final_gate` (same file) is the second gate's own failing-first regression: a valid SDL plus the
+malformed-directive-string config above, asserting the second gate's distinct error message.
+Revert-check on the second gate specifically: disabled, the new test fails with "Missing expected
+exception"; restored, it passes again. Full suite (`tests/all/*.test.ts`) green — 0 fail, only the
+pre-existing, unrelated `#120`/`test_61` todos remain (`test_72` no longer needs one — see
+`docs/issues.md #135`).
+
+**Refs:** `src/oas/oasGen.ts` (`generateSchema`, `describeParseError`), `src/oas/lint/namespace.ts`
+(`Namespace.apply`), `src/oas/lint/directives.ts` (`Directives.apply`). Fixture
+`oneof-scalar-members-empties-response-type.yaml`. #108, #110 (the original, now individually fixed,
+repro instances), `docs/FIXED.md #134` (this fix's original regression fixture, now independently
+fixed), `docs/issues.md #135` (test_72's own, unrelated silent-bad-output case, still open, worked
+around rather than fixed), `docs/issues.md #136` (what #134's fixture actually exercises now).
+
+## 134 · A property whose schema is a bare `oneOf` of plain scalar/enum members vanishes, taking its whole type with it — ✅ Fixed
+
+**Symptom:** a GraphQL `union` can only have Object type members — a `oneOf` of plain scalars/enums
+(no discriminator, no object shape) has none, so whatever gets built has no selectable leaf form.
+The property disappeared from the flattened selection, its owning type became unreachable, and the
+operation's own return type printed blank:
+```
+widgetsById(id: String!): 
+  @connect(... selection: """ """)
+```
+— invalid GraphQL on its own (`Expected Name, found "@"`). Same failure family as `#108` (map
+value) and `#110` (array item).
+
+**OAS** (minimal, not from a real API — not yet found in the corpus):
+```yaml
+Widget:
+  type: object
+  properties:
+    kind:
+      oneOf:
+        - { type: string, enum: [alpha, beta, gamma] }
+        - { type: string, description: "custom kind" }
+```
+
+**Cause:** `Factory.fromProp` built a `Union` unconditionally whenever a property's schema had
+`oneOf`, in both the typed branch (`type: object` with `oneOf`) and the untyped branch — neither
+checked whether the members were all plain values first, unlike `fromArrayItems`'s
+`holdsPlainValues`/`holdsMixedPlainAndObjectValues` guards (`#86`, `#131`). A bare `anyOf` (no
+`oneOf`, no `type`) on a property was not reachable through either branch and already fell through
+to the safe JSON default (`#133`) — this was specifically about `oneOf`, and about `anyOf` when
+`type: object` is also present.
+
+**Fix:** mirrors `fromArrayItems`'s guard — before building the `Union` at either site in `fromProp`,
+`Schemas.holdsPlainValues` on the `oneOf` members degrades to `Scalar('JSON')`, `warn()`s, and
+carries a `Schemas.withDegradeNote` explaining why (`docs/FIXED.md #133`'s mechanism, same reason
+string at both sites): *"a oneOf of only plain scalar/enum values has no GraphQL union member to
+build — sent as raw JSON instead."*
+
+**Example:**
+```graphql
+type Widget {
+  "NEEDS ATTENTION: a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead."
+  kind: JSON
+}
+```
+
+**Verified against the real regression fixture** (`tests/resources/oas/oneof-scalar-members-empties-
+response-type.yaml`, `#111`'s own): given a selection that actually reaches into `Widget`
+(`get:/widgets/{id}>**`, not just the bare operation), `kind` now degrades cleanly to `JSON` and
+`Widget` composes as valid SDL — confirmed by generating the schema directly, not assumed from the
+guard's presence alone.
+
+**Not fixed by this, and does not need to be — a separate, unrelated bug:** `#111`'s own test
+(`test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing`) selects with
+`[...gen.paths.keys()]` — the *bare operation key alone*, no property path, no `>**` — which never
+reaches `Widget`/`kind` at all. That selection shape hits a different bug entirely (the operation's
+own response type never gets visited — see `docs/issues.md #136`), which is what still makes that
+test's fixture produce invalid SDL. This fix and that test were never actually testing the same
+mechanism, despite `#111`'s original write-up assuming they were — caught by independently
+re-verifying this entry against the code rather than trusting the fixture's continued failure as
+proof #134 was still open.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromProp`), `src/oas/utils/schemas.ts` (`holdsPlainValues`,
+`withDegradeNote`). `#108`, `#110`, `#131` (the same empty-type family, already fixed for
+map/array), `docs/FIXED.md #133` (the note-and-warn mechanism this reuses), `docs/issues.md #136`
+(the real, still-open mechanism behind `#111`'s own regression test), `docs/FIXED.md #111` (the
+safety net this was originally found while building).
