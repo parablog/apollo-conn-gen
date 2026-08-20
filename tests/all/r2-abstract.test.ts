@@ -14,7 +14,7 @@ test('test_R2_union_discriminator_emits_typename_match_and_composes', async () =
   // __typename per member. Composes only at fed 2.14.
   const schema = await runOasTest('simple-oneOf-example.yaml', ['get:/item>**'], 1, 5, { connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.14',
-    composeFederationVersion: '2.15.1' });
+    composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   // real union, not the consolidate downgrade
   assert.ok(schema!.includes('union ItemResponse = Book | Movie'), 'expected a real union type');
@@ -39,7 +39,7 @@ test('test_R2_union_partial_selection_omits_unselected_member', async () => {
   ];
   const schema = await runOasTest('simple-oneOf-example.yaml', paths, 1, 3, { connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.14',
-    composeFederationVersion: '2.15.1' });
+    composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(/union ItemResponse = Book\b/.test(schema!), 'union lists only the selected member');
   assert.ok(!/\bMovie\b/.test(schema!), 'unselected member Movie must not appear (no fieldless type, no union member)');
@@ -54,7 +54,7 @@ test('test_R2_interface_oneof_promotes_and_composes', async () => {
   // fed 2.13.
   const schema = await runOasTest('r2-interface-oneof.yaml', ['get:/item>**'], 1, 4, { connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.14',
-    composeFederationVersion: '2.15.1' });
+    composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('interface Product'), 'shared base promoted to an interface');
   assert.ok(schema!.includes('type Book implements Product'), 'Book implements the interface');
@@ -98,7 +98,7 @@ test('test_R2_interface_promotes_when_the_union_is_returned_in_a_list', async ()
   // type nothing referenced and composition failed. see docs/FIXED.md #58
   const schema = await runOasTest('r2-interface-oneof-list.yaml', ['get:/pages>**'], 1, 4, { connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.14',
-    composeFederationVersion: '2.15.1' });
+    composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('interface PageBase'), 'shared base promoted to an interface');
   assert.ok(!/^type PageBase\b/m.test(schema!), 'no orphan concrete base type');
@@ -141,7 +141,7 @@ test('test_R2_union_without_discriminator_degrades_to_merged_object', async () =
   // typesSize 2: response + union — the merged members are no longer collected at all (#26)
   const schema = await runOasTest('oneof-no-discriminator.yaml', ['get:/search>**'], 1, 2, { connectorSpecVersion: 'v0.4',
     federationVersion: 'v2.14',
-    composeFederationVersion: '2.15.1' });
+    composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union line without a discriminator');
   assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
@@ -178,7 +178,7 @@ test('test_R2_union_discriminator_no_mapping_uses_bare_refname', async () => {
     1,
     5, { connectorSpecVersion: 'v0.4',
       federationVersion: 'v2.14',
-      composeFederationVersion: '2.15.1' });
+      composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('union ItemResponse = Book | Movie'), 'expected a real union type');
   assert.ok(
@@ -207,7 +207,7 @@ test('test_R2_input_union_consolidated_kind_is_intentional (C6 investigation)', 
     1,
     3, { connectorSpecVersion: 'v0.4',
       federationVersion: 'v2.14',
-      composeFederationVersion: '2.15.1' });
+      composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   // A discriminated input `oneOf` must STILL degrade to the input object — never a union / ->match
   // (GraphQL has no input unions, any version). This is the guard for the position-first predicate. #36
@@ -264,7 +264,7 @@ test('test_R2_union_nested_in_array_degrades_to_merged_object', async () => {
     'r2-union-nested-in-list.yaml',
     ['get:/list>**'],
     6,
-    2, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1' });
+    2, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union line for a nested union');
   assert.ok(!/->match\(/.test(schema!), 'no ->match for a nested union');
@@ -281,7 +281,7 @@ test('test_R2_union_top_level_array_stays_real_union', async () => {
     'r2-union-nested-in-list.yaml',
     ['get:/items>**'],
     6,
-    3, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1' });
+    3, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('union ItemUnion = Book | Movie'), 'expected a real union type');
   assert.ok(schema!.includes('... type->match('), 'expected a spread ->match on the discriminator');
@@ -299,7 +299,7 @@ test('test_R2_union_snake_case_member_refs_resolve_sanitised_name', async () => 
     'r2-union-nested-in-list.yaml',
     ['get:/snake-items>**'],
     6,
-    3, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1' });
+    3, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('union SnakeItemUnion = BookItem | MovieItem'),
@@ -318,7 +318,7 @@ test('test_R2_union_inline_nested_degrades_via_local_check', async () => {
     'r2-union-nested-in-list.yaml',
     ['get:/inline-list>**'],
     6,
-    2, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1' });
+    2, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union line for an inline nested union');
   assert.ok(!/->match\(/.test(schema!), 'no ->match for an inline nested union');
@@ -336,7 +336,7 @@ test('test_R2_union_merge_name_collision_drops_shadowed_type', async () => {
     'r2-union-nested-in-list.yaml',
     ['get:/wrapped-list>**'],
     6,
-    3, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1' });
+    3, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
   assert.ok(/type WrappedUnion \{/.test(schema!), 'merged object replaces the union');
@@ -357,7 +357,7 @@ test('test_R2_union_merge_kind_collision_degrades_to_json', async (t) => {
     'r2-union-nested-in-list.yaml',
     ['get:/kind-collision-list>**'],
     6,
-    2, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1' });
+    2, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(/union degraded to a merged object/.test(schema!), 'the degrade is announced');
   assert.ok(/type KindCollisionUnion \{/.test(schema!), 'merged object replaces the union');
@@ -387,7 +387,7 @@ test('test_R2_union_shared_by_body_and_response_emits_both_flavours', async () =
     'union-shared-body-and-response.yaml',
     ['post:/bills>**'],
     1,
-    4, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1' });
+    4, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1', forceRover: true });
   assert.ok(schema !== undefined);
   assert.ok(/type LineUnion \{/.test(schema!), 'the response flavour is emitted');
   assert.ok(/input LineUnionInput \{/.test(schema!), 'the body flavour is emitted');

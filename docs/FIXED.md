@@ -6249,3 +6249,58 @@ description on, or the decision happens after the description already wrote). Tr
 `fromSchema`), `src/oas/nodes/union.ts` (`dedupedSelectedProps`). See #39/#44 (C2's kind-collision
 precedent), #131 (the `withDegradeNote`-adjacent `holdsMixedPlainAndObjectValues`, same file), #132
 (the 13 deferred sites).
+
+## 128 · A pinned `composeFederationVersion` without `forceRover` composes against the wrong plugin — ✅ Fixed
+
+**Symptom:** `compose()` (`src/tests/runners.ts`) prefers a gitignored local patched composer
+(`tools/local/apollo-federation-cli`) over real Rover unless `forceRover: true` is set — and that
+local build ignores `federation_version` entirely (patched past 2.15). A test that pins
+`composeFederationVersion` below 2.15 without also setting `forceRover: true` never actually
+composes against that older plugin — its pin is inert, and it silently passes regardless of real
+pre-2.15 incompatibilities.
+
+**Confirmed instances found before this audit, all three already fixed:**
+`test_108_confluence_full_production_selection` and `test_110_pagerduty_full_production_selection`
+both had this gap — real composition at `2.14.0` failed for real (confluence: 322
+`CONNECTORS_UNRESOLVED_FIELD`, the same #14/#16 mechanism #109 hit; pagerduty: a `nom` parser error
+on `??` default-coalesce syntax, a different specific gap in the same category). A third,
+`test_recursive_schema_cut_composes_abstract_pass`, failed the same way at `2.14.3` on
+`CONNECTORS_UNRESOLVED_FIELD: No connector resolves field 'Shared.label'` (the #16
+optional-marker-on-nested-object gap via a different fixture). All three fixed the same way:
+`forceRover: true` + bump `composeFederationVersion` to `2.15.1`.
+
+**Full audit (2026-08-20), the remaining 15 sites:** grepped fresh — 22 real
+`composeFederationVersion` pins total across `tests/all/oas-core.test.ts` (8) and
+`tests/all/r2-abstract.test.ts` (14); 7 already had `forceRover: true` from the work above. Method
+per site: confirm via the `run-rover.sh` scratch script (`compose()` already writes the exact
+command run, naming either the local binary or real rover) that the local composer was in use
+without the flag, add `forceRover: true`, keep the existing version pin, rerun.
+
+- `test_entity_resolver_with_errors_emits_wellformed_schema` (`oas-core.test.ts`, pinned `2.14.3`):
+  confirmed via the scratch script it was silently running the local composer despite a prior note
+  claiming this was already checked — that note was stale, not the code. With `forceRover: true`
+  added, confirmed the switch to real rover via the same script, then reran: passes clean at real
+  `2.14.3`. Pin was accurate.
+- All 14 `composeFederationVersion: '2.15.1'` pins in `tests/all/r2-abstract.test.ts`
+  (`test_R2_*`): same treatment, all 14 pass clean against real Rover at `2.15.1`. No `#14`/`#16`
+  gap or any other real composition defect found at any site.
+
+**Outcome:** all 22 pins across the suite now carry `forceRover: true`; every one was verified
+against real Rover and passes. No new bugs found, no site left with the silent bypass.
+
+**Also resolved:** whether graphos-service-factory's production deploy can actually run composer
+`2.15.1` — confirmed yes. `mdg-private/constellation-registry`'s real CI
+(`connector-validation.yml` → `run-tests.sh` → `rover supergraph compose --config
+supergraph.yaml`, Rover installed via `.../nix/latest`) has no external version ceiling; nothing
+blocks committing `=2.15.1` in a service's own `supergraph.yaml`.
+
+**Verified:** full suite (`oas-core.test.ts` + `r2-abstract.test.ts`) green — 200 pass, 0 fail, 2
+todo (both pre-existing and unrelated: `#120`'s bare-enum-response case, and
+`test_61_sanitised_at_type_must_not_collide` — the latter currently passes despite its stale
+`{todo}` marker, a separate small cleanup outside this audit's scope). Rover
+0.41.0 used throughout; `--elv2-license accept` already present in `compose()`, no ELv2 rejection
+seen.
+
+**Refs:** `src/tests/runners.ts` (`compose()`, `localComposer()`), `tests/all/oas-core.test.ts`,
+`tests/all/r2-abstract.test.ts`. #108, #109, #110 (the confirmed instances and the shared #14/#16
+mechanism), #73 (the same mistake, independently).

@@ -828,6 +828,7 @@ test('test_entity_resolver_with_errors_emits_wellformed_schema', async () => {
       federationVersion: 'v2.14',
       composeFederationVersion: '2.14.3',
       emitConnectorErrors: true,
+      forceRover: true,
     } });
   assert.ok(schema !== undefined);
   const userIdx = schema!.indexOf('type User');
