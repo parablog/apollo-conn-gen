@@ -1,4 +1,4 @@
-import { IType, Param, T, Type, Union } from './internal.js';
+import { IType, Param, Res, T, Type, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -50,6 +50,14 @@ export class En extends Type {
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
+    // reached as a bare response (no object wrapper) — the definition itself is written
+    // separately by the top-level types walk; here just reference it by name, same as Obj's own
+    // in-Res case. see docs/FIXED.md #120
+    if (context.inContextOf(Res, this)) {
+      writer.write(Naming.genTypeName(this.name));
+      return;
+    }
+
     context.enter(this);
     trace(context, '-> [enum::generate]', `-> in: ${this.name}`);
 

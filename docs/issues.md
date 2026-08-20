@@ -619,37 +619,6 @@ non-blocking (full HubSpot lists run is 18.9s), and deferred:
 not be memoized globally). The fourth bullet becomes moot under ROADMAP.md R15 (selection
 externalisation), which replaces the representation these costs live in.
 
-## 120 · A bare `$ref`-enum response drops the whole operation — ⬜ Open
-
-**Symptom:** an op whose 200 response is a component enum directly (no object wrapper) vanishes
-from the schema — no field, no error. Found writing #115's coverage.
-
-**OAS** (`duplicate-enum-values-routes.yaml`):
-```yaml
-/status:
-  get:
-    responses:
-      '200':
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/StateCode' }   # a bare enum
-StateCode: { type: string, enum: [pending, active, done] }
-```
-
-**Example** — `type Query` contains `jobs` but no `status` field at all; the enum itself IS
-visited and stored (trace shows `enum:visit`), only the selection walk loses it.
-
-**Cause:** the leaf cases in `collectExpandedPaths`'s traverse (`src/oas/generator/typesCollector.ts`)
-cover `PropScalar`, `PropEn`, `PropCircRef`, `Scalar` under a `Res`, and lists of values — a bare
-`En` under a `Res` matches none, so the op yields zero selection paths and is dropped. The exact
-mechanism #32 (bare scalar) and #47 (bare scalar array) fixed for their shapes; the enum case was
-never covered (#24 only fixed `PropEn` leaves).
-
-**Test:** `test_115_bare_enum_response_must_not_drop_the_operation` (`tests/all/oas-core.test.ts`,
-`{ todo: ... }`) — flips green when fixed.
-
-**Refs:** `src/oas/generator/typesCollector.ts` (the leaf cases), docs/FIXED.md #32 #47 #24.
-
 ## 121 · A `oneOf` component used top-level by one op and nested by another fails the combined compose — ⬜ Open
 
 **Symptom:** each op composes alone; generate BOTH into one schema and rover rejects it with

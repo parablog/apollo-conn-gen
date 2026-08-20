@@ -1558,17 +1558,13 @@ test('test_115_enum_dedup_holds_on_ref_component_and_input_routes', async () => 
   assert.ok(/input JobInput \{[^}]*state: StateCode/.test(schema!), 'input side references the same enum');
 });
 
-test(
-  'test_115_bare_enum_response_must_not_drop_the_operation',
-  { todo: 'a bare $ref-enum response drops the whole operation, like pre-#32 bare scalars — see docs/issues.md #120' },
-  async () => {
-    // Found writing #115's coverage: `get:/status` answers the StateCode enum directly and the
-    // op vanishes from the schema — En under a Res is not a leaf for the selection walk.
-    const schema = await runOasTest('duplicate-enum-values-routes.yaml', ['get:/status>**'], 3, 1);
-    assert.ok(schema !== undefined);
-    assert.ok(/status: StateCode/.test(schema!), 'the op is emitted and returns the enum');
-  },
-);
+test('test_115_bare_enum_response_must_not_drop_the_operation', async () => {
+  // Found writing #115's coverage: `get:/status` answers the StateCode enum directly and the
+  // op vanishes from the schema — En under a Res is not a leaf for the selection walk.
+  const schema = await runOasTest('duplicate-enum-values-routes.yaml', ['get:/status>**'], 3, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/status: StateCode/.test(schema!), 'the op is emitted and returns the enum');
+});
 
 test('test_97_object_stamped_on_a_list_reads_the_items', async () => {
   // #97: slack's reactions.get answers `{ type: object, items: { anyOf: […] } }` — an object with

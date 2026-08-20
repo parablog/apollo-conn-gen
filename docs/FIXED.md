@@ -6562,3 +6562,83 @@ nodes/get.ts` (`visitResponseContent`, the disabled eager visit), `src/oas/nodes
 `bare-op-nested-body.yaml`. `docs/FIXED.md #134` (the issue this replaced as #111's original
 load-bearing fixture), `docs/issues.md #135` (#111's test's new, unaffected mechanism), `docs/FIXED.md
 #111` (the safety net this was found re-verifying).
+
+## 120 · A bare `$ref`-enum response drops the whole operation — ✅ Fixed
+
+**Symptom:** an op whose 200 response is a component enum directly (no object wrapper) vanished
+from the schema — no field, no error. Found writing `#115`'s coverage.
+
+**OAS** (`duplicate-enum-values-routes.yaml`):
+```yaml
+/status:
+  get:
+    responses:
+      '200':
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StateCode' }   # a bare enum
+StateCode: { type: string, enum: [pending, active, done] }
+```
+
+**Cause, three deep, all in the same bare-value-under-`Res` family `#32`/`#47` already cover for
+scalars/arrays:**
+1. `PathsCollector.collectExpandedPaths`'s leaf-case chain (`src/oas/generator/typesCollector.ts`)
+   recognized a bare `Scalar` or `Arr`-of-`Scalar` directly under a `Res`, but not a bare `En` — so
+   the selection walk found nothing to select and the whole op was dropped, the original diagnosis.
+2. Once that leaf case was added, a second gap surfaced: `Factory.createScalarType`
+   (`src/oas/nodes/factory.ts`) always named a bare enum the literal string `'enum'`, unlike its
+   sibling branches (`createContainerType`'s `Obj`/`Union`/`Composed`/`Map`) which all keep the
+   resolved `$ref` as the name — so every bare-enum response would have collided on one shared
+   `enum Enum { … }` regardless of which component it came from.
+3. A third gap: `En.generate()` had no reference-only branch for a bare enum reached through a
+   `Res` (mirroring `Obj.generate()`'s `context.inContextOf(Res, this)` early return) — it always
+   wrote the full `enum X { … }` body inline, so the field printed `status: enum StateCode { … }`,
+   invalid GraphQL. `Res.select()` had the matching gap on the selection side: `En` didn't match
+   `T.isScalar`, so it fell through to `En.select()` — a no-op — leaving `selection: """ """` blank
+   instead of passing the bare value through with `$`.
+
+**Fix:** one addition per gap, each mirroring the existing bare-scalar handling for its file:
+```ts
+// typesCollector.ts — new leaf case, alongside the existing Scalar-under-Res one
+} else if (child instanceof En && child.parent instanceof Res) {
+  newSelection.add(child.path());
+}
+// factory.ts — createScalarType now takes `ref` and keeps it as the enum's name
+return new En(parent, ref ?? 'enum', schema, schema.enum! as string[]);
+// en.ts — En.generate() references by name when reached through a Res, same as Obj.generate()
+if (context.inContextOf(Res, this)) {
+  writer.write(Naming.genTypeName(this.name));
+  return;
+}
+// res.ts — Res.select() passes a bare En through as `$`, same as a bare Scalar
+T.isScalar(response) || response instanceof En || ...
+```
+
+**Example:**
+```graphql
+enum StateCode {
+ pending,
+ active,
+ done
+}
+
+type Query {
+  status: StateCode
+    @connect(... selection: """
+      $
+      """)
+}
+```
+
+**Verified:** `test_115_bare_enum_response_must_not_drop_the_operation`
+(`duplicate-enum-values-routes.yaml`, `get:/status>**`) — `{ todo }` marker removed, its existing
+assertion (`/status: StateCode/`) is now the real regression check. Revert-check: with the
+`typesCollector.ts` leaf case alone reverted, the test fails exactly as before (`0 is not equal to
+1`, same assertion line); restored, it passes. Full suite green (397 tests, 396 pass, 0 fail, 1
+todo — the pre-existing `test_61`).
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`PathsCollector.collectExpandedPaths`), `src/oas/
+nodes/factory.ts` (`createScalarType`), `src/oas/nodes/en.ts` (`generate`), `src/oas/nodes/res.ts`
+(`select`). `docs/FIXED.md #32` (bare scalar under `Res`, the same mechanism this enum case was
+missing), `docs/FIXED.md #47` (bare scalar array under `Res`), `docs/FIXED.md #24` (`PropEn` leaves,
+a different node than the bare `En` this fixes), `docs/issues.md #115` (found writing its coverage).

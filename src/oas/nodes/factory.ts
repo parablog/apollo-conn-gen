@@ -116,7 +116,7 @@ export class Factory {
     }
     // scalar
     else {
-      result = this.createScalarType(schemaObj, parent);
+      result = this.createScalarType(schemaObj, parent, ref);
     }
 
     // we could not infer a proper type
@@ -127,13 +127,15 @@ export class Factory {
     return result;
   }
 
-  private static createScalarType(schema: SchemaObject | null, parent: IType) {
+  private static createScalarType(schema: SchemaObject | null, parent: IType, ref?: string) {
     const typeStr = schema?.type;
     if (typeStr != null) {
       if (typeStr === 'array') {
         throw new Error(`Should have been handled already? ${typeStr}, schema: ${JSON.stringify(schema)}`);
       } else if (schema?.enum != null) {
-        return new En(parent, 'enum', schema, schema.enum! as string[]);
+        // a bare (non-property) enum keeps its component name, same as Obj/Union/Composed above —
+        // otherwise every such enum collides on the generic name 'enum'. see docs/FIXED.md #120
+        return new En(parent, ref ?? 'enum', schema, schema.enum! as string[]);
       }
       // scalar case — gqlScalar knows `date`/`date-time` mean String, like fromProp's branch below
       const scalarType = GqlUtils.gqlScalar(typeStr as string);
@@ -145,7 +147,7 @@ export class Factory {
       warn(null, '[factory]', `unknown scalar type '${typeStr}' becomes JSON in: ${parent.pathToRoot()}`);
       return new Scalar(parent, 'JSON', schema!);
     } else if (schema?.enum != null) {
-      return new En(parent, 'enum', schema, _.get(schema, 'enum') as string[]);
+      return new En(parent, ref ?? 'enum', schema, _.get(schema, 'enum') as string[]);
     }
     // or we have no idea how to handle this
     else {

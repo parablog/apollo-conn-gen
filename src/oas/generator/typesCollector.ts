@@ -2,6 +2,7 @@ import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
 import {
   Arr,
+  En,
   IType,
   // aliased: this file builds plenty of real `Map`s, and the node class would shadow the built-in
   Map as MapNode,
@@ -352,6 +353,10 @@ class PathsCollector {
           // commerce), or a token string (petstore `/user/login`):
           //   responses: { '200': { schema: { type: boolean } } }
           // Nothing to pick apart, so the value itself is the leaf. see docs/FIXED.md #32
+          newSelection.add(child.path());
+        } else if (child instanceof En && child.parent instanceof Res) {
+          // a response that is just an enum value, no object around it — same shape as #32's bare
+          // scalar, just enum-typed. see docs/FIXED.md #120
           newSelection.add(child.path());
         } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
           // the case above with a list around it — a response that is just an array of values,
