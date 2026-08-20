@@ -1,0 +1,33 @@
+openapi: 3.0.3
+info:
+  title: Bare op selection, nested mutation body
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widgets:
+    post:
+      operationId: createWidget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                detail:
+                  type: object
+                  properties:
+                    color:
+                      type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string

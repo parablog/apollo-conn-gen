@@ -1,0 +1,31 @@
+openapi: 3.0.3
+info:
+  title: Bare op selection, nested response
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  detail:
+                    type: object
+                    properties:
+                      name:
+                        type: string

@@ -6367,24 +6367,28 @@ gate (1) and both wraps; a second, closer review found the final-output gate (2)
 entirely (nothing re-validated what `Directives`/`Namespace` themselves produced), the
 `Directives.apply` wrap was unrequested scope creep, `test_72_browse_minted_path_resolves` had been
 left `{ todo }`'d rather than actually fixed, and `#134`'s open/closed write-up needed independent
-re-verification against the code (see `docs/issues.md #136` for what that check found).
+re-verification against the code (see `docs/FIXED.md #136`, itself found and fixed as a result).
 
-**Verified:** `test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing`
-(`tests/all/oas-core.test.ts`) exercises the fixture both with and without `servicePrefix`, asserting
-the first gate's clear error in both cases. `test_111_directives_apply_corrupting_sdl_is_caught_by_
-the_final_gate` (same file) is the second gate's own failing-first regression: a valid SDL plus the
-malformed-directive-string config above, asserting the second gate's distinct error message.
-Revert-check on the second gate specifically: disabled, the new test fails with "Missing expected
-exception"; restored, it passes again. Full suite (`tests/all/*.test.ts`) green — 0 fail, only the
-pre-existing, unrelated `#120`/`test_61` todos remain (`test_72` no longer needs one — see
-`docs/issues.md #135`).
+**Verified, updated as `#134`/`#136` moved underneath it:** `test_111_invalid_generated_sdl_throws_
+a_clear_error_instead_of_crashing` originally exercised the `#134` fixture both with and without
+`servicePrefix`; once `#134` and then `#136` were independently fixed, that exact selection stopped
+producing invalid SDL, so the test moved to `tests/all/regen.test.ts` (next to
+`test_72_browse_minted_path_resolves`, reusing its helpers) as `test_111_bare_leaf_selection_still_
+throws_invalid_sdl`, now exercising `docs/issues.md #135` instead — the two gates themselves are
+unchanged and untouched by that move. `test_111_directives_apply_corrupting_sdl_is_caught_by_the_
+final_gate` (`tests/all/oas-core.test.ts`) is the second gate's own failing-first regression: a valid
+SDL plus the malformed-directive-string config above, asserting the second gate's distinct error
+message. Revert-check on the second gate specifically: disabled, the new test fails with "Missing
+expected exception"; restored, it passes again. Full suite (`tests/all/*.test.ts`) green — 0 fail,
+only the pre-existing, unrelated `#120`/`test_61` todos remain.
 
 **Refs:** `src/oas/oasGen.ts` (`generateSchema`, `describeParseError`), `src/oas/lint/namespace.ts`
 (`Namespace.apply`), `src/oas/lint/directives.ts` (`Directives.apply`). Fixture
-`oneof-scalar-members-empties-response-type.yaml`. #108, #110 (the original, now individually fixed,
-repro instances), `docs/FIXED.md #134` (this fix's original regression fixture, now independently
-fixed), `docs/issues.md #135` (test_72's own, unrelated silent-bad-output case, still open, worked
-around rather than fixed), `docs/issues.md #136` (what #134's fixture actually exercises now).
+`oneof-scalar-members-empties-response-type.yaml` (no longer used by this issue's own test — see
+`docs/FIXED.md #136`). #108, #110 (the original, now individually fixed, repro instances),
+`docs/FIXED.md #134` (this fix's original regression fixture, now independently fixed),
+`docs/issues.md #135` (this issue's test's current, unrelated mechanism, still open, worked around
+rather than fixed), `docs/FIXED.md #136` (what `#134`'s fixture exercised in between, also fixed).
 
 ## 134 · A property whose schema is a bare `oneOf` of plain scalar/enum members vanishes, taking its whole type with it — ✅ Fixed
 
@@ -6438,18 +6442,123 @@ response-type.yaml`, `#111`'s own): given a selection that actually reaches into
 `Widget` composes as valid SDL — confirmed by generating the schema directly, not assumed from the
 guard's presence alone.
 
-**Not fixed by this, and does not need to be — a separate, unrelated bug:** `#111`'s own test
-(`test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing`) selects with
-`[...gen.paths.keys()]` — the *bare operation key alone*, no property path, no `>**` — which never
-reaches `Widget`/`kind` at all. That selection shape hits a different bug entirely (the operation's
-own response type never gets visited — see `docs/issues.md #136`), which is what still makes that
-test's fixture produce invalid SDL. This fix and that test were never actually testing the same
-mechanism, despite `#111`'s original write-up assuming they were — caught by independently
-re-verifying this entry against the code rather than trusting the fixture's continued failure as
-proof #134 was still open.
+**Not fixed by this, and did not need to be — a separate, unrelated bug (since also fixed):**
+`#111`'s own test (`test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing`, at the
+time) selected with `[...gen.paths.keys()]` — the *bare operation key alone*, no property path, no
+`>**` — which never reached `Widget`/`kind` at all. That selection shape hit a different bug
+entirely (the operation's own response type never got visited — `docs/FIXED.md #136`, filed and
+fixed right after this entry), which is what was still making that test's fixture produce invalid
+SDL. This fix and that test were never actually testing the same mechanism, despite `#111`'s
+original write-up assuming they were — caught by independently re-verifying this entry against the
+code rather than trusting the fixture's continued failure as proof #134 was still open. Once #136
+was fixed too, `#111`'s test moved off this fixture entirely (see `docs/FIXED.md #111`).
 
 **Refs:** `src/oas/nodes/factory.ts` (`fromProp`), `src/oas/utils/schemas.ts` (`holdsPlainValues`,
 `withDegradeNote`). `#108`, `#110`, `#131` (the same empty-type family, already fixed for
-map/array), `docs/FIXED.md #133` (the note-and-warn mechanism this reuses), `docs/issues.md #136`
-(the real, still-open mechanism behind `#111`'s own regression test), `docs/FIXED.md #111` (the
-safety net this was originally found while building).
+map/array), `docs/FIXED.md #133` (the note-and-warn mechanism this reuses), `docs/FIXED.md #136`
+(the real mechanism this fix's own regression test relied on, also since fixed — see that entry for
+where `#111`'s test moved to), `docs/FIXED.md #111` (the safety net this was originally found while
+building).
+
+## 136 · A selection naming only the bare operation (no property path, no `>**`) silently answered an empty schema — ✅ Fixed
+
+**Symptom:** found while re-verifying #134's write-up against the current code (it turned out #134
+was already fixed — see its own entry above — so #111's own regression fixture no longer reproduced
+#134's mechanism, and had to be re-diagnosed to find out what it *actually* still exercised). A
+selection that names only the operation itself, with no property path segment and no `>**` glob —
+`generateSchema(['get:/widgets/{id}'])` — answered a fully blank return type:
+```graphql
+widgetsById(id: String!): 
+  @connect(... selection: """ """)
+```
+— invalid GraphQL on its own, same visible symptom as #134's original report, but a different cause.
+Also reachable on a mutation body the same way (`Post`'s `body` has the identical structural
+pattern), confirmed with its own separate repro, not assumed from "same shape."
+
+**OAS** (`bare-op-nested-response.yaml`, response has a nested object one level down):
+```yaml
+/widgets/{id}:
+  get:
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: string }
+                detail:
+                  type: object
+                  properties:
+                    name: { type: string }
+```
+
+**Cause:** `Get.visit()` (`src/oas/nodes/get.ts`) builds the operation's `resultType` (a `Res` node)
+but deliberately does not call `.visit()` on it — `visitResponseContent`'s own comment marks this
+`// PENDING: do not visit anymore`, moving that to whenever the *selection's own walk* reaches it.
+`TypesCollector`'s collect loop (`src/oas/generator/typesCollector.ts`) only calls `gen.expand()` on
+nodes it walks *past* — for a selection whose only segment is the operation itself, the walk never
+goes past it, so `Res.visit()` never ran and `Res.response` never got set. `Res.dependencies()` then
+returned `[]`, so `collectReachable`'s BFS from the selected roots found nothing past the `Res`
+wrapper. This failed **silently**, not with the internal consistency error one might expect
+(`collectReachable: unvisited type ... — the collect walk missed a reference`) — that check only
+fires for `T.isContainer` nodes, and `Res`'s id (`res:r`) is deliberately excluded from
+`isContainer` (`obj:`/`comp:`/`union:`/`map:` only), so an unvisited `Res` passed the guard and just
+contributed nothing. `Body` (mutation request bodies) has the identical pattern for the same reason.
+
+**Fix:** `PathsCollector.collectExpandedPaths()` (`src/oas/generator/typesCollector.ts`) now treats a
+bare-op selection entry (no `Naming.PATH_SEPARATOR` in it at all) the same as that entry with `>**`
+appended — the existing, already-proven full-subtree-walk machinery every `<op>>**` selection
+already gets (`collectPaths` cascades `gen.expand()` down to the root, then `T.traverse` visits
+every descendant). `TypesCollector.collect()` itself needed no change. One condition, in one
+function:
+```ts
+const isBareOp = (p: string) => !p.includes(Naming.PATH_SEPARATOR);
+const expands = selection.filter((p) => p.endsWith('>**') || isBareOp(p));
+const filtered = expands.map((p) => (p.endsWith('>**') ? p.replace('>**', '') : p));
+```
+A single `gen.expand()` call on just `resultType`/`body` was tried and rejected first — it runs
+`Res.visit()`, exposing the response object as a child, but never visits *that* object, so
+generation still came out broken (an empty `type X {}` this time, not a blank return type) — same
+defect, one level deeper. The full-subtree walk is what actually closes it.
+
+**Example:**
+```graphql
+# before: blank return type, invalid on its own
+widgetsById(id: String!): 
+
+# after
+type Detail { name: String }
+type WidgetsByIdResponse { detail: Detail id: String }
+widgetsById(id: String!): WidgetsByIdResponse
+```
+
+**Ripple effect on `#111`'s own regression test:** `test_111_invalid_generated_sdl_throws_a_clear_
+error_instead_of_crashing` relied on exactly this bug to make its fixture produce invalid SDL: fixing
+#136 made that selection valid, breaking the test. `generateSchema([])` does not work as a
+replacement (`OperationWriter` early-returns on an empty selection, emitting only boilerplate with no
+`Query` type at all — `parse()` never complains, since a missing root type is a schema-build concern,
+not a syntax one — confirmed, not assumed). Replaced with `docs/issues.md #135` (still open, a
+different mechanism, survives this fix undisturbed): the test moved to `tests/all/regen.test.ts`, next
+to `test_72_browse_minted_path_resolves` (reusing its `mintPath`/`deepExpand`/`freshGen` helpers) as
+`test_111_bare_leaf_selection_still_throws_invalid_sdl` — browses `/v2/apps` on `digitalocean.yaml`
+first to drift-rename the deployments subtree, mints the literal leaf path with no `>**`, and asserts
+`generateSchema([minted])` still throws `[gen] generated an invalid GraphQL schema`, both with and
+without `servicePrefix` set.
+
+**Verified:** `test_136_bare_op_selection_visits_the_full_response_subtree` (new fixture
+`bare-op-nested-response.yaml`) and `test_136_bare_op_selection_visits_the_full_mutation_body` (new
+fixture `bare-op-nested-body.yaml`, a POST body with the identical nested shape) both assert the
+*nested* field survives, not just the flat top-level one — a fix that only visited one level deeper
+would still pass a flat-only fixture. Revert-check: with `collectExpandedPaths`'s bare-op handling
+disabled, both new tests fail (`0 is not equal to 2`/`3` types collected); restored, both pass. Full
+suite green (396 tests, 394 pass, 0 fail, 2 todo — the same pre-existing `#120`/`test_61` as always),
+runtime unaffected by bare-op selections now taking the same full-subtree-walk path `>**` already
+does everywhere else.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`PathsCollector.collectExpandedPaths`), `src/oas/
+nodes/get.ts` (`visitResponseContent`, the disabled eager visit), `src/oas/nodes/res.ts` (`visit`,
+`dependencies`), `src/oas/nodes/typeUtils.ts` (`isContainer`). Fixtures `bare-op-nested-response.yaml`,
+`bare-op-nested-body.yaml`. `docs/FIXED.md #134` (the issue this replaced as #111's original
+load-bearing fixture), `docs/issues.md #135` (#111's test's new, unaffected mechanism), `docs/FIXED.md
+#111` (the safety net this was found re-verifying).

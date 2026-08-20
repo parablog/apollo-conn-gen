@@ -854,42 +854,4 @@ operation subtree (`SelectionPath.everythingUnder`, always `>**`), so this needs
 (`resolveSegment`, the recovery this interacts with). Found while verifying #111's fix against the
 full suite.
 
-## 136 · A selection naming only the bare operation (no property path, no `>**`) silently answers an empty schema — ⬜ Open
-
-**Symptom:** found while re-verifying #134's write-up against the current code (it turned out #134
-was already fixed — see `docs/FIXED.md #134` — so #111's own regression fixture no longer reproduces
-#134's mechanism, and had to be re-diagnosed to find out what it *actually* still exercises). A
-selection that names only the operation itself, with no property path segment and no `>**` glob —
-`generateSchema(['get:/widgets/{id}'])` — answers a fully blank return type:
-```graphql
-widgetsById(id: String!): 
-  @connect(... selection: """ """)
-```
-— invalid GraphQL on its own, same visible symptom as #134's original report, but a different cause.
-
-**Cause:** `Get.visit()` (`src/oas/nodes/get.ts`) builds the operation's `resultType` (a `Res` node)
-but deliberately does **not** call `.visit()` on it — `visitResponseContent`'s own comment marks
-this `// PENDING: do not visit anymore`, moving that to whenever the *selection's own walk* reaches
-it. `TypesCollector`'s collect loop (`src/oas/generator/typesCollector.ts`) only calls
-`gen.expand()` on nodes it walks *past* — for a selection whose only segment is the operation
-itself, the walk never goes past it, so `Res.visit()` never runs and `Res.response` (its own
-`this.response = type` line) never gets set. `Res.dependencies()` then returns `[]`
-(`res.ts`: `return this.response ? [this.response] : []`), so `collectReachable`'s BFS from the
-selected roots finds nothing past the `Res` wrapper. It fails **silently**, not with the internal
-consistency error one might expect (`collectReachable: unvisited type ... — the collect walk missed
-a reference`) — that check only fires for `T.isContainer` nodes, and `Res`'s id (`res:r`) is
-deliberately excluded from `isContainer` (`obj:`/`comp:`/`union:`/`map:` only), so an unvisited `Res`
-passes the guard and just contributes nothing.
-
-**Not done.** No fix attempted — same reasoning as #134's original framing: this is now the
-mechanism `test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing`
-(`tests/all/oas-core.test.ts`) actually relies on to keep producing invalid SDL (via
-`[...gen.paths.keys()]`, a bare op-key selection, on `oneof-scalar-members-empties-response-type.yaml`)
-now that #134 itself is fixed. Fixing this would need its own regression fixture before being picked
-up, for the same reason #134's did.
-
-**Refs:** `src/oas/nodes/get.ts` (`visitResponseContent`, the disabled eager visit),
-`src/oas/nodes/res.ts` (`visit`, `dependencies`), `src/oas/generator/typesCollector.ts`
-(`collectReachable`), `src/oas/nodes/typeUtils.ts` (`isContainer`). #111 (the safety net this was
-found re-verifying), `docs/FIXED.md #134` (the issue this replaces as #111's load-bearing fixture).
 

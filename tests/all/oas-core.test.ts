@@ -2349,6 +2349,30 @@ test('test_unrecognised_shape_degrades_to_json_with_note', async (t) => {
   );
 });
 
+test('test_134_oneof_of_plain_values_property_degrades_to_json_with_note', async (t) => {
+  // #134: a property whose schema is a bare oneOf of plain scalar/enum members used to build a
+  // Union with no selectable leaf, silently dropping the whole owning type. fromProp now checks
+  // Schemas.holdsPlainValues first and degrades to JSON instead, same note-and-warn shape as #133.
+  // This was the fixture #111 originally borrowed as its own regression case (docs/FIXED.md #134
+  // and #136 both explain why it no longer serves that purpose) — it degrades cleanly on its own now.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('oneof-scalar-members-empties-response-type.yaml', ['get:/widgets/{id}>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/type Widget \{/.test(schema!), 'Widget is reachable, not dropped');
+
+  const oneOfDegradeReason =
+    'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(oneOfDegradeReason)}"\\n {2}kind: JSON`).test(schema!),
+    'kind carries a NEEDS ATTENTION note immediately above the field',
+  );
+  assert.ok(!/union \w+ =/.test(schema!), 'no union type is written for the plain-value oneOf');
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === oneOfDegradeReason),
+    'warn() fires with the [factory] tag and the exact reason text',
+  );
+});
+
 test('test_66_array_body_references_item_input_type', async () => {
   // #66: a body that is an array (gong `fields`) used to emit `input: InputInput!`, a type nothing
   // defines. Now the arg is a list of the item's type. Composing checks the body mapping too.
@@ -2559,26 +2583,32 @@ test(
   },
 );
 
-test('test_111_invalid_generated_sdl_throws_a_clear_error_instead_of_crashing', async () => {
-  // RELEASE BLOCKER — fixed, see docs/FIXED.md #111. Do not re-add `{ todo: ... }` here without
+test('test_136_bare_op_selection_visits_the_full_response_subtree', async () => {
+  // RELEASE BLOCKER — fixed, see docs/FIXED.md #136. Do not re-add `{ todo: ... }` here without
   // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
   //
-  // The selection below is the bare operation key alone — no property path, no `>**` — which never
-  // visits the op's own response type (docs/issues.md #136) and leaves `getWidget`'s return type
-  // blank in the generated SDL: invalid GraphQL on its own. (The fixture's `oneOf`-of-plain-values
-  // `kind` field, #134, is fixed now — this test no longer depends on that mechanism.) Before #111,
-  // generating that SDL with `servicePrefix` set crashed the whole process with an uncaught
-  // GraphQLError; without a prefix, it silently returned the broken SDL. `generateSchema()` now
-  // validates its own output either way and throws one clear, actionable error instead.
-  const file = 'oneof-scalar-members-empties-response-type.yaml';
+  // A selection naming only the op, no property path and no `>**`, used to stop right after the op
+  // node — Res.visit() never ran, so the whole response silently dropped: a blank return type. The
+  // nested `detail.name` field (not just the flat `id`) proves the fix walks the whole subtree, not
+  // just one level. see docs/FIXED.md #136
+  const schema = await runOasTest('bare-op-nested-response.yaml', ['get:/widgets/{id}'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/type WidgetsByIdResponse \{/.test(schema!), 'the response type is emitted, not blank');
+  assert.ok(/detail: Detail/.test(schema!), 'the nested object field survives');
+  assert.ok(/type Detail \{\n {2}name: String\n\}/.test(schema!), 'and its own nested field too');
+});
 
-  const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, { skipValidation: true });
-  await gen.visit();
-  assert.throws(() => gen.generateSchema([...gen.paths.keys()]), /\[gen\] generated an invalid GraphQL schema/);
-
-  const prefixed = await OasGen.fromFile(`${oasBasePath}/${file}`, { skipValidation: true, servicePrefix: 'acme' });
-  await prefixed.visit();
-  assert.throws(() => prefixed.generateSchema([...prefixed.paths.keys()]), /\[gen\] generated an invalid GraphQL schema/);
+test('test_136_bare_op_selection_visits_the_full_mutation_body', async () => {
+  // RELEASE BLOCKER — fixed, see docs/FIXED.md #136. Do not re-add `{ todo: ... }` here without
+  // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
+  //
+  // Same bug, on a POST body instead of a GET response — Body.visit() never ran either, for the
+  // same reason. see docs/FIXED.md #136
+  const schema = await runOasTest('bare-op-nested-body.yaml', ['post:/widgets'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/input InputInput \{/.test(schema!), 'the body input type is emitted, not blank');
+  assert.ok(/detail: DetailInput/.test(schema!), 'the nested object field survives in the input');
+  assert.ok(/detail \{\n\s+color\n\s*\}/.test(schema!), 'and the body mapping reaches into it too');
 });
 
 test(

@@ -112,6 +112,29 @@ test('test_72_browse_minted_path_resolves', async () => {
   assert.strictEqual(drifted, straight, 'the drifted path generates what the fresh spelling does');
 });
 
+test('test_111_bare_leaf_selection_still_throws_invalid_sdl', async () => {
+  // RELEASE BLOCKER — fixed, see docs/FIXED.md #111. Do not re-add `{ todo: ... }` here without
+  // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
+  //
+  // #136 fixed the bare-op-key case this test used to rely on. #135 (still open) is the
+  // replacement: the exact drift-recovery selection `test_72` works around by globbing — select
+  // the literal leaf alone here instead, and it still answers an empty, invalid type.
+  const gen = await freshGen('digitalocean.yaml');
+  deepExpand(gen, gen.paths.get('get:/v2/apps')!);
+  const deployments = gen.paths.get('get:/v2/apps/{app_id}/deployments')!;
+  deepExpand(gen, deployments);
+  const minted = mintPath(gen, deployments, 'ActiveDeployment')!;
+  assert.throws(() => gen.generateSchema([minted]), /\[gen\] generated an invalid GraphQL schema/);
+
+  const prefixed = await OasGen.fromFile(`${oasBasePath}/digitalocean.yaml`, { ...opts, servicePrefix: 'acme' });
+  await prefixed.visit();
+  deepExpand(prefixed, prefixed.paths.get('get:/v2/apps')!);
+  const prefixedDeployments = prefixed.paths.get('get:/v2/apps/{app_id}/deployments')!;
+  deepExpand(prefixed, prefixedDeployments);
+  const mintedPrefixed = mintPath(prefixed, prefixedDeployments, 'ActiveDeployment')!;
+  assert.throws(() => prefixed.generateSchema([mintedPrefixed]), /\[gen\] generated an invalid GraphQL schema/);
+});
+
 test('test_72_recovery_never_guesses_among_siblings', async () => {
   const gen = await freshGen('petstore.yaml');
   // a made-up field: Pet has several props, so nothing may stand in for it
