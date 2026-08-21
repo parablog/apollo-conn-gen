@@ -97,9 +97,17 @@ export class Schemas {
 
   // Marks a schema about to degrade to JSON, so the reason lands in the SDL, not just the console
   // log. e.g. (docker-engine) Labels: { additionalProperties: { type: string } } in a request body
-  // -> `labels: JSON` gets a "NEEDS ATTENTION: ..." docstring. see docs/FIXED.md #133
+  // -> `labels: JSON` gets a "NEEDS ATTENTION: ..." docstring. see docs/FIXED.md #133, #152
   public static withDegradeNote(schema: SchemaObject, reason: string): SchemaObject {
-    const note = `NEEDS ATTENTION: ${reason}`;
-    return { ...schema, description: schema.description ? `${schema.description}\n\n${note}` : note };
+    const note = Schemas.asciiSafeDashes(`NEEDS ATTENTION: ${reason}`);
+    const description = schema.description
+      ? `${Schemas.asciiSafeDashes(schema.description)}\n\n${note}`
+      : note;
+    return { ...schema, description };
+  }
+
+  // A multi-byte dash character in a doc comment can crash rover mid-compose. see docs/FIXED.md #152
+  private static asciiSafeDashes(text: string): string {
+    return text.replace(/[‒-―−]/g, '--');
   }
 }

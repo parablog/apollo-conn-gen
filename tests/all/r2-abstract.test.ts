@@ -368,8 +368,10 @@ test('test_R2_union_merge_kind_collision_degrades_to_json', async (t) => {
   // #133: the merged field carries a note explaining the degrade, and warn() logs the same reason.
   const kindCollisionReason =
     'different branches of a merged type declare this field differently, and no single GraphQL type fits both — sent as raw JSON.';
+  // #152: the SDL note flattens the em-dash to "--"; the console warn() below keeps it as-is.
+  const kindCollisionReasonInSdl = kindCollisionReason.replace('—', '--');
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(kindCollisionReason)}"\\n {2}status: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(kindCollisionReasonInSdl)}"\\n {2}status: JSON`).test(schema!),
     'status carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(

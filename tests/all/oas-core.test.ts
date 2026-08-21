@@ -1621,8 +1621,11 @@ test('test_101_type_with_every_field_removed_becomes_json', async (t) => {
   // #145: the reason contributors became JSON now lands in the SDL, not just the console log.
   const cycleReason =
     'every field of Contributors was removed to break a reference cycle, leaving no type to write — sent as raw JSON instead.';
+  // #152: the SDL note flattens the em-dash to "--" (rover crashes on the raw byte otherwise);
+  // the console warn() below still gets cycleReason's own em-dash unchanged.
+  const cycleReasonInSdl = cycleReason.replace('—', '--');
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(cycleReason)}"\\n {2}contributors: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(cycleReasonInSdl)}"\\n {2}contributors: JSON`).test(schema!),
     'contributors carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(
@@ -1643,8 +1646,10 @@ test('test_145_prop_obj_with_no_properties_of_its_own_becomes_json', async (t) =
   assert.ok(/^\s+emptyBox\??$/m.test(schema!), 'and still takes the field');
 
   const emptyReason = 'this object declares no properties of its own — sent as raw JSON instead.';
+  // #152: same em-dash flattening as test_101 above — SDL gets "--", warn() keeps the em-dash.
+  const emptyReasonInSdl = emptyReason.replace('—', '--');
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(emptyReason)}"\\n {2}emptyBox: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(emptyReasonInSdl)}"\\n {2}emptyBox: JSON`).test(schema!),
     'emptyBox carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(
@@ -2411,15 +2416,17 @@ test('test_84_body_map_is_sent_as_json', async (t) => {
   // it, not replace it, so both survive in the docstring block.
   const mapDegradeReason =
     "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+  // #152: the SDL note flattens the em-dash to "--"; the console warn() below keeps it as-is.
+  const mapDegradeReasonInSdl = mapDegradeReason.replace('—', '--');
   assert.ok(
     new RegExp(
-      `"""\\n {2}key/value labels attached to the snapshot\\n\\nNEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReason)}\\n {2}"""\\n {2}labels: JSON`,
+      `"""\\n {2}key/value labels attached to the snapshot\\n\\nNEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReasonInSdl)}\\n {2}"""\\n {2}labels: JSON`,
     ).test(schema!),
     'labels keeps its original description and gains the NEEDS ATTENTION note',
   );
   // portBindings has no OAS description of its own — the note stands alone, on one line.
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReason)}"\\n {2}portBindings: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReasonInSdl)}"\\n {2}portBindings: JSON`).test(schema!),
     'portBindings carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(
@@ -2437,8 +2444,9 @@ test('test_untyped_input_map_degrades_to_json_with_note', async (t) => {
 
   const mapDegradeReason =
     "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+  // #152: the SDL note flattens the em-dash to "--"; the console warn() below keeps it as-is.
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReason)}"\\n {2}settings: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReason.replace('—', '--'))}"\\n {2}settings: JSON`).test(schema!),
     'settings carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(
@@ -2456,8 +2464,9 @@ test('test_unrecognised_shape_degrades_to_json_with_note', async (t) => {
 
   const unrecognisedReason =
     "this field's shape didn't match any known pattern and defaulted to JSON — worth checking the source OAS schema.";
+  // #152: the SDL note flattens the em-dash to "--"; the console warn() below keeps it as-is.
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(unrecognisedReason)}"\\n {2}mystery: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(unrecognisedReason.replace('—', '--'))}"\\n {2}mystery: JSON`).test(schema!),
     'mystery carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(
@@ -2479,8 +2488,9 @@ test('test_134_oneof_of_plain_values_property_degrades_to_json_with_note', async
 
   const oneOfDegradeReason =
     'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
+  // #152: the SDL note flattens the em-dash to "--"; the console warn() below keeps it as-is.
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(oneOfDegradeReason)}"\\n {2}kind: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(oneOfDegradeReason.replace('—', '--'))}"\\n {2}kind: JSON`).test(schema!),
     'kind carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(!/union \w+ =/.test(schema!), 'no union type is written for the plain-value oneOf');

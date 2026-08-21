@@ -7449,3 +7449,61 @@ pre-existing todo.
 **Refs:** `src/oas/nodes/factory.ts` (`Factory.fromProp`), `graphos-service-factory`'s
 `tools/connect-gen/src/emit/types.rs` and `operations.rs` (the ported heuristic),
 `graphos-service-factory/docs/ts-gen-comparison.md` (the comparison that surfaced this).
+
+
+## 152 [BUG] · A dash in a JSON-degrade note can crash rover mid-compose — ✅ Fixed
+
+**Symptom:** `Schemas.withDegradeNote` (`#133`) writes the reason a field became `JSON` straight
+into that field's SDL doc comment. Several of those reason strings, and `#145`'s, use a real
+em-dash (`—`, U+2014) for readability — the same style this whole codebase's own comments use.
+rover's `ariadne` dependency panics slicing composition-error text by byte index across a
+multi-byte UTF-8 boundary, and an em-dash is 3 bytes. None of this project's tests run real
+`rover compose` against these fixtures (they assert on generated SDL text only), so this could
+crash a real composition and never show up in this repo's own suite.
+
+**Confirmed, not theoretical:** found by reading the Rust connector generator this project is
+compared against (`graphos-service-factory/tools/connect-gen/src/emit/types.rs`), whose own
+`JsonReason::doc_note()` carries this exact comment: *"Intentionally ASCII-only: rover's `ariadne`
+dependency... panics when slicing UTF-8 strings by byte index across a multi-byte boundary. An
+em-dash... on this line crashed `rover supergraph compose` on the regenerated GitHub connector."*
+Same rover, same mechanism, same class of generated doc comment.
+
+**OAS** (`only-field-in-a-cycle.yaml`, the same fixture `#145` uses):
+```yaml
+ContentHistory:
+  properties:
+    contributors: { $ref: '#/components/schemas/Contributors' }   # every field cycle-cut away
+```
+
+**Example** — before, and after:
+```graphql
+# before — a real em-dash, 3 bytes, embedded straight into the SDL
+"""
+NEEDS ATTENTION: every field of Contributors was removed to break a reference cycle, leaving no
+type to write — sent as raw JSON instead.
+"""
+contributors: JSON
+
+# after
+"""
+NEEDS ATTENTION: every field of Contributors was removed to break a reference cycle, leaving no
+type to write -- sent as raw JSON instead.
+"""
+contributors: JSON
+```
+
+**Fix:** rather than hand-editing every reason string at its call site (`factory.ts`, `map.ts`,
+`union.ts`, `propObj.ts` — 12 call sites, ~9 distinct reason strings, more added over time),
+`Schemas.withDegradeNote` sanitizes the combined note text once, at the single point every one of
+them funnels through before reaching the SDL: en/em/figure/horizontal-bar dashes and the Unicode
+minus sign all become a plain ASCII `--`. Source prose at each call site is untouched and keeps
+its normal em-dash style — only the generated doc comment changes.
+
+**Verified:** `test_101_type_with_every_field_removed_becomes_json` and
+`test_145_prop_obj_with_no_properties_of_its_own_becomes_json` (`tests/all/oas-core.test.ts`)
+updated to expect `--` instead of `—` in the generated docstring — the only two existing tests
+whose exact-text assertions crossed a dash. Full suite green.
+
+**Refs:** `src/oas/utils/schemas.ts` (`withDegradeNote`, `asciiSafeDashes`). Rust precedent:
+`graphos-service-factory/tools/connect-gen/src/emit/types.rs` (`JsonReason::doc_note`). See #133
+(the mechanism this closes a gap in), #145 (the specific strings that surfaced it).
