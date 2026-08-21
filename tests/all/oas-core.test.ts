@@ -721,7 +721,7 @@ test('test_allof_contentless_member_skipped_and_composes', async () => {
   const schema = await runOasTest('allof-empty-member.yaml', ['get:/things>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(
-    /type Thing \{[^}]*\bid: String\b[^}]*\bname: String\b/s.test(schema!),
+    /type Thing \{[^}]*\bid: ID\b[^}]*\bname: String\b/s.test(schema!),
     "merged type keeps both members' fields",
   );
 });
@@ -1528,6 +1528,22 @@ test('test_98_union_of_unknown_scalars_still_generates', async () => {
   assert.ok(!/\bvalue[:?]/.test(schema!), 'the scalar-only union field stays absent — no `>**` leaf, as before');
 });
 
+test('test_142_identifier_shaped_string_property_becomes_id', async () => {
+  // #142: a string property named exactly "id", or ending in "Id"/"ID" (capitalisation matters),
+  // is written as GraphQL's ID scalar instead of String — matching the rule the Rust connector
+  // generator already uses. e.g. confluence's AdminKeyResponse.accountId: string -> ID.
+  const schema = await runOasTest('id-scalar-promotion.yaml', ['get:/things>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bid: ID\b/.test(schema!), 'the exact name "id" becomes ID');
+  assert.ok(/\baccountId: ID\b/.test(schema!), 'a name ending in "Id" becomes ID');
+  assert.ok(/\baccountID: ID\b/.test(schema!), 'a name ending in the all-caps "ID" becomes ID too');
+  // these must NOT be promoted, or the heuristic is too broad:
+  assert.ok(/\buserId: String\b/.test(schema!), 'snake_case "user_id" does not end in "Id"/"ID" -> stays String');
+  assert.ok(/\bvalid: String\b/.test(schema!), '"valid" ends in lowercase "id", not "Id"/"ID" -> stays String');
+  assert.ok(/\bvoid: String\b/.test(schema!), '"void" ends in lowercase "id", not "Id"/"ID" -> stays String');
+  assert.ok(/\bname: String\b/.test(schema!), 'an unrelated field is unaffected');
+});
+
 test('test_99_dangling_ref_response_degrades_to_json', async () => {
   // #99: a 200 schema of `$ref: '#../'` — a pointer to nowhere, as published in common-room's
   // del:/user/{email} — stopped the whole run. The reference now reads as free-form JSON.
@@ -1689,7 +1705,7 @@ test('test_114_nested_object_stamped_on_a_list_reads_the_items', async () => {
   const schema = await runOasTest('object-stamped-on-a-list-nested.yaml', ['get:/widgets>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(/broken: Broken/.test(schema!), 'the field survives and points at a real type');
-  assert.ok(/type Broken \{[^}]*id: String[^}]*label: String[^}]*\}/.test(schema!), 'items fields are read');
+  assert.ok(/type Broken \{[^}]*id: ID[^}]*label: String[^}]*\}/.test(schema!), 'items fields are read');
   assert.ok(/broken\? \{/.test(schema!), 'the selection keeps the field group');
 });
 

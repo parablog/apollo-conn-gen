@@ -278,23 +278,3 @@ TDD cases: splice + hard-fail-on-unknown).
 **Refs:** `tools/connect-gen/src/emit/regions.rs` (the Rust mechanism to port);
 `graphos-service-factory/scripts/gen-ts.mjs` + `gen-ts.test.mjs` (the external prototype);
 `graphos-service-factory/docs/ts-gen-comparison.md` (the comparison that surfaced this).
-
-## 142 [FEAT] [P4] · Identifier-shaped string properties emit as `String`, never `ID` — ⬜ Open
-
-**Why:** found in the same comparison. Rust promotes properties that are clearly identifiers
-(`*Id`-suffixed, or an `id` field itself) from `String` to GraphQL's `ID` scalar; `gen` emits
-`String` for all of them (954 instances found across the 5 real connectors — the single largest
-difference category in the whole comparison). `ID` is more than a style choice to GraphQL tooling:
-cache normalization (Apollo Client's `__typename`+id keying), codegen, and persisted-query tooling
-all treat `ID` fields as identifier-shaped signals that plain `String` doesn't carry.
-
-**OAS/example:** `Confluence_AdminKeyResponse.accountId` is `ID` in the committed Rust schema,
-`String` in `gen`'s output, for the identical OAS input.
-
-**Shape:** needs the exact trigger condition read out of Rust's source first — likely a
-name-pattern heuristic (property name ends in `Id`/`_id`, or is literally `id`) rather than
-anything OAS's `type: string` schema itself signals structurally. Port the heuristic, then validate
-it against the same 5 real specs for false positives (a string property that merely *contains* "id"
-but isn't actually a reference/identifier) before shipping it as a default-on behavior.
-
-**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`.

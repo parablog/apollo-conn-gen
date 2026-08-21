@@ -7392,3 +7392,60 @@ default-emission fix), `docs/FIXED.md #127` (the string/number coercion refineme
 `graphos-service-factory/scripts/semantic-diff.mjs` (the comparison tool, run directly to verify),
 `graphos-service-factory/service-catalog/confluence/confluence.graphql` (the stale committed
 baseline, dated 2026-07-24).
+
+
+## 142 [FEAT] · Identifier-shaped string properties emit as `String`, never `ID` — ✅ Fixed
+
+**Symptom:** a `type: string` property whose name is clearly an identifier — `id` itself, or a name
+ending in `Id`/`ID` — wrote as GraphQL's `String` scalar instead of `ID`. The Rust connector
+generator this project is compared against already promotes those names to `ID`; `gen` did not (954
+instances found across the 5 real connectors compared — the single largest difference category in
+the whole comparison).
+
+**OAS** (`confluence-full.json`, `AdminKeyResponse`):
+```yaml
+AdminKeyResponse:
+  type: object
+  properties:
+    accountId:
+      type: string
+```
+
+**Example** — before, and after:
+```graphql
+# before
+accountId: String
+
+# after
+accountId: ID
+```
+
+**Trigger condition — confirmed against the Rust source** (`graphos-service-factory`, checked out
+under `constellation-connectors/`): `types.rs`/`operations.rs` promote a string field to `ID` when
+its name is exactly `id`, or ends in `Id` (camelCase) or `ID` (all-caps) — case-sensitive, no
+lowercasing first. So `user_id` (snake_case) does **not** match and stays `String`.
+
+**Fix:** `Factory.fromProp` (`src/oas/nodes/factory.ts`) checks a string property's name against
+that same rule right after resolving it to GraphQL's `String` scalar, promoting it to `ID` when it
+matches. Only string properties are affected — an `id: integer` still becomes `Int`, unchanged.
+
+**Not done here (out of scope for this fix, flagged for a follow-up):** array-of-ID properties
+(`memberIds: [string]` → `[ID]`) go through a different code path that doesn't currently see the
+array's own property name. Operation parameters also stay `String` — Rust's `operations.rs` applies
+this identical rule to plain string parameters too, so `Query.widget(id: ID!)` in Rust becomes
+`Query.widget(id: String!)` in `gen`; a real, confirmed inconsistency, just outside what this issue's
+title ("properties") asked for.
+
+**Verified:** new fixture `id-scalar-promotion.yaml` and test
+`test_142_identifier_shaped_string_property_becomes_id` cover both the positive cases (`id`,
+`accountId`, `accountID` → `ID`) and the negative cases that guard against too broad a match
+(`user_id`, `valid`, `void`, `name` → stay `String`). The heuristic was also run as a one-off check
+against ~1,100 real string property names across the confluence/github/slack/digitalocean/box/
+sendgrid/asana corpus specs — 21 matched, all genuine identifiers (`accountId`, `pageId`, `ownerId`,
+…), no false positives. Two pre-existing tests (`oas-core.test.ts`'s `Thing`/`Broken` fixtures)
+updated from `id: String` to `id: ID` as expected fallout. Full suite: 405 pass, 0 fail, 2
+pre-existing todo.
+
+**Refs:** `src/oas/nodes/factory.ts` (`Factory.fromProp`), `graphos-service-factory`'s
+`tools/connect-gen/src/emit/types.rs` and `operations.rs` (the ported heuristic),
+`graphos-service-factory/docs/ts-gen-comparison.md` (the comparison that surfaced this).

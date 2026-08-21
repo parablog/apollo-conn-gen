@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: Id Scalar Promotion Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /things:
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: A thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+components:
+  schemas:
+    Thing:
+      type: object
+      properties:
+        # exact name "id", and names ending in "Id" or "ID" (capitalisation matters) -> ID
+        id:
+          type: string
+        accountId:
+          type: string
+        accountID:
+          type: string
+        # snake_case "user_id" does not end in "Id" or "ID" -> stays String
+        user_id:
+          type: string
+        # "valid" and "void" both end in the two letters "id", lowercase -> stays String
+        valid:
+          type: string
+        void:
+          type: string
+        name:
+          type: string
