@@ -9,7 +9,7 @@ note stating how (or whether) the node tree changed.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 126 fixed ones live in `docs/FIXED.md`. Ids are global
+meant for it belongs there, not here. The 127 fixed ones live in `docs/FIXED.md`. Ids are global
 across all three files and never reused:
 - open, loop-actionable — `// see docs/issues.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -148,45 +148,3 @@ field, never which node kind gets built.
 **Refs:** `ROADMAP.md` "R16" (this survey's own shape notes, kept there since it's still planned
 work), `docs/FIXED.md #133` (the 4 sites already done, same design: `warn()` and the schema note
 share one reason string, `Schemas.withDegradeNote`).
-
-## 137 [P4] · A Swagger 2.0 `formData` request body is dropped entirely — ⬜ Open
-
-**Symptom:** an operation whose body is declared as `in: formData` parameters (the pre-OAS-3 way
-to describe a form body) emits with zero arguments and no body at all once there are 2+ such
-parameters — not a compose failure, just a mutation nobody can actually send data to.
-
-**OAS** (Swagger 2.0, `consumes: [multipart/form-data]`, two `formData` params):
-```yaml
-parameters:
-  - { name: title, in: formData, type: string, required: true }
-  - { name: description, in: formData, type: string, required: false }
-```
-
-**Example** — confirmed by direct reproduction; the log even names the cause
-(`[post::visitBody] Cannot send multipart/form-data: /upload goes out with no body.`), but the op
-still emits instead of failing loudly or degrading safely:
-```graphql
-type Mutation {
-  createUpload: CreateUploadResponse   # no title/description arguments at all
-    @connect(http: { POST: "/upload" }, selection: "success: $(true)")
-}
-```
-
-**Not the same as** the already-known "router rejects `multipart/form-data`" limitation (a real
-router restriction on file-upload-shaped bodies) — this reproduces on a two-plain-string-field form
-with nothing router-incompatible about it. `gen` never attempts the mapping at all for the OAS 2.0
-`formData` syntax specifically (distinct from `requestBody.content['multipart/form-data']`, which
-already works).
-
-**Fix (not done):** the OAS 2.0 `formData` parameter style needs the same treatment #83's
-`application/x-www-form-urlencoded` fix already gave the OAS 3.x `requestBody.content` form —
-synthesize an input object from the `formData` parameters and map it the same way a JSON body's
-properties are mapped, instead of silently dropping it.
-
-**AST:** none yet — nothing currently builds a node for `formData` params at all; the fix adds a
-new `visitBody` branch, not just an emission change.
-
-**Refs:** `docs/FIXED.md #83` (the related, already-fixed `application/x-www-form-urlencoded` case,
-different OAS syntax, same family). Found comparing `gen`'s output against Rust `tools/connect-gen`
-(`graphos-service-factory/docs/ts-gen-comparison.md`).
-

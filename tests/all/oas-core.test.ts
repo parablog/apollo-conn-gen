@@ -2452,7 +2452,7 @@ test('test_83_form_body_is_sent_with_its_content_type', async () => {
   // #83: a body written as a form was dropped for not being JSON, and the mutation came out with no
   // argument and no body. The fields are mapped now, and the connector says it is sending a form.
   // 4 types, not 5: since #84 the `metadata` map is one JSON field, with no entry type of its own
-  const schema = await runOasTest('form-encoded-body.yaml', ['post:/approve>**', 'post:/customers>**'], 7, 4);
+  const schema = await runOasTest('form-encoded-body.yaml', ['post:/approve>**', 'post:/customers>**'], 8, 4);
   assert.ok(schema !== undefined);
   assert.ok(/createApprove\(input: InputInput!\)/.test(schema!), 'the flat form takes an argument');
   assert.ok(/app_id: appId\n/.test(schema!), 'and sends its fields');
@@ -2469,7 +2469,7 @@ test('test_83_form_body_is_sent_with_its_content_type', async () => {
 test('test_83_a_form_the_router_refuses_stays_bodyless', async () => {
   // #83: a form is sent as an object, so a body that is one value or a list still sends nothing —
   // `rover connector run` refuses both. Multipart has no mapping we can write and is unchanged.
-  const schema = await runOasTest('form-encoded-body.yaml', ['post:/note>**', 'post:/tags>**', 'post:/files>**'], 7, 1);
+  const schema = await runOasTest('form-encoded-body.yaml', ['post:/note>**', 'post:/tags>**', 'post:/files>**'], 8, 1);
   assert.ok(schema !== undefined);
   assert.ok(/createNote: Result/.test(schema!), 'a form of one value takes no argument');
   assert.ok(/createTags: Result/.test(schema!), 'nor does a form that is a list');
@@ -2481,7 +2481,7 @@ test('test_83_a_form_the_router_refuses_stays_bodyless', async () => {
 test('test_83_json_still_wins_over_a_form', async () => {
   // #83: JSON is picked first when a body offers both, and a body written as
   // `requestBody: { $ref: … }` reads its content type the same way the inline spelling does.
-  const schema = await runOasTest('form-encoded-body.yaml', ['post:/both>**', 'post:/coupons>**'], 7, 3);
+  const schema = await runOasTest('form-encoded-body.yaml', ['post:/both>**', 'post:/coupons>**'], 8, 3);
   assert.ok(schema !== undefined);
   assert.ok(/createBoth\(input: AddressInput!\)/.test(schema!), 'the JSON body is the one taken');
   assert.ok(/createCoupons\(input: InputInput!\)/.test(schema!), 'a referenced form is sent as well');
@@ -2511,6 +2511,38 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   assert.ok(files !== undefined);
   assert.ok(/createV1Files: File/.test(files!), 'the multipart upload takes no argument');
   assert.ok(!/body:/.test(files!), 'and maps no body');
+});
+
+test('test_137_multipart_with_only_plain_strings_maps_as_a_form', async () => {
+  // #137: a body sent as multipart/form-data used to be dropped no matter what was in it, even when
+  // none of its fields actually needed a file upload. A flat body of plain string fields now maps
+  // as a form, the same way #83 already does for application/x-www-form-urlencoded.
+  const schema = await runOasTest('form-encoded-body.yaml', ['post:/receipt>**'], 8, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/createReceipt\(input: InputInput!\)/.test(schema!), 'the multipart form takes an argument');
+  assert.ok(/note\n\s+payer\n/.test(schema!), 'and sends its fields');
+  assert.ok(
+    /\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/.test(schema!),
+    'sent as a form, not multipart',
+  );
+});
+
+test('test_137_swagger2_formdata_maps_as_a_form', async () => {
+  // #137: Swagger 2.0's `formData` parameters never reach this code as `formData` at all — by the
+  // time the spec is read, they have already become a requestBody with a content type picked from
+  // `consumes` (multipart/form-data here, since /upload and /avatar both declare it). /upload's two
+  // string fields now map as a form; /avatar mixes in a file field and stays bodyless, unchanged.
+  const schema = await runOasTest('swagger2-formdata.yaml', ['post:/upload>**', 'post:/avatar>**', 'post:/note>**'], 3, 5);
+  assert.ok(schema !== undefined);
+  assert.ok(/createUpload\(input: InputInput!\)/.test(schema!), 'the plain-string form takes an argument');
+  assert.ok(/description\n\s+title\n/.test(schema!), 'and sends its fields');
+  assert.equal(
+    schema!.match(/\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/g)?.length,
+    2,
+    'both /upload and /note (already a form by default) carry the header',
+  );
+  assert.ok(/createAvatar: CreateAvatarResponse/.test(schema!), 'a file field keeps the body dropped');
+  assert.ok(!/createAvatar\(/.test(schema!), 'so /avatar takes no argument');
 });
 
 test(

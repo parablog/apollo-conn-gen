@@ -5,6 +5,7 @@ import { Operation } from 'oas/operation';
 import { SchemaObject } from 'oas/types';
 import { trace, warn } from '../log/trace.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 import _ from 'lodash';
 
 // container for the schema and media types, so we can
@@ -114,6 +115,13 @@ export class Post extends Get {
 
     const mediaType = Post.findSendableMediaType(mediaTypes);
     if (!mediaType) {
+      const plainMultipart = this.findSendablePlainMultipart(mediaTypes);
+      if (plainMultipart) {
+        this.body = Factory.fromBody(context, this, plainMultipart.schema, plainMultipart.mediaType) as Body;
+        this.body.visit(context);
+        return;
+      }
+
       warn(context, '  [post::visitBody]', `Cannot send ${mediaTypes.join(', ')}: ${this.name} goes out with no body.`);
       return;
     }
@@ -146,6 +154,20 @@ export class Post extends Get {
   private static findSendableMediaType(mediaTypes: string[]): string | undefined {
     const json = mediaTypes.find((type) => /^application\/(?:.*\+)?json/i.test(type));
     return json ?? mediaTypes.find((type) => type.toLowerCase().startsWith('application/x-www-form-urlencoded'));
+  }
+
+  // A multipart body whose fields are all plain text is sent as a form instead of dropped, the same
+  // way #83 already sends `application/x-www-form-urlencoded` bodies.
+  // e.g. (swagger2-formdata.yaml) /upload's title and description fields -> sent as a form   #137
+  private findSendablePlainMultipart(mediaTypes: string[]): ReferencedBody | undefined {
+    const multipart = mediaTypes.find((type) => type.toLowerCase().startsWith('multipart/form-data'));
+    if (!multipart) return undefined;
+
+    const body = this.operation.getRequestBody(multipart);
+    if (!body || Array.isArray(body) || !body.schema || !Schemas.isPlainStringForm(body.schema)) {
+      return undefined;
+    }
+    return { schema: body.schema, mediaType: 'application/x-www-form-urlencoded' };
   }
 
   // The schema inside a body the spec wrote as a reference. e.g. (request-body-component-ref.yaml)

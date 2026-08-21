@@ -126,6 +126,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Result'
+  # multipart with only plain string fields: nothing binary about it, so it maps as a form   #137
+  /receipt:
+    post:
+      operationId: createReceipt
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                payer:
+                  type: string
+                note:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
   # a form written as a reference, the shape #74 fixed for JSON
   /coupons:
     post:

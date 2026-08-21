@@ -1,0 +1,69 @@
+swagger: '2.0'
+info:
+  title: Swagger 2.0 formData bodies
+  version: 1.0.0
+host: api.example.com
+basePath: /
+schemes:
+  - https
+paths:
+  # #137: two plain string fields, sent as multipart because consumes says so - should map as a form
+  /upload:
+    post:
+      operationId: createUpload
+      consumes:
+        - multipart/form-data
+      parameters:
+        - name: title
+          in: formData
+          type: string
+          required: true
+        - name: description
+          in: formData
+          type: string
+          required: false
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/Result'
+  # a string field mixed with a file field - a real upload, stays bodyless
+  /avatar:
+    post:
+      operationId: createAvatar
+      consumes:
+        - multipart/form-data
+      parameters:
+        - name: name
+          in: formData
+          type: string
+          required: false
+        - name: file
+          in: formData
+          type: file
+          required: true
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/Result'
+  # formData with no consumes at all - already a form by default, before #137's fix existed
+  /note:
+    post:
+      operationId: createNote
+      parameters:
+        - name: body
+          in: formData
+          type: string
+          required: false
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/Result'
+definitions:
+  Result:
+    type: object
+    properties:
+      id:
+        type: string

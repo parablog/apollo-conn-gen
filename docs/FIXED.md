@@ -7216,3 +7216,87 @@ mechanism itself is exercised by #89's fixture and test instead: `cycle-cut-on-s
 this entry's `findSelectedFieldNode`), `src/oas/oasContext.ts` (`propOverrides`, replacing
 `sdlPropOverrides`). See docs/FIXED.md #89 (the fix that actually landed), #10 (the cycle cut this
 reacts to).
+
+## 137 · A Swagger 2.0 `formData` request body is dropped entirely — ✅ Fixed
+
+**Symptom:** an operation whose body is declared as `in: formData` parameters (the pre-OAS-3 way
+to describe a form body) emitted with zero arguments and no body at all once there were 2+ such
+parameters — not a compose failure, just a mutation nobody could actually send data to.
+
+**OAS** (Swagger 2.0, `consumes: [multipart/form-data]`, two `formData` params):
+```yaml
+parameters:
+  - { name: title, in: formData, type: string, required: true }
+  - { name: description, in: formData, type: string, required: false }
+```
+
+**Example** — before, and after:
+```graphql
+# before — nothing to send
+createUpload: CreateUploadResponse
+  @connect(source: "api", http: { POST: "/upload" }, selection: """success: $(true)""")
+
+# after
+createUpload(input: InputInput!): CreateUploadResponse
+  @connect(
+    source: "api"
+    http: {
+      POST: "/upload"
+      headers: [{ name: "Content-Type", value: "application/x-www-form-urlencoded" }]
+      body: """
+      $args.input {
+        description
+        title
+      }
+      """
+    }
+    selection: """success: $(true)"""
+  )
+```
+
+**Correction to the issue's own framing:** the issue assumed `formData` parameters reach `gen` as
+their own thing, distinct from `requestBody.content['multipart/form-data']`. Tracing the actual
+data flow (`oasGen.ts` → `oas-normalize`'s `.convert()` → `swagger2openapi`) shows that isn't so:
+`swagger2openapi` converts `formData` parameters into `requestBody.content[...]` before `gen` ever
+reads the document — picking `multipart/form-data` when `consumes` lists it, else defaulting to
+`application/x-www-form-urlencoded`. So the issue's repro landed in `Post.visitBody` as an ordinary
+`multipart/form-data` body — the exact same path a hand-written OAS 3 multipart body takes, and
+that path was (and still is, for anything but a plain-string form) dropped on purpose: multipart's
+file/binary parts have no mapping this generator can write.
+
+**Cause:** `Post.findSendableMediaType` only ever picks JSON or `application/x-www-form-urlencoded`
+— `multipart/form-data` fell straight through to the drop+warn branch, with no check for whether
+the body actually needed multipart's binary-part machinery or was just plain text fields wearing
+that label because `consumes` said so.
+
+**Fix:** a multipart body is no longer rejected outright. `Schemas.isPlainStringForm` checks the
+schema is a flat object whose properties are all plain strings — no nesting, no `$ref`, no
+`format: binary`. When a body's only available content type is `multipart/form-data` and it passes
+that check, `Post.findSendablePlainMultipart` maps it through the exact same
+`application/x-www-form-urlencoded` machinery #83 already built, for both Swagger-2-derived and
+hand-written OAS 3 documents alike (nothing at this point in the code can tell the two apart, and
+there's no reason to treat them differently). Anything else — a file field, a nested object, an
+array, a non-string scalar — keeps the original drop+warn behavior.
+
+**Known limitation — this is a deliberate contract deviation.** The generated connector sends
+`Content-Type: application/x-www-form-urlencoded` for a body the source spec declared as
+`multipart/form-data`. A server that strictly requires real multipart encoding, even for text-only
+fields, could reject that. This is accepted because the alternative — silently dropping the whole
+body, which is what happened before this fix — is strictly worse, and #83 already established this
+same urlencoded mapping as the project's answer for plain-value form bodies. Real multipart wire
+encoding (boundary, part headers) would remove the risk but is separate, larger work, not attempted
+here.
+
+**Verified:** generated-shape tests only (SDL, headers, argument mapping) — not verified against a
+live server's acceptance of the substituted content type.
+
+**AST:** no new node kind — `Post.visitBody` gains one more branch (`findSendablePlainMultipart`)
+that reuses the existing `Body` node the same way #83's `application/x-www-form-urlencoded` path
+does.
+
+**Refs:** `src/oas/nodes/post.ts` (`findSendablePlainMultipart`), `src/oas/utils/schemas.ts`
+(`isPlainStringForm`). Fixtures `swagger2-formdata.yaml` (plain-string form, a form mixing in a
+file field, and `formData` with no `consumes`) and `form-encoded-body.yaml`'s `/receipt` case
+(hand-written OAS 3 multipart, flat strings). Tests
+`test_137_multipart_with_only_plain_strings_maps_as_a_form`,
+`test_137_swagger2_formdata_maps_as_a_form`. Related: #83.

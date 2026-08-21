@@ -84,6 +84,17 @@ export class Schemas {
     return members.some(isPlainValue) && members.some(isRealObject);
   }
 
+  // True for a flat object whose fields are all plain text - no nesting, lists, references, or
+  // files. e.g. (swagger2-formdata.yaml) /upload's title and description fields -> true.
+  // /avatar mixes in a `file` field -> false   #137
+  public static isPlainStringForm(schema: SchemaObject): boolean {
+    if (schema.type !== 'object' || _.isEmpty(schema.properties)) return false;
+    const properties = Object.values(schema.properties) as (SchemaObject | ReferenceObject)[];
+    return properties.every(
+      (property) => !('$ref' in property) && property.type === 'string' && property.format !== 'binary',
+    );
+  }
+
   // Marks a schema about to degrade to JSON, so the reason lands in the SDL, not just the console
   // log. e.g. (docker-engine) Labels: { additionalProperties: { type: string } } in a request body
   // -> `labels: JSON` gets a "NEEDS ATTENTION: ..." docstring. see docs/FIXED.md #133
