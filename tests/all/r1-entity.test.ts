@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { OasGen } from '../../src/index.js';
-import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
+import { runOasTest } from '../../src/tests/runners.js';
 import './_setup.js';
 
 // --- R1: entity-resolver inference (inferEntityResolvers, type-level @connect) ---
@@ -84,18 +83,21 @@ test('test_R1_16_entity_selection_keeps_key_plain', async () => {
 
 test('test_R1_16_aliased_optional_key_plain_only_in_entity_selection', async () => {
   // #16 spots a key by Prop identity, not by name — the aliased `widgetId: widget_id` stays plain
-  // in the entity selection and takes `?` in the list selection. Writer-level only: @key still
-  // writes the raw OAS name (see docs/issues.md #65), so this schema does not compose yet.
-  const gen = await OasGen.fromFile(`${oasBasePath}/entity-aliased-key.yaml`, {
-    skipValidation: false,
-    showParentInSelections: false,
-    inferEntityResolvers: true,
-  });
-  await gen.visit();
-  const sdl = gen.generateSchema(['get:/widgets/{widget_id}>**', 'get:/widgets>**']);
-  assert.ok(sdl.includes('@key(fields: "widget_id")'), 'entity resolver inferred for the aliased key');
-  assert.ok(sdl.includes('name?\n      widgetId: widget_id\n'), 'aliased key plain in the entity selection');
-  assert.ok(sdl.includes('name?\n      widgetId: widget_id?'), 'aliased key marked in the list selection');
+  // in the entity selection and takes `?` in the list selection. #65 sanitises @key/$this to the
+  // written field name, so this now composes.
+  const paths = [
+    'get:/widgets/{widget_id}>res:r>obj:type:#/c/s/Widget>prop:scalar:widget_id',
+    'get:/widgets/{widget_id}>res:r>obj:type:#/c/s/Widget>prop:scalar:name',
+    'get:/widgets>res:r>array:#/c/s/Widget>obj:type:#/c/s/Widget>prop:scalar:widget_id',
+    'get:/widgets>res:r>array:#/c/s/Widget>obj:type:#/c/s/Widget>prop:scalar:name',
+  ];
+
+  const schema = await runOasTest('entity-aliased-key.yaml', paths, 2, 1, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('@key(fields: "widgetId")'), 'key field sanitised');
+  assert.ok(schema!.includes('http: { GET: "/widgets/{$this.widgetId}" }'), 'resolver URL uses the sanitised $this field');
+  assert.ok(schema!.includes('name?\n      widgetId: widget_id\n'), 'aliased key plain in the entity selection');
+  assert.ok(schema!.includes('name?\n      widgetId: widget_id?'), 'aliased key marked in the list selection');
 });
 
 test('test_R1_entity_multi_key_two_resolvers_sorted', async () => {

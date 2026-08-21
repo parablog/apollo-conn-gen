@@ -102,7 +102,11 @@ export class Obj extends Type {
     const resolvers = this.entityResolvers;
     if (resolvers.length > 0) {
       for (const key of Array.from(new Set(resolvers.map((r) => r.keyFields))).sort()) {
-        writer.write(` @key(fields: "${key}")`);
+        const sanitisedKey = key
+          .split(' ')
+          .map((field) => Naming.sanitiseField(field))
+          .join(' ');
+        writer.write(` @key(fields: "${sanitisedKey}")`);
       }
       for (const resolver of resolvers) {
         if (resolver.batch) {
@@ -175,7 +179,7 @@ export class Obj extends Type {
     const i6 = ' '.repeat(6);
 
     // Rewrite each {param} to {$this.param} (vs {$args.param} for Query-field connectors).
-    const path = resolver.path.replace(/\{([a-zA-Z0-9]+)\}/g, '{$this.$1}');
+    const path = resolver.path.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, param) => `{$this.${Naming.sanitiseField(param)}}`);
 
     writer
       .write('\n')

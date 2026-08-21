@@ -6642,3 +6642,58 @@ nodes/factory.ts` (`createScalarType`), `src/oas/nodes/en.ts` (`generate`), `src
 (`select`). `docs/FIXED.md #32` (bare scalar under `Res`, the same mechanism this enum case was
 missing), `docs/FIXED.md #47` (bare scalar array under `Res`), `docs/FIXED.md #24` (`PropEn` leaves,
 a different node than the bare `En` this fixes), `docs/issues.md #115` (found writing its coverage).
+
+## 65 · An entity key whose OAS name is not a clean GraphQL name breaks R1 emission — ✅ Fixed
+
+**Symptom:** an entity keyed on a property like `widget_id` emitted a connector that referenced names
+nobody defines. Two separate leaks, same root:
+- `@key(fields: "widget_id")` wrote the **raw OAS name**, but the type's field is the sanitised
+  `widgetId` — composition rejected the `@key`.
+- the resolver URL never got its `$this`: the rewrite regex `\{([a-zA-Z0-9]+)\}` (`obj.ts`,
+  `writeEntityConnector`) did not match `_`, so the path stayed `GET: "/widgets/{widget_id}"`.
+
+**OAS** — any by-id endpoint whose path param needs sanitising, e.g. (entity-aliased-key):
+```yaml
+/widgets/{widget_id}:
+  get:
+    parameters: [{ name: widget_id, in: path, required: true }]
+Widget:
+  properties: { widget_id: { type: string }, name: { type: string } }
+```
+
+**Cause:** `keyFields` carries raw path-param names (`entity.ts`) and stays that way on purpose —
+#16 spots a key by Prop identity, matching `keyFields` against the raw `Prop.name`. The bug lived in
+the two downstream write sites: `@key` wrote `keyFields` unsanitised, and the `$this` rewrite regex
+predated non-identifier param names.
+
+**Fix:** sanitise at both write sites in `obj.ts`, `keyFields`/`isEntityKey` untouched:
+```ts
+// generate() — @key(fields: …), each space-separated key field sanitised individually
+const sanitisedKey = key.split(' ').map((field) => Naming.sanitiseField(field)).join(' ');
+writer.write(` @key(fields: "${sanitisedKey}")`);
+// writeEntityConnector() — widen the {param} class to match `_`, sanitise the captured name
+const path = resolver.path.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, param) => `{$this.${Naming.sanitiseField(param)}}`);
+```
+
+**Example:**
+```graphql
+# before — @key names a field Widget does not have, and the URL kept the bare param
+type Widget @key(fields: "widget_id")
+    @connect(http: { GET: "/widgets/{widget_id}" } ...)
+{ widgetId: String ... }
+# after
+type Widget @key(fields: "widgetId")
+    @connect(http: { GET: "/widgets/{$this.widgetId}" } ...)
+```
+
+**Verified:** `test_R1_16_aliased_optional_key_plain_only_in_entity_selection`
+(`entity-aliased-key.yaml`) moved onto `runOasTest`, per the issue's own instruction, so it now
+actually composes; asserts both the sanitised `@key` and the sanitised `$this` URL. Revert-check:
+with the `$this` regex/sanitise alone reverted, the test fails on the URL assertion; with the `@key`
+sanitise alone reverted, it fails on composition (`KEY_INVALID_FIELDS`); restored, both pass. Full
+suite green (397 tests, 396 pass, 0 fail, 1 todo — the pre-existing `test_61`).
+
+**Refs:** `src/oas/nodes/obj.ts` (`generate`, `writeEntityConnector`), `Naming.sanitiseField`,
+`docs/FIXED.md #2` (the same raw-name/regex leak, fixed there for `$args` — this closes the sibling
+gap for `$this`), `docs/issues.md #16` (the by-identity key suppression this keeps in step with).
+

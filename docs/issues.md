@@ -290,50 +290,6 @@ selection duplicates the same way.
 todo — asserts the op composes.
 **Refs:** #42 (the alias machinery involved), #57 (whose corpus sweep surfaced it).
 
-## 65 · An entity key whose OAS name is not a clean GraphQL name breaks R1 emission — ⬜ Open
-
-**Symptom:** an entity keyed on a property like `widget_id` emits a connector that references names
-nobody defines. Two separate leaks, same root:
-- `@key(fields: "widget_id")` writes the **raw OAS name**, but the type's field is the sanitised
-  `widgetId` — composition rejects the `@key`.
-- the resolver URL never gets its `$this`: the rewrite regex `\{([a-zA-Z0-9]+)\}` (`obj.ts`,
-  `writeEntityConnector`) does not match `_`, so the path stays `GET: "/widgets/{widget_id}"`.
-
-**OAS** — any by-id endpoint whose path param needs sanitising, e.g. (entity-aliased-key):
-```yaml
-/widgets/{widget_id}:
-  get:
-    parameters: [{ name: widget_id, in: path, required: true }]
-Widget:
-  properties: { widget_id: { type: string }, name: { type: string } }
-```
-
-**Example:**
-```graphql
-# now — @key names a field Widget does not have, and the URL kept the bare param
-type Widget @key(fields: "widget_id")
-    @connect(http: { GET: "/widgets/{widget_id}" } ...)
-{ widgetId: String ... }
-# wanted
-type Widget @key(fields: "widgetId")
-    @connect(http: { GET: "/widgets/{$this.widgetId}" } ...)
-```
-
-**Cause:** `keyFields` carries raw path-param names (`entity.ts`), `@key` writes them unsanitised
-(`obj.ts`), and the `$this` rewrite regex predates non-identifier param names. The selection side is
-already correct — `widgetId: widget_id` — and #16 spots the key by Prop identity, so neither fix
-changes selections.
-
-**Tests:** `test_R1_16_aliased_optional_key_plain_only_in_entity_selection` in
-`tests/all/r1-entity.test.ts` generates this shape writer-level only; it must start composing once
-this is fixed (then move it onto `runOasTest`).
-
-**AST:** no change expected — an emission fix in `obj.ts` (sanitise `@key` fields, widen the
-rewrite) plus keeping `$this.<sanitised>` consistent with the `@key`.
-**Refs:** #16 (found while planning it — its key suppression matches `keyFields` against
-`Prop.name`, both raw OAS names today; sanitising `keyFields` for `@key` must keep that check in
-step, and the test above fails if it does not), `Naming.sanitiseField`.
-
 ## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked (stripe trigger fixed 2026-08-19; identity-drift core still open, untested)
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —
