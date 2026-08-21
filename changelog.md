@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.25.0]
+
+### Added
+
+- A field degraded to `JSON` because its shape can't map cleanly to GraphQL now carries a
+  `NEEDS ATTENTION` docstring in the schema itself, not just a build-log warning — docker's
+  map-shaped `Labels` argument reads its reason inline. Issue #133.
+
+### Fixed
+
+- An array item mixing a plain string with real object choices no longer merges into an
+  object-only union that silently drops the string branch — stripe's and pagerduty's
+  `expand[]`-style fields degrade cleanly to `JSON` instead. Issue #131.
+- Invalid GraphQL SDL the generator's own output already produced no longer crashes the
+  whole CLI when `--service-prefix` (or `--directives`) is set — both paths now fail with a
+  clear, located parse error instead of an unhandled `GraphQLError` stack trace. Issue #111.
+- A property whose schema is a bare `oneOf` of plain scalar/enum members no longer
+  disappears and takes its whole owning type down with it — it now degrades to `JSON`, the
+  same fallback already used for the equivalent map and array-item shapes. Issue #134.
+- A selection that names only the operation itself — no property path, no `>**` wildcard —
+  no longer answers a blank, invalid return type; it now walks the full response (and
+  mutation body) subtree the same way an explicit `>**` selection already does. Issue #136.
+- An operation whose response is a bare enum, with no object wrapper, no longer drops the
+  whole operation from the schema — it's kept, named after its own component instead of the
+  generic `enum`, and its value is selected directly. Issue #120.
+- An entity's `@key` fields and the `$this` params in its resolver URL are now sanitised to
+  match the type's actual, GraphQL-clean field names instead of the API's raw ones — a key
+  like `widget_id` no longer leaves the connector referencing names nobody defines. Issue #65.
+- A `oneOf` component reached top-level by one operation and nested by another no longer
+  composes two conflicting SDL forms — the shared, flat merged form is now forced across
+  every reaching operation once they disagree. Issue #121.
+- An inline map (dictionary) at an operation's response root no longer takes the generic,
+  always-colliding name `REntry` — github's `/emojis` and `/languages` maps are named after
+  their own operation instead. Issue #93.
+- An array node built as a union member no longer borrows its parent's raw `$ref` name for
+  its own identity — the aliasing this allowed already broke confluence's
+  `content/{id}/restriction` mutations (Issue #94); this closes the underlying identity bug
+  itself. Issue #95.
+- A component reached both directly and through a `#/paths` JSON-pointer `$ref` no longer
+  survives as two divergently-named definitions — digitalocean's whole-spec mutations sweep
+  cleared its last 5 `CONNECTORS_UNRESOLVED_FIELD` errors, all on one type's fields. Issue #124.
+
 ## [0.24.0]
 
 ### Changed
