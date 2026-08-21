@@ -16,6 +16,7 @@ import {
   Res,
   Scalar,
   T,
+  Union,
 } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
 import { trace } from '../log/trace.js';
@@ -93,6 +94,10 @@ export class TypesCollector {
       }
     }
 
+    // a component reached both top-level and nested by the selected ops must pick one form before
+    // anything below reads dependencies()/isFlat() on it. #121
+    this.resolveDivergentUnionForms(expanded);
+
     // first pass is to consolidate all Composed & Union nodes
     const composed: Array<Composed> = Array.from(pendingTypes.values())
       .filter((t) => t instanceof Composed)
@@ -141,6 +146,28 @@ export class TypesCollector {
       }
     }
     return roots;
+  }
+
+  // A union shares one id whether reached top-level or nested (union.ts's `id`) — force the shared
+  // flat form on every instance so the SDL agrees with every op's own selection. see docs/FIXED.md #121
+  // e.g.:
+  //   /media: get -> $ref Media                    # top level: real union, ->match selection
+  //   /shelf: get -> { featured: $ref Media, ... }  # nested: merged/flat object
+  //   Media: oneOf [Book, Movie], discriminator kind
+  private resolveDivergentUnionForms(expanded: string[]): void {
+    const byId = new Map<string, Union[]>();
+    for (const root of this.selectedRoots(expanded)) {
+      T.traverse(root, (node) => {
+        if (node instanceof Union) {
+          (byId.get(node.id) ?? byId.set(node.id, []).get(node.id)!).push(node);
+        }
+      });
+    }
+    for (const group of byId.values()) {
+      if (new Set(group.map((u) => u.isFlat())).size > 1) {
+        group.forEach((u) => (u.forcedFlat = true));
+      }
+    }
   }
 
   // Every type the written schema will point at, walked over each node's own dependencies()

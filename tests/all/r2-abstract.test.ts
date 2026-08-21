@@ -392,3 +392,18 @@ test('test_R2_union_shared_by_body_and_response_emits_both_flavours', async () =
   assert.ok(/type LineUnion \{/.test(schema!), 'the response flavour is emitted');
   assert.ok(/input LineUnionInput \{/.test(schema!), 'the body flavour is emitted');
 });
+
+// see docs/FIXED.md #121
+test('test_R2_union_diverges_top_level_vs_nested_forces_flat_everywhere', async () => {
+  // Media is a real top-level union for getMedia but a nested flat merge for getShelf.
+  // Forced to the shared flat form everywhere so the SDL and both ops' selections agree.
+  const schema = await runOasTest(
+    'per-op-green-whole-red.yaml',
+    ['get:/media>**', 'get:/shelf>**'],
+    2,
+    2, { connectorSpecVersion: 'v0.4', federationVersion: 'v2.14', composeFederationVersion: '2.15.1', forceRover: true });
+  assert.ok(schema !== undefined);
+  assert.ok(!/union Media = /.test(schema!), 'no real union — forced flat everywhere');
+  assert.ok(/type Media \{/.test(schema!), 'flat merged type emitted once');
+  assert.ok(!/->match\(/.test(schema!), 'no ->match selection anywhere for Media');
+});

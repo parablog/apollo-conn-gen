@@ -18,9 +18,10 @@ const runTool = (args: string[], env: Record<string, string>) =>
     env: { ...process.env, ...env },
   });
 
-test('test_coverage_all_ops_column_catches_per_op_green_whole_red', () => {
-  // per-op-green-whole-red.yaml: both GET ops compose alone; combined they share one oneOf
-  // component top-level (real union) AND nested (flat merge) and rover rejects the pair (#121).
+test('test_coverage_all_ops_column_all_ops_green_when_forms_agree', () => {
+  // per-op-green-whole-red.yaml: both GET ops compose alone; combined they used to share one oneOf
+  // component top-level (real union) AND nested (flat merge) — fixed by forcing the shared flat
+  // form everywhere the two forms disagree (#121).
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cov-tool-'));
   const res = runTool(['--spec', 'per-op-green-whole-red.yaml'], {
     COV_OUT: path.join(dir, 'out.md'),
@@ -31,13 +32,10 @@ test('test_coverage_all_ops_column_catches_per_op_green_whole_red', () => {
   const perOp = Object.entries(dump).filter(([k]) => k !== 'whole');
   assert.strictEqual(perOp.length, 2, 'two per-op verdicts');
   assert.ok(perOp.every(([, v]) => v === 'OK'), 'every op composes alone: ' + JSON.stringify(dump));
-  // pins the DETECTION; when #121 is fixed this flips to OK and the fixture/test move on
-  // ×1, not ×2: #129 fixed compose() double-counting every error (e.message re-embedded stderr).
-  assert.match(dump.whole, /^FAIL \[GROUP_SELECTION_IS_NOT_OBJECT ×1\]/, 'the combined compose is caught');
+  assert.strictEqual(dump.whole, 'OK', 'the combined compose now agrees with the per-op verdicts');
   const report = fs.readFileSync(path.join(dir, 'out.md'), 'utf-8');
   assert.ok(report.includes('| all-ops |'), 'report has the column');
-  assert.ok(/per-op-green-whole-red\.yaml \|.*\| 100\.0% \| FAIL \[GROUP_SELECTION_IS_NOT_OBJECT ×1\]/.test(report),
-    'row shows per-op green next to all-ops red');
+  assert.ok(/per-op-green-whole-red\.yaml \|.*\| 100\.0% \| OK/.test(report), 'row shows per-op and all-ops both green');
 });
 
 test('test_coverage_all_ops_zero_ops_is_na_not_failure', () => {

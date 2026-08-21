@@ -32,6 +32,14 @@ export class Union extends Type {
   // promoteAllOfBase (a post-collect pass) — never in visit().
   public interfaceBaseRef?: string;
 
+  // set by TypesCollector when one op reaches this component top-level and another nests it,
+  // forcing the shared merged-object form everywhere. see docs/FIXED.md #121
+  // e.g.:
+  //   /media: get -> $ref Media                    # top level: real union, ->match selection
+  //   /shelf: get -> { featured: $ref Media, ... }  # nested: merged/flat object
+  //   Media: oneOf [Book, Movie], discriminator kind
+  public forcedFlat = false;
+
   constructor(
     parent: IType,
     name: string,
@@ -124,7 +132,7 @@ export class Union extends Type {
   // (GraphQL has no input unions), it has no tag field to pick a branch (#25), or it's nested
   // inside a field rather than being the op's own response (#38). see docs/FIXED.md #25, #38
   public isFlat(): boolean {
-    return this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
+    return this.forcedFlat || this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
   }
 
   public generate(context: OasContext, writer: Writer, selection: string[]): void {

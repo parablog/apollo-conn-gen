@@ -6697,3 +6697,68 @@ suite green (397 tests, 396 pass, 0 fail, 1 todo — the pre-existing `test_61`)
 `docs/FIXED.md #2` (the same raw-name/regex leak, fixed there for `$args` — this closes the sibling
 gap for `$this`), `docs/issues.md #16` (the by-identity key suppression this keeps in step with).
 
+## 121 · A `oneOf` component used top-level by one op and nested by another fails the combined compose — ✅ Fixed
+
+**Symptom:** each op composes alone; generate BOTH into one schema and rover rejects it with
+`GROUP_SELECTION_IS_NOT_OBJECT`. Found building the all-ops coverage column — the first committed
+per-op-green/whole-red case.
+
+**OAS** (`per-op-green-whole-red.yaml`):
+```yaml
+/media:  get -> $ref Media                      # top level: real union + ->match (has discriminator)
+/shelf:  get -> { featured: $ref Media, ... }   # nested: isFlat -> merged object
+Media:   oneOf [Book, Movie], discriminator kind
+```
+
+**Cause:** `Union.id` is `union:${this.kind}:${this.name}` — `kind` defaults to `'type'` for any
+response position, so the top-level `/media` union and the nested `/shelf.featured` union collide on
+one id even though they're two separate node instances. `TypesCollector.collect()` dedupes by that
+id into one `pendingTypes` entry, so only one instance ever gets `generate()` called — whichever
+wins decides whether the SDL says `union Media = Book | Movie` or the flat `type Media { ... }`.
+Selections, though, are written per-op from that op's own `resultType` — each op's own node, not the
+deduped map — so `/media`'s selection always assumes the real-union form and `/shelf`'s always
+assumes the flat form, regardless of which form the SDL settled on. This is the gap `#38` flagged
+and deliberately left open.
+
+**Fix:** a new `Union.forcedFlat` flag (same idiom as R2's `interfaceBaseRef`, set by a dedicated
+post-collect pass, consulted next to `isFlat()`):
+```ts
+// union.ts
+public isFlat(): boolean {
+  return this.forcedFlat || this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
+}
+```
+`TypesCollector.resolveDivergentUnionForms()` groups every `Union` reachable from the selected ops'
+own result/body roots by `id`, and when a group's members disagree on `isFlat()`, forces the whole
+group flat. It runs inside `collect()`, before `consolidateRemovedFields`/`collectReachable` — unlike
+`interfaceBaseRef`, `forcedFlat` changes what `dependencies()` returns, and those walks read
+`dependencies()` before generation, so it can't wait for a post-collect pass the way
+`promoteAllOfBase` does. Input- and output-position instances of the same ref already have different
+ids (`union:input:X` vs `union:type:X`), so they land in different groups and are untouched — a union
+used consistently across ops (always top-level, or always nested) has one `isFlat()` value in its
+group and the pass is a no-op.
+
+**Example:**
+```graphql
+# before: /media's SDL/selection wins the real-union form; /shelf's selection still speaks it —
+# rover: GROUP_SELECTION_IS_NOT_OBJECT on Query.shelf's `featured { }` group
+# after: forced flat everywhere
+type Media { kind: String, pages: Int, minutes: Int }
+```
+
+**Verified:** `test_R2_union_diverges_top_level_vs_nested_forces_flat_everywhere`
+(`tests/all/r2-abstract.test.ts`) — asserts no `union Media = ` line, one `type Media {` merge, and
+no `->match` selection anywhere for `Media`. Revert-check: with the `union.ts`/`typesCollector.ts`
+edits reverted, the test fails the same way it did before the fix (`typesSize` mismatch, then
+`GROUP_SELECTION_IS_NOT_OBJECT` once the count is corrected); restored, it passes.
+`test_coverage_all_ops_column_catches_per_op_green_whole_red` (`tests/all/coverage-tool.test.ts`),
+which pinned the detection, is now renamed `test_coverage_all_ops_column_all_ops_green_when_forms_agree`
+and asserts `OK` instead of the `GROUP_SELECTION_IS_NOT_OBJECT` failure. Full suite green (398
+tests, 397 pass, 0 fail, 1 todo — the pre-existing `test_61`).
+
+**Refs:** `src/oas/nodes/union.ts` (`forcedFlat`, `isFlat`), `src/oas/generator/typesCollector.ts`
+(`resolveDivergentUnionForms`), `docs/FIXED.md #25` `#38` `#48` (the union-form family — #38 is the
+entry that left this gap open), `src/oas/nodes/allOfBase.ts` (`interfaceBaseRef`/`promoteAllOfBase`,
+the R2 idiom `forcedFlat` reuses), `docs/issues.md #122` (the umbrella this was already isolated out
+of). Fixture `tests/resources/oas/per-op-green-whole-red.yaml`.
+

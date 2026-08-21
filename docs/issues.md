@@ -575,34 +575,6 @@ non-blocking (full HubSpot lists run is 18.9s), and deferred:
 not be memoized globally). The fourth bullet becomes moot under ROADMAP.md R15 (selection
 externalisation), which replaces the representation these costs live in.
 
-## 121 · A `oneOf` component used top-level by one op and nested by another fails the combined compose — ⬜ Open
-
-**Symptom:** each op composes alone; generate BOTH into one schema and rover rejects it with
-`GROUP_SELECTION_IS_NOT_OBJECT ×2`. Found building the all-ops coverage column — the first
-committed per-op-green/whole-red case.
-
-**OAS** (`per-op-green-whole-red.yaml`):
-```yaml
-/media:  get -> $ref Media                      # top level: real union + ->match (has discriminator)
-/shelf:  get -> { featured: $ref Media, ... }   # nested: isFlat -> merged object
-Media:   oneOf [Book, Movie], discriminator kind
-```
-
-- one component, two forms: the top-level position emits `union Media = Book | Movie` with a
-  `->match` selection; the nested position needs the flat merge (#25/#38).
-- combined, the two nodes share the component's name and one form wins the definition while the
-  other position's selection still speaks its own form — the `->match` group lands on a
-  non-object.
-- per-op coverage is 100% on this spec; only the all-ops column sees it (COVERAGE.md legend).
-
-**Test:** `test_coverage_all_ops_column_catches_per_op_green_whole_red`
-(`tests/all/coverage-tool.test.ts`) pins the DETECTION — when this entry is fixed, the fixture
-turns green and that test moves to a then-current red case (or a synthetic one).
-
-**Refs:** `src/oas/nodes/union.ts` (`isFlat`, `isTopLevelResponse`), docs/FIXED.md #25 #38 #48
-(the union-form family), #13/#89 (position-dependent divergence). Fixture
-`tests/resources/oas/per-op-green-whole-red.yaml`.
-
 ## 122 · All-ops sweep findings: four cross-op failure classes invisible to per-op coverage — ⬜ Open (umbrella)
 
 **Symptom:** first sweeps with the all-ops column (2026-08-18): six spec/verb combos are per-op
@@ -616,10 +588,10 @@ turns green and that test moves to a then-current red case (or a synthetic one).
 | `INVALID_GRAPHQL` ×2 | digitalocean GET | likely a cross-op duplicate definition — smallest, easiest isolate |
 
 - launch_library `GRAPH_QL_ERROR ×2` is the known #79 upstream op riding along — not new.
-- #121 (union top-level + nested) is the already-isolated member of this family.
+- #121 (union top-level + nested), the already-isolated member of this family — ✅ fixed, see docs/FIXED.md #121.
 
 **Refs:** COVERAGE.md / COVERAGE-mutations.md `all-ops` column + `WHOLE:` histogram buckets,
-`tools/coverage-spec.mts` (`runWholeSpec`), #121, #13/#89, #104/#112.
+`tools/coverage-spec.mts` (`runWholeSpec`), docs/FIXED.md #121, #13/#89, #104/#112.
 
 ## 124 · digitalocean all-ops mutations: no connector resolves the `LoadBalancerRegion` fields — ⬜ Open
 
