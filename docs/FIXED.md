@@ -4809,7 +4809,7 @@ Decrementing your own name is never right: the count is per name, so it can only
 definition being written.
 
 **Not fixed here:** the array member inheriting its parent's name is itself wrong — anything else
-keyed by node name can trip on it. Filed as #95.
+keyed by node name can trip on it. Filed as #95, now fixed.
 
 **Measured:** whole-spec confluence generation before and after differs by additions only — the 16
 lines of this one input type, with none of the other 376 definitions touched.
@@ -6762,3 +6762,215 @@ entry that left this gap open), `src/oas/nodes/allOfBase.ts` (`interfaceBaseRef`
 the R2 idiom `forcedFlat` reuses), `docs/issues.md #122` (the umbrella this was already isolated out
 of). Fixture `tests/resources/oas/per-op-green-whole-red.yaml`.
 
+## 93 · An inline map at the response root is always called `REntry` — ✅ Fixed
+
+**Symptom:** github `get:/emojis` emitted its entry type as `REntry`, which said nothing about the
+operation or the data. Every unnamed map at a response root got that same name.
+
+**Cause:** `Map.updateName()` named an unnamed map `<parentName> + "Entry"`. A response-root map's
+parent is the `Res`, and a `Res` is named `r` — so the answer was always `REntry`. The three sibling
+container nodes all special-case this position and name themselves after the operation:
+
+| node | unnamed, under a `Res` |
+|---|---|
+| `Obj.updateName` | `op.getGqlOpName() + 'Response'` |
+| `Composed.updateName` | `op.getGqlOpName() + 'Response'` |
+| `Union.updateName` | `op.getGqlOpName() + 'Response'` |
+| `Map.updateName` | `'REntry'` — the `Res` branch was missing |
+
+Only an *inline* map root minted `REntry`; one behind a `$ref` took the ref's name. github's
+`/emojis` and `/repos/{owner}/{repo}/languages` each have exactly one, so nothing collided yet — but
+two inline map roots in one spec would both have asked for `REntry` and landed on `#78`'s conflict
+machinery, which renames by container, and both containers are `r`.
+
+**Fix:** gave `Map.updateName` the same `parent instanceof Res` branch the other three containers
+already had, with `Entry` instead of `Response`:
+```ts
+// map.ts
+if (parent instanceof Res) {
+  const op = parent.parent as Get;
+  name = op.getGqlOpName() + 'Entry';
+} else if (parentName) {
+  name = Naming.genTypeName(Naming.getRefName(parentName) + 'Entry');
+} else {
+  name = '[inline:MapEntry]';
+}
+```
+The name set here is the pre-`genTypeName` node id (`restrictionsEntry`); `Map.generate()` already
+ran every written name through `Naming.genTypeName()` at write time (same as `Obj`), so the emitted
+SDL type is capitalized without any extra step.
+
+**Example** (`map-response-root.yaml`, `get:/restrictions`):
+```graphql
+type Query {
+  restrictions: [RestrictionsEntry]
+    @connect(... selection: "$->entries { key value }")
+}
+type RestrictionsEntry {
+  key: String
+  value: Restriction
+}
+```
+
+**Verified:** `test_90_map_at_the_response_root_takes_entries` and
+`test_92_map_of_plain_values_at_the_response_root_expands` (`tests/all/oas-core.test.ts`), updated
+from asserting `REntry` to the operation-derived names — `RestrictionsEntry` (`/restrictions`),
+`EmojiEntry` (`/emoji`), `LanguagesEntry` (`/languages`). Revert-check: with just the `Res` branch
+removed from `map.ts`, both tests fail back to expecting the now-absent `REntry`; restored, they
+pass. Full suite green (397 pass, 0 fail, 1 pre-existing todo).
+
+**Refs:** `src/oas/nodes/map.ts` (`updateName`), mirroring `obj.ts` / `comp.ts` / `union.ts`
+(`updateName`). `docs/FIXED.md #90` and `docs/FIXED.md #92` (the map-at-response-root mechanics this
+collision was surfaced against).
+
+
+## 95 · An array node is named after its parent, so it shares its parent's ref name — ✅ Fixed
+
+**Symptom:** none on its own — it is what made #94 possible, and anything else keyed by node name
+could trip on it the same way.
+
+**OAS** (`union-body-array-member.yaml` — a request body that is a `oneOf` of an object and an array
+of the same `$ref`):
+```yaml
+RestrictionArray:
+  oneOf:
+    - type: object
+      properties: { results: { type: array, items: { $ref: '#/…/Restriction' } }, size: { type: integer } }
+    - type: array
+      items: { $ref: '#/…/Restriction' }
+```
+
+**Example** — the array member of the union, as built:
+```
+# before
+array:#/components/schemas/Restriction   # id — from its items, correct
+  name = '#/components/schemas/RestrictionArray'   # the *union's* own ref name
+
+# after
+array:#/components/schemas/Restriction
+  name = 'RestrictionArray'   # resolved through the same Naming.getRefName the union itself uses
+```
+
+**Cause:** `Factory.createArrayType` did `new Arr(parent, parent.name)` — an array is a wrapper, so it
+borrowed a name rather than minting one. Under a `Union` reached via a `$ref`, `parent.name` is the
+literal ref string, so the `Arr` became indistinguishable from its parent in anything keyed by name
+(`context.refCount`, `context.types`). #94 is exactly that: a decrement meant for the array member
+landed on the union instead.
+
+**Fix:** resolve the ref once, only for the reproduced case — a `Union` parent whose name is
+ref-shaped — rather than changing the general borrowing behaviour:
+```ts
+// factory.ts, createArrayType
+let parentName = parent.name;
+if (parent instanceof Res) {
+  const get = parent.parent as Get;
+  parentName = _.upperFirst(get.getGqlOpName());
+} else if (parent instanceof Union && T.isRef(parentName)) {
+  // an Arr is a wrapper, not a component of its own — carrying the raw $ref would alias it with
+  // the parent in name-keyed maps (context.refCount, context.types). #95
+  parentName = Naming.getRefName(parentName);
+}
+const arr = new Arr(parent, parentName);
+```
+`Naming.getRefName` is idempotent on an already-resolved name (`RemoveRefConverter.process` only
+strips a `#/components/.../` prefix if one is present), so `Obj.updateName`'s existing
+`Naming.getRefName(parentName)` call for an array's inline item object produces the same string as
+before — no second call site needed. `Arr.id` (used for identity/`path()`) derives from
+`itemsType.name`, not `this.name`, so this is a lookup-key change only, not an identity change.
+
+`Composed` and `Map` can structurally reach the same `parent` slot (an `allOf` member or
+`additionalProperties` value that is itself an array) but no defect has been reproduced there, so
+they are left alone — worth a reproduction pass if one turns up.
+
+**Verified:** `test_95_array_member_does_not_borrow_its_parents_ref_name`
+(`tests/all/oas-core.test.ts`), which pulls the `Arr` directly off the union's own children
+(`union.children.find(c => c instanceof Arr)`, since `Union.visit` adds every member as a child) and
+asserts its `.name` resolves to `RestrictionArray` instead of the raw
+`#/components/schemas/RestrictionArray` ref. `getTypes()`'s id-keyed map can't be used for this — an
+`Arr` is never `context.store`'d, so it never appears there. Revert-check: with just the `factory.ts`
+branch removed, `test_95` fails with the raw ref string and `test_94` (SDL-level) still passes
+byte-identical — confirming the bug was already invisible in generated output. Full suite green (398
+pass, 1 pre-existing todo, 0 fail).
+
+**Refs:** `src/oas/nodes/factory.ts` (`createArrayType`), `src/oas/nodes/arr.ts` (`Arr.id`),
+`src/oas/utils/naming.ts` (`Naming.getRefName`, `REF_CONVERTER`). Fixture
+`union-body-array-member.yaml`. See #94, the bug this made possible.
+
+## 124 · A component reached both directly and via a `#/paths` ref survives as two definitions — ✅ Fixed
+
+**Symptom:** digitalocean's whole-spec mutations compose failed with 5 build errors, one per field
+of a single type:
+```
+CONNECTORS_UNRESOLVED_FIELD: No connector resolves field `LoadBalancerRegion.available`.
+It must have a `@connect` directive or appear in `@connect(selection:)`.
+```
+(same for `.features`, `.name`, `.sizes`, `.slug`.) Per-op, all 145 mutation ops still composed
+100% — a cross-op-only failure, previously masked by #123's `INVALID_BODY` errors.
+
+**OAS** (digitalocean — `loadBalancers_update`'s response `$ref`s back to `loadBalancers_create`'s):
+```yaml
+/load_balancers:
+  post:                                    # loadBalancers_create
+    responses:
+      '202':
+        content:
+          application/json:
+            schema:
+              properties:
+                load_balancer:
+                  allOf: [..., { properties: { region: { allOf: [..., { $ref: '#/…/region' }] } } }]
+/load_balancers/{id}:
+  put:                                     # loadBalancers_update
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              $ref: '#/paths/~1load_balancers/post/responses/202/content/application~1json/schema'
+```
+
+**Cause:** a node's raw internal `.name`/`.id` is not normalized the way its printed SDL name is.
+`loadBalancers_create`'s own `load_balancer`/`region` fields build their `Composed` nodes directly
+and get a clean raw name (`Naming.genTypeName` applied at print time). `loadBalancers_update`'s
+response reaches the *same* shape through a raw `#/paths/...` JSON-pointer `$ref`, so its `Composed`
+node keeps the entire raw pointer string as its name — `Composed.updateName()` short-circuits once a
+name is already non-empty (the `$ref` string, set by the paths-ref resolution ahead of it). Both
+print identically via `Naming.genTypeName()`, but their differing raw ids meant the two instances
+were never recognized as the same type. Unlike `Obj.visit()`, `Composed.visit()` never checked
+`T.collidesWithStoredType` (the same-class, different-id collision), only cross-class and reserved-
+name collisions (#22, #126) — so both instances survived independently, writing two duplicate
+`type LoadBalancer { }` blocks with divergently-renamed nested `region` types, leaving one orphaned
+with no connector selecting its fields.
+
+**Fix:** added `T.collidesWithStoredType(this, context)` to `Composed.visit()`'s existing
+rename-check condition, mirroring the check `Obj.visit()` already had:
+```ts
+// comp.ts, visit()
+if (
+  this.parent instanceof Prop &&
+  (T.collidesWithStoredType(this, context) ||
+    T.collidesAcrossNodeClasses(this, context) ||
+    T.collidesWithReservedComponentName(this, context))
+) {
+  T.resolveNameConflict(this, context);
+}
+```
+The second (paths-ref-reached) instance is now detected as colliding and renamed through the
+existing `resolveNameConflict`/`canConvergeOn` machinery.
+
+**Verified:** fixture `paths-ref-shared-create-and-update.yaml` mirrors digitalocean's exact `$ref`
+topology (an `allOf`-wrapped field built directly in one op vs. reached via a `#/paths` pointer in
+another), test `test_124_paths_ref_shared_object_reached_nested_and_whole_composes`
+(`tests/all/oas-core.test.ts`). Revert-check: with just the `comp.ts` change reverted, the fixture
+fails `INVALID_GRAPHQL: type Thing is defined multiple times in the schema`; with it, it composes
+cleanly, the wrapper and shared nested type are each emitted once, and the second instance is
+renamed. The same same-class check also caught a genuine pre-existing latent instance in box.yaml:
+`Collaboration.created_by` (`$ref User--Collaborations`) and `File.created_by` (`$ref User--Mini`)
+were silently sharing the unqualified name `CreatedBy` despite different shapes —
+`test_57_merged_union_defines_the_enum_it_references`'s expected type count moved 36→37. Full suite
+green (399 pass, 1 pre-existing todo, 0 fail).
+
+**Refs:** `src/oas/nodes/comp.ts` (`visit`), `src/oas/nodes/typeUtils.ts`
+(`collidesWithStoredType`, already used by `Obj.visit`). Fixture
+`paths-ref-shared-create-and-update.yaml`. See #22/#126 (the sibling `Composed` collision checks),
+#123 (the unmasking fix), #122 (umbrella).

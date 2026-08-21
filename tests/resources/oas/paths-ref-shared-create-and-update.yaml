@@ -1,0 +1,93 @@
+openapi: 3.0.3
+info:
+  title: Paths Ref Shared By Create And Update Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # left out of the mutations selection on purpose — mirrors digitalocean's actions_list (a GET),
+  # the only place `region`'s shape is written out, everywhere else reaches it by $ref.
+  /things/actions:
+    get:
+      operationId: thingsActionsList
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  actions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        region:
+                          type: object
+                          properties:
+                            available:
+                              type: boolean
+                            features:
+                              type: array
+                              items:
+                                type: string
+                            name:
+                              type: string
+                            sizes:
+                              type: array
+                              items:
+                                type: string
+                            slug:
+                              type: string
+  /things:
+    post:
+      operationId: thingsCreate
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  # an allOf wrapper — same shape digitalocean uses for loadBalancers_create's
+                  # `load_balancer` field — routes this through the Composed node, not a plain Obj.
+                  thing:
+                    allOf:
+                      - properties:
+                          id:
+                            type: string
+                        type: object
+                      - properties:
+                          region:
+                            # a decorative sibling next to the real $ref — same shape digitalocean
+                            # uses for loadBalancers_create's `region` field.
+                            allOf:
+                              - description: Where the thing lives.
+                              - $ref: '#/paths/~1things~1actions/get/responses/200/content/application~1json/schema/properties/actions/items/properties/region'
+                            type: object
+                        type: object
+  /things/{id}:
+    put:
+      operationId: thingsUpdate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  thing:
+                    # the entire body $refs back to create's response — same shape digitalocean
+                    # uses for loadBalancers_update.
+                    $ref: '#/paths/~1things/post/responses/202/content/application~1json/schema/properties/thing'

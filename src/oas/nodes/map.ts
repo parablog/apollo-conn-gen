@@ -1,4 +1,4 @@
-import { Arr, Composed, Factory, IType, Obj, Res, Type, T, Scalar } from './internal.js';
+import { Arr, Composed, Factory, Get, IType, Obj, Res, Type, T, Scalar } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -207,7 +207,13 @@ export class Map extends Type {
       const parent = this.parent;
       const parentName = parent?.name;
 
-      if (parentName) {
+      // an inline map at the response root is named after the operation, not a generic entry name.
+      // e.g. (map-response-root.yaml) get:/restrictions -> additionalProperties: { $ref: Restriction }
+      //   -> restrictionsEntry. #93
+      if (parent instanceof Res) {
+        const op = parent.parent as Get;
+        name = op.getGqlOpName() + 'Entry';
+      } else if (parentName) {
         name = Naming.genTypeName(Naming.getRefName(parentName) + 'Entry');
       } else {
         name = '[inline:MapEntry]';

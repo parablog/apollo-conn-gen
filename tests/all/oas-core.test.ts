@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { DirectivesConfig, OasGen } from '../../src/index.js';
-import { Prop, T } from '../../src/oas/nodes/internal.js';
+import { Arr, Prop, T, Union } from '../../src/oas/nodes/internal.js';
 import './_setup.js';
 
 /// OAS TESTS
@@ -750,6 +750,24 @@ test('test_schema_ref_into_paths_gets_clean_type_name', async () => {
   assert.ok(/\bwidget: WidgetsItem\b/.test(schema!), 'reference uses the same derived name');
 });
 
+test('test_124_paths_ref_shared_object_reached_nested_and_whole_composes', async () => {
+  // digitalocean's LoadBalancer/LoadBalancerRegion: POST's allOf `thing` wrapper is built directly;
+  // PUT's is the exact same allOf reached via a #/paths ref back to POST's response. Both used to
+  // keep their own raw ($ref-pointer vs clean) name and never collide, so the writer emitted `type
+  // Thing` twice — composition then failed. see docs/FIXED.md #124
+  const schema = await runOasTest(
+    'paths-ref-shared-create-and-update.yaml',
+    ['post:/things>**', 'put:/things/{id}>**'],
+    3,
+    5,
+  );
+  assert.ok(schema !== undefined);
+  assert.strictEqual((schema!.match(/^type Thing \{/gm) ?? []).length, 1, 'the allOf wrapper is emitted once, not twice');
+  assert.strictEqual((schema!.match(/^type Region \{/gm) ?? []).length, 1, 'the shared nested type is emitted once');
+  assert.ok(schema!.includes('type UpdateThingsByIdResponseThing {'), "PUT's twin renamed instead of colliding");
+  assert.ok(/available: Boolean/.test(schema!), 'shared type keeps its fields, resolved by some connector');
+});
+
 test('test_inline_name_collision_splits_by_container', async () => {
   // Two differently-shaped inline objects sharing a property key (`saleInfo.listPrice` -> {amount},
   // `offers[].listPrice` -> {amountInMicros}) must not collapse into one type (which drops fields and
@@ -950,7 +968,10 @@ test('test_57_merged_union_defines_the_enum_it_references', async () => {
   // folded its members only at write time, after the reachability walk — the walk collected the
   // web_link member's `type` enum while the writer emitted the file member's: `type: FileBaseType!`
   // with no `enum FileBaseType`, INVALID_GRAPHQL on compose. see #57
-  const schema = await runOasTest('box.yaml', ['get:/collaborations>**'], 258, 36);
+  // typesSize 37, not 36: fixing #124 also caught Collaboration.created_by ($ref User--Collaborations)
+  // and File.created_by ($ref User--Mini) silently sharing the unqualified name "CreatedBy" despite
+  // different shapes — Composed now gets the same collision check Obj already had. see #124
+  const schema = await runOasTest('box.yaml', ['get:/collaborations>**'], 258, 37);
   assert.ok(schema !== undefined);
   assert.ok(/enum FileBaseType \{/.test(schema!), 'the emitted field type has a definition');
 });
@@ -2636,8 +2657,11 @@ test('test_90_map_at_the_response_root_takes_entries', async () => {
   // now reads the entries of the response itself, and the field is the list ->entries answers.
   const schema = await runOasTest('map-response-root.yaml', ['get:/restrictions>**'], 4, 2);
   assert.ok(schema !== undefined);
-  assert.ok(/restrictions: \[REntry\]/.test(schema!), 'the whole-response map is a list of entries');
-  assert.ok(/type REntry \{\n {2}key: String\n {2}value: Restriction\n\}/.test(schema!), 'entry type is written');
+  assert.ok(/restrictions: \[RestrictionsEntry\]/.test(schema!), 'the whole-response map is a list of entries');
+  assert.ok(
+    /type RestrictionsEntry \{\n {2}key: String\n {2}value: Restriction\n\}/.test(schema!),
+    'entry type is written',
+  );
   assert.ok(/selection: """\n\s*\$->entries \{/.test(schema!), 'the selection reads the response entries');
   assert.ok(/key\n\s*value \{\n\s*allowed\?/.test(schema!), "the value's fields sit inside value, not at the root");
 });
@@ -2656,13 +2680,13 @@ test('test_92_map_of_plain_values_at_the_response_root_expands', async () => {
   // paths and the op was dropped before any writer ran. github's /emojis and /languages both did.
   const strings = await runOasTest('map-response-root.yaml', ['get:/emoji>**'], 4, 1);
   assert.ok(strings !== undefined);
-  assert.ok(/emoji: \[REntry\]/.test(strings!), 'the map is a list of entries');
-  assert.ok(/type REntry \{\n {2}key: String\n {2}value: String\n\}/.test(strings!), 'a string value');
+  assert.ok(/emoji: \[EmojiEntry\]/.test(strings!), 'the map is a list of entries');
+  assert.ok(/type EmojiEntry \{\n {2}key: String\n {2}value: String\n\}/.test(strings!), 'a string value');
   assert.ok(/\$->entries \{\n\s*key\n\s*value\n\s*\}/.test(strings!), 'key and a bare value — no value block');
 
   const numbers = await runOasTest('map-response-root.yaml', ['get:/languages>**'], 4, 1);
   assert.ok(numbers !== undefined);
-  assert.ok(/type REntry \{\n {2}key: String\n {2}value: Int\n\}/.test(numbers!), 'and an integer value');
+  assert.ok(/type LanguagesEntry \{\n {2}key: String\n {2}value: Int\n\}/.test(numbers!), 'and an integer value');
 });
 
 test('test_94_union_body_with_an_array_member_keeps_its_input_type', async () => {
@@ -2676,5 +2700,21 @@ test('test_94_union_body_with_an_array_member_keeps_its_input_type', async () =>
   assert.ok(
     /input RestrictionArrayInput \{ [^}]*results: \[RestrictionInput\]\n {2}size: Int\n\}/.test(schema!),
     'and the input type is defined, with the object member fields',
+  );
+});
+
+test('test_95_array_member_does_not_borrow_its_parents_ref_name', async () => {
+  // #95: Factory.createArrayType named an Arr after its parent's raw name. Under a Union reached
+  // via a $ref, that name is the literal ref string, so the array is indistinguishable from its
+  // parent in anything keyed by name (context.refCount, context.types) — that's what #94 hit.
+  const gen = await OasGen.fromFile(`${oasBasePath}/union-body-array-member.yaml`, { showParentInSelections: false });
+  const types = gen.getTypes(['post:/restrictions>**']);
+  const union = Array.from(types.values()).find((t) => t instanceof Union) as Union;
+  const arr = union.children.find((c) => c instanceof Arr) as Arr;
+  assert.ok(arr, 'the union has an array member');
+  assert.strictEqual(
+    arr.name,
+    'RestrictionArray',
+    "the array resolves its own name instead of borrowing the union's raw $ref",
   );
 });

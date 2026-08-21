@@ -56,12 +56,16 @@ export class Composed extends Type {
       trace(context, '[comp]', '   in composed schema: ' + this.name);
     }
 
-    // a PropComp-named inline allOf (#7) that clashes with a stored type of a different class, or
-    // reserves the name of a real (same-class) component, must rename. see docs/FIXED.md #22, #126
-    //   e.g. (pagerduty) IncidentNote.user: allOf[...] mints "User" — same name as the real User component
+    // a PropComp-named inline allOf clashing with a stored type (different class, same-class via a
+    // #/paths ref back to its twin, or a reserved component name) must rename. #22, #124, #126
+    // e.g.:
+    //   POST /things     -> thing: allOf[{id}, {region}]         # Composed built directly, named Thing
+    //   PUT /things/{id} -> thing: $ref '#/paths/.../thing'      # same shape via a raw pointer, must rename
     if (
       this.parent instanceof Prop &&
-      (T.collidesAcrossNodeClasses(this, context) || T.collidesWithReservedComponentName(this, context))
+      (T.collidesWithStoredType(this, context) ||
+        T.collidesAcrossNodeClasses(this, context) ||
+        T.collidesWithReservedComponentName(this, context))
     ) {
       T.resolveNameConflict(this, context);
     }

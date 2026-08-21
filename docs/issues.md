@@ -435,71 +435,6 @@ validation gap fixed in router source, not yet in a released plugin.
 **Next step:** nothing generator-side. Re-check this op when a supergraph plugin newer than 2.15.1
 ships; if it still fails there, find the router fix commit and reference it here.
 
-## 93 · An inline map at the response root is always called `REntry` — ⬜ Open
-**Symptom:** github `get:/emojis` emits its entry type as `REntry`, which says nothing about the
-operation or the data. Every unnamed map at a response root gets that same name.
-
-**Cause:** `Map.updateName()` names an unnamed map `<parentName> + "Entry"`. A response-root map's
-parent is the `Res`, and a `Res` is named `r` — so the answer is always `REntry`. The three sibling
-container nodes all special-case this position and name themselves after the operation:
-
-| node | unnamed, under a `Res` |
-|---|---|
-| `Obj.updateName` | `op.getGqlOpName() + 'Response'` |
-| `Composed.updateName` | `op.getGqlOpName() + 'Response'` |
-| `Union.updateName` | `op.getGqlOpName() + 'Response'` |
-| `Map.updateName` | `'REntry'` — the `Res` branch is missing |
-
-**Latent, not currently biting.** Only an *inline* map root mints `REntry`; one behind a `$ref`
-takes the ref's name (`/repos/{owner}/{repo}/languages` → `LanguageEntry`). github has exactly one
-of each, so nothing collides today. Two inline map roots in one spec would both ask for `REntry` and
-land on #78's conflict machinery, which renames by container — and both containers are `r`.
-
-**Fix (not done):** give `Map.updateName` the same `parent instanceof Res` branch, with `Entry`
-instead of `Response`. Cost: it renames confluence's entry type too, so the `REntry` assertions in
-`test_90_map_at_the_response_root_takes_entries` move with it.
-
-**Refs:** `src/oas/nodes/map.ts` (`updateName`), against `obj.ts` / `comp.ts` / `union.ts`
-(`updateName`). Surfaced while fixing #92; the whole-spec github check that closed #92 is what
-showed the collision is not reachable yet.
-
-## 95 · An array node is named after its parent, so it shares its parent's ref name — ⬜ Open
-**Symptom:** none on its own today; it is what made #94 possible, and anything else keyed by node
-name can trip on it the same way.
-
-**OAS** (confluence — the second member of an input-position `oneOf`):
-```yaml
-ContentRestrictionAddOrUpdateArray:
-  oneOf:
-    - { type: object, properties: { … } }
-    - { type: array, items: { $ref: '#/…/ContentRestrictionUpdate' } }
-```
-
-**Example**:
-```
-# the array member of the union, as built:
-array:#/components/schemas/ContentRestrictionUpdate   # id — from its items, correct
-  name = '#/components/schemas/ContentRestrictionAddOrUpdateArray'   # the *union's* ref name
-```
-
-**Cause:** `Factory.createArrayType` does `new Arr(parent, parent.name)` — an array is a wrapper, so
-it borrows a name rather than minting one. That is harmless while only `Arr.id` (derived from the
-items type) is used to identify it, and wrong for anything reading `.name`: `context.refCount` is
-keyed by ref name, so an `Arr` under a `$ref`'d container is indistinguishable from the container
-itself. #94 is exactly that — a decrement meant for the member landed on the union.
-
-**Known blast radius:** `decRefCount` (guarded in `union.ts` by #94), `context.store`/`types` keyed
-by name, and the writer's `nameKey` (`T.isRef(type.name)`) — an `Arr` never reaches the writer as a
-definition, so that one is theoretical.
-
-**Fix (not done):** an `Arr` under a named parent should carry no ref name of its own — either a
-derived one (`<parent>Items`) or none, with the callers that need a label reading the items type.
-Cost: `Arr.name` is read in traces and in `createArrayType`'s `Res` branch (`<op>Response`), and any
-name change is an identity change (#73) if it ever reaches a `path()`.
-
-**Refs:** `src/oas/nodes/factory.ts` (`createArrayType`), `src/oas/nodes/arr.ts`. Surfaced while
-fixing #94, which guards the one site that bites.
-
 ## 106 · The selection linter checks selections against the spec, not against the emitted type — 📋 Noted, not fixed
 
 **Symptom:** docs/FIXED.md #105 generates a selection referencing a field (`deleted`) that is real in the
@@ -592,23 +527,6 @@ externalisation), which replaces the representation these costs live in.
 
 **Refs:** COVERAGE.md / COVERAGE-mutations.md `all-ops` column + `WHOLE:` histogram buckets,
 `tools/coverage-spec.mts` (`runWholeSpec`), docs/FIXED.md #121, #13/#89, #104/#112.
-
-## 124 · digitalocean all-ops mutations: no connector resolves the `LoadBalancerRegion` fields — ⬜ Open
-
-**Symptom:** the whole-spec mutations compose of digitalocean.yaml fails with 5 build errors,
-one per field of a single type — previously masked by #123's `INVALID_BODY` errors:
-```
-CONNECTORS_UNRESOLVED_FIELD: No connector resolves field `LoadBalancerRegion.available`.
-It must have a `@connect` directive or appear in `@connect(selection:)`.
-```
-(same for `.features`, `.name`, `.sizes`, `.slug` — the report column counts ×10 occurrences.)
-
-- Per-op, all 145 mutation ops still compose 100% — a cross-op-only failure (#122 family).
-- The type is emitted, but no selected op's connector selection covers its fields.
-- Not chased as part of #123; first read pending.
-
-**Refs:** COVERAGE-mutations.md `all-ops` column (`digitalocean.yaml`), #122 (umbrella), #123
-(the unmasking fix). Probe: whole-spec mutations schema of `digitalocean.yaml` via rover.
 
 ## 130 · Two unrelated inline shapes sharing one property-key-derived name — box.yaml's real #126 residue — ⬜ Open
 

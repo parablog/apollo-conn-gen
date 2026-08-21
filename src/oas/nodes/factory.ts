@@ -235,6 +235,10 @@ export class Factory {
     if (parent instanceof Res) {
       const get = parent.parent as Get; // Assume parent.parent is a GetOp.
       parentName = _.upperFirst(get.getGqlOpName());
+    } else if (parent instanceof Union && T.isRef(parentName)) {
+      // an Arr is a wrapper, not a component of its own — carrying the raw $ref would alias it with
+      // the parent in name-keyed maps (context.refCount, context.types). #95
+      parentName = Naming.getRefName(parentName);
     }
 
     const arr = new Arr(parent, parentName);
