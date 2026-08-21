@@ -6762,6 +6762,65 @@ entry that left this gap open), `src/oas/nodes/allOfBase.ts` (`interfaceBaseRef`
 the R2 idiom `forcedFlat` reuses), `docs/issues.md #122` (the umbrella this was already isolated out
 of). Fixture `tests/resources/oas/per-op-green-whole-red.yaml`.
 
+## 49 · A request body that reaches a big shared model makes composition run out of memory — ✅ Fixed, as a side effect of #89
+
+**Symptom:** a write op whose request body pulled in a large, self-referencing model generated a
+schema rover could not compose in bounded memory: the composing process grew by about 2 GB every 5s
+and never finished, reaching 60–75 GB and taking the machine down twice. Three `confluence.json` ops
+did it, e.g. `put:/wiki/rest/api/content/{id}/child/attachment/{attachmentId}` — its `version` field
+reaches the whole `Content` model, a 12-schema self-referencing clique.
+
+**OAS** — the body looks small, but `version` reaches the whole content model:
+```yaml
+AttachmentPropertiesUpdateBody:      # the request body: 8 fields
+  properties:
+    version: { $ref: '#/components/schemas/Version' }   # <- the door
+Version:
+  properties:
+    content: { $ref: '#/components/schemas/Content' }   # <- the whole model
+Content:                                                 # refers to 12 schemas, itself included
+  properties:
+    ancestors: { type: array, items: { $ref: '#/components/schemas/Content' } }
+    space:     { $ref: '#/components/schemas/Space' }
+    version:   { $ref: '#/components/schemas/Version' } # <- back to where we came from
+```
+
+**Cause was never pinned down as its own mechanism** — this entry's own investigation left it
+undecided between two candidates (the 134 KB body selection, or the size of the input-type graph
+itself, 87 types / 104 references) and stopped at a bisection plan. Before that bisection ran, #89
+landed for an unrelated symptom (`CONNECTORS_UNRESOLVED_FIELD` on confluence's relation GETs) and
+fixed the same underlying divergence from a different angle: cycle detection (#10) works per
+selection *path*, so two instances of the same node could disagree on whether a field survived the
+cut — one route's `Content.space` kept, another's cut. For a tightly-connected clique like
+`Content`/`Version`/`Space`/`User`, that divergence multiplied the number of distinct container
+instances the walk had to build. #89 made a field removed on any route removed on every route
+(`context.propOverrides`, keyed by node id), which collapses that divergence and, incidentally,
+bounds the walk this entry was tripping over.
+
+**Verified** (2026-08-20), against the real op named in the issue, generated and composed fresh —
+not read from a cached artifact:
+- `put:/wiki/rest/api/content/{id}/child/attachment/{attachmentId}` now generates in under 1s (was
+  ~1s / 293 KB / 173 types before; now 94,330 bytes / 148 types) and composes with `rover supergraph
+  compose` in ~1s at negligible peak RSS — no growth, no timeout.
+- All 65 mutation ops in `confluence.json`, including the other two ops this entry's "three ops"
+  referred to (`post:`/`put:/wiki/rest/api/content/{id}/child/attachment`, 95 types each), compose
+  OK — swept end to end with a fresh `OasGen` per op and real `rover` composes.
+- The largest schema in that sweep is now 134,878 bytes (`put:/wiki/rest/api/relation/...`, a
+  different op), composing in ~2.6s — nothing in the spec approaches the old failure's scale.
+
+**Not independently bisected:** the two candidate causes this entry originally proposed (body
+selection size vs. input-type graph size) were never isolated from each other, because the bug
+stopped reproducing before that work started. #89's fix narrows but does not eliminate the
+underlying risk — `Factory.cyclicAncestor` is still path-scoped by design, so a clique large enough
+to blow up the walk even with consistent cycle-cuts remains possible in principle.
+
+**Refs:** `docs/FIXED.md #89` (the actual fix: `src/oas/generator/typesCollector.ts`
+`consolidateRemovedFields`, `src/oas/oasContext.ts` `propOverrides`), `#10` (the cycle cuts #89 made
+consistent), `#48` (ruled out in the original investigation as this op's trigger). `ROADMAP.md` R15
+(Selection externalisation) remains relevant future work for selection/tree size in general,
+independent of this entry closing. `tools/coverage-spec.mts` keeps its 30s compose deadline and
+big-schema serialization as defense in depth, not because this op still needs them.
+
 ## 93 · An inline map at the response root is always called `REntry` — ✅ Fixed
 
 **Symptom:** github `get:/emojis` emitted its entry type as `REntry`, which said nothing about the

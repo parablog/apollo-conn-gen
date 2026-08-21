@@ -21,6 +21,10 @@ no paragraph-blobs. The example carries the weight; prose only adds what the exa
 
 Status: ⬜ Open · 🔴 Open · 🟡 Partly done · ⏸ Parked (blocked on an external gate) · 📋 Noted.
 
+Priority (open bugs only, assigned 2026-08-20): P1 real production risk · P2 confirmed compose
+failure, narrower blast radius · P3 tracking/umbrella, not independently actionable · P4 low
+real-world impact / DX only · P5 latent/theoretical or explicitly out of scope.
+
 ## Node model (AST) at a glance
 
 The generator parses the OAS document into a node tree; `generate()` emits the GraphQL SDL and
@@ -129,87 +133,6 @@ on others is now removed on every route and in the SDL, so the instances cannot 
 **Refs:** `src/oas/generator/typesCollector.ts` (`consolidateRemovedFields`), `src/oas/oasContext.ts`
 (`propOverrides`), `src/oas/nodes/obj.ts` (generate/select/dependencies). See docs/FIXED.md #89.
 
-## 49 · A request body that reaches a big shared model makes composition run out of memory — ⬜ Open
-
-**Symptom:** a write op whose request body pulls in a large, self-referencing model generates a
-schema rover cannot compose in bounded memory: the composing process grows by about 2 GB every 5s
-(16 GB at 45s) and never finishes. It reached 60–75 GB and took the machine down twice. Three
-`confluence.json` ops do it, e.g. `put:/wiki/rest/api/content/{id}/child/attachment/{attachmentId}`.
-Generation itself is fine and fast — 293K of SDL in about a second, 70 MB of heap (all 65 of that
-spec's mutation ops generate in one process with a 310 MB peak).
-
-**OAS** — the body looks small, but `version` reaches the whole content model:
-```yaml
-AttachmentPropertiesUpdateBody:      # the request body: 8 fields
-  properties:
-    id:        { type: string }
-    title:     { type: string }
-    container: { $ref: '#/components/schemas/Container' }
-    version:   { $ref: '#/components/schemas/Version' }   # <- the door
-
-Version:
-  properties:
-    content: { $ref: '#/components/schemas/Content' }     # <- the whole model
-
-Content:                                                   # refers to 12 schemas, itself included
-  properties:
-    ancestors: { type: array, items: { $ref: '#/components/schemas/Content' } }
-    children:  { $ref: '#/components/schemas/ContentChildren' }
-    space:     { $ref: '#/components/schemas/Space' }
-    version:   { $ref: '#/components/schemas/Version' }   # <- back to where we came from
-    ...
-```
-
-**Example** — what one op writes:
-```graphql
-# 173 definitions for a body of 8 fields:
-type ... x86         # the response side
-input ... x87        # the same model again, as input types
-# and one @connect body selection of 134,402 characters
-```
-
-**Measurements (all on that one op):**
-- 86 output types + 87 input types, 293K of SDL.
-- The `@connect(http: { body: ... })` selection is **134 KB in a single directive** — nearly half the file.
-- 191 fields were dropped as cycle cuts (`# … - circular reference omitted`), and cycles still
-  survive on **both** sides: `User -> Space -> SpaceHistory -> User` among the output types,
-  `ContentInput -> ContentHistoryInput -> UserInput -> SpaceInput -> ContentInput` among the inputs.
-  (Recursive types are legal GraphQL — this is listed as a fact about the output, not as the cause.)
-
-**Not caused by #48** (checked, because that fix landed just before this appeared). The same op
-generated with the pre-#48 union id is byte-identical except for 10 lines — the `type LabelsUnion`
-definition that used to be missing. Both have the same 87 input types. What changed is only how far
-rover gets: the old schema referenced an undefined type, so it was rejected at parse time
-(`INVALID_GRAPHQL`, 4.2s); the corrected schema is valid, so composition actually starts, and that is
-what runs out of memory. The op failed before and fails now — only the bucket changed.
-
-**Cause:** not yet established. Two candidates, in order of suspicion:
-1. the 134 KB body selection — its size, not the schema's;
-2. the size of the input-type graph itself (87 types, 104 references between them).
-Bisecting them apart is the next step: compose the same schema with the body selection trimmed, then
-with the input types trimmed, and see which one changes the memory curve.
-
-**Mitigation (not a fix):** `tools/coverage-spec.mts` now gives each compose a 30s deadline and kills
-rover **and its `supergraph-<version>` child** (`pkill -9 -P` before killing rover — the child is
-reparented and unfindable once the parent is gone, and `child_process.exec` silently ignores
-`detached`, so a process-group kill does not work here). A runaway op now scores
-`COMPOSE-FAIL [TIMEOUT]` instead of ending the sweep. Big schemas (≥200K) also compose one at a
-time — eight of these at once is what turned 8 GB into 60 GB.
-A `TIMEOUT` is wall-clock, so it depends on the machine and what else is running: 30s is about ten
-times a normal compose and the big ones no longer compete with each other, but read a new one as
-"look at this op", not as proof on its own.
-
-**Evidence kept:** `/tmp/qbo-after.graphql` (current) and `/tmp/qbo-before.graphql` (pre-#48) —
-the pair the comparison above is based on; `/tmp/oas-coverage-keep/` holds the harness's own
-`schema-4.graphql` + `supergraph-4.yaml` for the same op.
-
-**AST:** none — the node tree is not involved. Generation produces the same tree it always did; this
-is about how much SDL that tree writes for a body, and what composition then costs.
-**Refs:** `tools/coverage-spec.mts` (the deadline and the size split). Related: #48 (the fix that
-made this op reach composition at all — not its cause), #10 (the cycle cuts that fire 191 times here
-and still leave cycles behind), and `confluence.json post:/wiki/rest/api/content/{id}/copy`, the only
-`CIRCULAR_REFERENCE` in the corpus, which may be the same shape seen from the response side.
-
 ## 54 · The same "what does this operation give back" walk is written four times — 📋 Noted, not fixed
 
 **Symptom:** four places walk the operation's result node the same way, each with its own copy of
@@ -252,7 +175,7 @@ promotes — that near-miss is pinned by `test_oas_responseType_keeps_the_list_w
 it is a bigger change than the `allOfBase` swap, and it is working code on the R6 batch path. Left for
 a quieter moment.
 
-## 61 · `@type` and `type` on the same object both emit as `type` — ⬜ Open
+## 61 [P5] · `@type` and `type` on the same object both emit as `type` — ⬜ Open
 
 **Symptom:** composition fails with `INVALID_GRAPHQL: Field type already exists on
 Customer360PromotionVO`. The written type carries two `type` fields.
@@ -510,7 +433,7 @@ non-blocking (full HubSpot lists run is 18.9s), and deferred:
 not be memoized globally). The fourth bullet becomes moot under ROADMAP.md R15 (selection
 externalisation), which replaces the representation these costs live in.
 
-## 122 · All-ops sweep findings: four cross-op failure classes invisible to per-op coverage — ⬜ Open (umbrella)
+## 122 [P3] · All-ops sweep findings: four cross-op failure classes invisible to per-op coverage — ⬜ Open (umbrella)
 
 **Symptom:** first sweeps with the all-ops column (2026-08-18): six spec/verb combos are per-op
 100% and red combined. Umbrella entry — a class gets its own number when someone picks it up.
@@ -528,7 +451,7 @@ externalisation), which replaces the representation these costs live in.
 **Refs:** COVERAGE.md / COVERAGE-mutations.md `all-ops` column + `WHOLE:` histogram buckets,
 `tools/coverage-spec.mts` (`runWholeSpec`), docs/FIXED.md #121, #13/#89, #104/#112.
 
-## 130 · Two unrelated inline shapes sharing one property-key-derived name — box.yaml's real #126 residue — ⬜ Open
+## 130 [P2] · Two unrelated inline shapes sharing one property-key-derived name — box.yaml's real #126 residue — ⬜ Open
 
 **Symptom:** after `#129`'s correction, box.yaml's whole-spec compose genuinely fails on 9 GET / 5
 mutation `GRAPH_QL_ERROR`s — real, not #126's already-fixed pattern (checked: none collide with a
@@ -577,7 +500,7 @@ regression. Do not attempt casually; needs its own design pass, same rigor as `#
 decision and its box regression, "Care" note), `#126` (the sibling, already-fixed real-component
 case), `#129` (the measurement-tool bug found while investigating this).
 
-## 132 · Most JSON-degrade sites still give no signal in the generated schema, only the build log — ⬜ Open (umbrella)
+## 132 [P4] · Most JSON-degrade sites still give no signal in the generated schema, only the build log — ⬜ Open (umbrella)
 
 **Symptom:** `warn()` logs why a field gave up and became `JSON`, but that reason never reaches the
 schema itself — anyone reading the SDL (or GraphQL tooling: Studio, GraphiQL, introspection) sees a
@@ -614,7 +537,7 @@ field, never which node kind gets built.
 work), `docs/FIXED.md #133` (the 4 sites already done, same design: `warn()` and the schema note
 share one reason string, `Schemas.withDegradeNote`).
 
-## 135 · A drift-recovered path segment answers empty when nothing re-derives its `.path()` string — ⬜ Open
+## 135 [P4] · A drift-recovered path segment answers empty when nothing re-derives its `.path()` string — ⬜ Open
 
 **Symptom:** found as a side effect of landing #111's new "own output must parse" safety net — a
 previously-green test, `test_72_browse_minted_path_resolves` (`tests/all/regen.test.ts`), turned out
