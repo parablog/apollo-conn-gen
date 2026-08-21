@@ -1,0 +1,68 @@
+openapi: 3.0.0
+info:
+  title: Two unrelated inline allOf shapes share a property-key-derived name
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /task-assignments:
+    get:
+      operationId: getTaskAssignments
+      responses:
+        '200':
+          description: >-
+            `assigned_to` is a $ref-wrapped allOf (small shape: UserMini's `login`) — box.yaml's
+            TaskAssignment pattern. see #130
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assigned_to:
+                    allOf:
+                      - $ref: '#/components/schemas/UserMini'
+                      - description: The user that the task has been assigned to.
+  /legal-hold-policy-assignments:
+    get:
+      operationId: getLegalHoldPolicyAssignments
+      responses:
+        '200':
+          description: >-
+            `assigned_to` here is a oneOf-wrapped allOf (big shape: File/Folder/WebLink) — same
+            property key as /task-assignments, an unrelated shape. box.yaml's
+            LegalHoldPolicyAssignment pattern. The oneOf sits inside the outer allOf, so this mints
+            as Composed too, not Union — both name "AssignedTo" from the shared key. see #130
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assigned_to:
+                    allOf:
+                      - oneOf:
+                          - $ref: '#/components/schemas/File'
+                          - $ref: '#/components/schemas/Folder'
+                          - $ref: '#/components/schemas/WebLink'
+                      - description: The item that the legal hold policy is assigned to.
+components:
+  schemas:
+    UserMini:
+      type: object
+      properties:
+        login:
+          type: string
+    File:
+      type: object
+      properties:
+        id:
+          type: string
+    Folder:
+      type: object
+      properties:
+        id:
+          type: string
+    WebLink:
+      type: object
+      properties:
+        id:
+          type: string

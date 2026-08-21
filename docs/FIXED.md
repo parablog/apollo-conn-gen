@@ -7033,3 +7033,59 @@ green (399 pass, 1 pre-existing todo, 0 fail).
 (`collidesWithStoredType`, already used by `Obj.visit`). Fixture
 `paths-ref-shared-create-and-update.yaml`. See #22/#126 (the sibling `Composed` collision checks),
 #123 (the unmasking fix), #122 (umbrella).
+
+## 130 · Two unrelated inline shapes sharing one property-key-derived name — ✅ Fixed, as a side effect of #124
+
+**Symptom:** after `#129`'s correction, box.yaml's whole-spec compose genuinely failed on 9 GET / 5
+mutation `GRAPH_QL_ERROR`s — real, not #126's already-fixed pattern (checked: none collide with a
+real top-level component). Two clusters:
+
+**Cluster A — "AssignedTo"** (4 GET errors, all 5 mutation errors):
+```yaml
+TaskAssignment:
+  properties:
+    assigned_to:
+      allOf: [{ $ref: '#/components/schemas/User--Mini' }, { description: ... }]   # small shape
+LegalHoldPolicyAssignment:
+  properties:
+    assigned_to:
+      allOf: [{ oneOf: [File, Folder, WebLink] }, { description: ... }]            # big shape
+```
+Both are inline `allOf`s on a property literally named `assigned_to` (the `oneOf` sits *inside* the
+outer `allOf`, so both mint as `Composed`, not `Union`) — `Composed.updateName` names both
+`"AssignedTo"`. Only the big File/Folder/WebLink-derived definition survived; selections expecting
+the small shape's `login` field (e.g. `taskAssignmentCollection.entries.assignedTo.login`) no
+longer matched anything.
+
+**Cluster B — "Fields"** (the other 5 GET errors, `metadata_templates*` ops): two unrelated
+array-item objects both named from the property key `fields` — one with
+`{description, displayName, hidden, id, key, options, type}`, one with just `{key, sort_direction}`.
+Only the smaller shape survived; the `metadata_templates*` ops' selections expecting the larger
+shape's fields no longer matched.
+
+**Cause was already fixed, unverified:** this is `#22`'s original, deliberately-unfixed scope — a
+same-class collision (both `Composed`, or both `Obj`) between two *unrelated* inline shapes that
+happen to mint the same property-key-derived name. `#124` landed `T.collidesWithStoredType` in
+`Composed.visit()` for an unrelated symptom (digitalocean's `#/paths`-ref-reached duplicate), but
+that check is class-agnostic — it flags any stored occupant with a different shape under the same
+name, not just cross-class ones (`collidesAcrossNodeClasses`) or reserved-component ones
+(`collidesWithReservedComponentName`) — so it also catches two same-class inline shapes that
+collide only because they share a property-key-derived name, exactly this entry's scope.
+
+**Verified:** fixtures `composed-collision-same-key-refs.yaml` (Cluster A) and
+`composed-collision-array-items.yaml` (Cluster B) reproduce each cluster in isolation; tests
+`test_130_composed_allof_same_key_collision_splits_by_container` and
+`test_130_composed_array_item_same_key_collision_splits_by_container` (`tests/all/oas-core.test.ts`)
+assert both colliding types are emitted, each keeping its own fields, with the second one
+container-qualified and correctly referenced. Revert-check: with `comp.ts` reverted to pre-`#124`,
+both new tests fail (the second shape is silently dropped instead of splitting). Full suite green
+(402 tests, 401 pass, 1 pre-existing todo, 0 fail). `tools/coverage-spec.mts --pass both` on
+box.yaml: 114/114 GET ops, 144/144 mutation ops, both `100.0%`/`composeFail=0`/`whole=OK` — the exact
+9+5 errors this entry recorded are gone, fully accounted for by these two clusters (no third
+source).
+
+**Refs:** `docs/FIXED.md #124` (the actual fix: `src/oas/nodes/comp.ts` `Composed.visit`,
+`src/oas/nodes/typeUtils.ts` `collidesWithStoredType`). Fixtures `composed-collision-same-key-refs.yaml`,
+`composed-collision-array-items.yaml`. See `#22` (the same-class scope decision this closes), `#126`
+(the sibling, already-fixed real-component case), `#129` (the measurement-tool bug found while
+investigating this).

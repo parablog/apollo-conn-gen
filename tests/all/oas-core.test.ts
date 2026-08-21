@@ -811,6 +811,55 @@ test('test_composed_collision_with_stored_object_splits_by_container', async () 
   assert.ok(!/type Permissions \{[^}]*canDelete/s.test(schema!), 'no redefinition of Permissions');
 });
 
+test('test_130_composed_allof_same_key_collision_splits_by_container', async () => {
+  // Two unrelated inline allOf shapes both named "AssignedTo" from their shared property key —
+  // one $ref-wrapped (box.yaml TaskAssignment, small: UserMini's `login`), one oneOf-wrapped
+  // (box.yaml LegalHoldPolicyAssignment, big: File/Folder/WebLink). Both are Composed (the oneOf
+  // sits inside the outer allOf), so #22's collidesAcrossNodeClasses never caught it — same class,
+  // different shape. collidesWithStoredType (docs/FIXED.md #124) now does. see #130.
+  const schema = await runOasTest(
+    'composed-collision-same-key-refs.yaml',
+    ['get:/task-assignments>**', 'get:/legal-hold-policy-assignments>**'],
+    2,
+    4,
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/type AssignedTo \{[^}]*login/s.test(schema!), 'the first-visited shape keeps the key name');
+  assert.ok(
+    /type LegalHoldPolicyAssignmentsResponseAssignedTo \{[^}]*id/s.test(schema!),
+    'colliding Composed qualified by container',
+  );
+  assert.ok(
+    /\bassignedTo: LegalHoldPolicyAssignmentsResponseAssignedTo\b/.test(schema!),
+    'legal hold response references the split type',
+  );
+  assert.ok(!/type AssignedTo \{[^}]*id: String/s.test(schema!), 'no redefinition of AssignedTo');
+});
+
+test('test_130_composed_array_item_same_key_collision_splits_by_container', async () => {
+  // Two unrelated inline array-item allOf shapes both named "Fields" from their shared property
+  // key — box.yaml's MetadataTemplate (big: description/displayName/hidden/key/type) and
+  // MetadataQueryIndex (small: key/sortDirection). Same mechanism as the allOf case above, but
+  // through an array item instead of a $ref/oneOf member. see #130.
+  const schema = await runOasTest(
+    'composed-collision-array-items.yaml',
+    ['get:/metadata-templates>**', 'get:/metadata-query-indices>**'],
+    2,
+    4,
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/type Fields \{[^}]*displayName/s.test(schema!), 'the first-visited shape keeps the key name');
+  assert.ok(
+    /type MetadataQueryIndicesResponseFields \{[^}]*sortDirection/s.test(schema!),
+    'colliding Composed qualified by container',
+  );
+  assert.ok(
+    /\bfields: \[MetadataQueryIndicesResponseFields\]/.test(schema!),
+    'metadata query indices response references the split type',
+  );
+  assert.ok(!/type Fields \{[^}]*sortDirection/s.test(schema!), 'no redefinition of Fields with the small shape');
+});
+
 test('test_no_duplicate_type_definitions_launch_library', async () => {
   // A $ref reached two ways builds two nodes with the same name but different ids — `AgencyMini`
   // as an array item (`obj:type:…`) and as a single-member allOf (`comp:type:…`). The emit gate

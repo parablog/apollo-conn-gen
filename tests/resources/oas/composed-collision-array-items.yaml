@@ -1,0 +1,58 @@
+openapi: 3.0.0
+info:
+  title: Two unrelated inline array-item allOf shapes share a property-key-derived name
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /metadata-templates:
+    get:
+      operationId: getMetadataTemplates
+      responses:
+        '200':
+          description: >-
+            `fields` items are an inline allOf (big shape: description/displayName/hidden/key/type)
+            — box.yaml's MetadataTemplate pattern. see #130
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items:
+                      allOf:
+                        - properties:
+                            description:
+                              type: string
+                            displayName:
+                              type: string
+                            hidden:
+                              type: boolean
+                            key:
+                              type: string
+                            type:
+                              type: string
+  /metadata-query-indices:
+    get:
+      operationId: getMetadataQueryIndices
+      responses:
+        '200':
+          description: >-
+            `fields` items here are also an inline allOf (small shape: key/sortDirection) — same
+            property key as /metadata-templates, an unrelated, disjoint shape. box.yaml's
+            MetadataQueryIndex pattern. Both name "Fields" from the shared key. see #130
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items:
+                      allOf:
+                        - properties:
+                            key:
+                              type: string
+                            sortDirection:
+                              type: string
