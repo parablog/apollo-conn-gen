@@ -38,12 +38,14 @@ export class TypesCollector {
       let collection = Array.from(this.gen.paths.values());
       let current: IType | undefined;
       let last: IType | undefined;
+      let hitWildcard = false;
 
       let i = 0;
       const parts = path.split(Naming.PATH_SEPARATOR);
       do {
         const part = Naming.expandRef(parts[i]);
         if (part === '*') {
+          hitWildcard = true;
           // remove the current path from the expanded array
           expanded = expanded.filter((s) => s !== path);
 
@@ -77,6 +79,14 @@ export class TypesCollector {
         collection = Array.from(current!.children.values()) || Array.from(current!.props.values()) || [];
         i++;
       } while (i < parts.length);
+
+      // #135: a saved selection can still name a field by an old, renamed name — e.g. digitalocean.yaml's
+      // ActiveDeployment.cause, renamed to inlinev2AppsByAppIdDeploymentsResponseActiveDeployment after
+      // browsing /v2/apps first (test_72). The walk above finds the field anyway; keep `expanded` in sync.
+      if (!hitWildcard && current && current.path() !== path) {
+        const idx = expanded.indexOf(path);
+        if (idx !== -1) expanded[idx] = current.path();
+      }
 
       if (current && !(current instanceof Scalar)) {
         const parentType = T.findNonPropParent(current as IType);
