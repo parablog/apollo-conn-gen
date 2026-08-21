@@ -149,6 +149,10 @@ inside the consuming items.
 | R9. Computed / literal bodies | ✅ Done | inferred `$args.input { … }` + `overrides[opId].body` raw JSONSelection (replace/drop) |
 | R12. OAS folder input | ⬜ Parked | accept a folder of independent OAS specs (OAS mode only): per-file normalize, merge into one OASDocument pre-parse; fail on collisions, sniff+skip non-OAS files |
 | R14. Manual directive declarations | ✅ Done | `--directives` file: `Type` / `Type.field` selectors (field part globs) -> verbatim directive strings, added over the parsed output; federation directives join the `@link` import; a selector that names nothing throws |
+| R17. Hand-authored content survives regeneration | ⬜ Planned | port `tools/connect-gen`'s CUSTOM-region round-trip (`# === CUSTOM <name> === ... # === END CUSTOM <name> ===`) — the one thing a comment can't do: correct output the spec itself gets wrong, or add capability with no OAS operation behind it, and have it survive the next regen |
+| R18. GraphQL-level argument defaults from OAS | ⬜ Planned | emit a param's OAS `default` as a real GraphQL argument default (`limit: Int = 50`), not just as a request-time fallback; Rust does this everywhere, TS never does |
+| R19. `ID` scalar for identifier-shaped properties | ⬜ Planned | promote `*Id`/`id`-shaped string properties to `ID` instead of `String` (Rust does; validate the naming heuristic against false positives before porting) |
+| R20. Enum value casing convention | ⬜ Planned (decide first) | decide whether to normalize enum values to `SCREAMING_SNAKE_CASE` (Rust does; TS preserves the spec's raw casing) — the more idiomatic GraphQL convention, but a deliberate style call, not an obvious bug |
 
 ### Foundation (must precede version-sensitive items)
 
@@ -654,6 +658,105 @@ a generator limitation, so its wording (if any) should read softer than the rest
 
 **Refs:** `docs/issues.md #132` (the filed entry tracking these 13 sites as deferred, with exact
 line numbers); `docs/FIXED.md #133` (Phase 1, the 4 sites already done).
+
+---
+
+### R17. Hand-authored content survives regeneration (CUSTOM regions) — ⬜ Planned
+
+**Why:** found comparing `gen`'s output against `tools/connect-gen` (Rust)'s committed output for
+the 5 real connectors in `graphos-service-factory` (see that repo's `docs/ts-gen-comparison.md`).
+Rust's round-trip mechanism (`tools/connect-gen/src/emit/regions.rs`) lets a human correct output
+the OpenAPI spec itself gets wrong — Omni's real API disagrees with its own spec on one shape
+(`omni_foldersListLive`); a human wrote the correct field by hand, inside a `# === CUSTOM
+extra-query-fields === ... # === END CUSTOM extra-query-fields ===` marker pair. On the next
+regen, Rust extracts that block from the old file and splices it back into the new one. `gen` has
+no equivalent at all: hand-editing generated output is a dead end today, since the next run
+silently overwrites it with no error and no signal that anything was lost.
+
+**This is a different problem from the JSON-degrade comments (R16), not an overlapping one.**
+R16 documents *why the generator itself* fell back to `JSON` — it's automatic, spec-derived, and
+fires when the spec is ambiguous. CUSTOM regions are for when the spec is not ambiguous but
+*wrong*, or when the desired output has no corresponding OAS operation at all (net-new fields, or
+infrastructure like an extra `@link`/`@source` the derivation logic has no way to infer) — nothing
+a degrade-note can annotate, because there's no automatically-derived output to attach a comment
+to in the first place.
+
+**Shape (ported from Rust, `regions.rs`):**
+- `extract(content)`: scan committed output for `# === CUSTOM <name> ===` / `# === END CUSTOM
+  <name> ===` marker pairs (five known names: `extra-links`, `extra-sources`, `extra-types`,
+  `extra-query-fields`, `extra-mutation-fields`); body is every line between them.
+- `splice(skeleton, regions)`: same marker scan over the freshly generated output; insert each
+  non-empty extracted body between its matching marker pair. A region name outside the known five
+  is a hard error, never silently dropped.
+- Unlike Rust, TS's raw output has no markers in it at all (Rust's skeleton is templated with them
+  built in; TS's isn't) — so `splice` also needs to decide *where* each marker pair goes in fresh
+  output: `extra-types` just before the first of `type Query {`/`type Mutation {`;
+  `extra-query-fields`/`extra-mutation-fields` as the last field(s) inside their respective root
+  type, before the closing `}`; `extra-links`/`extra-sources` after the existing `@link`/`@source`
+  blocks. Only implement an insertion point once a real non-empty example exists for it — hard-fail
+  naming the region rather than guessing, the same discipline the `graphos-service-factory` wrapper
+  used when it prototyped this externally (below).
+
+**A working prototype already exists, external to `gen`:** `graphos-service-factory/scripts/gen-ts.mjs`
+(`extractCustomRegions`/`injectCustomRegions`) implements exactly this, as a post-processing bolt-on
+around raw `gen` CLI output, because `gen` itself has nothing to hook into. It only implements
+injection for the two regions any of the 5 real committed schemas actually use non-empty today
+(`extra-types`, `extra-query-fields`) and hard-fails on the other three rather than guess — worth
+reusing that same scoping discipline, and possibly the fixture tests, when this lands inside `gen`
+proper (`scripts/gen-ts.test.mjs` in that repo has the TDD cases: splice + hard-fail-on-unknown).
+
+**Refs:** `tools/connect-gen/src/emit/regions.rs` (the Rust mechanism to port);
+`graphos-service-factory/scripts/gen-ts.mjs` + `gen-ts.test.mjs` (the external prototype);
+`graphos-service-factory/docs/ts-gen-comparison.md` (the comparison that surfaced this).
+
+### R18. GraphQL-level argument defaults from OAS — ⬜ Planned
+
+**Why:** found in the same comparison. Rust reads an OAS parameter's declared `default` and emits
+a real GraphQL argument default (`limit: Int = 50`); `gen` never does, across every one of the 5
+real connectors (249 instances found by the field-level structural-equivalence walk in
+`graphos-service-factory/scripts/semantic-diff.mjs`). A client that omits the argument gets
+materially different behavior between the two — Rust supplies the spec's own default, `gen`
+supplies none (`null`/absent, whatever the connector's HTTP layer does with a missing query param).
+
+**Shape:** the information is already read from the spec during param/argument construction
+(`Param`-related nodes); this is plumbing the OAS `default` value through to the emitted GraphQL
+argument's `defaultValue`, not new spec-reading. Should compose the same way scalar/enum defaults
+already do elsewhere in the emitter — literal value, printed via the existing value-node printing
+path.
+
+**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`; the 249-instance count came from
+running `semantic-diff.mjs`'s `structuralDiff()` against all 5 committed schemas.
+
+### R19. `ID` scalar for identifier-shaped string properties — ⬜ Planned
+
+**Why:** found in the same comparison. Rust promotes properties that are clearly identifiers
+(`*Id`-suffixed, or an `id` field itself) from `String` to GraphQL's `ID` scalar; `gen` emits
+`String` for all of them (954 instances found across the 5 real connectors — the single largest
+difference category). `ID` is more than a style choice to GraphQL tooling: cache normalization
+(Apollo Client's `__typename`+id keying), codegen, and persisted-query tooling all treat `ID`
+fields as identifier-shaped signals that plain `String` doesn't carry.
+
+**Shape:** needs the exact trigger condition read out of Rust's source first — likely a
+name-pattern heuristic (property name ends in `Id`/`_id`, or is literally `id`) rather than
+anything OAS's `type: string` schema itself signals structurally. Port the heuristic, then
+validate it against the same 5 real specs for false positives (a string property that merely
+*contains* "id" but isn't actually a reference/identifier) before shipping it as a default.
+
+**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`; example:
+`Confluence_AdminKeyResponse.accountId` is `ID` in the committed Rust schema, `String` in `gen`'s
+output for the identical OAS input.
+
+### R20. Enum value casing convention — ⬜ Planned (decide first)
+
+**Why:** found in the same comparison. Rust normalizes enum values to `SCREAMING_SNAKE_CASE`
+(`ACTIVE`, `PAGE`); `gen` preserves the OAS spec's own casing verbatim (`active`, `page` — 343
+schema-level differences found, plus confirmed at runtime: real API responses come back
+lowercase and fail a test written against Rust's uppercase enum values). Uppercase is the more
+idiomatic GraphQL convention for enum values, so this leans toward "port it" — but unlike R17-R19
+this is a style decision with a real migration cost (an existing client's enum literals would
+need updating), not an unambiguous gap. Decide deliberately before implementing.
+
+**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`.
 
 ---
 
