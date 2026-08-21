@@ -179,7 +179,10 @@ export class Obj extends Type {
     const i6 = ' '.repeat(6);
 
     // Rewrite each {param} to {$this.param} (vs {$args.param} for Query-field connectors).
-    const path = resolver.path.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, param) => `{$this.${Naming.sanitiseField(param)}}`);
+    const path = resolver.path.replace(
+      /\{([a-zA-Z0-9_]+)\}/g,
+      (_match, param) => `{$this.${Naming.sanitiseField(param)}}`,
+    );
 
     writer
       .write('\n')

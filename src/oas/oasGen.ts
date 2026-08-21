@@ -193,7 +193,9 @@ export class OasGen {
         try {
           parse(final);
         } catch (e) {
-          throw new Error(`[gen] --directives or --service-prefix produced invalid GraphQL: ${OasGen.describeParseError(e)}`);
+          throw new Error(
+            `[gen] --directives or --service-prefix produced invalid GraphQL: ${OasGen.describeParseError(e)}`,
+          );
         }
       }
       return final;

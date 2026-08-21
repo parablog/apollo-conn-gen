@@ -363,7 +363,8 @@ export class Factory {
           if (Schemas.holdsPlainValues(context, schemaObj)) {
             // a oneOf of only plain scalars/enums has no object member a union can hold — same
             // empty-type family as #108 (map)/#110 (array item), just at a plain property. #134
-            const reason = "a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.";
+            const reason =
+              'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
             warn(context, '[factory]', reason);
             prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
           } else {
@@ -385,7 +386,8 @@ export class Factory {
           if (T.isParentAnInput(parent)) {
             // GraphQL input types can't take arbitrary keys, so a map in input position has no
             // typed shape to write — send it as JSON instead. #133
-            const reason = "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+            const reason =
+              "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
             warn(context, '[factory]', reason);
             prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
           } else {
@@ -436,7 +438,8 @@ export class Factory {
     else if (schemaObj.oneOf) {
       if (Schemas.holdsPlainValues(context, schemaObj)) {
         // same guard as the typed branch above, reached here because this schema has no `type` key. #134
-        const reason = "a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.";
+        const reason =
+          'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
         warn(context, '[factory]', reason);
         prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
       } else {
@@ -451,7 +454,8 @@ export class Factory {
     } else if (Schemas.isMap(schemaObj)) {
       if (T.isParentAnInput(parent)) {
         // same as the typed branch above, reached here because this schema has no `type` key. #133
-        const reason = "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+        const reason =
+          "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
         warn(context, '[factory]', reason);
         prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
       } else {
@@ -465,7 +469,8 @@ export class Factory {
     }
     // default case: no type, no oneOf/allOf, not a map, no properties — an unrecognised shape. #133
     else {
-      const reason = "this field's shape didn't match any known pattern and defaulted to JSON — worth checking the source OAS schema.";
+      const reason =
+        "this field's shape didn't match any known pattern and defaulted to JSON — worth checking the source OAS schema.";
       warn(context, '[factory]', reason);
       prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
     }
