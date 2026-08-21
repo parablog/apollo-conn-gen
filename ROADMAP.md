@@ -153,7 +153,6 @@ inside the consuming items.
 | R18. GraphQL-level argument defaults from OAS | ⬜ Planned | emit a param's OAS `default` as a real GraphQL argument default (`limit: Int = 50`), not just as a request-time fallback; Rust does this everywhere, TS never does |
 | R19. `ID` scalar for identifier-shaped properties | ⬜ Planned | promote `*Id`/`id`-shaped string properties to `ID` instead of `String` (Rust does; validate the naming heuristic against false positives before porting) |
 | R20. Enum value casing convention | ⬜ Planned (decide first) | decide whether to normalize enum values to `SCREAMING_SNAKE_CASE` (Rust does; TS preserves the spec's raw casing) — the more idiomatic GraphQL convention, but a deliberate style call, not an obvious bug |
-| R21. Swagger 2.0 `formData` parameters | ⬜ Planned | a `formData`-style request body (2+ params) is dropped entirely — the operation gets no argument and no body at all; Rust correctly synthesizes an input object for the same shape |
 
 ### Foundation (must precede version-sensitive items)
 
@@ -759,42 +758,6 @@ need updating), not an unambiguous gap. Decide deliberately before implementing.
 
 **Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`.
 
-### R21. Swagger 2.0 `formData` parameters — ⬜ Planned
-
-**Why:** found in the same comparison. A Swagger 2.0 operation whose body is declared as `in:
-formData` parameters (the pre-OAS-3 way to describe a form body — not the newer
-`requestBody.content['multipart/form-data']` style, which already works) gets no argument and no
-body at all once there are 2+ such parameters. Rust correctly synthesizes an input object for the
-same shape. This is not the same issue as the already-known "router rejects `multipart/form-data`"
-limitation (that one is a real router restriction on file-upload-shaped bodies); this reproduces
-on a two-plain-string-field form with nothing router-incompatible about it — `gen` never attempts
-the mapping at all.
-
-**OAS** (Swagger 2.0, `consumes: [multipart/form-data]`, two `formData` params):
-```yaml
-parameters:
-  - { name: title, in: formData, type: string, required: true }
-  - { name: description, in: formData, type: string, required: false }
-```
-
-**Example** — confirmed by direct reproduction: the log even names the cause
-(`[post::visitBody] Cannot send multipart/form-data: /upload goes out with no body.`), but the
-operation still emits with zero arguments instead of failing loudly or degrading safely:
-```graphql
-type Mutation {
-  createUpload: CreateUploadResponse   # no title/description arguments at all
-    @connect(http: { POST: "/upload" }, selection: "success: $(true)")
-}
-```
-
-**Shape:** the OAS 2.0 `formData` parameter style needs the same treatment `#83`'s
-`application/x-www-form-urlencoded` fix already gave the OAS 3.x `requestBody.content` form —
-synthesize an input object from the `formData` parameters and map it the same way a JSON body's
-properties are mapped, not silently drop it.
-
-**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`; `docs/FIXED.md #83` (the related,
-already-fixed `application/x-www-form-urlencoded` case, different OAS syntax, same family).
-
 ---
 
 ## Coverage findings — robustness backlog (from `COVERAGE.md`)
@@ -993,7 +956,7 @@ shim), the abstract pass recovers **~69 ops corpus-wide** (CCS +26, github +15, 
 | 1 | ~~**#17** — param defaults dangle ` = `~~ | — | ✅ fixed `aae14ca` |
 | 2 | ~~**R-collector** — identical inline schemas rename instead of dedup → orphan types (#18)~~ | — | ✅ fixed `0cff45d`, +36 ops/pass corpus-wide; residue split into the two rows below |
 | 2a | ~~**#22** — `Composed` skips the #9/#12 collision check → duplicate type definitions~~ | — | ✅ fixed `1669c6a`; the 9 box ops fail on a second bug (#13-family cycle cut) the duplicate was hiding |
-| 2b | **R-options-pairing** (open research) — same-named array items split (`Options` vs `OptionsItem`) but field/selection pair with the wrong half (box `/metadata_templates` family); #13-adjacent | 5/pass (box) | mechanism unpinned — likely the #13 collect-time prop-merge resolves it; verify when slicing #13 |
+| 2b | ~~**R-options-pairing** — same-named array items split (`Options` vs `OptionsItem`) but field/selection pair with the wrong half (box `/metadata_templates` family)~~ | 5/pass (box) | ✅ fixed `c94ab9f`: this was `docs/FIXED.md #130`'s "Fields" cluster on the same 5 `/metadata_templates*` ops, under an earlier working name — `collidesWithStoredType` (landed with #124) fixed it; box.yaml is 114/114 GET, 144/144 mutations |
 | 3 | ~~**#19** — typeless `{}` schemas throw~~ | — | ✅ fixed `aae14ca` (sendgrid's 3 throws were this shape too; omni's 3 persist → R-genthrow-tail confirmed distinct) |
 | 4 | ~~**R-anyof-empty** (#20) — `anyOf: [$ref, empty-closed-object]` → zero types~~ | — | ✅ fixed (working tree): single-real-member collapse, +6 ops / 0 regressions once #26 cleared the collector orphans that blocked it |
 | 5 | ~~**R-genthrow-tail** — omni(3) GEN-THROW ops~~ | — | ✅ fixed `00c0d4b` (#23): OAS 3.1 type arrays collapse to the first non-null entry; omni 83.3→88.9 |
