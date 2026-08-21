@@ -153,6 +153,7 @@ inside the consuming items.
 | R18. GraphQL-level argument defaults from OAS | ⬜ Planned | emit a param's OAS `default` as a real GraphQL argument default (`limit: Int = 50`), not just as a request-time fallback; Rust does this everywhere, TS never does |
 | R19. `ID` scalar for identifier-shaped properties | ⬜ Planned | promote `*Id`/`id`-shaped string properties to `ID` instead of `String` (Rust does; validate the naming heuristic against false positives before porting) |
 | R20. Enum value casing convention | ⬜ Planned (decide first) | decide whether to normalize enum values to `SCREAMING_SNAKE_CASE` (Rust does; TS preserves the spec's raw casing) — the more idiomatic GraphQL convention, but a deliberate style call, not an obvious bug |
+| R21. Swagger 2.0 `formData` parameters | ⬜ Planned | a `formData`-style request body (2+ params) is dropped entirely — the operation gets no argument and no body at all; Rust correctly synthesizes an input object for the same shape |
 
 ### Foundation (must precede version-sensitive items)
 
@@ -757,6 +758,42 @@ this is a style decision with a real migration cost (an existing client's enum l
 need updating), not an unambiguous gap. Decide deliberately before implementing.
 
 **Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`.
+
+### R21. Swagger 2.0 `formData` parameters — ⬜ Planned
+
+**Why:** found in the same comparison. A Swagger 2.0 operation whose body is declared as `in:
+formData` parameters (the pre-OAS-3 way to describe a form body — not the newer
+`requestBody.content['multipart/form-data']` style, which already works) gets no argument and no
+body at all once there are 2+ such parameters. Rust correctly synthesizes an input object for the
+same shape. This is not the same issue as the already-known "router rejects `multipart/form-data`"
+limitation (that one is a real router restriction on file-upload-shaped bodies); this reproduces
+on a two-plain-string-field form with nothing router-incompatible about it — `gen` never attempts
+the mapping at all.
+
+**OAS** (Swagger 2.0, `consumes: [multipart/form-data]`, two `formData` params):
+```yaml
+parameters:
+  - { name: title, in: formData, type: string, required: true }
+  - { name: description, in: formData, type: string, required: false }
+```
+
+**Example** — confirmed by direct reproduction: the log even names the cause
+(`[post::visitBody] Cannot send multipart/form-data: /upload goes out with no body.`), but the
+operation still emits with zero arguments instead of failing loudly or degrading safely:
+```graphql
+type Mutation {
+  createUpload: CreateUploadResponse   # no title/description arguments at all
+    @connect(http: { POST: "/upload" }, selection: "success: $(true)")
+}
+```
+
+**Shape:** the OAS 2.0 `formData` parameter style needs the same treatment `#83`'s
+`application/x-www-form-urlencoded` fix already gave the OAS 3.x `requestBody.content` form —
+synthesize an input object from the `formData` parameters and map it the same way a JSON body's
+properties are mapped, not silently drop it.
+
+**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`; `docs/FIXED.md #83` (the related,
+already-fixed `application/x-www-form-urlencoded` case, different OAS syntax, same family).
 
 ---
 
