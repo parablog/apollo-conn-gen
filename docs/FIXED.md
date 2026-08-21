@@ -7357,3 +7357,38 @@ tests, 404 pass, 0 fail, 2 pre-existing todo).
 **Refs:** `src/oas/nodes/prop.ts` (`effectiveDescription`), `src/oas/nodes/propObj.ts`
 (`jsonDegradeReason`, `getValue`, `effectiveDescription`). `docs/FIXED.md #133` (the shared design,
 the first 4 sites), `docs/TASKS.md #132` (the umbrella — 11 sites still open there).
+
+
+## 141 [FEAT] · OAS parameter defaults already become a GraphQL argument default — ✅ Already correct, no code change
+
+**Symptom (as filed):** the Rust-comparison audit claimed `gen` never emits an OAS parameter's
+`default` as a real GraphQL argument default (`limit: Int = 50`) — 249 "argument default differs"
+instances found across 5 real connectors via `graphos-service-factory/scripts/semantic-diff.mjs`.
+
+**Investigation:** `Param.generate()` (`src/oas/nodes/param.ts`) already writes `= <value>` for any
+parameter with a declared default, and has since `#17` (June 2026) — with `#127`'s later refinement
+for a `type: string` param whose JSON default is a number/boolean. This predates `#141`'s own filing
+by months. Running the actual comparison tool against confluence (the largest of the 5, 165 of the
+249 instances) confirms it directly: today's `.ts-gen` output already writes
+`confluence_getAttachments(..., limit: Int = 50)`; the *committed* Rust schema being compared
+against — last updated 2026-07-24 in `graphos-service-factory`, weeks before this audit ran — has no
+default there at all. Checked all 165 confluence instances: every single one is
+`argument default differs: undefined vs <value>` (committed missing it, `gen` has it) — zero in the
+opposite direction.
+
+**Cause:** the audit's premise was backwards, or at minimum built on a stale baseline. `gen` is not
+missing this capability; the committed Rust schema it was diffed against is the side lagging behind
+(whether because the real `tools/connect-gen` also already fixed this and the checked-in schema
+just wasn't regenerated, or because it genuinely doesn't — either way, not something for `gen` to
+change). The "0 differs across 5 specs" acceptance bar this entry was filed with can't be met by
+changing `gen`, since `gen` isn't the side with the gap.
+
+**Not done here:** no code change — there was nothing to fix. `#138`/`#139`/`#140`/`#142` came from
+the same Rust-comparison batch and haven't been individually re-verified against a fresh baseline;
+treat their instance counts with the same caution until checked.
+
+**Refs:** `src/oas/nodes/param.ts` (`writeDefaultValue`), `docs/FIXED.md #17` (the original
+default-emission fix), `docs/FIXED.md #127` (the string/number coercion refinement),
+`graphos-service-factory/scripts/semantic-diff.mjs` (the comparison tool, run directly to verify),
+`graphos-service-factory/service-catalog/confluence/confluence.graphql` (the stale committed
+baseline, dated 2026-07-24).

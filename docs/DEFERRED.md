@@ -304,7 +304,9 @@ itself before any implementation starts — putting it in `docs/TASKS.md` would 
 autonomously pick a convention and implement it unsupervised, which is exactly the risk this file
 exists to keep out of the queue. Move to `docs/TASKS.md` (with a priority tag) once the casing
 question is actually decided — at that point it's a small, well-scoped change, same family as
-`docs/TASKS.md #141`/`#142`.
+`docs/TASKS.md #142`. (Not `#141` — that one turned out to be based on a stale comparison baseline,
+no code change needed; see `docs/FIXED.md #141`. Worth re-checking `#142`'s own instance count
+against a fresh baseline before assuming it's still accurate.)
 
 **Shape (once decided "yes"):** normalize enum value strings to `SCREAMING_SNAKE_CASE` at the same
 point enum values are currently read/emitted (`src/oas/nodes/en.ts`); the runtime request/response

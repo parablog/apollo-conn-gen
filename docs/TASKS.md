@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 127 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 129 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -278,32 +278,6 @@ TDD cases: splice + hard-fail-on-unknown).
 **Refs:** `tools/connect-gen/src/emit/regions.rs` (the Rust mechanism to port);
 `graphos-service-factory/scripts/gen-ts.mjs` + `gen-ts.test.mjs` (the external prototype);
 `graphos-service-factory/docs/ts-gen-comparison.md` (the comparison that surfaced this).
-
-## 141 [FEAT] [P4] · OAS parameter `default` values never become a GraphQL argument default — ⬜ Open
-
-**Why:** found in the same Rust-comparison audit. Rust reads an OAS parameter's declared `default`
-and emits a real GraphQL argument default (`limit: Int = 50`); `gen` never does, across every one of
-the 5 real connectors compared (249 instances found by the field-level structural-equivalence walk
-in `graphos-service-factory/scripts/semantic-diff.mjs`). A client that omits the argument gets
-materially different behavior between the two tools — Rust supplies the spec's own default, `gen`
-supplies none (`null`/absent, whatever the connector's HTTP layer does with a missing query param).
-
-**OAS** (the shape that triggers it):
-```yaml
-parameters:
-  - name: limit
-    in: query
-    schema: { type: integer, default: 50 }
-```
-
-**Shape:** the `default` value is already read from the spec during param/argument construction
-(`Param`-related nodes) — this is plumbing that existing value through to the emitted GraphQL
-argument's `defaultValue`, not new spec-reading. Should compose the same way scalar/enum defaults
-already do elsewhere in the emitter — literal value, printed via the existing value-node printing
-path.
-
-**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`; the 249-instance count came from
-running `semantic-diff.mjs`'s `structuralDiff()` against all 5 committed schemas.
 
 ## 142 [FEAT] [P4] · Identifier-shaped string properties emit as `String`, never `ID` — ⬜ Open
 
