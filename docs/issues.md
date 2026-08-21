@@ -48,91 +48,6 @@ Invariants the entries below rely on:
 
 ---
 
-## 13 · Path-dependent cycle cuts make same-named instances diverge — 🟡 Donation replaced: #89 removes the field everywhere
-**Symptom:** with #10 + #12 in place, Confluence abstract fails compose with
-`SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`.
-
-**OAS** (Confluence — `Space` carries refs that re-enter `Content`/`User` only on *some* paths):
-```yaml
-Space:
-  properties:
-    homepage: { $ref: '#/components/schemas/Content' }   # cut when Space sits under Content
-    history:
-      type: object
-      properties:
-        createdBy: { $ref: '#/components/schemas/User' } # cut when Space sits under User
-```
-**Example** — two `Space` instances in one op:
-```
-path A (under Content): Space { # history — cut }      path B: Space { history: SpaceHistory }
-emitted (first wins):   type Space { # history … }     selection (path B): … space { history { … } }
-                        → SELECTED_FIELD_NOT_FOUND     goal: emitted Space = union → history survives
-```
-
-**The two routes** (`get:/wiki/rest/api/content/{id}/restriction`, re-checked 2026-07-30). They part
-company at `ContentRestriction`, and only the first one travels through `Content` — which is what
-makes `homepage` loop back and get cut there:
-```
-… >obj:type:#/c/s/ContentRestriction>prop:obj:content>obj:type:#/c/s/Content>prop:obj:history> …
-  … >obj:type:#/c/s/User>prop:obj:personalSpace>obj:type:#/c/s/Space>prop:circular-ref:#homepage
-… >obj:type:#/c/s/ContentRestriction>prop:obj:restrictions> … >obj:type:#/c/s/UserArray
-  >prop:array:#results>obj:type:#/c/s/User>prop:obj:personalSpace>obj:type:#/c/s/Space>prop:obj:homepage
-```
-The field it bites **today** is `homepage`: across all 65 confluence GET ops, `Space.homepage` is cut
-351 times and `Space.history` never — `history` keeps its slot and the cut inside it lands on
-`history.createdBy`. The June symptom above quotes `history`; same mechanism, different field.
-
-**Cause:**
-- #10's cycle cut is **per expansion path**: `Space` under a `Content` ancestor has `history`/`homepage`
-  cut; a `Space` instance on a path without that ancestor keeps them.
-- The writer emits **one** `type Space` (collector keeps the first instance per id).
-- The op's selection is the union of all paths → a selection from an un-cut instance can reference a
-  field the emitted (cut) instance commented out.
-
-**Proposed fix:** when the collector meets an already-collected id, **merge props** — per prop name,
-prefer the non-`PropCircRef` version. Then:
-- emitted type = union of surviving fields → every selected field exists (no `SELECTED_FIELD_NOT_FOUND`);
-- every union field is selected on at least the path it came from (no `CONNECTORS_UNRESOLVED_FIELD`);
-- props cut on *every* path stay commented.
-
-**AST (proposed):** no new nodes — a collect-time prop merge on the kept instance.
-
-**Fix (2026-06-11 — incorporates the lessons of the reverted 06-10 attempt):**
-- The routes are already spelled out in the final selection, so no extra bookkeeping: for each
-  field a node lost to a cycle cut, find a selection path that carries the real field under the
-  same type id (`>obj:type:X>prop:…:name`, in the `#/c/s` short form `path()` writes) and walk
-  it to its node with the existing `collectPaths`.
-- **SDL-only:** the found node goes into `context.sdlPropOverrides`
-  (`Map<writtenInstance, Map<fieldName, node>>`), read by `Obj.generate` only — every route's
-  selection keeps its own "field removed" comment. Mutating `props` instead leaked the field
-  into the cut position's selection → rover `CIRCULAR_REFERENCE`.
-- **Selection-guarded by construction:** the replacement comes FROM the selection, so a field
-  nobody selects is never added to the SDL (`CONNECTORS_UNRESOLVED_FIELD`, caught by
-  `test_040` AdobeCommerce).
-- Runs after the collect loop, once `expanded` is final. (A first version tracked instance
-  pairs during the loop — the same pair is met once per route and confluence has thousands,
-  so it went quadratic and hung the sweep. Deriving from `expanded` avoids the whole class.)
-
-**Measured:** confluence abstract `SELECTED_FIELD_NOT_FOUND` 8 → 1; the unblocked ops now fail
-on the **R2 discriminator-less-union wall** (`GROUP_SELECTION_IS_NOT_OBJECT` on
-`ContentMetadata.labels: LabelsUnion`, 14 ops) — net pass-rate unchanged (69.2% both passes)
-until that R2 gap is fixed. Full corpus byte-identical otherwise (zero regressions, both
-passes). box's 9 INTERNAL_ERROR ops confirmed a *different* mechanism (referenced-but-unemitted
-`Folder--Mini`, R-collector family) — untouched by this merge.
-
-**Status update (2026-08-14).** The R2 wall named above is gone, so it is no longer what holds
-these ops back. Confluence is at 93.8% (61/65 GET) and three of its four failures are now
-`CONNECTORS_UNRESOLVED_FIELD` on `Content.space` — the same divergence, raising the opposite
-error. The guard this entry relies on ("every union field is selected on at least the path it came
-from") is not enough: the composer wants the field provided at every position the type appears.
-Written up as #89.
-
-Fixed by #89 (see docs/FIXED.md): the donation is gone — a field removed on some routes but kept
-on others is now removed on every route and in the SDL, so the instances cannot disagree.
-
-**Refs:** `src/oas/generator/typesCollector.ts` (`consolidateRemovedFields`), `src/oas/oasContext.ts`
-(`propOverrides`), `src/oas/nodes/obj.ts` (generate/select/dependencies). See docs/FIXED.md #89.
-
 ## 54 · The same "what does this operation give back" walk is written four times — 📋 Noted, not fixed
 
 **Symptom:** four places walk the operation's result node the same way, each with its own copy of
@@ -141,7 +56,7 @@ the unwrap. They agree today, but nothing keeps them in step.
 | Where | Unwraps to | Extra it does |
 |---|---|---|
 | `typeUtils.ts` `T.responseType` | the response node, list kept | — |
-| `typeUtils.ts` `T.responseItemSchema` | the item's OAS schema | takes lists off |
+| `typeUtils.ts` `T.responseItemSchema` | the item's OAS schema | takes lists off — now delegates its unwrap to `T.responseItemType` (docs/FIXED.md #58), one copy folded |
 | `batch.ts` `responseItem` | the item object | also handles a `{ results: [Product] }` wrapper, returns a `BatchTarget` |
 | `entity.ts` (around :49) | the response node | reads it for entity resolvers |
 
@@ -487,60 +402,4 @@ field, never which node kind gets built.
 **Refs:** `ROADMAP.md` "R16" (this survey's own shape notes, kept there since it's still planned
 work), `docs/FIXED.md #133` (the 4 sites already done, same design: `warn()` and the schema note
 share one reason string, `Schemas.withDegradeNote`).
-
-## 135 [P4] · A drift-recovered path segment answers empty when nothing re-derives its `.path()` string — ⬜ Open
-
-**Symptom:** found as a side effect of landing #111's new "own output must parse" safety net — a
-previously-green test, `test_72_browse_minted_path_resolves` (`tests/all/regen.test.ts`), turned out
-to have been comparing two empty, invalid schemas against each other the whole time. Its own helper,
-`mintPath`, walks a fully-expanded digitalocean.yaml tree and returns the path to the *first* scalar
-leaf whose path contains a marker string (`ActiveDeployment` in this test) — after browsing
-`/v2/apps` first (which claims the name `ActiveDeployment` for a same-shaped type reached from
-*that* op), the deployments op's own `ActiveDeployment` drift-renames to
-`inlinev2AppsByAppIdDeploymentsResponseActiveDeployment` (see #72's own naming-collision fix).
-Passing `generateSchema([minted])` — that one drifted, fully-qualified scalar path, no `>**`
-wildcard — produces `type ActiveDeployment {\n}\n`: the type is emitted, but `cause` (the field the
-path names) is missing entirely.
-
-**Root-caused** (correcting this entry's earlier "not yet root-caused" note — the prior hypothesis,
-that the reachability loop's fixed point converges to nothing, was wrong; verified empirically
-instead of assumed): a **plain, un-drifted** bare leaf selection works fine on its own (confirmed
-against `petstore.yaml`'s `Pet.name`, and against `digitalocean.yaml`'s `ActiveDeployment.cause`
-when `/v2/apps` is never browsed first, so no rename ever happens) — this is specific to the
-drift-recovery case:
-- `SelectionPath.resolveSegment` DOES recover the drifted segment to the right node (confirmed:
-  the recovered `ActiveDeployment` object visits correctly and populates all 15 of its real props).
-- But the selection array passed to `generateSchema` still holds the **literal, stale string**
-  `minted` mints — containing the *drifted* segment name
-  (`inlinev2AppsByAppIdDeploymentsResponseActiveDeployment`), which only existed in the browsed
-  tree that had the naming collision.
-- `Type.selectedProps` (`src/oas/nodes/type.ts`) checks selection membership by recomputing each
-  prop's **own, fresh** `.path()` and testing it against the selection's prefix set
-  (`selectionPrefixes`). The freshly-recovered node's `.path()` uses *its own* (un-drifted, or
-  differently-drifted) name for that segment — never the stale string that found it — so `cause`'s
-  fresh path never matches `minted`, and `ActiveDeployment.selectedProps([minted])` returns empty.
-- With a `>**` glob, this can't happen: `PathsCollector.collectExpandedPaths` rebuilds the whole
-  selection from the SAME live traversal (`T.traverse` + each child's own `.path()` call), so the
-  string and the node it names are always in sync. The mismatch is only possible for a bare,
-  pre-computed literal path string — which is also why this needed a *browsed-then-drifted* setup
-  to surface at all; a plain fresh selection's string always already matches.
-
-**Workaround applied to `test_72` (not a fix for the general case):** glob the drifted segment's
-whole subtree (`>**`) instead of selecting its one leaf directly — this still exercises the thing
-the test is about (a drift-recovered segment resolves to the same generation a fresh canonical name
-does), while sidestepping the stale-string mismatch since `>**` always re-derives its own paths.
-`test_72_browse_minted_path_resolves` un-`{ todo }`'d, passing again.
-
-**Not done:** the general fix — make a bare, literal selection-path string survive recovery (e.g.
-re-deriving each selected node's own fresh `.path()` back into the selection array after resolution,
-instead of trusting the caller's original string past that point). No corpus case is known to hit
-this outside `test_72`'s own drift setup; a `--paths` CLI invocation always selects at least a full
-operation subtree (`SelectionPath.everythingUnder`, always `>**`), so this needs a browsed, renamed,
-*and* leaf-only-selected combination to reach — unconfirmed whether that's reachable outside tests.
-
-**Refs:** `tests/all/regen.test.ts` (`mintPath`, `test_72_browse_minted_path_resolves`),
-`src/oas/nodes/type.ts` (`selectedProps`, `selectionPrefixes`), `src/oas/utils/selectionPath.ts`
-(`resolveSegment`, the recovery this interacts with). Found while verifying #111's fix against the
-full suite.
-
 

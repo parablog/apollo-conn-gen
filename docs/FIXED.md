@@ -6374,7 +6374,7 @@ a_clear_error_instead_of_crashing` originally exercised the `#134` fixture both 
 `servicePrefix`; once `#134` and then `#136` were independently fixed, that exact selection stopped
 producing invalid SDL, so the test moved to `tests/all/regen.test.ts` (next to
 `test_72_browse_minted_path_resolves`, reusing its helpers) as `test_111_bare_leaf_selection_still_
-throws_invalid_sdl`, now exercising `docs/issues.md #135` instead — the two gates themselves are
+throws_invalid_sdl`, now exercising `docs/FIXED.md #135` instead — the two gates themselves are
 unchanged and untouched by that move. `test_111_directives_apply_corrupting_sdl_is_caught_by_the_
 final_gate` (`tests/all/oas-core.test.ts`) is the second gate's own failing-first regression: a valid
 SDL plus the malformed-directive-string config above, asserting the second gate's distinct error
@@ -6387,8 +6387,9 @@ only the pre-existing, unrelated `#120`/`test_61` todos remain.
 `oneof-scalar-members-empties-response-type.yaml` (no longer used by this issue's own test — see
 `docs/FIXED.md #136`). #108, #110 (the original, now individually fixed, repro instances),
 `docs/FIXED.md #134` (this fix's original regression fixture, now independently fixed),
-`docs/issues.md #135` (this issue's test's current, unrelated mechanism, still open, worked around
-rather than fixed), `docs/FIXED.md #136` (what `#134`'s fixture exercised in between, also fixed).
+`docs/FIXED.md #135` (this issue's test's current mechanism, since independently fixed —
+`test_111_bare_leaf_selection_still_throws_invalid_sdl` was retired as a result, see that entry),
+`docs/FIXED.md #136` (what `#134`'s fixture exercised in between, also fixed).
 
 ## 134 · A property whose schema is a bare `oneOf` of plain scalar/enum members vanishes, taking its whole type with it — ✅ Fixed
 
@@ -6538,8 +6539,8 @@ error_instead_of_crashing` relied on exactly this bug to make its fixture produc
 #136 made that selection valid, breaking the test. `generateSchema([])` does not work as a
 replacement (`OperationWriter` early-returns on an empty selection, emitting only boilerplate with no
 `Query` type at all — `parse()` never complains, since a missing root type is a schema-build concern,
-not a syntax one — confirmed, not assumed). Replaced with `docs/issues.md #135` (still open, a
-different mechanism, survives this fix undisturbed): the test moved to `tests/all/regen.test.ts`, next
+not a syntax one — confirmed, not assumed). Replaced with `docs/FIXED.md #135` (a different
+mechanism, since independently fixed): the test moved to `tests/all/regen.test.ts`, next
 to `test_72_browse_minted_path_resolves` (reusing its `mintPath`/`deepExpand`/`freshGen` helpers) as
 `test_111_bare_leaf_selection_still_throws_invalid_sdl` — browses `/v2/apps` on `digitalocean.yaml`
 first to drift-rename the deployments subtree, mints the literal leaf path with no `>**`, and asserts
@@ -6560,8 +6561,8 @@ does everywhere else.
 nodes/get.ts` (`visitResponseContent`, the disabled eager visit), `src/oas/nodes/res.ts` (`visit`,
 `dependencies`), `src/oas/nodes/typeUtils.ts` (`isContainer`). Fixtures `bare-op-nested-response.yaml`,
 `bare-op-nested-body.yaml`. `docs/FIXED.md #134` (the issue this replaced as #111's original
-load-bearing fixture), `docs/issues.md #135` (#111's test's new, unaffected mechanism), `docs/FIXED.md
-#111` (the safety net this was found re-verifying).
+load-bearing fixture), `docs/FIXED.md #135` (#111's test's mechanism at the time, since
+independently fixed), `docs/FIXED.md #111` (the safety net this was found re-verifying).
 
 ## 120 · A bare `$ref`-enum response drops the whole operation — ✅ Fixed
 
@@ -7089,3 +7090,129 @@ source).
 `composed-collision-array-items.yaml`. See `#22` (the same-class scope decision this closes), `#126`
 (the sibling, already-fixed real-component case), `#129` (the measurement-tool bug found while
 investigating this).
+
+## 135 · A drift-recovered path segment answered empty because the selection string was never re-derived after recovery — ✅ Fixed
+
+**Symptom:** found as a side effect of landing `#111`'s "own output must parse" safety net — a
+previously-green test, `test_72_browse_minted_path_resolves` (`tests/all/regen.test.ts`), turned out
+to have been comparing two empty, invalid schemas against each other the whole time. Selecting one
+leaf field by its exact path, with no `>**` wildcard, after that leaf's name had drift-renamed
+(digitalocean.yaml: browsing `/v2/apps` first claims the name `ActiveDeployment`, so the deployments
+op's own same-shaped type renames to `inlinev2AppsByAppIdDeploymentsResponseActiveDeployment` — see
+`#72`) produced `type ActiveDeployment {\n}\n`: the type was emitted, but the selected field
+(`cause`) was missing entirely.
+
+**Cause:** `TypesCollector.collect()` (`src/oas/generator/typesCollector.ts`) walks a selection path
+segment by segment via `SelectionPath.resolveSegment` (`src/oas/utils/selectionPath.ts`). When a
+segment's name has drifted, `resolveSegment` recovers the right node through its "only child of that
+kind" fallback — but the walk never wrote that recovery back into the selection array; the stale,
+literal string stayed as it was. `Type.selectedProps` (`src/oas/nodes/type.ts`) later matches a prop
+by recomputing its own, fresh `.path()` against the selection's prefixes — a drift-recovered node's
+fresh path never equals the stale string that found it, so the match silently failed and the field
+was dropped, even though its parent type still got emitted. Only a bare, literal path was
+vulnerable: a `>**` wildcard is immune because `PathsCollector.collectExpandedPaths` rebuilds every
+leaf string from the same live walk that names it, so the string and the node it names can never
+drift apart.
+
+**Fix:** after the segment walk finishes for one literal (non-wildcard) selection entry, re-derive
+the resolved node's current path and swap it into the selection array if it no longer matches the
+string that found it:
+```ts
+if (!hitWildcard && current && current.path() !== path) {
+  const idx = expanded.indexOf(path);
+  if (idx !== -1) expanded[idx] = current.path();
+}
+```
+`hitWildcard` is reset for every selection entry, so an earlier `>**` entry in the same run can't
+suppress the correction for a later literal one.
+
+**Example:**
+```graphql
+# before: the type is emitted, but the field it exists for is missing — invalid on its own
+type ActiveDeployment {
+}
+# after
+type ActiveDeployment {
+  cause: String
+}
+```
+
+**Verified:** new test `test_135_drift_recovered_bare_leaf_selection_resolves`
+(`tests/all/regen.test.ts`) selects the drift-renamed leaf directly (no `>**`) and asserts both that
+the output matches a fresh, un-drifted selection's output, and that the selected field is actually
+present, not just its type. Revert-check: with the `typesCollector.ts` fix reverted, the new test
+fails reproducing the issue's exact symptom (an empty type, no `cause` field); restored, it passes.
+Full suite green: 401 pass, 0 fail, 2 todo (`test_61`, and `#111`'s own regression test — see below).
+
+`#111`'s own regression test, `test_111_bare_leaf_selection_still_throws_invalid_sdl`
+(`tests/all/regen.test.ts`), relied on this exact bug as its only known trigger for the "own output
+must parse" gate it exists to protect — fixing #135 makes its selection valid GraphQL, so its
+`assert.throws` calls stopped firing, correctly. Retired via Node's `test(name, { todo }, fn)` form
+(mirroring `test_61`'s existing pattern), with its body removed and the reason recorded in the
+`todo` string. No other known repro of that gate exists, so it was not left red.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`TypesCollector.collect`), `src/oas/nodes/type.ts`
+(`selectedProps`, `selectionPrefixes`), `src/oas/utils/selectionPath.ts` (`resolveSegment`, the
+recovery this interacts with). `#111` (the safety net that surfaced this), `#134`/`#136` (found and
+fixed in the same investigation), `#72` (the drift-rename mechanism this reuses as its repro).
+
+
+## 13 · Path-dependent cycle cuts make same-named instances diverge — ✅ Fixed, superseded by #89
+
+**Symptom:** with #10's per-route cycle cut in place, Confluence abstract fails compose with
+`SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`
+(later, same mechanism, on `homepage` instead).
+
+**OAS** (Confluence — `Space` carries refs that re-enter `Content`/`User` only on *some* paths):
+```yaml
+Space:
+  properties:
+    homepage: { $ref: '#/components/schemas/Content' }   # cut when Space sits under Content
+    history:
+      type: object
+      properties:
+        createdBy: { $ref: '#/components/schemas/User' } # cut when Space sits under User
+```
+
+**Cause:** #10's cycle cut runs per expansion path, so two `Space` instances built on different
+routes can disagree on which fields survive; the writer emits only one `type Space`, and an op's
+selection is the union of every route it reaches — a selection built from an un-cut instance can
+name a field the emitted (cut) instance already commented out.
+
+**First attempt (reverted 2026-06-10):** mutate `props` on the kept instance directly, merging in
+whichever route still had the field. This leaked the field into the *cut* position's own selection
+too — rover then rejected it with `CIRCULAR_REFERENCE`, since that position's selection now asked
+for a field its own SDL comment says was removed.
+
+**Fix that shipped (2026-06-11):** stay selection-guarded and SDL-only instead of touching `props`.
+For each field a node lost to a cycle cut, find a selection path that already carries the real
+field under the same type id and walk it there with the existing `collectPaths`; stash the found
+node in `context.sdlPropOverrides` (`Map<writtenInstance, Map<fieldName, node>>`), read by
+`Obj.generate` only. Every route's own selection keeps its own "field removed" comment — only the
+written SDL type gets the field back, and only for fields some selection actually names. Runs once,
+after the collect loop, over the final `expanded` set — an earlier version tracked instance pairs
+*during* the collect loop, which meets the same pair once per route; Confluence has thousands of
+routes, so that version went quadratic and hung the sweep.
+
+**Not enough:** this "donation" only guaranteed a field was selected on *at least one* route
+reaching the type, not on *every* route — the composer wants a declared field provided at every
+position the type appears, a stricter requirement. That gap resurfaced on `Content.space` and was
+written up as #89, which fixed it for real: a field removed on any route is now removed on *every*
+route (SDL, every route's own selection, and reachability alike), instead of declared because one
+route happened to keep it. #89 also deletes this entry's donation machinery
+(`findSelectedFieldNode`, `sdlPropOverrides`) outright — it only ever fired when a route had lost
+the field, which now just means removing it everywhere instead of donating it back.
+
+**Verified:** no dedicated fixture of its own — tracked via Confluence corpus pass-rate sweeps
+(`SELECTED_FIELD_NOT_FOUND` 8 → 1 when this landed, net pass-rate held at 69.2% until the R2
+discriminator-less-union wall blocking the unblocked ops was separately fixed, later 93.8%). The
+mechanism itself is exercised by #89's fixture and test instead: `cycle-cut-on-some-routes.yaml`,
+`test_89_field_removed_on_any_route_is_removed_everywhere`.
+
+**AST:** no new node shape at either stage — a collect-time SDL prop override here, replaced by
+#89's collect-time removal-propagation; `PropCircRef` stands in for both.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`consolidateRemovedFields`, #89's replacement for
+this entry's `findSelectedFieldNode`), `src/oas/oasContext.ts` (`propOverrides`, replacing
+`sdlPropOverrides`). See docs/FIXED.md #89 (the fix that actually landed), #10 (the cycle cut this
+reacts to).
