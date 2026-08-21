@@ -30,6 +30,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/History'
+  /box:
+    get:
+      operationId: getBox
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Box'
 components:
   schemas:
     History:
@@ -46,3 +56,11 @@ components:
       properties:
         publishers:
           $ref: '#/components/schemas/History'
+    # an object declaring no properties of its own, distinct from a shapeless `{}` value: this
+    # one still has `type: object`, it just lists nothing to put inside it
+    Box:
+      type: object
+      properties:
+        emptyBox:
+          type: object
+          properties: {}

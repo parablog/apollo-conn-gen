@@ -18,7 +18,7 @@ export abstract class Prop extends Type {
   }
 
   public generate(context: OasContext, writer: Writer, _selection: string[]): void {
-    const description = this.schema.description;
+    const description = this.effectiveDescription(context);
     if (description != null) {
       if (
         description.includes('\n') ||
@@ -47,6 +47,13 @@ export abstract class Prop extends Type {
   }
 
   public abstract getValue(context: OasContext): string;
+
+  // The docstring text written above this field. Default: just the field's own OAS description.
+  // A subclass that only decides inside getValue() to give up and write JSON overrides this to
+  // explain why. e.g. (confluence) PropObj adds a reason here when contributors becomes JSON.
+  protected effectiveDescription(_context: OasContext): string | undefined {
+    return this.schema.description;
+  }
 
   // the `?` symbol marks a field the API may leave out, so the router stops warning when it does.
   // e.g. (petstore) optional `name?`, while required `id` stays plain and still warns.

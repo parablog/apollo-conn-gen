@@ -1,11 +1,12 @@
 import { IType, Obj, Union, Prop, T } from './internal.js';
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
-import { trace } from '../log/trace.js';
+import { trace, warn } from '../log/trace.js';
 import { Composed } from './comp.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 
 export class PropObj extends Prop {
   constructor(
@@ -51,17 +52,41 @@ export class PropObj extends Prop {
     context.leave(this);
   }
 
-  public getValue(context: OasContext): string {
+  // Why this field has nothing real to write and must fall back to plain JSON, or undefined when
+  // it doesn't. getValue() and effectiveDescription() both call this, so the warn() log and the
+  // docstring above the field always give the same reason. see docs/FIXED.md #145
+  private jsonDegradeReason(context: OasContext): string | undefined {
     // we'll make an assumption here: that if the child obj has no properties,
     // then it's a free-form JSON payload. not sure if the right one, but it will
-    // compose for now.
-    if (_.isEmpty(this.obj?.props)) return 'JSON';
+    // compose for now. e.g. History.emptyBox: { type: object, properties: {} } -> emptyBox: JSON
+    if (_.isEmpty(this.obj?.props)) {
+      return 'this object declares no properties of its own — sent as raw JSON instead.';
+    }
 
     // every field of the target was removed: no type is written for it, so the field is free-form
     // JSON. e.g. (confluence) ContentHistory's contributors: { $ref: Contributors } -> JSON  #101
-    if (T.everyFieldRemoved(this.obj, context)) return 'JSON';
+    if (T.everyFieldRemoved(this.obj, context)) {
+      return `every field of ${Naming.getRefName(this.obj!.name!)} was removed to break a reference cycle, leaving no type to write — sent as raw JSON instead.`;
+    }
+
+    return undefined;
+  }
+
+  public getValue(context: OasContext): string {
+    const reason = this.jsonDegradeReason(context);
+    if (reason) {
+      warn(context, '[prop-obj]', reason);
+      return 'JSON';
+    }
 
     return Naming.genTypeName(this.obj!.name!) + (this.obj as Obj).nameSuffix();
+  }
+
+  // Adds the JSON-degrade reason to the field's docstring, same reason warn() already logged.
+  // e.g. (only-field-in-a-cycle) contributors gains a "NEEDS ATTENTION" note; createdDate doesn't.
+  protected effectiveDescription(context: OasContext): string | undefined {
+    const reason = this.jsonDegradeReason(context);
+    return reason ? Schemas.withDegradeNote(this.schema, reason).description : super.effectiveDescription(context);
   }
 
   dependencies(context: OasContext): IType[] {

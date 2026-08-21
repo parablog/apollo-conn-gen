@@ -1589,17 +1589,52 @@ test('test_89_field_removed_on_any_route_is_removed_everywhere', async () => {
   assert.ok(/\btitle\b/.test(schema!) && /\bnote\b/.test(schema!), 'and selected');
 });
 
-test('test_101_type_with_every_field_removed_becomes_json', async () => {
+test('test_101_type_with_every_field_removed_becomes_json', async (t) => {
   // #101: a type whose every field was removed printed nothing real between its braces, which does
   // not parse — confluence post:…/{id}/version and put:…/child/attachment/{attachmentId}. The field
   // is now free-form JSON, the selection takes it whole, and the definition is never written.
-  const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/history>**', 'post:/history>**'], 2, 2);
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/history>**', 'post:/history>**'], 3, 2);
   assert.ok(schema !== undefined);
   assert.ok(/\bcontributors: JSON\b/.test(schema!), 'the field reads as free-form JSON');
   assert.ok(!/^type Contributors/m.test(schema!), 'no comment-only type is written');
   assert.ok(!/^input ContributorsInput/m.test(schema!), 'no comment-only input is written');
   assert.ok(!/contributors\?? \{/.test(schema!), 'the selection opens no group for it');
   assert.ok(/^\s+contributors\??$/m.test(schema!), 'and still takes the field');
+
+  // #145: the reason contributors became JSON now lands in the SDL, not just the console log.
+  const cycleReason =
+    'every field of Contributors was removed to break a reference cycle, leaving no type to write — sent as raw JSON instead.';
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(cycleReason)}"\\n {2}contributors: JSON`).test(schema!),
+    'contributors carries a NEEDS ATTENTION note immediately above the field',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[prop-obj]' && c.arguments[2] === cycleReason),
+    'warn() fires with the [prop-obj] tag and the exact reason text',
+  );
+});
+
+test('test_145_prop_obj_with_no_properties_of_its_own_becomes_json', async (t) => {
+  // #145: an object property that declares `properties: {}` (unlike a shapeless `{}` value, which
+  // takes a different, Scalar-only path — see factory.ts's isShapelessObject) has nothing to write
+  // either, and gets the same JSON-and-note treatment as #101's cycle-cut case above.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/box>**'], 3, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bemptyBox: JSON\b/.test(schema!), 'the field reads as free-form JSON');
+  assert.ok(!/emptyBox\?? \{/.test(schema!), 'the selection opens no group for it');
+  assert.ok(/^\s+emptyBox\??$/m.test(schema!), 'and still takes the field');
+
+  const emptyReason = 'this object declares no properties of its own — sent as raw JSON instead.';
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(emptyReason)}"\\n {2}emptyBox: JSON`).test(schema!),
+    'emptyBox carries a NEEDS ATTENTION note immediately above the field',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[prop-obj]' && c.arguments[2] === emptyReason),
+    'warn() fires with the [prop-obj] tag and the exact reason text',
+  );
 });
 
 test('test_102_enum_value_listed_twice_is_written_once', async () => {

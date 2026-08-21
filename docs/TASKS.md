@@ -135,9 +135,10 @@ todo — asserts the op composes.
 **Symptom:** `warn()` logs why a field gave up and became `JSON`, but that reason never reaches the
 schema itself — anyone reading the SDL (or GraphQL tooling: Studio, GraphiQL, introspection) sees a
 bare `JSON` field with no clue why. `docs/FIXED.md #133` fixed 4 of the 17 live sites found by an
-exhaustive survey of `src/oas/` — the ones that could reuse `Prop.generate()`'s existing
-`schema.description -> """..."""` mechanism with no new plumbing. Umbrella entry for the other 13,
-each needing its own new-plumbing design; a site gets its own number when someone picks it up.
+exhaustive survey of `src/oas/`, and `docs/FIXED.md #145` fixed 2 more (`propObj.ts`'s D1/D2) — the
+ones that could reuse `Prop.generate()`'s existing `schema.description -> """..."""` mechanism, via
+a new overridable `effectiveDescription()` hook for the D1/D2 case. Umbrella entry for the remaining
+11, each needing its own new-plumbing design; a site gets its own number when someone picks it up.
 
 | site | where | why it needs new plumbing |
 |---|---|---|
@@ -152,34 +153,28 @@ each needing its own new-plumbing design; a site gets its own number when someon
 | `map.ts:172` | `visitAdditionalProperties`, `additionalProperties: {}` | same, **and** arguably not a forced degrade — the API author explicitly said "value can be anything," so any wording here should read softer than the rest |
 | `map.ts:184` | `visitAdditionalProperties`, all-plain choice (#108) | same |
 | `union.ts:144` | `Union.generate()`, merged type with no selected fields (#80) | writes straight into an operation's return-type slot; natural home is the operation-level docstring in `get.ts`/`post.ts`, already computed before `resultType.generate()` runs |
-| `propObj.ts:58` (D1) | `getValue()`, every field stripped from the object (#101) | decided *inside* `getValue()`, which runs after `Prop.generate()` has already written `this.schema.description` — needs a new overridable hook on `Prop` |
-| `propObj.ts:62` (D2) | `getValue()`, every field removed on every route (#101) | same |
 
 One dead line found in the same survey, not counted above: `map.ts:102`'s `else { writer.write('JSON') }`
 can't fire — a `Map` node only ever gets built when `Schemas.isMap()` already confirmed
 `additionalProperties` is a real object schema, so `visitAdditionalProperties`'s early-return guard
 that would leave `valueType` unset never triggers for a real `Map`.
 
-**Shape:** two groups, each needing its own new writer plumbing (folded in from `ROADMAP.md`'s
-former R16 — same 13-site scope, no separate id; merged into this entry 2026-08-21):
-- **11 sites produce a bare `Scalar` node or write the literal string `'JSON'` directly into a
-  type/operation body** — no existing comment channel at all. Landing position varies and needs a
-  design per shape: `Map.generate()`'s `value:` line (its own type body, not a `Prop`), a `Union`'s
-  zero-field merge written straight into an operation's return-type slot (natural home: extend the
-  operation-level docstring in `get.ts`/`post.ts`, already computed before `resultType.generate()`
-  runs), a `Param`'s degraded arg type (GraphQL supports argument descriptions syntactically, never
-  used anywhere in this codebase today), and several bare-`Scalar` sites in `factory.ts` whose
-  landing spot depends entirely on the caller (`Res` return type, `Union` member, `Map` value,
-  `Param` type).
-- **2 sites (`propObj.ts:58`, `propObj.ts:62`)** decide "this is JSON" *inside* `getValue()`, which
-  runs after `Prop.generate()` has already written the description — needs a new overridable hook
-  on the `Prop` base class (e.g. `effectiveDescription()`) rather than a static field read.
+**Shape:** the remaining 11 sites produce a bare `Scalar` node or write the literal string `'JSON'`
+directly into a type/operation body — no existing comment channel at all, unlike `#145`'s D1/D2
+(which had a `Prop` to hang a hook off). Landing position varies and needs a design per shape:
+`Map.generate()`'s `value:` line (its own type body, not a `Prop`), a `Union`'s zero-field merge
+written straight into an operation's return-type slot (natural home: extend the operation-level
+docstring in `get.ts`/`post.ts`, already computed before `resultType.generate()` runs), a `Param`'s
+degraded arg type (GraphQL supports argument descriptions syntactically, never used anywhere in this
+codebase today), and several bare-`Scalar` sites in `factory.ts` whose landing spot depends entirely
+on the caller (`Res` return type, `Union` member, `Map` value, `Param` type).
 
-**AST:** none of the 13 — this only changes what a `Prop`/writer emits alongside an already-JSON
+**AST:** none of the 11 — this only changes what a `Prop`/writer emits alongside an already-JSON
 field, never which node kind gets built.
 
-**Refs:** `docs/FIXED.md #133` (the 4 sites already done, same design: `warn()` and the schema note
-share one reason string, `Schemas.withDegradeNote`).
+**Refs:** `docs/FIXED.md #133` (the first 4 sites), `docs/FIXED.md #145` (D1/D2, the
+`effectiveDescription()` hook) — same design throughout: `warn()` and the schema note share one
+reason string, `Schemas.withDegradeNote`.
 
 ## 138 [FEAT] [P4] · Accept a folder of independent OAS specs, not just a single file — ⬜ Open
 

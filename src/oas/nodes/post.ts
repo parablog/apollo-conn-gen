@@ -115,9 +115,9 @@ export class Post extends Get {
 
     const mediaType = Post.findSendableMediaType(mediaTypes);
     if (!mediaType) {
-      const plainMultipart = this.findSendablePlainMultipart(mediaTypes);
-      if (plainMultipart) {
-        this.body = Factory.fromBody(context, this, plainMultipart.schema, plainMultipart.mediaType) as Body;
+      const multipart = this.findSendablePlainMultipart(mediaTypes);
+      if (multipart) {
+        this.body = Factory.fromBody(context, this, multipart.schema, multipart.mediaType) as Body;
         this.body.visit(context);
         return;
       }

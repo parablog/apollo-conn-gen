@@ -7302,3 +7302,58 @@ file field, and `formData` with no `consumes`) and `form-encoded-body.yaml`'s `/
 (hand-written OAS 3 multipart, flat strings). Tests
 `test_137_multipart_with_only_plain_strings_maps_as_a_form`,
 `test_137_swagger2_formdata_maps_as_a_form`. Related: #83.
+
+
+## 145 [BUG] · Two more JSON-degrade sites (`PropObj`'s D1/D2) now flag themselves in the schema — ✅ Fixed
+
+**Symptom:** same gap `#133` fixed for 4 sites, still open for `PropObj`'s two: `warn()` already
+logs why a field became `JSON` (an empty object, or every field removed to break a reference
+cycle), but the reason never reached the schema itself. Split off from the `#132` umbrella rather
+than closing it wholesale — `#132` covers 13 sites total, this fix only resolves these 2.
+
+**OAS** (`only-field-in-a-cycle.yaml` — two distinct triggers):
+```yaml
+Box:
+  type: object
+  properties:
+    emptyBox: { type: object, properties: {} }   # D1: declares no properties of its own
+ContentHistory:
+  properties:
+    contributors: { $ref: '#/components/schemas/Contributors' }   # D2: every field cycle-cut away
+```
+
+**Example:**
+```graphql
+# before
+emptyBox: JSON
+
+# after
+"""
+NEEDS ATTENTION: this object declares no properties of its own — sent as raw JSON instead.
+"""
+emptyBox: JSON
+```
+
+**Cause:** unlike `#133`'s 4 sites, `PropObj.getValue()` decides "this is JSON" *after*
+`Prop.generate()` has already written `this.schema.description` — the description line is emitted
+before `getValue()` ever runs, so there was no hook to attach the reason to.
+
+**Fix:** `Prop` gains a new overridable `effectiveDescription(context)` hook — default just returns
+`this.schema.description`, same as before. `Prop.generate()` calls it instead of reading
+`schema.description` directly. `PropObj` overrides it, and factors the "why JSON" decision into one
+private `jsonDegradeReason()` shared by both `getValue()` (the `warn()` call) and
+`effectiveDescription()` (the schema note) — so the log line and the docstring can never drift
+apart, the same guarantee `#133`'s shared-variable design gave its 4 sites. Reuses
+`Schemas.withDegradeNote` from `#133`, no new plumbing there.
+
+**Verified:** fixture `only-field-in-a-cycle.yaml` gained a `/box` op (`Box.emptyBox`, D1's
+empty-properties trigger — the pre-existing `/history` op already covered D2's cycle-cut trigger for
+`ContentHistory.contributors`). Tests `test_145_prop_obj_with_no_properties_of_its_own_becomes_json`
+(new) and `test_101_type_with_every_field_removed_becomes_json` (extended with the docstring +
+`warn()` assertions). Both assert the exact `NEEDS ATTENTION: <reason>` text lands immediately above
+the field *and* that `warn()` fires with the same string, `[prop-obj]` tag. Full suite green (406
+tests, 404 pass, 0 fail, 2 pre-existing todo).
+
+**Refs:** `src/oas/nodes/prop.ts` (`effectiveDescription`), `src/oas/nodes/propObj.ts`
+(`jsonDegradeReason`, `getValue`, `effectiveDescription`). `docs/FIXED.md #133` (the shared design,
+the first 4 sites), `docs/TASKS.md #132` (the umbrella — 11 sites still open there).
