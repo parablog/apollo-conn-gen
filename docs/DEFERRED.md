@@ -1,20 +1,23 @@
-# Generator issues log — deferred
+# Generator tasks log — deferred
 
-Entries filed the same way as `docs/issues.md`'s, but not active work: design notes, parked
-investigations, upstream-blocked gaps, and theoretical/no-repro cases. None of these carry a
-priority tag, and none should — the fix-the-issues loop (`~/bin/issue-loop.sh`) only ever
-considers `docs/issues.md` entries whose status is `⬜ Open`/`🔴 Open`, so everything here is
-already out of its work queue by construction.
+Entries filed the same way as `docs/TASKS.md`'s, but not active work: design notes, parked
+investigations, upstream-blocked gaps, and theoretical/no-repro cases — bugs and features alike.
+None of these carry a priority tag, and none should — the fix-the-issues loop
+(`~/bin/issue-loop.sh`) only ever considers `docs/TASKS.md` entries whose status is
+`⬜ Open`/`🔴 Open`, so everything here is already out of its work queue by construction.
 
-For the node-model (AST) background these entries assume, see `docs/issues.md`'s own preamble.
+Entries keep the same bracketed type label as `docs/TASKS.md` (`[BUG]`, `[FEAT]`, …) — just without
+a priority tag, since nothing here is queued.
 
-Ids are global across all three files (`docs/issues.md`, `docs/DEFERRED.md`, `docs/FIXED.md`) and
-never reused:
-- open, loop-actionable — `// see docs/issues.md #N`
+For the node-model (AST) background these entries assume, see `docs/TASKS.md`'s own preamble.
+
+Ids are global across all three files (`docs/TASKS.md`, `docs/DEFERRED.md`, `docs/FIXED.md`), shared
+by bugs and features, and never reused:
+- open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
 - fixed — `// see docs/FIXED.md #N`
 
-**Moving an entry out of here:** back to `docs/issues.md` (with a priority tag) if its status
+**Moving an entry out of here:** back to `docs/TASKS.md` (with a priority tag) if its status
 genuinely turns Open — a parked wake condition fires for real, an upstream block lifts, a theoretical
 case gets a repro. To `docs/FIXED.md` instead if work on it actually lands a fix.
 
@@ -23,7 +26,7 @@ without a dedicated code change).
 
 ---
 
-## 54 · The same "what does this operation give back" walk is written four times — 📋 Noted, not fixed
+## 54 [BUG] · The same "what does this operation give back" walk is written four times — 📋 Noted, not fixed
 
 **Symptom:** four places walk the operation's result node the same way, each with its own copy of
 the unwrap. They agree today, but nothing keeps them in step.
@@ -65,7 +68,7 @@ promotes — that near-miss is pinned by `test_oas_responseType_keeps_the_list_w
 it is a bigger change than the `allOfBase` swap, and it is working code on the R6 batch path. Left for
 a quieter moment.
 
-## 73 · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked (stripe trigger fixed 2026-08-19; identity-drift core still open, untested)
+## 73 [BUG] · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked (stripe trigger fixed 2026-08-19; identity-drift core still open, untested)
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —
 so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
@@ -187,7 +190,7 @@ it stays open here as a separate, untested concern, parked until something exerc
 again. See #109's matching 2026-08-19 correction — the same version-pin mistake, found the same day
 on a second schema.
 
-## 79 · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
+## 79 [BUG] · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
 
 **Symptom:** the last `GRAPH_QL_ERROR` sweep residue: launch_library
 `get:/2.3.0/dashboard/starship/` fails on stock rover with `No matching shape found for selection.
@@ -210,7 +213,7 @@ validation gap fixed in router source, not yet in a released plugin.
 **Next step:** nothing generator-side. Re-check this op when a supergraph plugin newer than 2.15.1
 ships; if it still fails there, find the router fix commit and reference it here.
 
-## 106 · The selection linter checks selections against the spec, not against the emitted type — 📋 Noted, not fixed
+## 106 [BUG] · The selection linter checks selections against the spec, not against the emitted type — 📋 Noted, not fixed
 
 **Symptom:** docs/FIXED.md #105 generates a selection referencing a field (`deleted`) that is real in the
 OAS spec (`deleted_discount.deleted`) but absent from the GraphQL type the emitter actually wrote
@@ -238,7 +241,7 @@ generation, not at `rover compose` time on a real production spec.
 `tools/lint-corpus.mts` (the gate that currently passes #105's case clean). Surfaced alongside
 #105, same investigation.
 
-## 115 · Enum dedup is only tested inline, and the raw enum list keeps its doubles — ✅ Covered (2026-08-18, coverage-only)
+## 115 [BUG] · Enum dedup is only tested inline, and the raw enum list keeps its doubles — ✅ Covered (2026-08-18, coverage-only)
 
 - the untested routes were already correct (every construction path passes the `En` constructor's
   dedup): pinned by `test_115_enum_dedup_holds_on_ref_component_and_input_routes`
@@ -251,7 +254,7 @@ generation, not at `rover compose` time on a real production spec.
 **Refs:** `src/oas/nodes/en.ts`, `docs/FIXED.md` #102, #120. Review §1. No code change, so the
 entry stays here rather than moving to FIXED.md.
 
-## 117 · Union convergence ignores the discriminator mapping — 📋 Noted
+## 117 [BUG] · Union convergence ignores the discriminator mapping — 📋 Noted
 
 **OAS** (the shape that would trip it — two same-member unions, mappings differ):
 ```yaml
@@ -267,7 +270,7 @@ discriminator:
 
 **Refs:** `src/oas/nodes/typeUtils.ts` (`sameSchemaAs`), `docs/FIXED.md` #73/#104. Review §5.
 
-## 119 · Residual path()-cost hotspots left after #118 — 📋 Noted
+## 119 [BUG] · Residual path()-cost hotspots left after #118 — 📋 Noted
 
 #118's fix removed the costs that broke the 5-minute bound; these four were measured, found
 non-blocking (full HubSpot lists run is 18.9s), and deferred:
@@ -282,5 +285,59 @@ non-blocking (full HubSpot lists run is 18.9s), and deferred:
   (wildcard `*`, #72 recovery, insertion order) and not worth it at current scale
 
 **Refs:** docs/FIXED.md #118 (the measurements), `src/oas/log/trace.ts`, #73 (why `path()` must
-not be memoized globally). The fourth bullet becomes moot under ROADMAP.md R15 (selection
+not be memoized globally). The fourth bullet becomes moot under `docs/TASKS.md #139` (selection
 externalisation), which replaces the representation these costs live in.
+
+## 143 [FEAT] · Enum value casing: decide whether to normalize to SCREAMING_SNAKE_CASE — 📋 Noted (decide first)
+
+**Why:** found comparing `gen`'s output against `tools/connect-gen` (Rust)'s committed output for
+the 5 real connectors in `graphos-service-factory`. Rust normalizes enum values to
+`SCREAMING_SNAKE_CASE` (`ACTIVE`, `PAGE`); `gen` preserves the OAS spec's own casing verbatim
+(`active`, `page` — 343 schema-level differences found, plus confirmed at runtime: real API
+responses come back lowercase and fail a test written against Rust's uppercase enum values).
+Uppercase is the more idiomatic GraphQL convention for enum values, so this leans toward "port
+it" — but this is a style decision with a real migration cost (an existing client's enum literals
+would need updating), not an unambiguous gap.
+
+**Not filed as loop-actionable on purpose.** This needs a human decision on the casing convention
+itself before any implementation starts — putting it in `docs/TASKS.md` would let the loop
+autonomously pick a convention and implement it unsupervised, which is exactly the risk this file
+exists to keep out of the queue. Move to `docs/TASKS.md` (with a priority tag) once the casing
+question is actually decided — at that point it's a small, well-scoped change, same family as
+`docs/TASKS.md #141`/`#142`.
+
+**Shape (once decided "yes"):** normalize enum value strings to `SCREAMING_SNAKE_CASE` at the same
+point enum values are currently read/emitted (`src/oas/nodes/en.ts`); the runtime request/response
+still needs the *original* spec casing over the wire, so this is a display/selection-alias change,
+not a raw-value change — needs the same "alias keeps the wire value, GraphQL name is sanitised"
+pattern already used for field names (`Naming.genParamName`, `docs/FIXED.md #1`).
+
+**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`.
+
+## 144 [FEAT] · Type-name migration risk moving off Rust's `connect-gen` — 📋 Noted
+
+**Why:** found during the Rust-comparison audit (`graphos-service-factory/docs/ts-gen-comparison.md`)
+and flagged at the time as needing its own follow-up. `gen` names object/input/enum/union types by
+shape (deduplicating structurally-identical types); Rust names them by full ancestor path (never
+colliding, but duplicating the same shape once per reachable position). These are different,
+incompatible conventions — for the same OAS input, the two tools essentially never produce the same
+type name.
+
+**Not a bug, and the fix is not "make `gen` match Rust."** Shape-derived naming is the more correct
+approach and dedup is a real win, not a defect. The point of this entry is narrower: even where the
+field-level *shape* is byte-for-byte equivalent between the two tools (the definition of
+"behavioral parity" this whole comparison used), the *type name* attached to that shape is not, and
+type names are client-visible — fragment type conditions, `__typename` checks, generated codegen
+types. An existing client migrating off Rust's schema can still break on a renamed type even when
+nothing about the underlying data changed.
+
+**Not scoped as an implementation item.** There's no single fix that resolves this without
+reintroducing ancestor-path naming's own problems; it's a real cost of moving off Rust that a
+migration needs to plan around (e.g. a rename map, or accepting the client-side churn), not
+something `gen` should absorb by changing its naming convention. Recorded here so it isn't lost, not
+assigned a design — matches this file's own "design notes, parked investigations... theoretical/
+no-repro cases" scope, not `docs/TASKS.md`'s loop-actionable one.
+
+**Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`; the plan this comparison followed
+(`graphos-service-factory`, criterion 3's caveat) is where this was first flagged as needing a
+follow-up.

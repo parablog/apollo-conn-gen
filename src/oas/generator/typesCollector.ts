@@ -358,7 +358,7 @@ class PathsCollector {
     const newSelection = new Set<string>();
     // A bare op (no path segments) never gets walked past the op node itself, so its response/body
     // silently never visits. Treat it as `<op>>**`, the same full-subtree walk every other op gets.
-    //   e.g. ['get:/widgets/{id}'] -> walked as 'get:/widgets/{id}>**'. see docs/issues.md #136
+    //   e.g. ['get:/widgets/{id}'] -> walked as 'get:/widgets/{id}>**'. see docs/FIXED.md #136
     const isBareOp = (p: string) => !p.includes(Naming.PATH_SEPARATOR);
     const expands = selection.filter((p) => p.endsWith('>**') || isBareOp(p));
     const filtered = expands.map((p) => (p.endsWith('>**') ? p.replace('>**', '') : p));

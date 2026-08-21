@@ -1,15 +1,17 @@
 # Fixed generator issues
 
-Archive of the entries in `docs/issues.md` that are done. Split out on 2026-08-14 because the one
-file had grown to 89 entries and the open ones were lost in it.
+Archive of the entries in `docs/TASKS.md` (bugs and features alike) that are done. Split out on
+2026-08-14 because the one file had grown to 89 entries and the open ones were lost in it.
 
-- **Ids are global.** They are not renumbered here and are not reused in `docs/issues.md`; a `#N`
-  in either file means the same entry.
+- **Ids are global.** They are not renumbered here and are not reused in `docs/TASKS.md`; a `#N`
+  in any of the three files means the same entry.
 - Code comments cite fixed entries as `// see docs/FIXED.md #N`, open ones as
-  `// see docs/issues.md #N`.
-- `docs/issues.md` holds the open entries, the style rules, and the node-model diagram the
-  entries below refer to.
+  `// see docs/TASKS.md #N`, deferred ones as `// see docs/DEFERRED.md #N`.
+- `docs/TASKS.md` holds the open entries, the style rules, the type-label scheme (`[BUG]`/`[FEAT]`/…),
+  and the node-model diagram the entries below refer to.
 - Every entry keeps its fixture under `tests/resources/oas/` and its test.
+- Entries fixed before 2026-08-21 predate the `[BUG]`/`[FEAT]` label scheme and are not
+  retroactively labeled — only entries added from 2026-08-21 onward carry one.
 
 Nothing here should need editing again. If a fixed entry regresses, move it back rather than
 opening a duplicate.
@@ -5948,7 +5950,7 @@ reported per-op was still correct; only the aggregate `all-ops` counts were wron
 **Fix:** drop `e.message` from the concatenated string — `e.stdout`/`e.stderr` alone already carry
 everything real, and `.message` is a redundant wrapper for this specific rejection shape.
 
-**Effect on prior measurements:** any `all-ops` count recorded in `docs/issues.md`/`docs/FIXED.md`
+**Effect on prior measurements:** any `all-ops` count recorded in `docs/TASKS.md`/`docs/FIXED.md`
 before 2026-08-19 is 2x inflated (e.g. #126's own "34→18" was really "17→9" — corrected in that
 entry). Historical *comparisons* (before/after a fix) stay directionally valid since both sides were
 inflated equally; absolute counts don't.
@@ -6243,7 +6245,7 @@ crash rather than a missing-docstring assertion failure, since that bug blocks g
 **Not done here:** 13 more JSON-degrade sites across `factory.ts`, `map.ts`, `union.ts`, `propObj.ts`
 give no schema-level signal yet — each needs its own new writer plumbing (no `Prop` to hang a
 description on, or the decision happens after the description already wrote). Tracked as
-`docs/issues.md #132`, not folded in here.
+`docs/TASKS.md #132`, not folded in here.
 
 **Refs:** `src/oas/utils/schemas.ts` (`withDegradeNote`), `src/oas/nodes/factory.ts` (`fromProp`,
 `fromSchema`), `src/oas/nodes/union.ts` (`dedupedSelectedProps`). See #39/#44 (C2's kind-collision
@@ -6642,7 +6644,7 @@ todo — the pre-existing `test_61`).
 nodes/factory.ts` (`createScalarType`), `src/oas/nodes/en.ts` (`generate`), `src/oas/nodes/res.ts`
 (`select`). `docs/FIXED.md #32` (bare scalar under `Res`, the same mechanism this enum case was
 missing), `docs/FIXED.md #47` (bare scalar array under `Res`), `docs/FIXED.md #24` (`PropEn` leaves,
-a different node than the bare `En` this fixes), `docs/issues.md #115` (found writing its coverage).
+a different node than the bare `En` this fixes), `docs/DEFERRED.md #115` (found writing its coverage).
 
 ## 65 · An entity key whose OAS name is not a clean GraphQL name breaks R1 emission — ✅ Fixed
 
@@ -6696,7 +6698,7 @@ suite green (397 tests, 396 pass, 0 fail, 1 todo — the pre-existing `test_61`)
 
 **Refs:** `src/oas/nodes/obj.ts` (`generate`, `writeEntityConnector`), `Naming.sanitiseField`,
 `docs/FIXED.md #2` (the same raw-name/regex leak, fixed there for `$args` — this closes the sibling
-gap for `$this`), `docs/issues.md #16` (the by-identity key suppression this keeps in step with).
+gap for `$this`), `docs/FIXED.md #16` (the by-identity key suppression this keeps in step with).
 
 ## 121 · A `oneOf` component used top-level by one op and nested by another fails the combined compose — ✅ Fixed
 
@@ -6760,7 +6762,7 @@ tests, 397 pass, 0 fail, 1 todo — the pre-existing `test_61`).
 **Refs:** `src/oas/nodes/union.ts` (`forcedFlat`, `isFlat`), `src/oas/generator/typesCollector.ts`
 (`resolveDivergentUnionForms`), `docs/FIXED.md #25` `#38` `#48` (the union-form family — #38 is the
 entry that left this gap open), `src/oas/nodes/allOfBase.ts` (`interfaceBaseRef`/`promoteAllOfBase`,
-the R2 idiom `forcedFlat` reuses), `docs/issues.md #122` (the umbrella this was already isolated out
+the R2 idiom `forcedFlat` reuses), `docs/TASKS.md #122` (the umbrella this was already isolated out
 of). Fixture `tests/resources/oas/per-op-green-whole-red.yaml`.
 
 ## 49 · A request body that reaches a big shared model makes composition run out of memory — ✅ Fixed, as a side effect of #89

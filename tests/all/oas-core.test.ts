@@ -1071,7 +1071,7 @@ test('test_59_nested_list_of_objects_names_and_selects_its_item', async () => {
 test('test_61_sanitised_at_type_must_not_collide', { todo: 'both fields emit as `type`' }, async () => {
   // TMF objects carry `@type` (from the Extensible base) next to a business field literally named
   // `type`. Sanitising strips the `@`, nothing checks the result against the sibling names, and
-  // the written type ends up with two `type:` lines. see docs/issues.md #61
+  // the written type ends up with two `type:` lines. see docs/TASKS.md #61
   const schema = await runOasTest('TMF717_Customer360-v5.0.0.oas.yaml', ['get:/customer360>**'], 8, 56, { skipValidation: true });
   assert.ok(schema !== undefined);
 });
@@ -2548,14 +2548,14 @@ test('test_137_swagger2_formdata_maps_as_a_form', async () => {
 test(
   'test_73_curated_multi_op_stripe_selection_composes',
   async () => {
-    // RELEASE BLOCKER — see docs/issues.md #73. Was a todo, un-todo'd 2026-08-18: this bug blocks
+    // RELEASE BLOCKER — see docs/DEFERRED.md #73. Was a todo, un-todo'd 2026-08-18: this bug blocks
     // shipping stripe as a real connector and must not ship silently green. Do not re-add
     // `{ todo: ... }` here — fix the bug or explicitly get sign-off to reopen it as non-blocking.
     //
     // stripe's real 34-op production selection failed with 1161 unresolved fields; #104's fix made
     // identical union twins converge on one name. #73's own CONNECTORS_UNRESOLVED_FIELD errors
     // turned out to be a composeFederationVersion-below-2.15 artifact (#14/#16), not a real bug —
-    // see docs/issues.md #73's 2026-08-19 correction. 359: the 40 numbered twin copies across 9
+    // see docs/DEFERRED.md #73's 2026-08-19 correction. 359: the 40 numbered twin copies across 9
     // name families collapse into their canonical types, and #131's fix removes 3 mixed-anyOf
     // array-item unions (discountsUnion, account_tax_idsUnion, InvoiceDiscountsUnion — each used
     // to silently merge away its string branch) plus 3 more types only they reached — see
