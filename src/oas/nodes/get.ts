@@ -1,4 +1,4 @@
-import { IType, Type, Param, ReferenceObject, Factory, Op } from './internal.js';
+import { IType, Type, Param, ReferenceObject, Factory, Op, Res, Scalar, Union } from './internal.js';
 import { Operation } from 'oas/operation';
 import { MediaTypeObject, ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
 
@@ -72,8 +72,9 @@ export class Get extends Type implements Op {
     const description = this.operation.getDescription();
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
+    const jsonReason = this.resultJsonReason(selection);
 
-    if (description || summary || originalPath) {
+    if (description || summary || originalPath || jsonReason) {
       writer.write('  """\n').write('  ');
       if (description) {
         writer.write(description).write(' ');
@@ -83,6 +84,9 @@ export class Get extends Type implements Op {
       }
       if (originalPath) {
         writer.write('(').write(originalPath).write(')');
+      }
+      if (jsonReason) {
+        writer.write('\n\n  ').write(Schemas.withJsonNote({}, jsonReason).description!);
       }
       writer.write('\n  """\n');
     }
@@ -102,6 +106,21 @@ export class Get extends Type implements Op {
 
   public select(_context: OasContext, _writer: Writer, _selection: string[]) {
     // do nothing
+  }
+
+  // Why the op returns plain JSON instead of a real type, or undefined if it doesn't. resultType is
+  // always a Res wrapper (see res.ts); the real answer is one step in, at Res.response. #132
+  //   e.g. (github) get:/watchers answers anyOf [array of user, array of watcher] — no shared
+  //   fields, so getWatchers(): JSON gains a "NEEDS ATTENTION" note explaining why
+  protected resultJsonReason(selection: string[]): string | undefined {
+    const response = this.resultType instanceof Res ? this.resultType.response : this.resultType;
+    if (response instanceof Union)
+      return response.emptyMergeReason(selection);
+
+    if (response instanceof Scalar)
+      return response.jsonReason;
+
+    return undefined;
   }
 
   public getGqlOpName(): string {

@@ -57,8 +57,9 @@ export class Factory {
       // a $ref that points nowhere is read as free-form JSON instead of stopping the run.
       //   e.g. (common-room) del:/user/{email} 200: { $ref: '#../' }  see docs/FIXED.md #99
       if (!schema) {
-        warn(null, '[factory]', `dangling $ref '${ref}' becomes JSON in: ${parent.pathToRoot()}`);
-        return new Scalar(parent, 'JSON', inputSchema as SchemaObject);
+        const reason = `the reference '${ref}' doesn't point to anything in this API description — sent as raw JSON instead.`;
+        warn(null, '[factory]', reason);
+        return new Scalar(parent, 'JSON', Schemas.withJsonNote(inputSchema as SchemaObject, reason), reason);
       }
     }
 
@@ -366,7 +367,7 @@ export class Factory {
             const reason =
               'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
             warn(context, '[factory]', reason);
-            prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(schemaObj, reason));
           } else {
             const inner: PropComp = new PropComp(parent, propName, schemaObj);
             inner.comp = new Union(
@@ -389,7 +390,7 @@ export class Factory {
             const reason =
               "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
             warn(context, '[factory]', reason);
-            prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(schemaObj, reason));
           } else {
             // Map property: object with only additionalProperties
             const mapType: Map = new Map(parent, ref || propName, schemaObj);
@@ -447,7 +448,7 @@ export class Factory {
         const reason =
           'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
         warn(context, '[factory]', reason);
-        prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(schemaObj, reason));
       } else {
         const inner: PropComp = new PropComp(parent, propName, schemaObj);
         inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
@@ -463,7 +464,7 @@ export class Factory {
         const reason =
           "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
         warn(context, '[factory]', reason);
-        prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(schemaObj, reason));
       } else {
         // Map property: object with only additionalProperties (no explicit type)
         const mapType: Map = new Map(parent, ref || propName, schemaObj);
@@ -478,7 +479,7 @@ export class Factory {
       const reason =
         "this field's shape didn't match any known pattern and defaulted to JSON — worth checking the source OAS schema.";
       warn(context, '[factory]', reason);
-      prop = new PropScalar(parent, propName, 'JSON', Schemas.withDegradeNote(schemaObj, reason));
+      prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(schemaObj, reason));
     }
 
     // Cut only a real loop: a field pointing back to a type we already passed through. Compare the schema,

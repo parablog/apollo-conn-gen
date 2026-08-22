@@ -8,6 +8,8 @@ import { Schemas } from '../utils/schemas.js';
 
 export class Map extends Type {
   public valueType?: IType;
+  // Why the `value:` line below reads JSON instead of a real type, set once during visit(). #132
+  private valueJsonReason?: string;
 
   constructor(
     parent: IType | undefined,
@@ -81,9 +83,17 @@ export class Map extends Type {
       .write(' {\n');
 
     // Generate the map as an array of key-value pairs
-    writer
-      .write('  key: String\n') // Keys are always present in maps, but not necessarily required in schema
-      .write('  value: ');
+    writer.write('  key: String\n'); // Keys are always present in maps, but not necessarily required in schema
+
+    // #132: same NEEDS ATTENTION note the rest of the schema gets when a field gives up on a real
+    // type — here it sits above `value:` since a map's value has no field of its own to carry it.
+    if (this.valueJsonReason) {
+      writer
+        .write('  """\n  ')
+        .write(Schemas.withJsonNote({}, this.valueJsonReason).description!)
+        .write('\n  """\n');
+    }
+    writer.write('  value: ');
 
     // Write the value type name without hardcoded required markers
     if (this.valueType) {
@@ -181,6 +191,8 @@ export class Map extends Type {
     // a choice of nothing but plain values builds an invalid scalar-only Union; read it as JSON.
     // e.g. (confluence) additionalProperties: { anyOf: [enum-of-strings, plain-string] }  #108
     if (Schemas.holdsPlainValues(context, additionalProps)) {
+      this.valueJsonReason =
+        "a map's values are a choice of nothing but plain scalar or enum values, with no GraphQL union member to build — sent as raw JSON instead.";
       this.valueType = new Scalar(this, 'JSON', additionalProps);
       this.add(this.valueType);
       this.valueType.visit(context);
@@ -191,6 +203,13 @@ export class Map extends Type {
     this.valueType = Factory.fromSchema(context, this, additionalProps);
     this.add(this.valueType);
     this.valueType.visit(context);
+
+    // an object or allOf value with no fields of its own is never written as its own type (#19) —
+    // it degrades to JSON, same as valueTypeName() below still does for this same check.
+    // e.g. (docker /commit) ExposedPorts: { additionalProperties: { type: object } } -> value: JSON
+    if ((this.valueType instanceof Obj || this.valueType instanceof Composed) && this.valueType.props.size === 0) {
+      this.valueJsonReason = "this map's values declare no fields of their own — sent as raw JSON instead.";
+    }
 
     trace(context, '<- [map::additionalProps]', 'out value type: ' + this.valueType.name);
   }

@@ -55,7 +55,7 @@ export class PropObj extends Prop {
   // Why this field has nothing real to write and must fall back to plain JSON, or undefined when
   // it doesn't. getValue() and effectiveDescription() both call this, so the warn() log and the
   // docstring above the field always give the same reason. see docs/FIXED.md #145
-  private jsonDegradeReason(context: OasContext): string | undefined {
+  private jsonReason(context: OasContext): string | undefined {
     // we'll make an assumption here: that if the child obj has no properties,
     // then it's a free-form JSON payload. not sure if the right one, but it will
     // compose for now. e.g. History.emptyBox: { type: object, properties: {} } -> emptyBox: JSON
@@ -73,7 +73,7 @@ export class PropObj extends Prop {
   }
 
   public getValue(context: OasContext): string {
-    const reason = this.jsonDegradeReason(context);
+    const reason = this.jsonReason(context);
     if (reason) {
       warn(context, '[prop-obj]', reason);
       return 'JSON';
@@ -82,11 +82,11 @@ export class PropObj extends Prop {
     return Naming.genTypeName(this.obj!.name!) + (this.obj as Obj).nameSuffix();
   }
 
-  // Adds the JSON-degrade reason to the field's docstring, same reason warn() already logged.
+  // Adds the JSON reason to the field's docstring, same reason warn() already logged.
   // e.g. (only-field-in-a-cycle) contributors gains a "NEEDS ATTENTION" note; createdDate doesn't.
   protected effectiveDescription(context: OasContext): string | undefined {
-    const reason = this.jsonDegradeReason(context);
-    return reason ? Schemas.withDegradeNote(this.schema, reason).description : super.effectiveDescription(context);
+    const reason = this.jsonReason(context);
+    return reason ? Schemas.withJsonNote(this.schema, reason).description : super.effectiveDescription(context);
   }
 
   dependencies(context: OasContext): IType[] {

@@ -1,0 +1,37 @@
+openapi: 3.0.3
+info:
+  title: Array items mix a plain value with a real object
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /charges:
+    get:
+      operationId: getCharges
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  # unexpanded, the API sends a bare owner id; expanded, the full Owner object.
+                  # a list of these has no single GraphQL shape to select, so it reads as JSON.
+                  owners:
+                    type: array
+                    items:
+                      oneOf:
+                        - type: string
+                        - $ref: '#/components/schemas/Owner'
+components:
+  schemas:
+    Owner:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string

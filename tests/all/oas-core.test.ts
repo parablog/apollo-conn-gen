@@ -1123,6 +1123,28 @@ test('test_typeless_object_items_degrade_to_json', async () => {
   const schema = await runOasTest('shapeless-object.yaml', ['get:/messages>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(/archivedChannels: \[JSON\]/.test(schema!), 'items:{type:object} should degrade to [JSON]');
+
+  // #132: the same reason now lands right above the field, not just the console log.
+  const reason = 'items in array have types that declare no fields - returning JSON type';
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(reason)}"\\n\\s+archivedChannels: \\[JSON\\]`).test(schema!),
+    'archivedChannels carries a NEEDS ATTENTION note immediately above the field',
+  );
+});
+
+test('test_array_items_mixed_plain_and_object_degrade_to_json', async () => {
+  // #132: an array whose items mix a plain value with a real object (stripe/pagerduty's
+  // "unexpanded id vs. expanded object" pattern, #131) has no single GraphQL shape to select, so
+  // it reads as JSON, same as the two array-item cases above — and now carries the same reason.
+  const schema = await runOasTest('mixed-plain-object-array-item.yaml', ['get:/charges>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/owners: \[JSON\]/.test(schema!), 'a mixed plain/object array item degrades to [JSON]');
+
+  const reason = 'items in array have both plain and object values - returning JSON type';
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(reason)}"\\n\\s+owners: \\[JSON\\]`).test(schema!),
+    'owners carries a NEEDS ATTENTION note immediately above the field',
+  );
 });
 
 test('test_response_allof_snake_path_def_ref_names_converge', async () => {
@@ -1561,13 +1583,29 @@ test('test_146_id_shaped_field_promotes_to_id_regardless_of_declared_type', asyn
   assert.ok(/\(id: ID!\)/.test(schema!), 'the operation argument is promoted too, distinct from the field match above');
 });
 
-test('test_99_dangling_ref_response_degrades_to_json', async () => {
+test('test_99_dangling_ref_response_degrades_to_json', async (t) => {
   // #99: a 200 schema of `$ref: '#../'` — a pointer to nowhere, as published in common-room's
   // del:/user/{email} — stopped the whole run. The reference now reads as free-form JSON.
+  const errSpy = t.mock.method(console, 'error');
   const schema = await runOasTest('dangling-ref.yaml', ['get:/status>**'], 1, 0, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(/\bstatus: JSON/.test(schema!), 'the op answers free-form JSON');
   assert.ok(/selection: """\s*\n\s*\$\s*\n/.test(schema!), 'and the selection takes the response whole');
+
+  // #132: the reason now lands in the operation's own docstring, not just the console log.
+  const reason = "the reference '#../' doesn't point to anything in this API description — sent as raw JSON instead.";
+  // #152: the SDL note flattens the em-dash to "--" (rover crashes on the raw byte otherwise).
+  const docBlock = `"""\n  (/status)\n\n  NEEDS ATTENTION: ${reason.replace('—', '--')}\n  """\n  status: JSON`;
+  assert.ok(schema!.includes(docBlock), 'status carries a NEEDS ATTENTION note in its own operation docstring');
+  assert.strictEqual(
+    (schema!.match(new RegExp(_.escapeRegExp(reason.replace('—', '--')), 'g')) || []).length,
+    1,
+    'the reason appears exactly once in the generated SDL',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === reason),
+    'warn() fires with the [factory] tag and the exact reason text',
+  );
 });
 
 test('test_same_name_fields_not_cut_as_circular', async () => {
@@ -2268,14 +2306,26 @@ test('test_77_empty_composed_map_value_reads_whole', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/mergedPorts: \[MergedPortsEntry\]/.test(schema!), 'the composed-valued map stays');
   assert.ok(
-    /type MergedPortsEntry \{\n {2}key: String\n {2}value: JSON\n\}/.test(schema!),
-    'its value degrades to JSON',
-  );
-  assert.ok(
     /mergedPorts: mergedPorts\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!),
     'read whole, no value block',
   );
   assert.ok(/exposedPorts: \[ExposedPortsEntry\]/.test(schema!), 'the empty-object control behaves the same');
+
+  // #132: the value's docstring now explains why it degrades to JSON, for both entry types.
+  // #152: SDL notes flatten a dash to "--" (rover crashes on a raw em-dash byte otherwise).
+  const reason = "this map's values declare no fields of their own -- sent as raw JSON instead.";
+  assert.ok(
+    new RegExp(
+      `type MergedPortsEntry \\{\\n {2}key: String\\n {2}"""\\n {2}NEEDS ATTENTION: ${_.escapeRegExp(reason)}\\n {2}"""\\n {2}value: JSON\\n\\}`,
+    ).test(schema!),
+    'its value degrades to JSON with a NEEDS ATTENTION note above it',
+  );
+  assert.ok(
+    new RegExp(`type ExposedPortsEntry \\{\\n {2}key: String\\n {2}"""\\n {2}NEEDS ATTENTION: ${_.escapeRegExp(reason)}\\n {2}"""\\n {2}value: JSON\\n\\}`).test(
+      schema!,
+    ),
+    'the empty-object control carries the same note',
+  );
 });
 
 test('test_78_same_named_maps_over_different_values_split', async () => {
@@ -2339,6 +2389,18 @@ test('test_80_union_of_arrays_answers_json', async () => {
   assert.ok(/watchers: JSON/.test(schema!), 'the field answers JSON');
   assert.ok(/selection: """\n\s+\$\n\s+"""/.test(schema!), 'the whole value passes through');
   assert.ok(!/replacement for Union/.test(schema!), 'no merged type is written');
+
+  // #132: the reason now lands in the operation's own docstring, not just the console log.
+  // #152: SDL notes flatten a dash to "--" (rover crashes on a raw em-dash byte otherwise).
+  const reason =
+    "this union merges every member's fields into one type, but none were selected -- sent as raw JSON instead.";
+  const docBlock = `"""\n  (/watchers)\n\n  NEEDS ATTENTION: ${reason}\n  """\n  watchers: JSON`;
+  assert.ok(schema!.includes(docBlock), 'watchers carries a NEEDS ATTENTION note in its own operation docstring');
+  assert.strictEqual(
+    (schema!.match(new RegExp(_.escapeRegExp(reason), 'g')) || []).length,
+    1,
+    'the reason appears exactly once in the generated SDL',
+  );
 });
 
 test('test_81_path_tokens_match_declared_params', async () => {
@@ -2433,25 +2495,25 @@ test('test_84_body_map_is_sent_as_json', async (t) => {
   assert.ok(/snapshots\(filter: JSON\)/.test(schema!), 'a query param that is a map stays as it was');
 
   // #133: an input-position map carries a description explaining the JSON degrade, and warn() logs
-  // the same reason. `labels` already has its own OAS description — withDegradeNote must append to
+  // the same reason. `labels` already has its own OAS description — withJsonNote must append to
   // it, not replace it, so both survive in the docstring block.
-  const mapDegradeReason =
+  const mapJsonReason =
     "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
   // #152: the SDL note flattens the em-dash to "--"; the console warn() below keeps it as-is.
-  const mapDegradeReasonInSdl = mapDegradeReason.replace('—', '--');
+  const mapJsonReasonInSdl = mapJsonReason.replace('—', '--');
   assert.ok(
     new RegExp(
-      `"""\\n {2}key/value labels attached to the snapshot\\n\\nNEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReasonInSdl)}\\n {2}"""\\n {2}labels: JSON`,
+      `"""\\n {2}key/value labels attached to the snapshot\\n\\nNEEDS ATTENTION: ${_.escapeRegExp(mapJsonReasonInSdl)}\\n {2}"""\\n {2}labels: JSON`,
     ).test(schema!),
     'labels keeps its original description and gains the NEEDS ATTENTION note',
   );
   // portBindings has no OAS description of its own — the note stands alone, on one line.
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReasonInSdl)}"\\n {2}portBindings: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapJsonReasonInSdl)}"\\n {2}portBindings: JSON`).test(schema!),
     'portBindings carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(
-    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === mapDegradeReason),
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === mapJsonReason),
     'warn() fires with the [factory] tag and the exact reason text',
   );
 });
@@ -2463,15 +2525,15 @@ test('test_untyped_input_map_degrades_to_json_with_note', async (t) => {
   const schema = await runOasTest('untyped-input-map.yaml', ['post:/widgets>**'], 1, 2);
   assert.ok(schema !== undefined);
 
-  const mapDegradeReason =
+  const mapJsonReason =
     "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
   // #152: the SDL note flattens the em-dash to "--"; the console warn() below keeps it as-is.
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapDegradeReason.replace('—', '--'))}"\\n {2}settings: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(mapJsonReason.replace('—', '--'))}"\\n {2}settings: JSON`).test(schema!),
     'settings carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(
-    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === mapDegradeReason),
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === mapJsonReason),
     'warn() fires with the [factory] tag and the exact reason text',
   );
 });
@@ -2507,16 +2569,16 @@ test('test_134_oneof_of_plain_values_property_degrades_to_json_with_note', async
   assert.ok(schema !== undefined);
   assert.ok(/type Widget \{/.test(schema!), 'Widget is reachable, not dropped');
 
-  const oneOfDegradeReason =
+  const oneOfJsonReason =
     'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
   // #152: the SDL note flattens the em-dash to "--"; the console warn() below keeps it as-is.
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(oneOfDegradeReason.replace('—', '--'))}"\\n {2}kind: JSON`).test(schema!),
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(oneOfJsonReason.replace('—', '--'))}"\\n {2}kind: JSON`).test(schema!),
     'kind carries a NEEDS ATTENTION note immediately above the field',
   );
   assert.ok(!/union \w+ =/.test(schema!), 'no union type is written for the plain-value oneOf');
   assert.ok(
-    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === oneOfDegradeReason),
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === oneOfJsonReason),
     'warn() fires with the [factory] tag and the exact reason text',
   );
 });
@@ -2741,6 +2803,17 @@ test(
     const schema = await runOasTest('map-value-anyof-enum-string.yaml', ['post:/content/convert-ids-to-types>**'], 1, 3);
     assert.ok(schema !== undefined);
     assert.ok(!/type ContentIdToContentTypeResponse \{\s*\}/.test(schema!), 'the map property should not vanish, leaving an empty type');
+
+    // #132: the map's value now explains why it reads as JSON, not just the console log.
+    // #152: SDL notes flatten a dash to "--" (rover crashes on a raw em-dash byte otherwise).
+    const reason =
+      "a map's values are a choice of nothing but plain scalar or enum values, with no GraphQL union member to build -- sent as raw JSON instead.";
+    assert.ok(
+      new RegExp(
+        `type ResultsEntry \\{\\n {2}key: String\\n {2}"""\\n {2}NEEDS ATTENTION: ${_.escapeRegExp(reason)}\\n {2}"""\\n {2}value: JSON\\n\\}`,
+      ).test(schema!),
+      'ResultsEntry carries a NEEDS ATTENTION note above its value',
+    );
   },
 );
 

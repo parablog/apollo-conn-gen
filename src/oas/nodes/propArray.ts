@@ -3,6 +3,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 
 export class PropArray extends Prop {
   public items?: IType;
@@ -71,6 +72,33 @@ export class PropArray extends Prop {
     }
 
     return `[prop] ${this.name}: [${this.items!.name}] (Array)`;
+  }
+
+  // Why this list gave up on its items and sends plain JSON instead, or undefined if the list holds
+  // a real type — the same reason `getValue()` above already wrote `[JSON]` for.
+  //   e.g. (slack) archivedChannels: { items: { type: object } } -> archivedChannels: [JSON]
+  private jsonReason(context: OasContext): string | undefined {
+    const inner = T.findLastArrayItemIn(this.items);
+    if (!(inner instanceof Scalar) || inner.name !== 'JSON') {
+      return undefined;
+    }
+    if (Schemas.isShapelessObject(inner.schema)) {
+      return 'items in array have types that declare no fields - returning JSON type';
+    }
+    if (Schemas.holdsPlainValues(context, inner.schema)) {
+      return 'items in array have mixed array types - returning JSON type';
+    }
+    if (Schemas.holdsMixedPlainAndObjectValues(context, inner.schema)) {
+      return 'items in array have both plain and object values - returning JSON type';
+    }
+    return undefined;
+  }
+
+  // Adds the JSON reason to the field's docstring, same reason the build log already shows.
+  //   e.g. (slack) archivedChannels gains a "NEEDS ATTENTION" note; a normal list doesn't.
+  protected override effectiveDescription(context: OasContext): string | undefined {
+    const reason = this.jsonReason(context);
+    return reason ? Schemas.withJsonNote(this.schema, reason).description : super.effectiveDescription(context);
   }
 
   dependencies(): IType[] {

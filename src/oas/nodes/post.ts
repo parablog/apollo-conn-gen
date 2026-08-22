@@ -72,14 +72,18 @@ export class Post extends Get {
 
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
+    const jsonReason = this.resultJsonReason(selection);
 
-    if (summary || originalPath) {
+    if (summary || originalPath || jsonReason) {
       writer.write('  """\n').write('  ');
       if (summary) {
         writer.write(summary).write(' ');
       }
       if (originalPath) {
         writer.write('(').write(originalPath).write(')');
+      }
+      if (jsonReason) {
+        writer.write('\n\n  ').write(Schemas.withJsonNote({}, jsonReason).description!);
       }
       writer.write('\n  """\n');
     }

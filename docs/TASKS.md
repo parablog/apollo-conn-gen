@@ -135,46 +135,45 @@ todo — asserts the op composes.
 **Symptom:** `warn()` logs why a field gave up and became `JSON`, but that reason never reaches the
 schema itself — anyone reading the SDL (or GraphQL tooling: Studio, GraphiQL, introspection) sees a
 bare `JSON` field with no clue why. `docs/FIXED.md #133` fixed 4 of the 17 live sites found by an
-exhaustive survey of `src/oas/`, and `docs/FIXED.md #145` fixed 2 more (`propObj.ts`'s D1/D2) — the
-ones that could reuse `Prop.generate()`'s existing `schema.description -> """..."""` mechanism, via
-a new overridable `effectiveDescription()` hook for the D1/D2 case. Umbrella entry for the remaining
-11, each needing its own new-plumbing design; a site gets its own number when someone picks it up.
+exhaustive survey of `src/oas/`, `docs/FIXED.md #145` fixed 2 more (`propObj.ts`'s D1/D2), and 7 more
+landed since (below, undocumented at the time — no individual numbers were assigned before the work
+was done). Umbrella entry for the remaining 4, each needing its own new-plumbing design; a site gets
+its own number when someone picks it up.
 
-| site | where | why it needs new plumbing |
-|---|---|---|
-| `factory.ts:61` | `fromSchema`, dangling `$ref` | bare `Scalar`, no `Prop` at all — landing spot depends entirely on the caller (`Res`, `Union` member, `Map` value, `Param` type) |
-| `factory.ts:115` | `fromSchema`, shapeless object (#19) | same — bare `Scalar`, no caller-independent landing spot |
-| `factory.ts:146` | `createScalarType`, unrecognised scalar `type` (#98) | same |
-| `factory.ts:212` | `fromArrayItems`, shapeless array item (#56) | the note belongs on the *field* (`[JSON]`), not the item — needs threading up into the owning `PropArray`'s schema |
-| `factory.ts:219` | `fromArrayItems`, all-plain choice (#86) | same |
-| `factory.ts:225` | `fromArrayItems`, mixed plain+object choice (#131) | same |
-| `map.ts:95` | `Map.generate()`, list value with no named item type | writes straight into the `value:` line of the map's own generated type — not a `Prop` |
-| `map.ts:117` | `Map.valueTypeName`, empty `Obj`/`Composed` value (#19/#70) | same |
-| `map.ts:172` | `visitAdditionalProperties`, `additionalProperties: {}` | same, **and** arguably not a forced degrade — the API author explicitly said "value can be anything," so any wording here should read softer than the rest |
-| `map.ts:184` | `visitAdditionalProperties`, all-plain choice (#108) | same |
-| `union.ts:144` | `Union.generate()`, merged type with no selected fields (#80) | writes straight into an operation's return-type slot; natural home is the operation-level docstring in `get.ts`/`post.ts`, already computed before `resultType.generate()` runs |
+| site | where | why it needs new plumbing | status |
+|---|---|---|---|
+| `factory.ts:61` | `fromSchema`, dangling `$ref` | bare `Scalar`, no `Prop` at all — landing spot depends entirely on the caller (`Res`, `Union` member, `Map` value, `Param` type) | done — `Scalar.jsonReason` + operation docstring (`Get`/`Post.resultJsonReason`) |
+| `factory.ts:115` | `fromSchema`, shapeless object (#19) | same — bare `Scalar`, no caller-independent landing spot | open |
+| `factory.ts:146` | `createScalarType`, unrecognised scalar `type` (#98) | same | open |
+| `factory.ts:212` | `fromArrayItems`, shapeless array item (#56) | the note belongs on the *field* (`[JSON]`), not the item — needs threading up into the owning `PropArray`'s schema | done — `PropArray.jsonReason()` re-derives the reason from the built item and threads it into `effectiveDescription()` |
+| `factory.ts:219` | `fromArrayItems`, all-plain choice (#86) | same | done — same mechanism |
+| `factory.ts:225` | `fromArrayItems`, mixed plain+object choice (#131) | same | done — same mechanism |
+| `map.ts:95` | `Map.generate()`, list value with no named item type | writes straight into the `value:` line of the map's own generated type — not a `Prop` | open |
+| `map.ts:117` | `Map.valueTypeName`, empty `Obj`/`Composed` value (#19/#70) | same | done — `Map.valueJsonReason`, written above the `value:` line |
+| `map.ts:172` | `visitAdditionalProperties`, `additionalProperties: {}` | same, **and** arguably not a forced degrade — the API author explicitly said "value can be anything," so any wording here should read softer than the rest | open |
+| `map.ts:184` | `visitAdditionalProperties`, all-plain choice (#108) | same | done — same `valueJsonReason` mechanism |
+| `union.ts:144` | `Union.generate()`, merged type with no selected fields (#80) | writes straight into an operation's return-type slot; natural home is the operation-level docstring in `get.ts`/`post.ts`, already computed before `resultType.generate()` runs | done — `Union.emptyMergeReason()`, consumed by `Get`/`Post.resultJsonReason` |
 
 One dead line found in the same survey, not counted above: `map.ts:102`'s `else { writer.write('JSON') }`
 can't fire — a `Map` node only ever gets built when `Schemas.isMap()` already confirmed
 `additionalProperties` is a real object schema, so `visitAdditionalProperties`'s early-return guard
 that would leave `valueType` unset never triggers for a real `Map`.
 
-**Shape:** the remaining 11 sites produce a bare `Scalar` node or write the literal string `'JSON'`
+**Shape:** the remaining 4 sites produce a bare `Scalar` node or write the literal string `'JSON'`
 directly into a type/operation body — no existing comment channel at all, unlike `#145`'s D1/D2
-(which had a `Prop` to hang a hook off). Landing position varies and needs a design per shape:
-`Map.generate()`'s `value:` line (its own type body, not a `Prop`), a `Union`'s zero-field merge
-written straight into an operation's return-type slot (natural home: extend the operation-level
-docstring in `get.ts`/`post.ts`, already computed before `resultType.generate()` runs), a `Param`'s
-degraded arg type (GraphQL supports argument descriptions syntactically, never used anywhere in this
-codebase today), and several bare-`Scalar` sites in `factory.ts` whose landing spot depends entirely
-on the caller (`Res` return type, `Union` member, `Map` value, `Param` type).
+(which had a `Prop` to hang a hook off). Landing position varies and needs a design per shape: a
+`Param`'s degraded arg type (GraphQL supports argument descriptions syntactically, never used
+anywhere in this codebase today), and the remaining bare-`Scalar` sites in `factory.ts`/`map.ts`
+whose landing spot depends entirely on the caller (`Res` return type, `Union` member, `Map` value,
+`Param` type).
 
-**AST:** none of the 11 — this only changes what a `Prop`/writer emits alongside an already-JSON
+**AST:** none of the 4 — this only changes what a `Prop`/writer emits alongside an already-JSON
 field, never which node kind gets built.
 
 **Refs:** `docs/FIXED.md #133` (the first 4 sites), `docs/FIXED.md #145` (D1/D2, the
 `effectiveDescription()` hook) — same design throughout: `warn()` and the schema note share one
-reason string, `Schemas.withDegradeNote`.
+reason string, `Schemas.withJsonNote` (renamed from `withDegradeNote` to match Rust's `JsonReason`
+naming, see `graphos-service-factory/tools/connect-gen/src/emit/types.rs`).
 
 ## 138 [FEAT] [P4] · Accept a folder of independent OAS specs, not just a single file — ⬜ Open
 

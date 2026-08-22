@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { runOasTest } from '../../src/tests/runners.js';
@@ -29,8 +30,20 @@ test('test_86_list_of_plain_values_stays', async () => {
   // out with no fields at all and rover rejected the syntax. The list reads as `[JSON]` now.
   const schema = await runOasTest('anyof-body-drops-operation.yaml', ['post:/convert>**'], 2, 2);
   assert.ok(schema !== undefined);
-  assert.ok(/input InputInput \{\n {2}ids: \[JSON\]!\n\}/.test(schema!), 'the body keeps the field');
   assert.ok(/\$args\.input \{\n\s+ids\n/.test(schema!), 'and sends it');
   assert.ok(/codes: \[JSON\]/.test(schema!), 'the response side keeps its own list of plain values');
   assert.ok(/\n\s+codes\?\n/.test(schema!), 'and selects it');
+
+  // #132: both fields carry the same reason right above them, not just in the console log.
+  const reason = 'items in array have mixed array types - returning JSON type';
+  assert.ok(
+    new RegExp(
+      `input InputInput \\{\\n {2}"NEEDS ATTENTION: ${_.escapeRegExp(reason)}"\\n {2}ids: \\[JSON\\]!\\n\\}`,
+    ).test(schema!),
+    'the body field keeps the note above it',
+  );
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(reason)}"\\n\\s+codes: \\[JSON\\]`).test(schema!),
+    'the response field carries the same note',
+  );
 });

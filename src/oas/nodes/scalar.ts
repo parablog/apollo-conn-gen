@@ -11,6 +11,8 @@ export class Scalar extends Type {
     parent: IType | undefined,
     name: string,
     public schema: SchemaObject,
+    // Why this became JSON instead of a real type, or undefined for a genuine scalar. #132
+    public jsonReason?: string,
   ) {
     super(parent, name);
   }

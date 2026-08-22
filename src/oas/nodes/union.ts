@@ -274,7 +274,7 @@ export class Union extends Type {
         const reason =
           'different branches of a merged type declare this field differently, and no single GraphQL type fits both — sent as raw JSON.';
         warn(null, '[union]', reason);
-        return new PropScalar(prop.parent!, name, 'JSON', Schemas.withDegradeNote({}, reason));
+        return new PropScalar(prop.parent!, name, 'JSON', Schemas.withJsonNote({}, reason));
       }),
     );
   }
@@ -509,6 +509,16 @@ export class Union extends Type {
       return this.props.size > 0;
     }
     return this.dedupedSelectedProps(selection).length > 0;
+  }
+
+  // Why generate() above writes JSON instead of a real return type, or undefined if it doesn't.
+  // The op's own docstring (get.ts/post.ts) reads this before this union writes anything. #132
+  //   e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no
+  //   fields to merge, so the operation answers JSON instead of an empty type
+  public emptyMergeReason(selection: string[]): string | undefined {
+    return this.isFlat() && !this.hasSelectedProps(selection)
+      ? "this union merges every member's fields into one type, but none were selected — sent as raw JSON instead."
+      : undefined;
   }
 
   public selectedProps(selection: string[]) {
