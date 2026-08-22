@@ -39,6 +39,14 @@ export class Param extends Type {
     this.add(type);
 
     this.resultType = type;
+    // Same ID promotion as fromProp's field sites in factory.ts, regardless of declared type. #142/#146
+    const GQL_SCALARS = ['String', 'Int', 'Float', 'Boolean'];
+    if (this.resultType instanceof Scalar && GQL_SCALARS.includes(this.resultType.name)) {
+      const looksLikeId = this.name === 'id' || this.name.endsWith('Id') || this.name.endsWith('ID');
+      if (looksLikeId) {
+        this.resultType.name = 'ID';
+      }
+    }
     trace(context, '   [param:visit]', 'type: ' + this.resultType);
     this.resultType.visit(context);
 

@@ -426,9 +426,10 @@ export class Factory {
       // 3rd tries for scalar
       else if (GqlUtils.gqlScalar(type as string)) {
         let scalar = GqlUtils.gqlScalar(type as string) as string;
-        // A string property named "id", or ending in "Id"/"ID" (capitalisation matters, so
-        // "user_id" stays String), reads as GraphQL's ID scalar. e.g. accountId: string -> ID. #142
-        if (scalar === 'String' && (propName === 'id' || propName.endsWith('Id') || propName.endsWith('ID'))) {
+        // A property named "id"/"*Id"/"*ID" reads as GraphQL's ID scalar regardless of the spec's
+        // declared type, e.g. `id: { type: integer, format: uuid }` -> ID, not Int. #142/#146
+        const looksLikeId = propName === 'id' || propName.endsWith('Id') || propName.endsWith('ID');
+        if (looksLikeId) {
           scalar = 'ID';
         }
         prop = new PropScalar(parent, propName, scalar, schemaObj);

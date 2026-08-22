@@ -7507,3 +7507,82 @@ whose exact-text assertions crossed a dash. Full suite green.
 **Refs:** `src/oas/utils/schemas.ts` (`withDegradeNote`, `asciiSafeDashes`). Rust precedent:
 `graphos-service-factory/tools/connect-gen/src/emit/types.rs` (`JsonReason::doc_note`). See #133
 (the mechanism this closes a gap in), #145 (the specific strings that surfaced it).
+
+## 146 [BUG] · An id-shaped field kept its declared scalar type even when the spec's type was wrong — ✅ Fixed
+
+**Symptom:** `#142` promotes a string property named `id`/`*Id`/`*ID` to GraphQL's `ID` scalar, but
+only fired *after* the property had already resolved to `String` — a property with the same
+id-shaped name declared as `type: integer` (or any other non-string type) was untouched and stayed
+`Int`/`Boolean`/`Float`. When the spec's declared type is simply wrong — the real API returns a
+UUID string, not an integer — GraphQL's `Int` coercion silently nulls the value instead of
+erroring. The field looks present in the schema and the connector call succeeds; the id itself just
+vanishes.
+
+**Confirmed transferable from a real production bug, not hypothetical:** `graphos-service-factory`'s
+`tools/connect-gen` (Rust) hit this exact failure live — beta-testing the World Anvil service
+through MCP, `listWorldsByUser` returned `id: null` on every entity while other fields populated
+fine, blocking every id-chained follow-up call. Root cause: the spec declares
+`WorldReference.id` as `type: integer, format: uuid` — self-contradictory in one node — and the
+generator honored `type:` over the name signal. Rust's own fix for this (`id_like`, commit
+`fb6793e` on the unmerged `anthony/id-fields-resist-spec-lies` branch — not yet on `main`) widens
+`String`/`Integer` only; its `Number`/`Boolean` scalar branches are untouched, no repro or
+production evidence exists for those two. `gen`'s fix below covers `Number`/`Boolean` too, as a
+deliberate choice beyond what Rust's real-world case actually demanded — see Fix.
+
+**OAS** (`id-scalar-wrong-declared-type.yaml`, the same shape as the real World Anvil spec):
+```yaml
+WorldReference:
+  properties:
+    id: { type: integer, format: uuid }        # real API returns a UUID string
+    ownerId: { type: integer, format: uuid }
+    title: { type: string }
+```
+
+**Example** — before, and after:
+```graphql
+# before
+type WorldReference {
+  id: Int          # a real UUID string here silently coerces to null
+  ownerId: Int
+  title: String
+}
+query worldsById(id: Int!): WorldReference
+
+# after
+type WorldReference {
+  id: ID
+  ownerId: ID
+  title: String
+}
+query worldsById(id: ID!): WorldReference
+```
+
+**Cause:** `Factory.fromProp`'s `#142` check ran only in the branch that had already resolved a
+property to `String`; it never reconsidered a property the parser resolved to `Int`/`Boolean`/
+`Float` based on the spec's own (possibly wrong) `type:`. Operation arguments/parameters weren't
+covered by `#142` at all — noted as its own follow-up in that entry.
+
+**Fix:** the id-shaped name predicate (`id`, `*Id`, `*ID`, same case-sensitive rule as `#142`) now
+runs regardless of which GraphQL scalar the spec's declared type resolved to — `String`, `Int`,
+`Float`, or `Boolean` all promote to `ID` when the name matches. Applied at all three sites: output
+fields and input fields (`Factory.fromProp`, `src/oas/nodes/factory.ts`) and operation arguments
+(`Param.visit`, `src/oas/nodes/param.ts`) — the same operation-argument gap `#142` flagged as a
+follow-up is closed by this fix too. `ID` coerces both strings and integers, so a genuinely-integer
+id that was already correct sees zero output change. **Wider than Rust's own fix on this point:**
+Rust's `id_like` only gates `String`/`Integer` (see Confirmed above); `Number`/`Boolean` promotion
+here is `gen`'s own deliberate extension for symmetry, not a ported behavior — no production repro
+motivates it the way World Anvil's `integer`/`uuid` case motivates the `String`/`Integer` half.
+
+**Verified:** fixture `id-scalar-wrong-declared-type.yaml` (integer-declared `id`/`ownerId`,
+boolean-declared `verifiedId`, number-declared `rankId`, all promoted to `ID`) and test
+`test_146_id_shaped_field_promotes_to_id_regardless_of_declared_type` cover all four scalar types at
+both the field and operation-argument sites. Revert-checked: narrowing the fix back to `String`/
+`Int` only makes the `Boolean`/`Float` assertions fail, confirming the widening is load-bearing, not
+vacuous. Full suite: 407 pass, 0 fail, 2 pre-existing todo.
+
+**Refs:** `src/oas/nodes/factory.ts` (`Factory.fromProp`), `src/oas/nodes/param.ts` (`Param.visit`);
+`docs/FIXED.md #142` (the string-only predecessor this extends, including the operation-argument gap
+it flagged); `graphos-service-factory` commit `fb6793e` (`connect-gen: id-named fields emit the ID
+scalar regardless of spec scalar type`, on the unmerged `anthony/id-fields-resist-spec-lies`
+branch — the `id_like` predicate `String`/`Integer` half is ported from, `Number`/`Boolean` is not);
+`tests/resources/oas/id-scalar-wrong-declared-type.yaml`.

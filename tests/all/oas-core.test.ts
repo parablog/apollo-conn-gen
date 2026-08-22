@@ -1324,7 +1324,9 @@ test('test_bare_scalar_response_not_dropped', async () => {
   const schema = await runOasTest('bare-scalar-response.yaml', ['del:/widgets/{widgetId}>**'], 1, 0, { skipValidation: true });
   assert.ok(schema !== undefined);
   assert.ok(
-    /deleteWidgetsByWidgetId\(widgetId: Int!\): Boolean\b/.test(schema!),
+    // widgetId ends in "Id" -- promoted to GraphQL's ID scalar regardless of the spec's declared
+    // type (integer here), same rule as #142/#146's field-name promotion.
+    /deleteWidgetsByWidgetId\(widgetId: ID!\): Boolean\b/.test(schema!),
     'delete field present, returns Boolean',
   );
   assert.ok(/selection: """\s*\$\s*"""/.test(schema!), 'selection passes through the raw scalar value');
@@ -1544,6 +1546,21 @@ test('test_142_identifier_shaped_string_property_becomes_id', async () => {
   assert.ok(/\bname: String\b/.test(schema!), 'an unrelated field is unaffected');
 });
 
+test('test_146_id_shaped_field_promotes_to_id_regardless_of_declared_type', async () => {
+  // #146: #142 only promoted a string-typed id-shaped field; a field the spec wrongly declared
+  // as integer (World Anvil's `id: { type: integer, format: uuid }`, but the API returns a
+  // UUID string) stayed Int and silently turned every id into null. Widened to cover every
+  // declared scalar type, not just integer -- boolean/number id-shaped fields promote too.
+  const schema = await runOasTest('id-scalar-wrong-declared-type.yaml', ['get:/worlds/{id}>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/^\s*id: ID$/m.test(schema!), 'wrongly-declared integer id field becomes ID');
+  assert.ok(/^\s*ownerId: ID$/m.test(schema!), 'same for the *Id-suffixed sibling field');
+  assert.ok(/^\s*verifiedId: ID$/m.test(schema!), 'a boolean-declared id-shaped field becomes ID too');
+  assert.ok(/^\s*rankId: ID$/m.test(schema!), 'a number-declared id-shaped field becomes ID too');
+  assert.ok(/^\s*title: String$/m.test(schema!), 'an unrelated field is unaffected');
+  assert.ok(/\(id: ID!\)/.test(schema!), 'the operation argument is promoted too, distinct from the field match above');
+});
+
 test('test_99_dangling_ref_response_degrades_to_json', async () => {
   // #99: a 200 schema of `$ref: '#../'` — a pointer to nowhere, as published in common-room's
   // del:/user/{email} — stopped the whole run. The reference now reads as free-form JSON.
@@ -1719,7 +1736,8 @@ test('test_anyof_param_coerced_to_string_arg', async () => {
   // emitting `id: !`); coerce it to String. see docs/FIXED.md #11. runOasTest composes via rover.
   const schema = await runOasTest('param-anyof.yaml', ['get:/things/{id}>**'], 1, 1);
   assert.ok(schema !== undefined);
-  assert.ok(/\bid: String!/.test(schema!), 'anyOf param coerced to a String arg');
+  // the anyOf coerces to String first, then "id" promotes String -> ID, same rule as #142/#146
+  assert.ok(/\bid: ID!/.test(schema!), 'anyOf param coerced to a String arg, then promoted to ID');
   assert.ok(!/\bid: !/.test(schema!), 'no empty arg type');
 });
 
@@ -2334,12 +2352,15 @@ test('test_81_path_tokens_match_declared_params', async () => {
   ];
   const schema = await runOasTest('path-param-mismatch.yaml', paths, 3, 1, { skipValidation: true });
   assert.ok(schema !== undefined);
-  assert.ok(/apiKeysById\(id: String!\)/.test(schema!), 'an undeclared token still becomes an argument');
+  // "id" promotes String -> ID, same rule as #142/#146
+  assert.ok(/apiKeysById\(id: ID!\)/.test(schema!), 'an undeclared token still becomes an argument');
   assert.ok(/GET: "\/api-keys\/\{\$args\.id\}"/.test(schema!), 'and the URL reads it');
-  assert.ok(/\(labelName: String!, userId: String\)/.test(schema!), 'a renamed param answers to its token');
+  // userId ends in "Id" -- promotes to ID too, same rule as #142/#146
+  assert.ok(/\(labelName: String!, userId: ID\)/.test(schema!), 'a renamed param answers to its token');
   assert.ok(/PUT: "\/labels\/\{\$args\.labelName\}"/.test(schema!), 'and keeps its place in the URL');
   assert.ok(!/\bname: String!/.test(schema!), 'the old name is gone, not duplicated');
-  assert.ok(/\(subscriberId: String!, addOnId: String!\)/.test(schema!), 'case-only disagreement matches too');
+  // subscriberId and addOnId both end in "Id" -- promoted to ID too
+  assert.ok(/\(subscriberId: ID!, addOnId: ID!\)/.test(schema!), 'case-only disagreement matches too');
 });
 
 test('test_82_keyword_prefixed_keys_take_the_path_form', async () => {
