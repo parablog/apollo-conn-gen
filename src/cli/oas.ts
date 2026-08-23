@@ -101,6 +101,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
+    sparseFieldsetsParam: opts.sparseFieldsetsParam,
   });
 
   await gen.visit();
@@ -169,6 +170,10 @@ program
     parseServicePrefix,
   )
   .option('--infer-entity-resolvers', 'Infer entity resolvers and emit @key / entity: true', false)
+  .option(
+    '--sparse-fieldsets-param <name>',
+    'Query param name for a vendor\'s sparse-by-default read (e.g. "fields") — every read op declaring it gets a default listing every field the op\'s selection can map',
+  )
   .option('--skip-auth', 'Omit all auth (no headers on @source, no auth on @connect)', false)
   .option(
     '--auth-value-prefix <prefix>',

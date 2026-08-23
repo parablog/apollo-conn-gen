@@ -1,0 +1,173 @@
+openapi: 3.0.3
+info:
+  title: R151 Sparse Fieldsets Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # a plain object response with a `fields` param and no default -> the default becomes
+  # every selected field, e.g. "fields: String = \"id,name,price\""
+  /products/{id}:
+    get:
+      operationId: getProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: fields
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+  /products:
+    # a wrapped list response -> the default is read from the wrapped array's item type
+    get:
+      operationId: listProducts
+      parameters:
+        - name: fields
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  total:
+                    type: integer
+    # a write op that happens to share the `fields` param name -> ineligible, reads only
+    post:
+      operationId: createProduct
+      parameters:
+        - name: fields
+          in: query
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '200':
+          description: The created product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+  # no `fields` param at all -> unaffected
+  /categories/{id}:
+    get:
+      operationId: getCategory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+  # a scalar response -> no fields to list, warns and skips
+  /products/{id}/price:
+    get:
+      operationId: getProductPrice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: fields
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The product's price
+          content:
+            application/json:
+              schema:
+                type: number
+  # `fields` is an array param (?fields=a&fields=b) -> reads as [String], no comma-string
+  # default to write, warns and skips
+  /products/search:
+    get:
+      operationId: searchProducts
+      parameters:
+        - name: fields
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  # `fields` already has an OAS-authored default -> kept as-is, never overridden
+  /products/{id}/details:
+    get:
+      operationId: getProductDetails
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: fields
+          in: query
+          schema:
+            type: string
+            default: id
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string

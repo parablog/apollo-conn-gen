@@ -2,6 +2,7 @@ import { OasGen } from '../oasGen.js';
 import { IType, T } from '../nodes/internal.js';
 import { inferEntityResolvers } from '../nodes/entity.js';
 import { applyBatchResolvers } from '../nodes/batch.js';
+import { applySparseFieldsets } from '../nodes/sparseFieldsets.js';
 import { promoteAllOfBase } from '../nodes/allOfBase.js';
 import { OperationWriter } from './operationWriter.js';
 import { SchemaWriter } from './schemaWriter.js';
@@ -63,6 +64,11 @@ export class Writer {
 
     // R6: add batch resolvers (needs the R1 @key above) when a --batch file was given.
     applyBatchResolvers(context, this.gen, types);
+
+    // #151: default a sparse-by-default read's `fields=`-style param to its selection, when
+    // --sparse-fieldsets-param was given. Filters to read ops itself, so it doesn't need the
+    // queries/mutations split further down.
+    applySparseFieldsets(context, this.gen, selection);
 
     // R2: promote discriminated oneOf-with-shared-allOf-base to a GraphQL interface (id-neutral;
     // no-op unless a qualifying discriminated output union exists). Same `types` map.

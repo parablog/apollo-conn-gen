@@ -81,6 +81,7 @@ interface IGenOptions {
   baseURL?: string;
   overrides?: OverridesConfig;
   batch?: BatchConfig;
+  sparseFieldsetsParam?: string;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;

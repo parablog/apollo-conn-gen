@@ -219,47 +219,6 @@ before implementing, the same way #122/#132 are handled.
 (the #49-adjacent measurements). Related: `docs/FIXED.md #13`/`#89` (path-dependent divergence
 family).
 
-## 151 [FEAT] [P4] · No bridge for sparse-by-default REST reads (`fields=`-style query params) — ⬜ Open
-
-**Why:** an API with a sparse-by-default read (a `fields=` query param widens the returned field
-set; omitting it returns a narrower default) breaks GraphQL semantics through plain param
-pass-through — in GraphQL, selecting a field IS the request for it, but here the wire request never
-asks unless the caller explicitly threads the vendor's own param. A caller selecting a field that
-isn't in the vendor's narrow default gets a confidently wrong `null`, indistinguishable from
-genuinely absent data. Not fixable by deriving `fields=` from the actual GraphQL selection set —
-neither `gen`'s connect v0.4 nor Rust's mapping language exposes a selection-set variable to
-`queryParams` (a router/spec ceiling, not implementation-specific, so this applies to `gen` exactly
-as much as it did to Rust before its fix).
-
-**Shipped in Rust already** (`graphos-service-factory` PR #29,
-`connect-gen: sparse_fieldsets — argument defaults bridge sparse REST reads`): an opt-in manifest
-config (`sparse_fieldsets: { param: fields }`) makes the generator emit a GraphQL argument default
-listing every field the operation's selection can map (`fields: String = "description,id,name"`).
-The router coerces that default into `$args` whenever the caller omits the argument, so an
-un-narrowed call fetches everything the selection can use and GraphQL semantics hold; a caller who
-explicitly passes the argument still gets real narrowing, and introspection surfaces the default so
-the vendor's sparseness is discoverable instead of a silent trap. Stated trade-off: every
-un-narrowed read now fetches the full payload the vendor's sparse default exists to avoid — accepted
-because a confidently-wrong `null` is worse than a bigger response for an agent-facing schema.
-
-**Shape:** `gen` has no manifest/config-file surface for this kind of per-operation, spec-wide
-declarative feature today (its equivalent knobs are CLI flags plus one-off files like
-`--overrides`/`--transform-rules`); this would need a comparable opt-in config identifying the
-vendor's sparse-read parameter name, then computing the default value per operation from the
-response schema's own mapped field list (list endpoints from the wrapper array's item type, get
-endpoints from the response root — per Rust's design).
-
-**Also worth tracking:** `graphos-service-factory` PR #30 is an RFC (stacked on #29, not yet
-merged even in Rust) proposing to go further — a router coprocessor that narrows the sparse-read
-param dynamically from the actual incoming selection set instead of the static "everything"
-default. Read that RFC before scoping this if `gen` picks it up, since a coprocessor-based approach
-would change the shape of what `gen` itself needs to emit (possibly less than the static-default
-version above).
-
-**Refs:** `graphos-service-factory` PR #29 (the shipped Rust mechanism) and PR #30 (the RFC,
-`docs/rfcs/0001-selection-derived-sparse-fieldsets.md` on that repo's `anthony/rfc-selection-
-narrowing` branch) on `mdg-private/graphos-service-factory`.
-
 ## 140 [FEAT] [P4] · Hand-authored content has no way to survive regeneration (no CUSTOM-region round-trip) — ⬜ Open
 
 **Why:** found comparing `gen`'s output against `tools/connect-gen` (Rust)'s committed output for

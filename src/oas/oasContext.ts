@@ -38,6 +38,9 @@ export type GenerateOptions = {
   baseURL?: string;
   overrides?: OverridesConfig;
   batch?: BatchConfig;
+  // #151: name of a query param (e.g. "fields") that a read op should default to every field its
+  // selection maps, so an omitted argument still asks the REST API for everything it needs.
+  sparseFieldsetsParam?: string;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;

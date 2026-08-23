@@ -8013,3 +8013,83 @@ pass, 2 pre-existing `todo`, 0 fail); `tsc --noEmit` and `eslint` clean.
 (`generateSchema` typo guard, `#116` rename pass), `src/oas/io/operationWriter.ts`
 (`writeQuery`/`writeMutations`, unchanged, empty-root omission reused as-is). `graphos-service-factory`
 PR #3 on `mdg-private/graphos-service-factory` (the shipped Rust design).
+
+## 151 [FEAT] [P4] · No bridge for sparse-by-default REST reads (`fields=`-style query params) — ✅ Fixed
+
+**Symptom:** an API with a sparse-by-default read (a `fields=` query param widens the returned field
+set; omitting it returns a narrower default) breaks GraphQL semantics through plain param
+pass-through — in GraphQL, selecting a field IS the request for it, but here the wire request never
+asks unless the caller explicitly threads the vendor's own param. A caller selecting a field that
+isn't in the vendor's narrow default gets a confidently wrong `null`, indistinguishable from
+genuinely absent data. Not fixable by deriving `fields=` from the actual GraphQL selection set —
+neither `gen`'s connect v0.4 nor Rust's mapping language exposes a selection-set variable to
+`queryParams` (a router/spec ceiling, not implementation-specific).
+
+**Shipped in Rust already** (`graphos-service-factory` PR #29,
+`connect-gen: sparse_fieldsets — argument defaults bridge sparse REST reads`): an opt-in manifest
+config (`sparse_fieldsets: { param: fields }`) makes the generator emit a GraphQL argument default
+listing every field the operation's selection can map (`fields: String = "description,id,name"`).
+The router coerces that default into `$args` whenever the caller omits the argument, so an
+un-narrowed call fetches everything the selection can use and GraphQL semantics hold; a caller who
+explicitly passes the argument still gets real narrowing. `gen`'s fix below ports the same static
+default onto a new opt-in CLI flag rather than adding a manifest/config-file surface.
+
+**OAS** (`sparse-fieldsets.yaml`):
+```yaml
+/products/{id}:
+  get:
+    operationId: getProduct
+    parameters:
+      - { name: fields, in: query, schema: { type: string } }
+    responses:
+      '200':
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Product' }   # { id, name, price }
+```
+
+**Example** — before, and after (`--sparse-fieldsets-param fields`):
+```graphql
+# before: no default, an omitted argument sends the REST call with no fields= at all,
+# so the vendor's own narrow default (e.g. just id) comes back and name/price resolve to null
+getProduct(id: ID!, fields: String): Product
+
+# after: an omitted argument still asks for everything the selection can use
+getProduct(id: ID!, fields: String = "id,name,price"): Product
+```
+
+**Fix:** a new pass, `src/oas/nodes/sparseFieldsets.ts` (`applySparseFieldsets`), wired into
+`src/oas/io/writer.ts` alongside `inferEntityResolvers`/`applyBatchResolvers`. For every read
+operation (`T.isQueryType`) in the selection with a query parameter matching the new
+`--sparse-fieldsets-param <name>` flag (`src/cli/oas.ts`, threaded through
+`GenerateOptions`/`IGenOptions` in `src/oas/oasContext.ts`/`src/oas/oasGen.ts` and
+`runOasTest` in `src/tests/runners.ts`, the same quartet `--batch` already touches): an
+already-authored OAS default is left untouched; a non-string param (e.g. `fields` declared as an
+array, which reads as GraphQL `[String]` with no comma-string default syntax) warns and is skipped;
+otherwise the response is unwrapped to its mappable object the same way `entity.ts`/`batch.ts`
+already do (a list/wrapper response uses the wrapped array's item type, a plain object uses itself),
+and `param.defaultValue` is set to the sorted, comma-joined wire names of every field the op's
+selection maps. A response that isn't a mappable object, or a selection that maps zero fields, warns
+and skips instead of guessing.
+
+**Not ported from the Rust design (deliberate):** `graphos-service-factory` PR #30's RFC — a router
+coprocessor that narrows the sparse-read param dynamically from the actual incoming selection set,
+instead of this static "everything" default — is not implemented. It's a separate, not-yet-merged
+proposal stacked on top of the shipped mechanism this entry ports, not a requirement of it; worth
+reading before any future work that wants dynamic (rather than static) narrowing.
+
+**Verified:** new fixture `sparse-fieldsets.yaml` and test `sparse-fieldsets.test.ts` (8 tests): a
+plain-object get and a wrapped-list get each get the sorted, comma-joined field-list default; the
+flag off is byte-parity with plain param pass-through; an op with no matching param is unaffected; a
+scalar response and an array-typed `fields` param each warn and skip; an already-authored OAS
+default is kept verbatim; a write op sharing the param name is ineligible. Revert-check: disabling
+the `writer.ts` call re-fails the positive-default tests, nothing else. Full suite green (431 pass, 2
+pre-existing `todo`, 0 fail); `tsc --noEmit`, `eslint`, and `prettier --check` clean on every touched
+file.
+
+**Refs:** `src/oas/nodes/sparseFieldsets.ts` (`applySparseFieldsets`), `src/oas/io/writer.ts`
+(wiring), `src/oas/oasContext.ts`/`src/oas/oasGen.ts` (`sparseFieldsetsParam`), `src/cli/oas.ts`
+(`--sparse-fieldsets-param`), `src/tests/runners.ts` (test passthrough). `graphos-service-factory`
+PR #29 (the shipped Rust mechanism) and PR #30 (the RFC,
+`docs/rfcs/0001-selection-derived-sparse-fieldsets.md` on that repo's `anthony/rfc-selection-
+narrowing` branch) on `mdg-private/graphos-service-factory`.
