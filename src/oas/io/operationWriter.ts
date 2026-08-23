@@ -200,11 +200,12 @@ export class OperationWriter {
       }
     }
 
-    // a form body is announced with this exact value, and a `; charset=` suffix would break it.
-    // a Content-Type the spec or the user already wrote stays as it is.
+    // a form or a structured-syntax JSON body is announced with its declared value, and a
+    // `; charset=` suffix would break it. a Content-Type the spec or the user already wrote stays.
     // e.g. (form-encoded-body.yaml) post:/approve -> added, post:/both (JSON) -> not added   #83
-    if (this.sendsForm(op, override) && !entries.some((entry) => entry.name.toLowerCase() === 'content-type')) {
-      entries = [{ name: 'Content-Type', value: 'application/x-www-form-urlencoded' }, ...entries];
+    const declaredContentType = this.declaredContentType(op, override);
+    if (declaredContentType && !entries.some((entry) => entry.name.toLowerCase() === 'content-type')) {
+      entries = [{ name: 'Content-Type', value: declaredContentType }, ...entries];
     }
 
     if (entries.length === 0) {
@@ -219,14 +220,14 @@ export class OperationWriter {
     return lines.join('\n') + '\n';
   }
 
-  // True when the request carries a form. A body dropped by an override (`"body": null`) or one we
-  // write nothing for sends no data at all, so it is not a form either.
-  // e.g. (form-encoded-body.yaml) post:/approve -> true, post:/note (one value) -> false    #83
-  private sendsForm(op: Op, override: OverrideEntry | undefined): boolean {
-    if (override?.body === null || !op.body?.isFormEncoded()) {
-      return false;
+  // the Content-Type the request must carry for its body, or null when the default
+  // (application/json) already matches or the body is dropped/empty.
+  // e.g. (merge-patch-content-type.yaml) patch:/widgets/{id} -> 'application/merge-patch+json'
+  private declaredContentType(op: Op, override: OverrideEntry | undefined): string | null {
+    if (override?.body === null || !op.body || op.body.isEmptyBody()) {
+      return null;
     }
-    return !op.body.isEmptyBody();
+    return op.body.declaredContentType() ?? null;
   }
 
   // merge user overrides over the inferred params: a string replaces the inferred value,

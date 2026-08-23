@@ -56,6 +56,17 @@ export class Body extends Type {
     return this.mediaType.toLowerCase().startsWith('application/x-www-form-urlencoded');
   }
 
+  // the Content-Type header this body needs, or undefined when the default (application/json)
+  // already matches. e.g. (merge-patch-content-type.yaml) content declares only
+  // `application/merge-patch+json` -> that exact value must be sent, not application/json.
+  public declaredContentType(): string | undefined {
+    if (this.isFormEncoded()) {
+      return 'application/x-www-form-urlencoded';
+    }
+    const type = this.mediaType.toLowerCase();
+    return /^application\/.+\+json$/.test(type) ? this.mediaType : undefined;
+  }
+
   // A body a mapping cannot send: no fields of its own and no member that has any. A single value
   // (a Scalar) is NOT this — it is sent whole. e.g. (fieldless-bodies.yaml) { type: object, properties: {} }  #67
   public isEmptyBody(): boolean {

@@ -2785,6 +2785,18 @@ test('test_137_swagger2_formdata_maps_as_a_form', async () => {
   assert.ok(!/createAvatar\(/.test(schema!), 'so /avatar takes no argument');
 });
 
+test('test_149_structured_syntax_json_body_keeps_its_declared_content_type', async () => {
+  // #149: a body declared only under a structured-syntax-suffix JSON media type
+  // (application/merge-patch+json) still shipped as bare application/json — same bytes, wrong
+  // header. The declared type is now forced onto the request, the same way #83 already does for forms.
+  const schema = await runOasTest('merge-patch-content-type.yaml', ['patch:/widgets/{id}>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /\{ name: "Content-Type", value: "application\/merge-patch\+json" \}/.test(schema!),
+    'the connector announces the declared merge-patch type, not the JSON default',
+  );
+});
+
 test(
   'test_73_curated_multi_op_stripe_selection_composes',
   async () => {

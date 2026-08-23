@@ -7754,3 +7754,73 @@ staying untouched when it wasn't the repair itself that emptied it).
 collapses into); `graphos-service-factory` PR #15 (same source as `#146`/`#147` — mentions both
 parsers now tolerating this shape); fixture
 `tests/resources/oas/malformed-response-schema-crashes.yaml`.
+
+## 149 [BUG] [P2] · A request body declared only under a non-`application/json` media type shipped mislabeled — ✅ Fixed
+
+**Symptom:** the `@source`/`@connect` block always sent `Content-Type: application/json`
+(overridden only for the form-encoded special case); an operation whose request body was declared
+*only* under a structured-syntax-suffix media type (`application/merge-patch+json`, `application/
+ld+json`, …) still shipped as plain `application/json`. RFC 7396 merge-patch semantics are enforced
+by conformant servers based on the content-type header, so the request was silently wrong — same
+JSON bytes, wrong label, and the server could reject or misinterpret it.
+
+**Confirmed transferable from a real production case:** `graphos-service-factory`'s
+`tools/connect-gen` (Rust) hit this on the GM Assistant experiment — all 13 of its PATCH bodies are
+declared as `application/merge-patch+json` only, mislabeling the entire update surface of the
+service. Rust's fix, already shipped: generalize the existing form-encoded special case to any
+declared media type the JSON-mapped body can honestly satisfy — `application/x-www-form-urlencoded`
+(unchanged) and `*+json` structured-syntax suffixes emit the declared type as a per-request header
+override. Media types a connector body genuinely can't express (multipart, binary) deliberately get
+no override, since mislabeling would make it worse, not better. `gen`'s own fix below is that same
+generalization applied to `gen`'s existing form-encoded special case.
+
+**OAS** (`merge-patch-content-type.yaml`):
+```yaml
+requestBody:
+  content:
+    application/merge-patch+json:
+      schema: { type: object, properties: { name: { type: string } } }
+```
+
+**Example** — before, and after:
+```graphql
+# before: no headers: block at all -- goes out under the connector default
+patchWidgetsById(id: ID!, input: InputInput!): PatchWidgetsByIdResponse
+  @connect(http: { PATCH: "/widgets/{$args.id}", body: "$args.input" })
+
+# after
+patchWidgetsById(id: ID!, input: InputInput!): PatchWidgetsByIdResponse
+  @connect(
+    http: {
+      PATCH: "/widgets/{$args.id}"
+      headers: [{ name: "Content-Type", value: "application/merge-patch+json" }]
+      body: "$args.input"
+    }
+  )
+```
+
+**Cause:** `Body` already tracked the exact media type it was read from (`mediaType`), and
+`OperationWriter.headersBlock` already had a special case that read it — but only for one value,
+`isFormEncoded`/`sendsForm`, which only recognized `application/x-www-form-urlencoded`. Every other
+declared media type, including a structured-syntax-suffix JSON one, fell through and the request
+went out under the connector's own default, `application/json`.
+
+**Fix:** generalized that one-value special case into `Body.declaredContentType()`
+(`src/oas/nodes/body.ts`) — the form-encoded type, unchanged, plus any `application/*+json`
+structured-syntax suffix, returned as the spec wrote it. Anything else (multipart, binary, plain
+`application/json`) returns `undefined`, so the connector's default keeps applying there, unchanged.
+`OperationWriter`'s private `sendsForm` (`src/oas/io/operationWriter.ts`) was replaced by
+`declaredContentType`, which calls the new `Body` method and feeds its result into the same
+`headersBlock` override path forms already used — no new emission path, just a wider input to the
+existing one.
+
+**Verified:** fixture `merge-patch-content-type.yaml` and
+`test_149_structured_syntax_json_body_keeps_its_declared_content_type`, plus the full `#83`/`#137`
+form-content-type block re-run to confirm no regression to the existing form case. Full suite green
+(413 tests, 411 pass, 2 pre-existing `todo`, 0 fail); `tsc --noEmit` clean.
+
+**Refs:** `src/oas/nodes/body.ts` (`declaredContentType`); `src/oas/io/operationWriter.ts`
+(`headersBlock`, `declaredContentType`); `docs/FIXED.md #83` (the form-encoded special case this
+generalizes); `graphos-service-factory` PR #17 on `mdg-private/graphos-service-factory`
+(`connect-gen: per-request Content-Type override for non-JSON request media types` — the shipped
+Rust fix); fixture `tests/resources/oas/merge-patch-content-type.yaml`.
