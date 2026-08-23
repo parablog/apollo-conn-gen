@@ -112,24 +112,6 @@ selection duplicates the same way.
 todo — asserts the op composes.
 **Refs:** #42 (the alias machinery involved), #57 (whose corpus sweep surfaced it).
 
-## 122 [BUG] [P3] · All-ops sweep findings: four cross-op failure classes invisible to per-op coverage — ⬜ Open (umbrella)
-
-**Symptom:** first sweeps with the all-ops column (2026-08-18): six spec/verb combos are per-op
-100% and red combined. Umbrella entry — a class gets its own number when someone picks it up.
-
-| class | where | first read |
-|---|---|---|
-| `INVALID_BODY` ×52 | digitalocean ×36, docker ×10, sendgrid ×6 — mutations only | ✅ fixed by #123 — digitalocean's all-ops now surfaces `CONNECTORS_UNRESOLVED_FIELD` (previously masked, see #124) |
-| `SATISFIABILITY_ERROR` | asana ×12 GET / ×30 mutations | composition-level: shared types reachable from several roots with disagreeing fields |
-| `GRAPH_QL_ERROR` + `SELECTED_FIELD_NOT_FOUND` | box ×34 GET / ×18 mutations | the SELECTED_FIELD_NOT_FOUND part smells like #13/#89 position divergence at cross-op scale |
-| `INVALID_GRAPHQL` ×2 | digitalocean GET | likely a cross-op duplicate definition — smallest, easiest isolate |
-
-- launch_library `GRAPH_QL_ERROR ×2` is the known #79 upstream op riding along — not new.
-- #121 (union top-level + nested), the already-isolated member of this family — ✅ fixed, see docs/FIXED.md #121.
-
-**Refs:** COVERAGE.md / COVERAGE-mutations.md `all-ops` column + `WHOLE:` histogram buckets,
-`tools/coverage-spec.mts` (`runWholeSpec`), docs/FIXED.md #121, #13/#89, #104/#112.
-
 ## 132 [BUG] [P4] · Most JSON-degrade sites still give no signal in the generated schema, only the build log — ⬜ Open (umbrella)
 
 **Symptom:** `warn()` logs why a field gave up and became `JSON`, but that reason never reaches the

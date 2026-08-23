@@ -273,7 +273,9 @@ ${devCmd}
 
   let output;
   try {
-    output = execSync(cmd, { stdio: 'pipe' });
+    // Node's default output limit is 1MB; a big spec like digitalocean's full selection makes
+    // rover print more than that and Node reports the cutoff as ENOBUFS. Same raise as coverage-spec.mts.
+    output = execSync(cmd, { stdio: 'pipe', maxBuffer: 64 * 1024 * 1024 });
     return [true, undefined];
   } catch (error) {
     return [false, _.get(error, 'message')];

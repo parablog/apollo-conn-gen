@@ -2901,6 +2901,62 @@ test(
   },
 );
 
+// #122 found three vendor specs (asana, box, digitalocean) where every operation generated and
+// composed fine on its own, but combining every operation into one schema and composing that —
+// what graphos-service-factory does for a real connector — failed. Two causes were found and
+// fixed later, as side effects of other numbered issues: #124 fixed digitalocean generating two
+// separate GraphQL types for the same OAS schema instead of reusing one; #125 fixed asana and
+// box keeping a field in the schema that no single operation actually asked for (each field was
+// requested on some routes and left out on others, and the leftover copy had nowhere valid to
+// point). The three tests below build the same "every operation, combined into one schema"
+// selection #122's own sweep used, so a change that brings either bug back fails a test instead
+// of only showing up in a full corpus sweep. See docs/FIXED.md #122 for the umbrella issue and
+// docs/FIXED.md #124/#125 for the two fixes.
+test(
+  'test_122_asana_full_production_selection',
+  async () => {
+    const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/asana-full-selection.json`, 'utf-8'));
+    const schema = await runOasTest('asana.yaml', selections, 167, 427, {
+      skipValidation: true,
+      skipAuth: true,
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.15.1',
+      forceRover: true,
+    });
+    assert.ok(schema !== undefined);
+  },
+);
+
+test(
+  'test_122_box_full_production_selection',
+  async () => {
+    const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/box-full-selection.json`, 'utf-8'));
+    const schema = await runOasTest('box.yaml', selections, 258, 763, {
+      skipValidation: true,
+      skipAuth: true,
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.15.1',
+      forceRover: true,
+    });
+    assert.ok(schema !== undefined);
+  },
+);
+
+test(
+  'test_122_digitalocean_full_production_selection',
+  async () => {
+    const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/digitalocean-full-selection.json`, 'utf-8'));
+    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1284, {
+      skipValidation: true,
+      skipAuth: true,
+      federationVersion: 'v2.14',
+      composeFederationVersion: '2.15.1',
+      forceRover: true,
+    });
+    assert.ok(schema !== undefined);
+  },
+);
+
 test(
   'test_108_map_with_anyof_enum_or_string_values_drops_the_map_and_selection',
   async () => {

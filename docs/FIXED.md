@@ -7824,3 +7824,57 @@ form-content-type block re-run to confirm no regression to the existing form cas
 generalizes); `graphos-service-factory` PR #17 on `mdg-private/graphos-service-factory`
 (`connect-gen: per-request Content-Type override for non-JSON request media types` — the shipped
 Rust fix); fixture `tests/resources/oas/merge-patch-content-type.yaml`.
+
+## 122 [BUG] [P3] · All-ops sweep findings: four cross-op failure classes invisible to per-op coverage — ✅ Fixed, as side effects of #123/#124/#125
+
+**Symptom:** the first sweep with the all-ops column (2026-08-18) found spec/verb combinations
+where every individual operation composed fine on its own, but combining every operation from that
+spec into one schema — what a real connector actually needs — failed:
+
+| class | where | resolution |
+|---|---|---|
+| `INVALID_BODY` ×52 | digitalocean ×36, docker ×10, sendgrid ×6 — mutations only | fixed by #123 |
+| `SATISFIABILITY_ERROR` | asana ×12 GET / ×30 mutations | fixed by #125 |
+| `GRAPH_QL_ERROR` + `SELECTED_FIELD_NOT_FOUND` | box ×34 GET / ×18 mutations | the `GRAPH_QL_ERROR` half fixed by #124, the `SELECTED_FIELD_NOT_FOUND` half by #125 |
+| `INVALID_GRAPHQL` ×2 | digitalocean GET | fixed by #124 |
+
+launch_library's `GRAPH_QL_ERROR ×2` was the known #79 upstream op riding along, never part of this
+umbrella's own scope. #121 (a `oneOf` used top-level by one op and nested by another) was the one
+member of this family isolated and fixed on its own — see docs/FIXED.md #121.
+
+**Cause:** none of the three remaining rows needed a dedicated fix of their own — each was already
+resolved as a side effect of a fix landed for a different, more specifically-described symptom, and
+#122's own table was never updated to say so:
+- #124 fixed a component reached both directly and via a `#/paths` ref surviving as two separate
+  GraphQL type definitions (`comp.ts`'s `Composed.visit()` was missing the same-shape collision
+  check `Obj.visit()` already had). That's digitalocean's duplicate-type `INVALID_GRAPHQL`, and —
+  per docs/FIXED.md #130 — the same mechanism also cleared box's `GRAPH_QL_ERROR` half.
+- #125 fixed a field declared on a shared type but never actually selected by any one operation
+  surviving into the schema as a real, unresolvable field (`Composed` hadn't been consulting
+  `propOverrides` the way `Obj` did, and a field no operation ever selects at all fell through the
+  older removed/kept check entirely). That's exactly "shared types reachable from several
+  operations with disagreeing fields" — asana's `SATISFIABILITY_ERROR` — and box's
+  `SELECTED_FIELD_NOT_FOUND` half.
+
+**Verified:** added the regression coverage the umbrella itself called for — one test per spec that
+builds the same "every operation, combined into one schema" selection the all-ops sweep uses
+(`SelectionPath.everythingUnder` over every operation in the spec) and composes it:
+`test_122_asana_full_production_selection`, `test_122_box_full_production_selection`,
+`test_122_digitalocean_full_production_selection` (`tests/all/oas-core.test.ts`, fixtures
+`{asana,box,digitalocean}-full-selection.json`). Revert-check: temporarily disabling #124's
+`T.collidesWithStoredType` check in `Composed.visit()` and #125's `removeFieldsNeverSelected` made
+all three tests fail composing with exactly #122's original error classes (asana:
+`SATISFIABILITY_ERROR`; box and digitalocean: `GRAPH_QL_ERROR`); restoring both, all three pass
+again. Separately re-ran the combined GET+mutations sweep (`tools/coverage-spec.mts --verbs all`)
+against all three specs directly: `whole=OK` with zero non-`OK` per-op verdicts, confirming the fix
+holds outside the new pinned-selection tests too. Full suite green.
+
+digitalocean's full-selection schema is large enough that composing it under Node's `execSync`
+needed the same output-buffer raise `tools/coverage-spec.mts` already carries — without it the
+compose step failed with `ENOBUFS` (Node's default 1 MB output limit), a test-harness limit, not a
+#122 regression. Fix: `maxBuffer: 64 * 1024 * 1024` added to the same `execSync` call in
+`src/tests/runners.ts`.
+
+**Refs:** COVERAGE.md / COVERAGE-mutations.md `all-ops` column + `WHOLE:` histogram buckets,
+`tools/coverage-spec.mts` (`runWholeSpec`), docs/FIXED.md #121/#123/#124/#125/#129/#130, #13/#89,
+#104/#112.
