@@ -1,0 +1,53 @@
+openapi: 3.0.0
+info:
+  title: Same inline shape written out in two operations
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /a:
+    get:
+      operationId: getA
+      responses:
+        '200':
+          description: A list of widgets, paged with a cursor.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: string
+                  # written out by hand here, not shared with /b through a component -- both
+                  # operations just happen to describe paging the same way.
+                  pagination:
+                    type: object
+                    properties:
+                      cursor:
+                        type: string
+                      hasMore:
+                        type: boolean
+  /b:
+    get:
+      operationId: getB
+      responses:
+        '200':
+          description: A list of gadgets, paged the same way as /a.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: string
+                  pagination:
+                    type: object
+                    properties:
+                      cursor:
+                        type: string
+                      hasMore:
+                        type: boolean

@@ -2845,6 +2845,39 @@ test('test_149_structured_syntax_json_body_keeps_its_declared_content_type', asy
   );
 });
 
+test('test_73_reversed_op_order_keeps_same_inline_shape_field_path_stable', async () => {
+  // docs/DEFERRED.md #73, step 0: does reading operations in a different order change where a
+  // field ends up? /a and /b each write out the same "pagination: { cursor, hasMore }" block by
+  // hand in their own response -- not shared through a component. /b's cursor field sits in the
+  // same spot in the file no matter what; this checks whether its path still comes out the same
+  // whether /a is read before /b, or /b before /a.
+  const orderAThenB = ['get:/a>**', 'get:/b>**'];
+  const orderBThenA = ['get:/b>**', 'get:/a>**'];
+
+  // a fresh OasGen per run, so nothing one run names carries over into the other
+  const genAThenB = await OasGen.fromFile(`${oasBasePath}/same-inline-shape-two-ops.yaml`, {
+    showParentInSelections: false,
+  });
+  await genAThenB.visit();
+  const pathsAThenB = genAThenB.expanded(orderAThenB);
+
+  const genBThenA = await OasGen.fromFile(`${oasBasePath}/same-inline-shape-two-ops.yaml`, {
+    showParentInSelections: false,
+  });
+  await genBThenA.visit();
+  const pathsBThenA = genBThenA.expanded(orderBThenA);
+
+  const bCursorPath = (paths: string[]) => paths.find((p) => p.startsWith('get:/b') && p.endsWith('prop:scalar:cursor'));
+
+  assert.ok(bCursorPath(pathsAThenB), "finds /b's cursor field when /a is read first");
+  assert.ok(bCursorPath(pathsBThenA), "finds /b's cursor field when /b is read first");
+  assert.strictEqual(
+    bCursorPath(pathsAThenB),
+    bCursorPath(pathsBThenA),
+    "/b's cursor field lands on the same path either way -- see docs/DEFERRED.md #73's step 0 result",
+  );
+});
+
 test(
   'test_73_curated_multi_op_stripe_selection_composes',
   async () => {

@@ -190,6 +190,23 @@ it stays open here as a separate, untested concern, parked until something exerc
 again. See #109's matching 2026-08-19 correction — the same version-pin mistake, found the same day
 on a second schema.
 
+**Step 0 result (2026-08-23) — negative, for the simple same-name/same-shape case.** Built the
+repro the mechanism actually needs: `tests/resources/oas/same-inline-shape-two-ops.yaml`, two GET
+ops (`/a`, `/b`) that each write out an identical inline `pagination: { cursor, hasMore }` block
+by hand, not through a shared component. Ran the file twice with a fresh `OasGen` each time — once
+reading `/a` then `/b`, once reading `/b` then `/a`
+(`test_73_reversed_op_order_keeps_same_inline_shape_field_path_stable`,
+`tests/all/oas-core.test.ts`). `/b`'s position in the file never moves between the two runs, and
+neither does its `cursor` field's path: both orders give
+`get:/b>res:r>obj:type:bResponse>prop:obj:pagination>obj:type:pagination>prop:scalar:cursor`. The
+shared inline block resolves to one type named after its own field key ("pagination") whichever
+op is read first, so there is never a name collision here and #57's "first-visited keeps the base
+name" tie-break never triggers. This is a narrower shape than the digitalocean case that reopened
+this issue (`allOf` members reached through different `$ref` pointers, `[inline:…]` names shifting
+because a parent's name shifted) — this result clears the simple same-name/same-shape case only,
+not the mechanism as a whole. Stays parked; wake again on a repro closer to digitalocean's actual
+shape (a `$ref`-reached member whose reachable path differs between browse orders).
+
 ## 79 [BUG] · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
 
 **Symptom:** the last `GRAPH_QL_ERROR` sweep residue: launch_library
