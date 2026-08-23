@@ -192,6 +192,11 @@ strings for "everything under this op", measured in `docs/FIXED.md #118`), and
 representation). Decided during `docs/FIXED.md #118` (2026-08-18): staged — the prefix-set fix
 shipped first; this is the durable half.
 
+**Sub-issue B, the size half, is fixed:** `docs/FIXED.md #153` (2026-08-23) made `generateSchema`
+hand back the original wildcard instead of its expansion, so "everything under this op" is compact
+again without waiting for this rewrite. Sub-issue C — identity fragility (`#73`) and the deferred
+collect-walk map (`#119`) — is untouched and is why this stays open.
+
 **Shape:** extract selection handling into its own module with **spec-position addressing** (paths
 derived from the OAS document structure, not from emitted node names), and a **selectable
 granularity mode** — the consumer chooses the selection algorithm per run:

@@ -231,7 +231,12 @@ export class OasGen {
       this.collector.collect(paths);
 
       const writer: Writer = new Writer(this);
-      this.selections = writer.generateWith(this.collector.types, this.collector.expanded);
+      writer.generateWith(this.collector.types, this.collector.expanded);
+
+      // Hand back what the caller asked for, not what we expanded it into -- "everything under
+      // this op" stays one entry instead of one per field. e.g. ['get:/lists/{id}>**'] in, same
+      // one entry out, not the 38,300 field paths that op's schema has. #118, #139
+      this.selections = paths;
 
       const schema = writer.flush();
       // The generator's own output must be valid GraphQL before anything downstream (Directives,

@@ -7878,3 +7878,69 @@ compose step failed with `ENOBUFS` (Node's default 1 MB output limit), a test-ha
 **Refs:** COVERAGE.md / COVERAGE-mutations.md `all-ops` column + `WHOLE:` histogram buckets,
 `tools/coverage-spec.mts` (`runWholeSpec`), docs/FIXED.md #121/#123/#124/#125/#129/#130, #13/#89,
 #104/#112.
+
+## 153 [BUG] [P3] · "Everything under this op" comes back as one string per field, not one — ✅ Fixed
+
+**Symptom:** asking `gen` to generate everything under one operation (`opId>**`, what the CLI's
+`-n` default and `--load-selections` full-spec files both use) got back one string per field it
+found under that operation, not the single wildcard that was asked for. On this repo's small test
+fixture that's 15 strings back for 1 in; on hubspot's real `lists/{listId}` endpoint
+(`docs/FIXED.md #118`) it's 38,300 — the whole point of asking for "everything" was to avoid
+writing out every field.
+
+**OAS** (`recursive-oneof-array-branches.yaml`, the same fixture #118 used to measure the cost of
+walking this shape):
+```yaml
+/lists/{id}:
+  get:
+    responses:
+      '200':
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublicObjectList' }
+```
+`gen.generateSchema(['get:/lists/{id}>**'])` — one wildcard in.
+
+**Cause:** `OasGen.generateSchema` (`src/oas/oasGen.ts`) built the schema from
+`TypesCollector.collectExpandedPaths`'s field-by-field walk (as it still needs to — that walk is
+the only code that knows which leaf shapes count as selectable), then handed back that same
+expanded, one-string-per-field list to the caller instead of the wildcard the caller actually typed
+in.
+
+**Fix:** `generateSchema` now assigns `this.selections` straight from its own `paths` argument —
+the original, unexpanded input — instead of from the expanded list. The expanded list still goes
+into writing the schema, unchanged:
+```ts
+// oasGen.ts, generateSchema()
+const writer: Writer = new Writer(this);
+writer.generateWith(this.collector.types, this.collector.expanded);
+this.selections = paths;
+```
+A wildcard entry needs no reconstruction — it's the literal input. An explicit, curated leaf entry
+in `paths` is untouched by this either, since `collectExpandedPaths` only expands `opId`/`opId>**`
+entries in the first place. What was ruled out: rebuilding the wildcard by matching expanded field
+paths back to their operation's prefix — a shared type reached by two operations (see #124's
+`paths-ref-shared-create-and-update.yaml`, where PUT's whole response is a `$ref` back to POST's)
+anchors its `.path()` under whichever operation's walk claimed it first, not necessarily the one
+whose wildcard reached it this run. Matching by prefix would silently mislabel or drop that
+operation's wildcard; reading `paths` straight through can't, because it never looks at the
+expanded leaves at all.
+
+**Verified:** fixture `recursive-oneof-array-branches.yaml`,
+test `test_153_whole_op_wildcard_selection_stays_compact` — `gen.selections` goes from 15 expanded
+field paths to the 1 original wildcard; the generated schema's content (merged union type, per-
+branch cut comments, kept tag field) is asserted unchanged from before the fix; feeding the
+compacted `gen.selections` back into a second `generateSchema` call regenerates an identical
+schema. Shared-type regression, fixture `paths-ref-shared-create-and-update.yaml`, test
+`test_153_shared_type_wildcard_selection_stays_labeled_by_its_own_op` — both operations' wildcards
+come back correctly labeled even though PUT's fields are all anchored under POST's op internally,
+which a prefix-matching fix would have gotten wrong. Revert-check: reverting the `oasGen.ts` change
+makes both new tests fail with the pre-fix expanded lists (confirmed); reapplying it, both pass.
+Full suite green.
+
+**Refs:** `src/oas/oasGen.ts` (`generateSchema`), `src/oas/generator/typesCollector.ts`
+(`collectExpandedPaths`, unchanged), `src/oas/utils/selectionPath.ts` (`everythingUnder`). Sub-issue
+B of `docs/TASKS.md #139` (the umbrella issue, left open — sub-issue C, spec-position addressing, is
+a separate decision not covered here). See `docs/FIXED.md #118` (the size measurement this fixes
+the return side of) and `docs/FIXED.md #124` (the shared-type fixture reused for the regression
+test).

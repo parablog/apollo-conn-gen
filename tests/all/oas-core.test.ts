@@ -1342,6 +1342,54 @@ test('test_118_prefix_set', async () => {
   assert.ok(calls < 250, `selection filters scan per prop again (${calls} path() calls, expected < 250)`);
 });
 
+test('test_153_whole_op_wildcard_selection_stays_compact', async () => {
+  // #139 sub-issue B: asking for "everything under this op" (`opId>**`) used to hand back one
+  // string per field it found -- 38,300 of them for hubspot's lists endpoint (docs/FIXED.md #118).
+  // This fixture reproduces the same shape at a size the test suite can afford. The schema is
+  // still built from every one of those fields; only what gets handed back in `gen.selections`
+  // changes -- it's now the one wildcard the caller asked for, not its expansion.
+  const gen = await OasGen.fromFile(`${oasBasePath}/recursive-oneof-array-branches.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+
+  const schema = gen.generateSchema(['get:/lists/{id}>**']);
+
+  assert.deepStrictEqual(gen.selections, ['get:/lists/{id}>**'], 'wildcard handed back as typed, not expanded');
+
+  // same output-equivalence checks as test_118_recursive_oneof_clique_cut_output: the schema text
+  // is unaffected by this change, only the returned selection list is smaller.
+  assert.ok(schema.includes('type FilterBranchUnion'), 'merged union object still emitted');
+  for (const branch of ['or', 'and', 'notAll', 'notAny', 'restricted', 'unifiedEvents', 'association']) {
+    assert.ok(
+      schema.includes(`# ${branch}Branches: [filterBranchUnion] - circular reference omitted`),
+      `${branch}Branches still cut in SDL`,
+    );
+  }
+  assert.ok(/\bfilterBranchType: OrBranchFilterBranchType\b/.test(schema), 'tag field still kept on the merge');
+
+  // round trip: what --load-selections does with a saved file. Feeding the compacted list straight
+  // back in must regenerate the exact same schema as the first run.
+  const roundTripped = gen.generateSchema(gen.selections);
+  assert.strictEqual(roundTripped, schema, 'compacted selection regenerates the identical schema');
+});
+
+test('test_153_shared_type_wildcard_selection_stays_labeled_by_its_own_op', async () => {
+  // #139 sub-issue B, regression: PUT's response here is the exact same node as POST's (a #/paths
+  // ref back to it, see docs/FIXED.md #124), so every field PUT's wildcard reaches "lives" under
+  // POST's op in the underlying tree. Handing back the original wildcards, instead of rebuilding
+  // them from where each field ended up, is what keeps PUT's wildcard labeled as PUT's.
+  const gen = await OasGen.fromFile(`${oasBasePath}/paths-ref-shared-create-and-update.yaml`, {
+    showParentInSelections: false,
+  });
+  await gen.visit();
+
+  gen.generateSchema(['post:/things>**', 'put:/things/{id}>**']);
+
+  assert.deepStrictEqual(gen.selections, ['post:/things>**', 'put:/things/{id}>**']);
+});
+
 test('test_bare_scalar_response_not_dropped', async () => {
   // A response that resolves directly to a scalar (no property wrapper) has nothing selectable
   // under the old leaf-detection, so the op was silently dropped from the schema entirely — not
