@@ -1634,6 +1634,51 @@ test('test_147_undescribed_2xx_response_degrades_to_json_not_boolean', async (t)
   );
 });
 
+test('test_148_malformed_response_schema_degrades_instead_of_crashing', async (t) => {
+  // #148: a response's content declared a media type but the schema under it was the literal
+  // value `null` -- present, not absent -- and OpenAPI's own checker rejected that outright,
+  // crashing the whole file before any generation happened. Same for `responses: {}` with no
+  // status code documented at all. Both are repaired before that checker ever sees them, so
+  // this test runs *without* skipValidation: true -- that's the proof the fix works, since on
+  // main this fixture throws before runOasTest reaches its first assertion.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest(
+    'malformed-response-schema-crashes.yaml',
+    ['get:/markers/{id}>**', 'get:/markers>**'],
+    2,
+    1,
+  );
+  assert.ok(schema !== undefined);
+
+  // `schema: null` collapses to the same "no content key" shape #147 already reads as JSON
+  const reason =
+    "the '200' response declares no body — the real API may still return data this spec doesn't describe, so it's read as raw JSON instead of a fabricated empty result.";
+  assert.ok(/markersById\(id: ID!\): JSON\b/.test(schema!), 'a null schema answers JSON, not a wrapper type');
+  assert.ok(
+    schema!.includes(`NEEDS ATTENTION: ${reason.replace('—', '--')}`),
+    'the reason surfaces in markersById\'s own docstring',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[2] === reason),
+    'warn() fires with the exact reason text for the null-schema case',
+  );
+
+  // `responses: {}` fills in the same success placeholder the emitter already invents whenever
+  // an operation documents nothing usable -- no invented status code, just the existing fallback
+  assert.ok(/markers: MarkersResponse\b/.test(schema!), 'an empty responses map still answers a wrapper type');
+  assert.ok(/markers[\s\S]{0,300}selection: """\s*\n\s*success: \$\(true\)/.test(schema!), 'and synthesizes success: true');
+});
+
+test('test_148_from_data_does_not_throw_on_malformed_response_schema', async () => {
+  // #148 covers OasGen.fromFile and OasGen.fromData separately -- each calls the normalizer and
+  // repairs its own loaded document, so fromData needs its own check that it resolves at all.
+  const file = fs.readFileSync(`${oasBasePath}/malformed-response-schema-crashes.yaml`);
+  await assert.doesNotReject(
+    // @ts-expect-error - Buffer to ArrayBuffer conversion, same as tests/all/mapper.test.ts
+    OasGen.fromData(file as ArrayBuffer, { skipValidation: false, showParentInSelections: false }),
+  );
+});
+
 test('test_99_dangling_ref_response_degrades_to_json', async (t) => {
   // #99: a 200 schema of `$ref: '#../'` — a pointer to nowhere, as published in common-room's
   // del:/user/{email} — stopped the whole run. The reference now reads as free-form JSON.

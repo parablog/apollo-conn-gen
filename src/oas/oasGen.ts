@@ -16,6 +16,65 @@ import { Mapper } from './mapper/types.js';
 import { Naming } from './utils/naming.js';
 import { Directives, DirectivesConfig } from './lint/directives.js';
 import { Namespace } from './lint/namespace.js';
+import { SYN_SUCCESS_RESPONSE } from './schemas/index.js';
+
+// A response as it looks in the raw file, before anything has checked it makes sense -- only the
+// two things repairMalformedResponses cares about: does it have a body, and for each body, does
+// it have a schema.
+interface RawResponse {
+  content?: Record<string, { schema?: unknown } | undefined>;
+}
+
+// An operation (the "get", "post", etc. block under one path) as it looks in the raw file.
+interface RawOperation {
+  responses?: Record<string, RawResponse>;
+}
+
+// every HTTP verb OpenAPI lets a path item declare -- validation checks the whole file, so a
+// malformed response under any of these, not just the ones `gen` reads, would still crash it
+const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
+
+// A `schema: null` or an empty `responses: {}` both fail OpenAPI's own checker before `gen` gets
+// a turn, crashing the whole file over one bad response. Runs before that checker, turning both
+// into shapes `gen` already reads on its own: no `content` key, or a placeholder success reply.
+//   e.g. (World Anvil) content: { application/json: { schema: null } } -> that entry is dropped
+//   (and `content` itself too, if it was the only body type) -- see docs/FIXED.md #147.
+function checkAndFixMalformedResponses(doc: Record<string, unknown>): void {
+  const paths = doc.paths as Record<string, Record<string, RawOperation>> | undefined;
+  if (!paths) return;
+
+  for (const pathItem of Object.values(paths)) {
+    for (const method of HTTP_METHODS) {
+      const operation = pathItem[method];
+      if (!operation || !operation.responses) continue;
+
+      const responses = operation.responses;
+      if (Object.keys(responses).length === 0) {
+        responses['200'] = SYN_SUCCESS_RESPONSE;
+        continue;
+      }
+
+      for (const response of Object.values(responses)) {
+        const content = response?.content;
+        if (!content) continue;
+
+        // a real spec (Confluence) already has responses whose `content` was written as `{}` on
+        // purpose, unrelated to #148 -- only drop `content` when a null-schema entry emptied it,
+        // not when it started empty.
+        let droppedEntry = false;
+        for (const [mediaType, media] of Object.entries(content)) {
+          if (media && media.schema === null) {
+            delete content[mediaType];
+            droppedEntry = true;
+          }
+        }
+        if (droppedEntry && Object.keys(content).length === 0) {
+          delete response.content;
+        }
+      }
+    }
+  }
+}
 
 interface IGenOptions {
   skipValidation?: boolean;
@@ -59,6 +118,7 @@ export class OasGen {
     });
 
     const _loaded: Record<string, unknown> = await normalizer.load();
+    checkAndFixMalformedResponses(_loaded);
     console.log('loaded file');
 
     const _normalised: OpenAPI.Document = await normalizer.bundle();
@@ -103,6 +163,7 @@ export class OasGen {
     });
 
     const _loaded: Record<string, unknown> = await normalizer.load();
+    checkAndFixMalformedResponses(_loaded);
     console.log('loaded file');
 
     const _normalised: OpenAPI.Document = await normalizer.bundle();

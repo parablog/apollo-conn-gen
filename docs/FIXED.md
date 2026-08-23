@@ -7680,3 +7680,77 @@ $ref-resolving sniff in the same file); `docs/FIXED.md #33` (the sub-case this s
 `#142`/`#146` (the sibling "untyped beats unreachable" family for id-shaped scalars);
 `graphos-service-factory` commit `7eeeda4`, open PR #15 on `mdg-private/graphos-service-factory`
 (not yet merged to `main`); fixture `tests/resources/oas/undescribed-2xx-response.yaml`.
+
+## 148 [BUG] [P2] · A response schema present but `null` crashes the CLI instead of degrading — ✅ Fixed
+
+**Symptom:** `content: { application/json: { schema: null } }` — the media type is declared but its
+schema is explicitly `null` (present, not absent) — failed OpenAPI schema validation and crashed the
+whole CLI with an uncaught `SyntaxError` before any generation happened. One malformed response
+anywhere in a spec took down generation for the entire file, not just that operation. A related
+shape, an entirely empty `responses: {}` map, crashed the same way (`minProperties` validation).
+
+**Worse than `#147`'s sibling bug, not the same one:** `#147` is about an operation silently
+degrading to an unreachable shape; this was about the CLI not producing any output at all for the
+whole spec. Confirmed on a real vendor spec (World Anvil, same source as `#146`/`#147`) — Rust's
+parser (both v3 and Swagger 2.0) now reports a declared-but-undescribed body as an Any-schema
+instead of erroring, rather than validating strictly and refusing to proceed.
+
+**OAS** (`malformed-response-schema-crashes.yaml`):
+```yaml
+/markers/{id}:
+  get:
+    responses:
+      '200':
+        content:
+          application/json:
+            schema: null
+/markers:
+  get:
+    responses: {}
+```
+
+**Example** — before, and after:
+```graphql
+# before: the whole process aborts before writing any SDL
+SyntaxError: OpenAPI schema validation failed.
+TYPE must be object
+
+# after
+markersById(id: ID!): JSON
+  @connect(http: { GET: "/markers/{$args.id}" })
+# NEEDS ATTENTION: the '200' response declares no body -- read as raw JSON instead
+
+markers: MarkersResponse
+  @connect(http: { GET: "/markers" }, selection: "success: $(true)")
+```
+
+**Cause:** `@readme/openapi-parser`'s validation step (run inside `oas-normalize`'s `.validate()`,
+called from `OasGen.fromFile`/`fromData`) checks the whole document against OpenAPI's own rules
+before `gen` gets a turn. A `null` schema fails the "must be an object" check; an empty `responses`
+map fails a "must have at least one entry" check. Both throw before generation starts, and nothing
+between there and the CLI entry point catches it.
+
+**Fix:** a small repair function (`repairMalformedResponses`, `src/oas/oasGen.ts`) walks the raw,
+just-loaded document — before validation, in both `fromFile` and `fromData` — and turns both broken
+shapes into ones the generator already knows how to read. A `schema: null` media-type entry is
+dropped, and `content` itself is dropped too, but *only* if removing that entry is what emptied it —
+a real spec (Confluence) already ships responses whose `content` was written as `{}` on purpose, and
+those must be left alone. This reproduces the same "declared but no content key" shape `#147`
+already degrades to a `JSON` scalar with a `NEEDS ATTENTION` note. An empty `responses: {}` gets its
+`'200'` filled in with the same synthetic `success: Boolean` response the generator already invents
+whenever nothing is documented — not an invented status code, just pre-seeding the fallback the
+emitter already reaches for once validation stops rejecting the empty map before that code runs.
+
+**Verified:** fixture `malformed-response-schema-crashes.yaml` (both shapes) and
+`test_148_malformed_response_schema_degrades_instead_of_crashing`, run *without*
+`skipValidation: true` — that absence is the proof the fix works, since on the unfixed code this
+fixture throws before the test's first assertion. A second test,
+`test_148_from_data_does_not_throw_on_malformed_response_schema`, checks the same fixture through
+`OasGen.fromData` directly, since it's a separate entry point with its own repair call. Full suite
+green, including `test_108_confluence_full_production_selection` (which depends on `content: {}`
+staying untouched when it wasn't the repair itself that emptied it).
+
+**Refs:** `src/oas/oasGen.ts` (`repairMalformedResponses`); `docs/FIXED.md #147` (the shape this
+collapses into); `graphos-service-factory` PR #15 (same source as `#146`/`#147` — mentions both
+parsers now tolerating this shape); fixture
+`tests/resources/oas/malformed-response-schema-crashes.yaml`.

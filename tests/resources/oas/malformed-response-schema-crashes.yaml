@@ -1,0 +1,23 @@
+openapi: 3.0.0
+info:
+  title: malformed response schema crashes the CLI test
+  version: "1.0"
+paths:
+  # spec hole: application/json declared with schema explicitly null (not absent -- present
+  # and null). A real vendor spec (World Anvil) does this.
+  /markers/{id}:
+    get:
+      operationId: readMarker
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: null
+  # spec hole: no response documented at all -- not even a status code.
+  /markers:
+    get:
+      operationId: listMarkers
+      responses: {}
