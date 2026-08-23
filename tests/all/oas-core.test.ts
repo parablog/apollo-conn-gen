@@ -601,21 +601,25 @@ test('test_046_oas_test_029_post-complex-body-selection', async () => {
 });
 
 test('test_047_oas_test_030_post-body-allOf', async () => {
+  // post:/user's 201 has no `content` key (post-sample.yaml) -- #147 reads it as JSON now, so the
+  // response leaf is the JSON scalar itself, not a field inside a synthesized wrapper type.
   const paths = [
     'post:/user>body:b>comp:input:Input>obj:input:#/c/s/ExtraInfo>prop:scalar:age',
     'post:/user>body:b>comp:input:Input>obj:input:#/c/s/BaseUser>prop:scalar:email',
     'post:/user>body:b>comp:input:Input>obj:input:#/c/s/ExtraInfo>prop:scalar:subscribed',
     'post:/user>body:b>comp:input:Input>obj:input:#/c/s/BaseUser>prop:scalar:username',
-    'post:/user>res:r>obj:type:createUserResponse>prop:scalar:success',
+    'post:/user>res:r>scalar:undefined',
   ];
 
-  await runOasTest(`post-sample.yaml`, paths, 3, 2);
+  await runOasTest(`post-sample.yaml`, paths, 3, 1);
 });
 
 test('test_048_oas_test_031_post-body-oneOf', async () => {
+  // post:/event's 200 has no `content` key either -- same #147 change as test_047 above, one
+  // fewer type since the wrapper object it used to synthesize is gone.
   const paths = ['post:/event>**'];
 
-  await runOasTest(`post-sample.yaml`, paths, 3, 3);
+  await runOasTest(`post-sample.yaml`, paths, 3, 2);
 });
 
 test('test_049_oas_test_032_mindbody-JSON', async () => {
@@ -1581,6 +1585,53 @@ test('test_146_id_shaped_field_promotes_to_id_regardless_of_declared_type', asyn
   assert.ok(/^\s*rankId: ID$/m.test(schema!), 'a number-declared id-shaped field becomes ID too');
   assert.ok(/^\s*title: String$/m.test(schema!), 'an unrelated field is unaffected');
   assert.ok(/\(id: ID!\)/.test(schema!), 'the operation argument is promoted too, distinct from the field match above');
+});
+
+test('test_147_undescribed_2xx_response_degrades_to_json_not_boolean', async (t) => {
+  // #147: a 200 with no `content` key at all (World Anvil's real shape) was treated the same as a
+  // genuine body-less status and collapsed to `{ success: Boolean }`, losing the real payload the
+  // API actually returns. Only 204/205 (genuinely body-less by the HTTP spec) keep that shortcut now;
+  // every other undescribed 2xx reads as JSON instead, whether inline, $ref'd, or the only 2xx present.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest(
+    'undescribed-2xx-response.yaml',
+    ['get:/manuscripts/{id}>**', 'del:/notebooks/{id}>**', 'del:/labels/{id}>**', 'get:/widgets/{id}>**', 'post:/reports>**'],
+    5,
+    2,
+  );
+  assert.ok(schema !== undefined);
+
+  // an inline 200 with no `content` key (the bug's own repro): degrades to JSON, not Boolean
+  const undescribedReason =
+    "the '200' response declares no body — the real API may still return data this spec doesn't describe, so it's read as raw JSON instead of a fabricated empty result.";
+  assert.ok(/manuscriptsById\(id: ID!\): JSON\b/.test(schema!), 'undescribed 200 answers JSON, not a wrapper type');
+  assert.ok(
+    schema!.includes(`NEEDS ATTENTION: ${undescribedReason.replace('—', '--')}`),
+    "the reason surfaces in manuscriptsById's own docstring",
+  );
+  assert.ok(/manuscriptsById[\s\S]{0,200}selection: """\s*\n\s*\$\s*\n/.test(schema!), 'and the whole body is passed through as-is');
+
+  // control: a genuine 204 (no $ref) still stays Boolean, same as before this fix
+  assert.ok(/deleteNotebooksById\(id: ID!\): DeleteNotebooksByIdResponse\b/.test(schema!), 'a real 204 still returns a wrapper type');
+  assert.ok(/deleteNotebooksById[\s\S]{0,300}selection: """\s*\n\s*success: \$\(true\)/.test(schema!), 'and synthesizes success: true');
+
+  // a shared "no body" response reused under a genuine 204 (github's real pattern): also stays Boolean
+  assert.ok(/deleteLabelsById\(id: ID!\): DeleteLabelsByIdResponse\b/.test(schema!), '$ref-under-204 still returns a wrapper type');
+  assert.ok(/deleteLabelsById[\s\S]{0,300}selection: """\s*\n\s*success: \$\(true\)/.test(schema!), 'and synthesizes success: true too');
+
+  // the same shared response reused under 200 instead: now degrades to JSON (supersedes the "200"
+  // sub-case of docs/FIXED.md #33's DigitalOcean example, which has no live corpus coverage today)
+  assert.ok(/widgetsById\(id: ID!\): JSON\b/.test(schema!), '$ref-under-200 now answers JSON instead of Boolean');
+
+  // a lone 201 with no 200 or default present: previously fell through findSuccessResponseCode's
+  // own "nothing found" fallback and got invented as Boolean before visitResponse ever saw it
+  assert.ok(/createReports: JSON\b/.test(schema!), 'the only declared response (201, no content) answers JSON');
+  assert.ok(/createReports[\s\S]{0,200}selection: """\s*\n\s*\$\s*\n/.test(schema!), 'and passes its body through as-is too');
+
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[2] === undescribedReason),
+    'warn() fires with the exact reason text for the undescribed-200 case',
+  );
 });
 
 test('test_99_dangling_ref_response_degrades_to_json', async (t) => {
@@ -2733,8 +2784,10 @@ test(
   async () => {
     // RELEASE BLOCKER — fixed, see docs/FIXED.md #108. Do not re-add `{ todo: ... }` here without
     // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
+    // 327: #147 turns one undescribed 200 (put:/app/properties/{propertyKey}) from a synthesized
+    // wrapper type into JSON -- one fewer type generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/confluence-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('confluence-full.json', selections, 213, 328, {
+    const schema = await runOasTest('confluence-full.json', selections, 213, 327, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -2755,8 +2808,10 @@ test(
     // production always passes (graphos-service-factory's wrapper always sets --service-prefix).
     // 420: docs/FIXED.md #126 renames omni's 5 inline pageInfo allOf wrappers (same id, one dedup)
     // off PageInfo's name.
+    // 416: #147 turns four undescribed 200s (the download-file/status, delete-yaml and
+    // update-schedule operations) from synthesized wrapper types into JSON.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('omni-full.json', selections, 163, 420, {
+    const schema = await runOasTest('omni-full.json', selections, 163, 416, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -2775,8 +2830,10 @@ test(
     // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
     //
     // PagerDuty had no corpus entry at all before this — not stale, simply untested.
+    // 332: #147 turns one undescribed 200 (delete:/schedules/{id}/overrides/{override_id}, which
+    // also declares a real 204 -- the 200 wins by the existing preference order) into JSON.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/pagerduty-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('pagerduty-full.json', selections, 95, 333, {
+    const schema = await runOasTest('pagerduty-full.json', selections, 95, 332, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',

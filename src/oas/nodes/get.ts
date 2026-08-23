@@ -13,6 +13,11 @@ import _ from 'lodash';
 
 const JSON_MEDIA_TYPE = /^application\/(?:.*\+)?json/i;
 
+// statuses that, per the HTTP spec itself, never carry a body -- these are the only ones where
+// inventing a plain "it worked" answer is safe. any other 2xx with no described content might
+// still return real data the spec simply forgot to write down. #147
+const BODYLESS_STATUS_CODES = new Set(['204', '205']);
+
 // the operation's `responses:` block, keyed by status code or `default`
 type ResponsesByCode = Record<string, ResponseObject | ReferenceObject>;
 
@@ -179,40 +184,58 @@ export class Get extends Type implements Op {
   };
 
   // Finds the code of the response we read: `200` if the spec has one, else the lowest other 2xx
-  // that sends a JSON body, else `default`. Nothing found means we invent the answer instead.
+  // that sends a JSON body, else `default`, else a 2xx that describes no body at all. Nothing
+  // found means we invent the answer instead.
   //   e.g. (github) post:/app-manifests/{code}/conversions documents only `201`   #85
   private findSuccessResponseCode(context: OasContext, responses: ResponsesByCode): string | undefined {
     if (responses['200']) {
       return '200';
     }
-    const created = Object.keys(responses)
+    const codes = Object.keys(responses)
       .filter((code) => /^2\d\d$/.test(code))
-      .sort()
-      .find((code) => this.sendsJson(context, responses[code]));
+      .sort();
 
-    return created ?? (responses.default ? 'default' : undefined);
+    const created = codes.find((code) => this.sendsJson(context, responses[code]));
+    if (created) return created;
+
+    if (responses.default) return 'default';
+
+    // e.g. a bare `201: { description: created }`, no `content` key -- previously fell all the
+    // way through to "nothing found" and got invented as success: Boolean here, before
+    // visitResponse ever got a chance to tell a real body-less status from an undescribed one. #147
+    return codes.find((code) => {
+      const resolved = this.resolveResponse(context, responses[code]);
+      return resolved != null && !resolved.content;
+    });
+  }
+
+  // Resolves a possibly-$ref'd response for a sniff that only picks a code (unreadable ref ->
+  // undefined, not thrown -- `visitResponseRef` is the real visit and still throws on those).
+  //   e.g. (response-201-only.yaml) `201: { $ref: '#/components/responses/Created' }` -> resolved
+  private resolveResponse(context: OasContext, response: ResponseObject | ReferenceObject): ResponseObject | undefined {
+    if (!('$ref' in response)) {
+      return response;
+    }
+    const lookup = context.lookupResponse((response as ReferenceObject).$ref!);
+    return lookup && !('$ref' in lookup) ? (lookup as ResponseObject) : undefined;
   }
 
   // True when a response carries a JSON body, so `204` and a contentless one answer false and keep
-  // the synthetic. A reference we cannot read is skipped, not thrown on: we are only picking a code.
+  // the synthetic.
   //   e.g. (response-201-only.yaml) `201: { content: { application/json } }` -> true   #85
   private sendsJson(context: OasContext, response: ResponseObject | ReferenceObject): boolean {
-    let resolved = response;
-    if ('$ref' in response) {
-      const lookup = context.lookupResponse((response as ReferenceObject).$ref!);
-      if (!lookup || '$ref' in lookup) {
-        return false;
-      }
-      resolved = lookup as ResponseObject;
-    }
-    return Object.keys((resolved as ResponseObject).content ?? {}).some((key) => JSON_MEDIA_TYPE.test(key));
+    const resolved = this.resolveResponse(context, response);
+    return resolved ? Object.keys(resolved.content ?? {}).some((key) => JSON_MEDIA_TYPE.test(key)) : false;
   }
 
-  private visitResponse(context: OasContext, code: string, response: ResponseObject): void {
+  // `code` is what we're reading right now (a real status, or a $ref path once we've followed one).
+  // `statusCode` stays the real status through the $ref, so we still know which one it was.
+  //   e.g. (github) del:.../labels/{name} 204: { $ref: '#/components/responses/no_content' }
+  private visitResponse(context: OasContext, code: string, response: ResponseObject, statusCode: string = code): void {
     const content = response.content as MediaTypeObject;
 
     if ('$ref' in response) {
-      this.visitResponseRef(context, response as ReferenceObject);
+      this.visitResponseRef(context, response as ReferenceObject, statusCode);
     }
     // If the response has a content property, we need to find the JSON content.
     else if (content) {
@@ -231,10 +254,33 @@ export class Get extends Type implements Op {
       } else {
         this.visitResponseContent(context, code, json);
       }
+    } else if (BODYLESS_STATUS_CODES.has(statusCode)) {
+      // a status that never carries a body by definition (204 No Content, 205 Reset Content) —
+      // there's nothing to select, so answer with the synthetic success.
+      //   e.g. (github) del:/repos/{owner}/{repo}/labels/{name} 204: (no content key at all)
+      this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
+    } else if (/^2\d\d$/.test(statusCode)) {
+      // a 2xx that the spec never described the body of — the real API most likely still returns
+      // data, it just wasn't written down, so we read the raw response instead of making up an
+      // empty "it worked" answer that would hide that data.
+      //   e.g. (world anvil) get:/manuscript 200: { description: ok }  — no `content` key   #147
+      const reason = `the '${statusCode}' response declares no body — the real API may still return data this spec doesn't describe, so it's read as raw JSON instead of a fabricated empty result.`;
+      warn(context, `  [${code}]`, reason);
+      const schema = Schemas.withJsonNote({}, reason);
+      // build the Res first so the Scalar below is parented to it from birth — building it the
+      // other way round (Scalar as a constructor argument to `new Res(...)`) would parent it one
+      // level too high, the same trap PropObj's own pre-built `obj` argument fell into.
+      const res = new Res(this, 'r', schema);
+      res.response = new Scalar(res, 'JSON', schema, reason);
+      res.add(res.response);
+      res.visited = true;
+      this.resultType = res;
+      if (!this.children.includes(this.resultType)) {
+        this.add(this.resultType);
+      }
     } else {
-      // the response declares no content — nothing to select, so answer with the synthetic
-      // success. Don't gate this on `code`: a $ref'd shared response (DO's `no_content`)
-      // arrives with the ref string as `code`, not "200". #33
+      // not a 2xx at all (the only other response `findSuccessResponseCode` can pick is a
+      // `default` block) — outside what this fix covers, so keep the old behavior.
       this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
     }
   }
@@ -269,7 +315,7 @@ export class Get extends Type implements Op {
     trace(context, '<- [get::responses::content]', 'out ' + this.name);
   }
 
-  private visitResponseRef(context: OasContext, ref: ReferenceObject): void {
+  private visitResponseRef(context: OasContext, ref: ReferenceObject, statusCode: string): void {
     trace(context, '-> [get::responses::ref]', `in: ${this.name}, ref: ${ref.$ref}`);
 
     const lookup = context.lookupResponse(ref.$ref!);
@@ -281,7 +327,7 @@ export class Get extends Type implements Op {
       throw new Error('Not yet implemented for nested refs');
     }
 
-    this.visitResponse(context, ref.$ref!, lookup as ResponseObject);
+    this.visitResponse(context, ref.$ref!, lookup as ResponseObject, statusCode);
     trace(context, '<- [get::responses::ref]', `out: ${this.name}, ref: ${ref.$ref}`);
   }
 

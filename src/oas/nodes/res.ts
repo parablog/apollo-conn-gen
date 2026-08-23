@@ -8,10 +8,9 @@ export class Res extends Type {
   public schema: SchemaObject;
   public response?: IType;
 
-  constructor(parent: IType, name: string, schema: SchemaObject, response?: IType) {
+  constructor(parent: IType, name: string, schema: SchemaObject) {
     super(parent, name);
     this.schema = schema;
-    this.response = response;
   }
 
   get id(): string {

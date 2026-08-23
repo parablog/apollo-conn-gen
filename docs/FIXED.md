@@ -7586,3 +7586,97 @@ it flagged); `graphos-service-factory` commit `fb6793e` (`connect-gen: id-named 
 scalar regardless of spec scalar type`, on the unmerged `anthony/id-fields-resist-spec-lies`
 branch — the `id_like` predicate `String`/`Integer` half is ported from, `Number`/`Boolean` is not);
 `tests/resources/oas/id-scalar-wrong-declared-type.yaml`.
+
+## 147 [BUG] · A 200 declared with no response body collapsed to a synthetic Boolean, losing real payload data — ✅ Fixed
+
+**Symptom:** an operation whose success response is a 2xx status with no `content` block at all
+(declared, just not described) was treated identically to a genuine body-less status and emitted a
+synthesized `{ success: Boolean }` type with `selection: "success: $(true)"`. If the real API
+actually returns data — which it usually does; the spec just never described the shape — that data
+was unreachable: GraphQL can't select into a scalar, so the call "succeeds" and the whole payload
+silently vanishes.
+
+**Confirmed transferable from a real production bug:** `graphos-service-factory`'s
+`tools/connect-gen` (Rust) hit this exact defect on 11 real World Anvil operations — live MCP
+beta testing surfaced `listNotesectionsByNotebook` returning `{"...": true}` instead of the
+notesection list. The same silent-collapse also affected already-committed real connectors in that
+repo once regenerated and checked (confluence, omni, pagerduty). Rust's own fix for this (commit
+`7eeeda4`, open PR #15 on `mdg-private/graphos-service-factory` — not yet merged to `main`):
+`Boolean` only for genuinely body-less statuses (204/205); every other undescribed 2xx degrades to
+the opaque JSON scalar with a `$` passthrough selection and a doc note instead — "untyped beats
+unreachable." Verified by reading the actual commit diff, not just its PR title.
+
+**OAS** (`undescribed-2xx-response.yaml`):
+```yaml
+/manuscripts/{id}:
+  get:
+    responses:
+      '200':
+        description: ok
+        # no `content` key -- a real manuscript object comes back, just undeclared
+```
+
+**Example** — before, and after:
+```graphql
+# before
+type ManuscriptsByIdResponse {
+  success: Boolean   # real API returns a full object; this is unreachable
+}
+manuscriptsById(id: ID!): ManuscriptsByIdResponse
+  @connect(http: { GET: "/manuscripts/{$args.id}" }, selection: "success: $(true)")
+
+# after
+manuscriptsById(id: ID!): JSON
+  @connect(http: { GET: "/manuscripts/{$args.id}" })
+# selection: $
+```
+A genuine `204` (inline or `$ref`'d, e.g. github's shared `no_content` response) still correctly
+stays `Boolean`.
+
+**Cause:** two cooperating gaps in `src/oas/nodes/get.ts` (shared by every HTTP verb — `Post`
+extends `Get`, `Put`/`Patch`/`Delete` extend `Post`, none override this logic): `visitResponse`'s
+no-content branch synthesized the `Boolean` success regardless of the real status code, and
+`findSuccessResponseCode` only picked a non-`200` 2xx code when it sent a JSON body, so a lone
+undescribed status (e.g. only a `201` declared, no `200`/`default`) never even reached
+`visitResponse` — it fell into `visitResponses`'s own earlier "nothing documented" fallback and was
+invented as `Boolean` there instead.
+
+**Fix:** `visitResponse` now threads the real status code through `$ref` recursion separately from
+`code` (which becomes the ref path string once a ref is followed), so a `$ref`'d shared response
+under a genuine `204` still resolves correctly. Only `204`/`205` (`BODYLESS_STATUS_CODES` — the only
+statuses that never carry a body by definition) keep the synthetic `Boolean`; any other 2xx with no
+content builds a `Res` wrapping a `Scalar('JSON', …)` with a `warn()`-logged reason baked into the
+schema, surfacing as a `NEEDS ATTENTION` doc note on the operation. `findSuccessResponseCode` gained
+one more fallback rung below `default`: a 2xx that, after resolving any `$ref`, declares no content
+at all — so a lone undescribed status is no longer swallowed before `visitResponse` gets a chance to
+look at it. The `Res` is constructed first and the `Scalar` built right after, parented to that `Res`
+instance directly (not to `Get`, which building the `Scalar` as a constructor argument to `new
+Res(...)` would do, one level too high in the tree — the same trap `PropObj`'s own pre-built `obj`
+argument fell into, see its own still-open re-parenting TODO); `get.ts` then adds it as a child and
+marks the `Res` visited itself, since `Res.visit()` never runs for a response built this way. Without
+correct parenting, the new JSON leaf was invisible to `typesCollector`'s leaf detection (`child
+instanceof Scalar && child.parent instanceof Res`) and the whole operation silently vanished from the
+generated schema — confirmed by reintroducing the wrong parent and watching the test fail.
+`Res`'s own constructor stays exactly as simple as before this fix; it has no special case for #147.
+
+**Supersedes one sub-case of `#33`:** `#33`'s DigitalOcean example is a shared `$ref`'d no-content
+response under a literal `"200"` — indistinguishable in the OAS from this bug's own repro, and now
+correctly degrades to JSON too, per this issue's own "any 2xx" wording. That literal shape isn't
+present in the live `digitalocean.yaml` corpus fixture, so this has no regression impact there
+beyond the tracked fixture/test added here.
+
+**Verified:** `undescribed-2xx-response.yaml` (an inline undescribed `200`, a control `204`, a
+`$ref`'d `204` that must stay `Boolean`, that same `$ref`'d response reused under `200` that must
+now degrade, and a lone `201` with no `200`/`default` present) and
+`test_147_undescribed_2xx_response_degrades_to_json_not_boolean`. Five corpus regressions from this
+exact bug shape, previously baked into hardcoded counts, updated to their new, correct values:
+`test_047`/`test_048` (`post-sample.yaml`) and the confluence/omni/pagerduty full-production-
+selection tests (1/4/1 real sites respectively). Full suite: 410 tests, 408 pass, 2 pre-existing
+`todo`, 0 fail.
+
+**Refs:** `src/oas/nodes/get.ts` (`visitResponse`, `findSuccessResponseCode`, `resolveResponse` — the
+last shared with the pre-existing `sendsJson`, extracted rather than duplicating a third
+$ref-resolving sniff in the same file); `docs/FIXED.md #33` (the sub-case this supersedes),
+`#142`/`#146` (the sibling "untyped beats unreachable" family for id-shaped scalars);
+`graphos-service-factory` commit `7eeeda4`, open PR #15 on `mdg-private/graphos-service-factory`
+(not yet merged to `main`); fixture `tests/resources/oas/undescribed-2xx-response.yaml`.

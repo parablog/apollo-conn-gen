@@ -1,0 +1,58 @@
+openapi: 3.0.0
+info:
+  title: undescribed 2xx response test
+  version: "1.0"
+components:
+  responses:
+    no_content:
+      description: no body, by convention
+paths:
+  # a real API returns a full manuscript object here; the spec just never described the body.
+  # This is the largest of three spec-hole flavors found on a real vendor spec (World Anvil).
+  /manuscripts/{id}:
+    get:
+      operationId: readManuscript
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: ok
+          # no `content` key at all
+  # control case: a genuine, body-less 204 -- must stay Boolean
+  /notebooks/{id}:
+    delete:
+      operationId: deleteNotebook
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '204':
+          description: deleted
+  # a shared "no body" response reused under a genuine 204, the way github's real spec does it --
+  # must ALSO stay Boolean, same as the inline 204 above.
+  /labels/{id}:
+    delete:
+      operationId: deleteLabel
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '204':
+          $ref: '#/components/responses/no_content'
+  # the same shared response, but reused under 200 instead of 204 -- the real API most likely
+  # still returns a body here, so this must read as JSON, not Boolean.
+  /widgets/{id}:
+    get:
+      operationId: readWidget
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          $ref: '#/components/responses/no_content'
+  # a 201 with no 200 and no default present at all -- must still be read as JSON, not invented
+  # as a synthetic success.
+  /reports:
+    post:
+      operationId: createReport
+      responses:
+        '201':
+          description: created
+          # no `content` key
