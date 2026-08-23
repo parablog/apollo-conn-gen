@@ -105,13 +105,29 @@ export class T {
     traverseNode(node);
   }
 
-  static isMutationType(type: IType): boolean {
+  // Written as "type Mutation" unless an override says otherwise — e.g. "POST /items/search"
+  // only reads data, so an override with root: 'query' keeps it out of Mutation. see docs/FIXED.md #150
+  static isMutationType(type: IType, context: OasContext): boolean {
+    const root = context.generateOptions.overrides?.[type.id]?.root;
+    if (root) {
+      return root === 'mutation';
+    }
     return (
       type.id.startsWith('post:') ||
       type.id.startsWith('put:') ||
       type.id.startsWith('patch:') ||
       type.id.startsWith('del:')
     );
+  }
+
+  // Written as "type Query" unless an override says otherwise — e.g. "GET /legacy/purge" deletes
+  // something, so an override with root: 'mutation' keeps it out of Query. see docs/FIXED.md #150
+  static isQueryType(type: IType, context: OasContext): boolean {
+    const root = context.generateOptions.overrides?.[type.id]?.root;
+    if (root) {
+      return root === 'query';
+    }
+    return type.id.startsWith('get:');
   }
 
   static isScalar(type: IType): boolean {

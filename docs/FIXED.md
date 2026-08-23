@@ -7944,3 +7944,72 @@ B of `docs/TASKS.md #139` (the umbrella issue, left open — sub-issue C, spec-p
 a separate decision not covered here). See `docs/FIXED.md #118` (the size measurement this fixes
 the return side of) and `docs/FIXED.md #124` (the shared-type fixture reused for the regression
 test).
+
+## 150 [FEAT] [P3] · No way to override an operation's Query/Mutation root when the HTTP method disagrees with its semantics — ✅ Fixed
+
+**Symptom:** `gen`'s Query/Mutation split is purely transport-based (`GET` → Query, everything else
+→ Mutation), with no override mechanism. Real APIs violate that mapping in both directions: some
+expose every list endpoint as `POST` with a pagination body (a real target in
+`graphos-service-factory`'s experiments has 33 of 166 operations like this), and legacy APIs
+sometimes mutate via `GET`. Left as-is, a POST-for-read operation generated as a GraphQL
+*mutation*, which is wrong three ways: semantics (agents/tools deprioritize mutations for
+retrieval), governance (a blanket `Mutation.* → require-approval` tag selector lands approval
+gating on a plain read), and MCP ergonomics.
+
+**Shipped in Rust already** (`graphos-service-factory` PR #3,
+`connect-gen: explicit bidirectional GraphQL-root overrides`): an explicit, exact-operation-id
+override list. `gen`'s fix below ports the same idea onto its existing `overrides` map rather than
+adding a parallel config surface.
+
+**OAS** (`r15-graphql-root.yaml`):
+```yaml
+/items/search:
+  post:
+    operationId: searchItems   # reads data via a search body -- should read as a query, not a mutation
+/legacy/purge:
+  get:
+    operationId: legacyPurge   # deletes data via GET -- should read as a mutation, not a query
+```
+
+**Example** — before, and after (`{ "post:/items/search": { "root": "query" } }`):
+```graphql
+# before: written under Mutation because the HTTP verb is POST
+type Mutation { createItemsSearch(term: String): [Item] @connect(http: { POST: "/items/search" ... }) }
+
+# after: same POST request, written under Query instead
+type Query { createItemsSearch(term: String): [Item] @connect(http: { POST: "/items/search" ... }) }
+```
+
+**Fix:** added a `root?: 'query' | 'mutation'` field to `OverrideEntry` (`src/oas/oasContext.ts`) —
+one more per-op knob on the existing, already-plumbed `overrides` map, not a new config surface.
+`T.isMutationType`/the new `T.isQueryType` (`src/oas/nodes/typeUtils.ts`) check an operation's
+`overrides[id].root` first and fall back to the existing verb-prefix / `get:`-prefix check
+otherwise; both call sites (`src/oas/io/writer.ts`'s query/mutation split, `src/oas/oasGen.ts`'s
+`#116` field-rename pass) now pass `context` through so the override is visible. The underlying
+`@connect` HTTP block (method, path, body) is untouched either way — only which root the field is
+written under (and therefore which `@tag` selectors reach it) changes. The existing `overrides`
+typo guard (`OasGen.generateSchema`) now also rejects a `root` value that isn't `"query"`/
+`"mutation"`; an unknown operation id is still warn-only, matching every other `overrides` key.
+Forcing every selected operation's `root` to `"mutation"` (leaving no operation under Query) is not
+an error — `writeQuery`/`writeMutations` (`src/oas/io/operationWriter.ts`) already omit an empty
+root entirely, the same as a spec that is naturally all-mutation today.
+
+**Not ported from the Rust design (deliberate):** duplicate override entries — a JSON object can't
+hold two values for one key, so there is nothing to reject. An override naming an excluded/missing
+operation id warns instead of failing generation, matching this codebase's existing `overrides`
+convention rather than Rust's stricter one.
+
+**Verified:** new fixture `r15-graphql-root.yaml` and test `r15-graphql-root.test.ts` (6 tests):
+`POST /items/search` forced to `query` keeps its `POST` `@connect` verb; `GET /legacy/purge` forced
+to `mutation` keeps its `GET` verb and picks up a `Mutation.*` `@tag` via `--directives`; the
+untouched baseline `GET` and the unsupported `HEAD` method are unaffected; an unknown op-id `root`
+key warns without throwing; an invalid `root` value throws; forcing every selected op to `mutation`
+(including the last `GET`) succeeds with no `Query` root emitted. Revert-check: reverting
+`typeUtils.ts`/`writer.ts`/`oasGen.ts` re-fails the new tests, nothing else. Full suite green (423
+pass, 2 pre-existing `todo`, 0 fail); `tsc --noEmit` and `eslint` clean.
+
+**Refs:** `src/oas/oasContext.ts` (`OverrideEntry.root`), `src/oas/nodes/typeUtils.ts`
+(`isMutationType`, `isQueryType`), `src/oas/io/writer.ts` (query/mutation split), `src/oas/oasGen.ts`
+(`generateSchema` typo guard, `#116` rename pass), `src/oas/io/operationWriter.ts`
+(`writeQuery`/`writeMutations`, unchanged, empty-root omission reused as-is). `graphos-service-factory`
+PR #3 on `mdg-private/graphos-service-factory` (the shipped Rust design).

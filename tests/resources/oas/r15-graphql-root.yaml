@@ -1,0 +1,86 @@
+openapi: 3.0.3
+info:
+  title: R15 GraphQL root override
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # untouched baseline: GET with no override -> stays under "type Query" as it always has.
+  # HEAD on the same path has no override either, and HEAD is not GET/POST/PUT/PATCH/DELETE,
+  # so it must stay excluded from both roots exactly as it is today (regression check).
+  /items/{id}:
+    get:
+      operationId: getItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+    head:
+      operationId: headItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item exists
+  # POST that only reads data (the body carries search filters, not a change to make) ->
+  # with root: 'query' set in the overrides file, this is written under "type Query" instead
+  # of "type Mutation". This is the 33-of-166 shape the issue describes.
+  /items/search:
+    post:
+      operationId: searchItems
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                term:
+                  type: string
+      responses:
+        '200':
+          description: Matching items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+  # legacy GET that deletes something -> with root: 'mutation' set, this is written under
+  # "type Mutation" instead of "type Query", even though the HTTP method is GET
+  /legacy/purge:
+    get:
+      operationId: legacyPurge
+      responses:
+        '200':
+          description: Confirmation that old data was purged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeResult'
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    PurgeResult:
+      type: object
+      properties:
+        purgedCount:
+          type: integer

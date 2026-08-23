@@ -102,8 +102,8 @@ export class Writer {
 
     const expanded = [...this.gen.paths];
 
-    const queries = new Map(expanded.filter(([_k, type]) => type.id.startsWith('get:')));
-    const mutations = new Map(expanded.filter(([_k, type]) => T.isMutationType(type)));
+    const queries = new Map(expanded.filter(([_k, type]) => T.isQueryType(type, context)));
+    const mutations = new Map(expanded.filter(([_k, type]) => T.isMutationType(type, context)));
 
     this.operationWriter.writeQuery(context, writer, queries, selection);
     this.operationWriter.writeMutations(context, writer, mutations, selection);

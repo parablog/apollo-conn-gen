@@ -219,36 +219,6 @@ before implementing, the same way #122/#132 are handled.
 (the #49-adjacent measurements). Related: `docs/FIXED.md #13`/`#89` (path-dependent divergence
 family).
 
-## 150 [FEAT] [P3] · No way to override an operation's Query/Mutation root when the HTTP method disagrees with its semantics — ⬜ Open
-
-**Why:** `gen`'s Query/Mutation split is purely transport-based (`GET` → Query, everything else →
-Mutation), with no override mechanism — confirmed via `--help` and a source search (no
-`graphql_root`/force-query/force-mutation concept anywhere). Real APIs violate that mapping in
-both directions: some expose every list endpoint as `POST` with a pagination body (a real target
-in `graphos-service-factory`'s experiments has 33 of 166 operations like this), and legacy APIs
-sometimes mutate via `GET`. Left as-is, a POST-for-read operation generates as a GraphQL
-*mutation*, which is wrong three ways: semantics (agents/tools deprioritize mutations for
-retrieval), governance (a blanket `Mutation.* → require-approval` tag selector lands approval
-gating on a plain read), and MCP ergonomics.
-
-**Shipped in Rust already** (`graphos-service-factory` PR #3,
-`connect-gen: explicit bidirectional GraphQL-root overrides`): an explicit, exact-operation-id
-override list (`operations.overrides: [{operation, graphql_root}]`) — deliberately not a glob
-pattern, since a broad pattern could silently reclassify a newly-added write as `Query` after an
-upstream spec update and quietly stop applying approval-gating to it. Bidirectional (`query` pulls
-a POST under `type Query`; `mutation` pushes a GET into `type Mutation` and its governance
-selectors), validated against the post-`include`/`exclude` selected set (an override naming an
-excluded/missing operation fails generation naming which and why), and rejects duplicate entries
-or an override set that empties the Query root.
-
-**Shape:** a CLI/manifest-level override keyed by operation id, applied after the normal
-GET-vs-other classification, forcing the field onto the named root regardless of HTTP method. The
-underlying `@connect` HTTP block (method, body, etc.) stays exactly as-derived either way — only
-the GraphQL root placement (and therefore which `@tag` selectors reach it) changes.
-
-**Refs:** `graphos-service-factory` PR #3 on `mdg-private/graphos-service-factory` (the shipped
-Rust design, including the exact-id-not-glob rationale and the validation rules above).
-
 ## 151 [FEAT] [P4] · No bridge for sparse-by-default REST reads (`fields=`-style query params) — ⬜ Open
 
 **Why:** an API with a sparse-by-default read (a `fields=` query param widens the returned field

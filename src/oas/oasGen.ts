@@ -221,10 +221,13 @@ export class OasGen {
 
   public generateSchema(paths: string[]): string {
     return this.isolatedRun(() => {
-      // typo guard: an override key that matches no operation would silently do nothing
-      for (const key of Object.keys(this.options.overrides ?? {})) {
+      // typo guard: an override key that matches no operation would silently do nothing. A root
+      // value other than "query"/"mutation" (e.g. "Mutation", capitalized) is caught here too.
+      for (const [key, entry] of Object.entries(this.options.overrides ?? {})) {
         if (!this.paths.has(key)) {
           console.warn(`[overrides] no operation matches "${key}" — override ignored.`);
+        } else if (entry?.root !== undefined && entry.root !== 'query' && entry.root !== 'mutation') {
+          throw new Error(`[overrides] "${key}".root must be "query" or "mutation", got ${JSON.stringify(entry.root)}.`);
         }
       }
 
@@ -324,7 +327,7 @@ export class OasGen {
     const queryFieldNames = new Set<string>();
     const mutationFieldNames = new Set<string>();
     for (const type of collected.values()) {
-      const takenNames = T.isMutationType(type) ? mutationFieldNames : queryFieldNames;
+      const takenNames = T.isMutationType(type, context) ? mutationFieldNames : queryFieldNames;
       const op = type as Get;
       const name = op.getGqlOpName();
       if (takenNames.has(name)) {

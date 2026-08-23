@@ -19,6 +19,9 @@ export type OverrideEntry = {
   queryParams?: Record<string, string | null>;
   headers?: Record<string, string | null>;
   body?: string | null;
+  // Places this one operation under "query" or "mutation" regardless of its HTTP method — e.g.
+  // "POST /items/search" (search filters in the body, but only reads data) -> root: 'query'.
+  root?: 'query' | 'mutation';
 };
 
 // request overrides, keyed by op id. e.g. { "get:/pets/{id}": { path: "/v2/pets/{id}" } }

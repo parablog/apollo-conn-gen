@@ -218,7 +218,7 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 | `baseURL`                | `string`           | `servers[0]` from the spec | Override the `@source` base URL.                                                                                                                     |
 | `federationVersion`      | `string`           | `v2.14`                    | Federation version for the `@link` URL (`>= v2.13`).                                                                                                 |
 | `connectorSpecVersion`   | `string`           | `v0.4`                     | Connector spec version (only `v0.4` is supported).                                                                                                   |
-| `overrides`              | `OverridesConfig`  | —                          | Per-operation request rewiring, keyed by op id. See [Request overrides](#request-overrides).                                                         |
+| `overrides`              | `OverridesConfig`  | —                          | Per-operation request rewiring, keyed by op id. Also carries `root`, to move an operation to `Query`/`Mutation` regardless of its HTTP method. See [Request overrides](#request-overrides). |
 | `batch`                  | `BatchConfig`      | —                          | Batch endpoints, keyed by op id. See [Batch endpoints](#batch-endpoints).                                                                            |
 | `directives`             | `DirectivesConfig` | —                          | Directives declared by hand, keyed by the type or field they belong on. See [Manual directives](#manual-directives).                                 |
 | `mapper`                 | `Mapper`           | —                          | Operation name mapper. See [Transform Rules](#transform-rules).                                                                                      |
@@ -491,7 +491,9 @@ node ./dist/cli/oas -h
 
 `body` is one raw JSONSelection string replacing the whole inferred `$args.input { … }` mapping (`null` drops the body).
 
-An override key that matches no operation is ignored with a warning.
+An operation is normally written under `type Query` when its HTTP method is GET, and under `type Mutation` otherwise. `root: "query"` or `root: "mutation"` moves one operation to the named side instead, regardless of its HTTP method — for example, a `POST /items/search` endpoint that only reads data (the body carries search filters) can be written under `type Query` with `{ "post:/items/search": { "root": "query" } }`. The HTTP request itself is unaffected: `@connect` still uses the operation's real method.
+
+An override key that matches no operation is ignored with a warning. A `root` value other than `"query"`/`"mutation"` stops the run.
 
 ### Request bodies
 
