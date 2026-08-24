@@ -1,0 +1,53 @@
+openapi: 3.0.0
+info:
+  title: A shared $ref member sits inside an inline allOf wrapper that collides by name
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /a:
+    get:
+      operationId: getA
+      responses:
+        '200':
+          description: >-
+            `container` wraps the shared `SharedPart` component plus a field only /a has. Whichever
+            op is read first keeps the plain name `Container`; the other collides on that name
+            (same property key, different extra field) and gets renamed. docs/DEFERRED.md #73
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  container:
+                    allOf:
+                      - $ref: '#/components/schemas/SharedPart'
+                      - type: object
+                        properties:
+                          aOnly:
+                            type: string
+  /b:
+    get:
+      operationId: getB
+      responses:
+        '200':
+          description: Same shape as /a's container, but its own extra field, so the two collide.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  container:
+                    allOf:
+                      - $ref: '#/components/schemas/SharedPart'
+                      - type: object
+                        properties:
+                          bOnly:
+                            type: string
+components:
+  schemas:
+    SharedPart:
+      type: object
+      properties:
+        token:
+          type: string

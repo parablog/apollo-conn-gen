@@ -2878,6 +2878,59 @@ test('test_73_reversed_op_order_keeps_same_inline_shape_field_path_stable', asyn
   );
 });
 
+test('test_73_ref_member_under_colliding_allof_wrapper_path_fails_to_resolve_after_reorder', async () => {
+  // docs/DEFERRED.md #73's 2026-08-23 note asked for a repro "closer to digitalocean's actual
+  // shape (a $ref-reached member whose reachable path differs between browse orders)". /a and /b
+  // both wrap a shared component (SharedPart) plus their own extra field (aOnly / bOnly) inside
+  // an inline "container: allOf[$ref SharedPart, {extra}]" -- same property key, different shape.
+  // Whichever op is read first keeps the plain name "Container"; the other collides (same key,
+  // different extra field) and is renamed after its own response ("AResponseContainer"). That
+  // rename also changes the name of the wrapper's OTHER allOf member -- the inline "extra field"
+  // object, named "[inline:<wrapper's name>]" -- even though that member never itself collided.
+  const orderAThenB = ['get:/a>**', 'get:/b>**'];
+  const orderBThenA = ['get:/b>**', 'get:/a>**'];
+
+  const genAThenB = await OasGen.fromFile(`${oasBasePath}/ref-member-under-colliding-allof-wrapper.yaml`, {
+    showParentInSelections: false,
+  });
+  await genAThenB.visit();
+  const pathsAThenB = genAThenB.expanded(orderAThenB);
+
+  const genBThenA = await OasGen.fromFile(`${oasBasePath}/ref-member-under-colliding-allof-wrapper.yaml`, {
+    showParentInSelections: false,
+  });
+  await genBThenA.visit();
+  const pathsBThenA = genBThenA.expanded(orderBThenA);
+
+  const aOnlyPath = (paths: string[]) => paths.find((p) => p.startsWith('get:/a') && p.endsWith('prop:scalar:aOnly'));
+  const savedFromOrderA = aOnlyPath(pathsAThenB);
+  const actualInOrderB = aOnlyPath(pathsBThenA);
+
+  assert.ok(savedFromOrderA, "finds /a's aOnly field when /a is read first");
+  assert.ok(actualInOrderB, "finds /a's aOnly field when /b is read first");
+  assert.notStrictEqual(
+    savedFromOrderA,
+    actualInOrderB,
+    "/a's aOnly field's path differs between browse orders -- the wrapper's rename cascades into its inline sibling",
+  );
+
+  // Replay the path saved under order A -- as a stored selection (web localStorage, a saved
+  // selection file) would -- against a fresh run browsed in order B. #72's single-target recovery
+  // (selectionPath.ts's SelectionPath.resolveSegment) can't help here: the stale segment
+  // (obj:type:[inline:Container]) sits directly under the Composed wrapper next to the stable
+  // $ref member (obj:type:.../SharedPart) -- two "obj:" children, not the single child a Prop
+  // wrapper (PropObj/PropComp/...) holds, which is the only shape T.innerChild can recover.
+  const genResolve = await OasGen.fromFile(`${oasBasePath}/ref-member-under-colliding-allof-wrapper.yaml`, {
+    showParentInSelections: false,
+  });
+  await genResolve.visit();
+  assert.throws(
+    () => genResolve.expanded(['get:/b>**', savedFromOrderA!]),
+    /Could not find type: obj:type:\[inline:Container\]/,
+    'a selection saved under one browse order fails to resolve at all under another -- confirms docs/DEFERRED.md #73',
+  );
+});
+
 test(
   'test_73_curated_multi_op_stripe_selection_composes',
   async () => {

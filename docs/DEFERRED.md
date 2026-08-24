@@ -68,7 +68,7 @@ promotes — that near-miss is pinned by `test_oas_responseType_keeps_the_list_w
 it is a bigger change than the `allOfBase` swap, and it is working code on the R6 batch path. Left for
 a quieter moment.
 
-## 73 [BUG] · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked (stripe trigger fixed 2026-08-19; identity-drift core still open, untested)
+## 73 [BUG] · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked (stripe trigger fixed 2026-08-19; identity-drift core confirmed 2026-08-24, no fix chosen yet)
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —
 so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
@@ -206,6 +206,37 @@ this issue (`allOf` members reached through different `$ref` pointers, `[inline:
 because a parent's name shifted) — this result clears the simple same-name/same-shape case only,
 not the mechanism as a whole. Stays parked; wake again on a repro closer to digitalocean's actual
 shape (a `$ref`-reached member whose reachable path differs between browse orders).
+
+**Step 0 result (2026-08-24) — positive: a saved selection can fail to resolve at all.** Built the
+repro this step's own gap named:
+`tests/resources/oas/ref-member-under-colliding-allof-wrapper.yaml`, two GET ops (`/a`, `/b`) whose
+response each puts a shared `$ref` component (`SharedPart`) and an op-specific extra field inside
+one inline `allOf` wrapper under the same property key (`container`). The two wrappers collide
+(same key, different extra field), so whichever op is visited first keeps the plain name
+`Container`; the other is renamed after its own response type (`AResponseContainer`) —
+`typeUtils.ts`'s `resolveNameConflict`, driven by visit order, exactly as this issue describes.
+That rename cascades into the wrapper's OTHER `allOf` member too: the inline "extra field" object
+is named `[inline:<wrapper's name>]`, so it silently picks up the new name even though it never
+itself collided.
+
+Ran the file twice with a fresh `OasGen` each time — once reading `/a` then `/b`, once reading `/b`
+then `/a` — and saved `/a`'s `aOnly` field's path from the first run
+(`test_73_ref_member_under_colliding_allof_wrapper_path_fails_to_resolve_after_reorder`,
+`tests/all/oas-core.test.ts`). Replaying that saved path against a fresh run browsed in the second
+order — what happens when a stored selection (web localStorage, a saved selection file) is reused
+after the spec, or just the selection, is re-walked in a different order — throws `Could not find
+type: obj:type:[inline:Container]` instead of resolving. `#72`'s single-target recovery
+(`selectionPath.ts`'s `SelectionPath.resolveSegment`, via `T.innerChild`) can't help: the stale
+segment sits directly under the `Composed` wrapper next to the stable `$ref` member
+(`obj:type:.../SharedPart`) — two `obj:` children, not the single child a `Prop` wrapper
+(`PropObj`/`PropComp`/…) holds, which is the only shape `T.innerChild` recovers. This is the
+resolution-based failure this step's gate asked for, not just a string diff: the same selection
+literally cannot be regenerated once the browse order changes.
+
+This confirms the identity-drift core of this issue is real, for a `$ref`-reached member's PARENT
+identity, not the member's own id. Per this step's own scope, no address scheme or fix is chosen
+here — that is follow-up work, informed by this specific failure shape (an inline `allOf` sibling
+of a stable `$ref` member, renamed only because its own parent's name shifted).
 
 ## 79 [BUG] · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
 
