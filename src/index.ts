@@ -1,5 +1,6 @@
 export { JsonGen } from './json/index.js';
 export { OasGen } from './oas/oasGen.js';
+export { Regions } from './oas/utils/regions.js';
 export type {
   BatchConfig,
   BatchEntry,

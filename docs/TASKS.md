@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 129 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 145 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -71,51 +71,3 @@ Invariants the entries below rely on:
   `context.lookupRef`, which returns the **same `SchemaObject` instance** per ref.
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
-
----
-
-## 140 [FEAT] [P4] · Hand-authored content has no way to survive regeneration (no CUSTOM-region round-trip) — ⬜ Open
-
-**Why:** found comparing `gen`'s output against `tools/connect-gen` (Rust)'s committed output for
-the 5 real connectors in `graphos-service-factory` (see that repo's `docs/ts-gen-comparison.md`).
-Rust's round-trip mechanism (`tools/connect-gen/src/emit/regions.rs`) lets a human correct output
-the OpenAPI spec itself gets wrong — Omni's real API disagrees with its own spec on one shape
-(`omni_foldersListLive`); a human wrote the correct field by hand, inside a `# === CUSTOM
-extra-query-fields === ... # === END CUSTOM extra-query-fields ===` marker pair. On the next
-regen, Rust extracts that block from the old file and splices it back into the new one. `gen` has
-no equivalent at all: hand-editing generated output is a dead end today, since the next run
-silently overwrites it with no error and no signal that anything was lost.
-
-**Distinct from `docs/FIXED.md #132`'s JSON-degrade comments, not overlapping:** `#132` documents
-*why the generator itself* fell back to `JSON` — it's automatic, spec-derived, and fires when the spec is ambiguous.
-CUSTOM regions are for when the spec is not ambiguous but *wrong*, or when the desired output has no
-corresponding OAS operation at all (net-new fields, or infrastructure like an extra `@link`/
-`@source` the derivation logic has no way to infer) — nothing a degrade-note can annotate, because
-there's no automatically-derived output to attach a comment to in the first place.
-
-**Shape (ported from Rust, `regions.rs`):**
-- `extract(content)`: scan committed output for `# === CUSTOM <name> ===` / `# === END CUSTOM
-  <name> ===` marker pairs (five known names: `extra-links`, `extra-sources`, `extra-types`,
-  `extra-query-fields`, `extra-mutation-fields`); body is every line between them.
-- `splice(skeleton, regions)`: same marker scan over the freshly generated output; insert each
-  non-empty extracted body between its matching marker pair. A region name outside the known five
-  is a hard error, never silently dropped.
-- Unlike Rust, TS's raw output has no markers in it at all (Rust's skeleton is templated with them
-  built in; TS's isn't) — so `splice` also needs to decide *where* each marker pair goes in fresh
-  output: `extra-types` just before the first of `type Query {`/`type Mutation {`;
-  `extra-query-fields`/`extra-mutation-fields` as the last field(s) inside their respective root
-  type, before the closing `}`; `extra-links`/`extra-sources` after the existing `@link`/`@source`
-  blocks. Only implement an insertion point once a real non-empty example exists for it — hard-fail
-  naming the region rather than guessing.
-
-**A working prototype already exists, external to `gen`:** `graphos-service-factory/scripts/gen-ts.mjs`
-(`extractCustomRegions`/`injectCustomRegions`) implements exactly this, as a post-processing bolt-on
-around raw `gen` CLI output. It only implements injection for the two regions any of the 5 real
-committed schemas actually use non-empty today (`extra-types`, `extra-query-fields`) and hard-fails
-on the other three rather than guess — worth reusing that same scoping discipline, and possibly the
-fixture tests, when this lands inside `gen` proper (`scripts/gen-ts.test.mjs` in that repo has the
-TDD cases: splice + hard-fail-on-unknown).
-
-**Refs:** `tools/connect-gen/src/emit/regions.rs` (the Rust mechanism to port);
-`graphos-service-factory/scripts/gen-ts.mjs` + `gen-ts.test.mjs` (the external prototype);
-`graphos-service-factory/docs/ts-gen-comparison.md` (the comparison that surfaced this).

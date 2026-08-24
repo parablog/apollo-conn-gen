@@ -8379,3 +8379,101 @@ now covers both `get:/customer360` (response side) and `post:/listener/customer3
 original duplicate-`type` composition error; restoring it passes again.
 
 **Refs:** `src/oas/nodes/comp.ts:175`, `src/oas/nodes/typeUtils.ts:370-393`, `docs/FIXED.md #113`.
+
+## 140 [FEAT] [P4] · Hand-authored content has no way to survive regeneration (no CUSTOM-region round-trip) — ✅ Fixed
+
+**Symptom:** hand-editing a generated schema to fix or add something the OpenAPI spec can't produce
+on its own — a field the real API returns that its own spec omits, say — was a dead end: the next
+`gen` run silently overwrote the edit, with no error and no signal that anything was lost. Found
+comparing `gen`'s output against `tools/connect-gen` (Rust)'s committed output for the 5 real
+connectors in `graphos-service-factory` (`docs/ts-gen-comparison.md`): Omni's real API disagrees
+with its own spec on one shape (`omni_foldersListLive`), and a human corrected it by hand inside a
+`# === CUSTOM extra-query-fields === ... # === END CUSTOM extra-query-fields ===` marker pair in
+the committed file.
+
+**Shipped in Rust already** (`tools/connect-gen/src/emit/regions.rs`): on every regen, Rust scans
+the old committed file for these marker pairs and splices their contents back into the freshly
+generated file, so the hand-written correction survives. A working bolt-on prototype of the same
+idea, external to `gen`, already existed too: `graphos-service-factory/scripts/gen-ts.mjs`
+(`extractCustomRegions`/`injectCustomRegions`), wrapped around raw `gen` CLI output.
+
+**Example** — round-tripping a hand-authored type and field through a fresh regeneration:
+```graphql
+# old committed file, hand-edited
+# === CUSTOM extra-types ===
+type Acme_HandAuthoredThing {
+  id: ID
+}
+# === END CUSTOM extra-types ===
+
+type Query {
+  # === CUSTOM extra-query-fields ===
+  acme_handAuthoredField: Acme_HandAuthoredThing
+  # === END CUSTOM extra-query-fields ===
+}
+```
+```graphql
+# freshly generated, before splice -- the hand-authored parts are gone
+type Acme_Widget {
+  id: ID
+}
+
+type Query {
+  acme_getWidget: Acme_Widget
+}
+```
+```graphql
+# after Regions.splice(fresh, Regions.extract(old)) -- both parts restored, still marked
+# === CUSTOM extra-types ===
+type Acme_HandAuthoredThing {
+  id: ID
+}
+# === END CUSTOM extra-types ===
+
+type Acme_Widget {
+  id: ID
+}
+
+type Query {
+  # === CUSTOM extra-query-fields ===
+  acme_handAuthoredField: Acme_HandAuthoredThing
+  # === END CUSTOM extra-query-fields ===
+  acme_getWidget: Acme_Widget
+}
+```
+
+**Fix:** new module `src/oas/utils/regions.ts`, a static `Regions` class next to `Naming`/
+`GqlUtils` (a text utility, not tied to the node graph — no OAS involved). `Regions.extract(content)`
+scans a file for `# === CUSTOM <name> === ... # === END CUSTOM <name> ===` pairs across the five
+known names (`extra-links`, `extra-sources`, `extra-types`, `extra-query-fields`,
+`extra-mutation-fields`), stripping the start marker's own leading whitespace from every body line
+so the body always starts at column 0 — needed because a marker sitting inside `type Query { ... }`
+carries that block's indentation, which would otherwise double up with the indent `splice` adds
+back on the way out. `Regions.splice(skeleton, regions)` re-wraps each non-empty body in fresh
+markers and inserts it into freshly generated output: `extra-types` right before the first
+`type Query {`/`type Mutation {`, `extra-query-fields` as the last field inside `type Query { }`.
+Those are the only two insertion points implemented, because they're the only two any of the 5 real
+committed connectors use non-empty today — a non-empty body for any other name, known or not,
+throws naming the region rather than guessing where it belongs. Exported from `src/index.ts`
+alongside `OasGen`/`JsonGen`. No call site inside `gen` itself: `src/cli/oas.ts` only reads config
+files (`--overrides`/`--batch`/`--directives`) and always writes the generated schema to stdout,
+never to a file, so there's no "old file in, new file out" step to hook `extract`/`splice` into —
+wiring this into an actual regeneration round-trip is `graphos-service-factory`'s job (the repo that
+owns the committed file), swapping its own bolt-on script for this module, as separate follow-up
+work.
+
+**Verified:** `tests/all/regions.test.ts` (4 tests): the round-trip above, checked by exact
+position/content and marker re-emission, plus that re-extracting the spliced output recovers the
+same two bodies (proves a second regeneration wouldn't lose them again); `splice` called directly
+with an already-column-0 body (bypassing `extract`) gets exactly one indent level, not zero or two;
+a non-empty `extra-links` (known but unimplemented) hard-fails naming the region; an unknown region
+name hard-fails in both `extract` and `splice`. Revert-check: removing the dedent step in `extract`
+reproduces the original bug exactly (a round-tripped field comes back double-indented, 4 spaces
+instead of 2), while the direct-`splice` test still passes, showing it depends on `extract`
+specifically. Full suite green (443 tests, 442 pass, 0 fail, 1 pre-existing `todo`); `tsc -b
+--noEmit` clean.
+
+**Refs:** `src/oas/utils/regions.ts` (`Regions.extract`, `Regions.splice`),
+`tests/all/regions.test.ts`, `src/index.ts` (export). `tools/connect-gen/src/emit/regions.rs` (the
+Rust mechanism this ports); `graphos-service-factory/scripts/gen-ts.mjs` +
+`scripts/gen-ts.test.mjs` (the external prototype it supersedes as a follow-up).
