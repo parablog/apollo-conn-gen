@@ -343,6 +343,36 @@ non-blocking (full HubSpot lists run is 18.9s), and deferred:
 not be memoized globally). The fourth bullet becomes moot under `docs/DEFERRED.md #139` (selection
 externalisation), which replaces the representation these costs live in.
 
+## 138 [FEAT] · Accept a folder of independent OAS specs, not just a single file — 📋 Noted, no real trigger found
+
+**Why it was filed:** JSON mode already accepts `<file|folder>` (`src/cli/json.ts`), but OAS mode is
+single-file. The stated motivation, "real APIs publish multiple independent OAS documents in one
+folder (e.g. Sanity's query + mutation specs)," traced back through `git log` to `ROADMAP.md`'s R12
+— an illustrative `e.g.`, not a citation of an actual encountered blocker.
+
+**Checked against the real corpus and the premise doesn't hold:**
+- **Sanity has no split.** `sanity-to-oas.mts` synthesizes exactly one `sanity-oas.json` per
+  instance (checked 3 real instances: acme-shop, marriott-mgs, mirror-mgs); the converter never
+  mentions a mutation spec at all.
+- **Only HubSpot genuinely splits**, across the whole `service-catalog/` corpus (6 files, one per
+  resource) — and it already has a working, unblocked solution external to `gen`:
+  `graphos-service-factory/service-catalog/hubspot/generate.py` runs the generator once per file
+  and merges the resulting GraphQL SDL text afterward.
+- PagerDuty's 2 files (`pagerduty.json`, `openapi.json`) are one canonical spec plus a stale
+  leftover, not an intentional split.
+- `gen`'s own `tests/resources/oas/` has zero folder-of-specs fixtures.
+- **The reference Rust implementation doesn't build this either** — `tools/connect-gen`'s
+  `Generate` command takes a single `--openapi <PathBuf>`, no directory/glob, no merge-before-parse
+  anywhere in `io.rs`. It uses the same per-file-then-external-merge pattern HubSpot's `generate.py`
+  orchestrates around it.
+
+**Parked, not loop-actionable — nothing in the corpus needs it, and even the reference
+implementation deliberately merges post-generation instead of pre-parse.** Revisit only if a real
+API surfaces that genuinely can't be split-and-merged externally — e.g. definitions shared across
+files that only resolve correctly when parsed together, which none of today's candidates are.
+
+**Refs:** `src/cli/json.ts` (the existing folder-input precedent for JSON mode, unaffected by this).
+
 ## 139 [FEAT] · Selections are flat emitted-name path lists, not spec-position addressed — 🟡 Partly done (sub-issue B fixed, docs/FIXED.md #153; one #73 recovery shape fixed, docs/FIXED.md #154; the module rewrite itself not started)
 
 **Why:** selections are flat lists of leaf-path strings whose segments embed *emitted* names. That

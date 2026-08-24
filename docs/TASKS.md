@@ -112,30 +112,6 @@ selection duplicates the same way.
 todo — asserts the op composes.
 **Refs:** #42 (the alias machinery involved), #57 (whose corpus sweep surfaced it).
 
-## 138 [FEAT] [P4] · Accept a folder of independent OAS specs, not just a single file — ⬜ Open
-
-**Why:** JSON mode already accepts `<file|folder>` (`src/cli/json.ts`), but OAS mode is
-single-file. Real APIs publish multiple independent OAS documents in one folder (e.g.
-Sanity's query + mutation specs). `oas-normalize` and `oas`'s `Oas` class are strictly
-single-document, so folder support means merging the docs into one `OASDocument` before
-parsing — nothing downstream changes.
-
-**Shape (designed, approved, parked before this migration):** `OasGen.fromFolder` (per-file
-normalize via the existing `fromFile` pipeline) + a merge helper in `src/oas/utils/` + CLI
-stat-dispatch on the `<source>` arg. Compatibility gate (same 3.x minor, deep-equal `servers` and
-`jsonSchemaDialect`), root-`security` push-down onto operations before merging, any collision
-(paths, components, operationIds) is a hard error naming both files, non-OAS files sniffed
-(`openapi`/`swagger` root key) and skipped with a warning. Tests run off small committed fixtures
-under `tests/resources/oas/folder/`.
-
-**Priority rationale:** no OAS document in the current corpus needs this — real-world-motivated
-(Sanity) but nothing in-repo is blocked on it today, so P4 (capability gap, not a failure).
-
-**Refs:** `src/cli/json.ts` (the existing folder-input precedent for JSON mode), `src/oas/oasGen.ts`
-(`fromFile`, the per-file pipeline `fromFolder` reuses). A prior detailed plan draft exists at
-`/Users/fernando/.claude-personal/specs/loop-JNRpnSgn/plan.md` (local, uncommitted — re-verify it's
-still current before relying on it, it predates this migration).
-
 ## 140 [FEAT] [P4] · Hand-authored content has no way to survive regeneration (no CUSTOM-region round-trip) — ⬜ Open
 
 **Why:** found comparing `gen`'s output against `tools/connect-gen` (Rust)'s committed output for
