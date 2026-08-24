@@ -74,44 +74,6 @@ Invariants the entries below rely on:
 
 ---
 
-## 61 [BUG] [P5] · `@type` and `type` on the same object both emit as `type` — ⬜ Open
-
-**Symptom:** composition fails with `INVALID_GRAPHQL: Field type already exists on
-Customer360PromotionVO`. The written type carries two `type` fields.
-
-**Also on the input side (2026-08-12):** since #74 resolves `$ref`'d request bodies, TMF717's
-three `post:/listener/…` ops fail the same way inside `Customer360PromotionVOInput` — the
-mutations sweep counts them under INVALID_GRAPHQL. One fix covers both directions.
-
-**OAS:** (TMF717) every entity extends `Extensible`, whose tag field is `@type`; the promotion
-object also has a business field literally named `type`:
-
-```yaml
-Extensible:
-  properties:
-    "@type": { type: string }        # "the sub-class Extensible name"
-Customer360PromotionVO:
-  allOf:
-    - $ref: '#/components/schemas/Entity'   # Entity -> Extensible -> @type
-    - type: object
-      properties:
-        type: { type: string }       # "Type of promotion. The basic type is Award/Discount/…"
-```
-
-**Cause:** `@type` is sanitised to `type` for GraphQL (the selection keeps the raw key through an
-alias, `type: "@type"`), but nothing checks the sanitised name against the object's other fields.
-The allOf fold then puts both props on one type and each writes its own `type:` line — the
-selection duplicates the same way.
-
-- `@baseType`/`@schemaLocation` sanitise cleanly (no plain `baseType` field beside them), so only
-  `@type` + `type` collides
-- accounts for the corpus's only 2 remaining `INVALID_GRAPHQL` ops (both TMF717 customer360 reads)
-- pre-existing: reproduced identically on the pre-#57 baseline
-
-**Test:** `test_61_sanitised_at_type_must_not_collide` in `tests/all/oas-core.test.ts`, failing as
-todo — asserts the op composes.
-**Refs:** #42 (the alias machinery involved), #57 (whose corpus sweep surfaced it).
-
 ## 140 [FEAT] [P4] · Hand-authored content has no way to survive regeneration (no CUSTOM-region round-trip) — ⬜ Open
 
 **Why:** found comparing `gen`'s output against `tools/connect-gen` (Rust)'s committed output for

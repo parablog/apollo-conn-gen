@@ -8337,3 +8337,45 @@ green (439 tests, 437 pass, 0 fail, 2 pre-existing `todo`).
 (`memberJsonReasons`, `writeMemberJsonNote`), `docs/FIXED.md #132` (where this was carved out from),
 `docs/FIXED.md #155` (the sibling fix this generalizes), `docs/FIXED.md #145` (the
 `effectiveDescription()` hook precedent this deliberately does not reuse).
+
+## 61 [BUG] [P5] · `@type` and `type` on the same object both emit as `type` — ✅ Fixed, already covered by #113
+
+**Symptom:** composition fails with `INVALID_GRAPHQL: Field type already exists on
+Customer360PromotionVO`. The written type carries two `type` fields.
+
+**Also on the input side (2026-08-12):** since #74 resolves `$ref`'d request bodies, TMF717's
+three `post:/listener/…` ops fail the same way inside `Customer360PromotionVOInput` — the
+mutations sweep counts them under INVALID_GRAPHQL. One fix covers both directions.
+
+**OAS:** (TMF717) every entity extends `Extensible`, whose tag field is `@type`; the promotion
+object also has a business field literally named `type`:
+
+```yaml
+Extensible:
+  properties:
+    "@type": { type: string }        # "the sub-class Extensible name"
+Customer360PromotionVO:
+  allOf:
+    - $ref: '#/components/schemas/Entity'   # Entity -> Extensible -> @type
+    - type: object
+      properties:
+        type: { type: string }       # "Type of promotion. The basic type is Award/Discount/…"
+```
+
+**Cause:** `numberTwinFields` (`src/oas/nodes/typeUtils.ts`, added for #113, `c37de63`) already
+numbers any two properties that sanitise to the same GraphQL field name, keeping each one's own
+wire key reachable. That fix landed after this issue's corpus snapshot and its own Cause note were
+written, and the two-level shape here (`Customer360PromotionVO` → `Entity` → `Extensible`) was never
+re-verified against #113 — `@type` sanitises to `type`, collides with the plain `type` field, and
+comes out numbered `type2` on both the response and request-body sides.
+
+**Fix:** no code change — already covered by #113.
+
+**Verified:** `test_61_sanitised_at_type_must_not_collide` (`tests/all/oas-core.test.ts`), un-todo'd,
+now covers both `get:/customer360` (response side) and `post:/listener/customer360CreateEvent`
+(request-body side), asserting `type`/`type2` each appear exactly once in both
+`Customer360PromotionVO` and `Customer360PromotionVOInput`. Revert-check: temporarily reverting
+`comp.ts`'s `selectedProps` override to skip `numberTwinFields` makes the test fail with the
+original duplicate-`type` composition error; restoring it passes again.
+
+**Refs:** `src/oas/nodes/comp.ts:175`, `src/oas/nodes/typeUtils.ts:370-393`, `docs/FIXED.md #113`.

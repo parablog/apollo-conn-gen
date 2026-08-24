@@ -1072,12 +1072,26 @@ test('test_59_nested_list_of_objects_names_and_selects_its_item', async () => {
   assert.ok(/rows\? \{\n\s+label\?\n\s+value\?\n\s+\}/.test(schema!), 'and the selection opens one block for it');
 });
 
-test('test_61_sanitised_at_type_must_not_collide', { todo: 'both fields emit as `type`' }, async () => {
+test('test_61_sanitised_at_type_must_not_collide', async () => {
   // TMF objects carry `@type` (from the Extensible base) next to a business field literally named
-  // `type`. Sanitising strips the `@`, nothing checks the result against the sibling names, and
-  // the written type ends up with two `type:` lines. see docs/TASKS.md #61
-  const schema = await runOasTest('TMF717_Customer360-v5.0.0.oas.yaml', ['get:/customer360>**'], 8, 56, { skipValidation: true });
+  // `type`. Sanitising strips the `@`, and both fields land on the same object -- once on the
+  // response side (`Customer360PromotionVO`), once on the request-body side
+  // (`Customer360PromotionVOInput`). #113's twin-field numbering (typeUtils.ts numberTwinFields)
+  // already keeps them apart: the plain `type` field, then `type2` for the sanitised `@type`.
+  // see docs/FIXED.md #61
+  const schema = await runOasTest(
+    'TMF717_Customer360-v5.0.0.oas.yaml',
+    ['get:/customer360>**', 'post:/listener/customer360CreateEvent>**'],
+    8, 113,
+    { skipValidation: true },
+  );
   assert.ok(schema !== undefined);
+  const outBlock = schema!.match(/type Customer360PromotionVO \{[\s\S]*?\n\}/)![0];
+  const inBlock = schema!.match(/input Customer360PromotionVOInput \{[\s\S]*?\n\}/)![0];
+  for (const block of [outBlock, inBlock]) {
+    assert.strictEqual((block.match(/\btype: String!/g) || []).length, 1, 'type once: ' + block);
+    assert.strictEqual((block.match(/\btype2: String/g) || []).length, 1, 'type2 once: ' + block);
+  }
 });
 
 test('test_required_oneof_null_field_is_kept', async () => {
