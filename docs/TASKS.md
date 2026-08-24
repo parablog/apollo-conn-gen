@@ -157,28 +157,3 @@ TDD cases: splice + hard-fail-on-unknown).
 **Refs:** `tools/connect-gen/src/emit/regions.rs` (the Rust mechanism to port);
 `graphos-service-factory/scripts/gen-ts.mjs` + `gen-ts.test.mjs` (the external prototype);
 `graphos-service-factory/docs/ts-gen-comparison.md` (the comparison that surfaced this).
-
-## 156 [BUG] [P4] · A Param's degraded argument type and a Union member holding a jsonReason Scalar still give no schema signal — ⬜ Open
-
-**Why:** split off `docs/FIXED.md #132` once every site its table ever listed closed
-(`docs/FIXED.md #155`). These two were named in `#132`'s own "Shape" section from the start but
-never got a table row, because neither has an existing landing spot to hang a description on the
-way a `Prop` or a map's `value:` line does.
-
-**Two distinct gaps, both reachable today:**
-- **A `Param`'s degraded argument type** (`param.ts:38`'s `Factory.fromSchema` call) — when an
-  operation argument's schema is shapeless or an unrecognised scalar type, it degrades to a JSON
-  `Scalar` with `jsonReason` set (`docs/FIXED.md #155`'s fix reaches this call site too, since it's
-  the same `fromSchema`/`createScalarType` code), but nothing reads it: GraphQL supports argument
-  descriptions syntactically, and this codebase has never emitted one, for any argument.
-- **A `Union` member holding a `jsonReason`-carrying `Scalar`** (`union.ts:87`'s `Factory.fromSchema`
-  call) — same silent drop. `Union.emptyMergeReason()` is a different mechanism (the *merged* type
-  having no selected fields at all), not a hook for one member's own degrade.
-
-**Shape:** design a landing spot for each — likely a new `Param.effectiveDescription()`-style hook
-for the argument case, mirroring `Prop`'s existing one (`docs/FIXED.md #145`), and either folding
-into `Union.emptyMergeReason()` or a sibling per-member note for the union case. Not scoped further
-than that here — a plan against this still needs to pick the exact wording/placement.
-
-**Refs:** `docs/FIXED.md #132` (where this was carved out from), `docs/FIXED.md #155` (the sibling
-fix this generalizes), `docs/FIXED.md #145` (the `effectiveDescription()` hook precedent).

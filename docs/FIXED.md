@@ -8232,11 +8232,11 @@ exact `NEEDS ATTENTION: <reason>` text sits immediately above its `value:`/field
 failing against the pre-fix code (revert-check: stashed `factory.ts` + `map.ts`, reran, restored).
 Full suite green (436 tests, 434 pass, 0 fail, 2 pre-existing `todo`).
 
-**Not done here:** the umbrella's other two originally-listed threads move to `docs/TASKS.md #156`,
-not resolved here — a `Param`'s degraded argument type (GraphQL argument descriptions are unused
-anywhere in this codebase today, and the formatting/shipping questions are undecided) and a
-`jsonReason`-carrying `Scalar` as a union member (`union.ts:144`'s existing scope limit, no landing
-spot).
+**Not done here:** the umbrella's other two originally-listed threads move to `#156` (later
+`docs/FIXED.md #156`, once closed), not resolved here — a `Param`'s degraded argument type (GraphQL
+argument descriptions are unused anywhere in this codebase today, and the formatting/shipping
+questions are undecided) and a `jsonReason`-carrying `Scalar` as a union member (`union.ts:144`'s
+existing scope limit, no landing spot).
 
 **Refs:** `src/oas/nodes/factory.ts` (`fromSchema`'s `isShapelessObject` branch,
 `createScalarType`'s catch-all), `src/oas/nodes/map.ts` (`visitAdditionalProperties`,
@@ -8246,26 +8246,94 @@ reuses), `src/oas/nodes/get.ts` (`visitResponseContent`'s `#31` guard, unchanged
 shapeless-object and empty-response fixes), `#56` (the array-item wording this reuses), `#70`/`#108`
 (the two pre-existing map-value degrades asserted alongside), `#98` (the unknown-scalar-type
 precedent `factory.ts:146` follows), `#133`/`#145` (the first 6 sites and the shared design), `#132`
-(the umbrella — closed here for its last 4 listed sites; the Param/Union remainder split to
-`docs/TASKS.md #156`).
+(the umbrella — closed here for its last 4 listed sites; the Param/Union remainder split to `#156`,
+since closed — see `docs/FIXED.md #156`).
 
-## 132 [BUG] [P4] · Most JSON-degrade sites still give no signal in the generated schema, only the build log — ✅ Fixed for every listed site; Param/Union gap split to `docs/TASKS.md #156`
+## 132 [BUG] [P4] · Most JSON-degrade sites still give no signal in the generated schema, only the build log — ✅ Fixed for every listed site; Param/Union gap split to `docs/FIXED.md #156`, now also fixed
 
 **Symptom:** `warn()` logged why a field gave up and became `JSON`, but the reason never reached the
 schema itself — anyone reading the SDL (or GraphQL tooling: Studio, GraphiQL, introspection) saw a
 bare `JSON` field with no clue why. An exhaustive survey of `src/oas/` found 17 live sites.
 
-**Resolved across three fixes, closing every row this entry's table ever listed:** `#133` (4 sites:
+**Resolved across four fixes, closing every row this entry's table ever listed:** `#133` (4 sites:
 `factory.ts:61/212/219/225`), `#145` (2 sites: `propObj.ts`'s D1/D2), `#155` (the last 4 open rows:
 `factory.ts:115/146`, `map.ts:95/172`) — plus `map.ts:117/184` and `union.ts:144`, which landed
-alongside `#133`'s work without ever getting their own table row.
+alongside `#133`'s work without ever getting their own table row. `#156` then closed the two threads
+the "Shape" section named from the start but never gave a table row: a `Param`'s degraded argument
+type, and a `jsonReason`-carrying `Scalar` as a `Union` member.
 
-**Not fully closed as a symptom — split off, not silently dropped:** two threads the "Shape" section
-named from the start but never gave a table row — a `Param`'s degraded argument type, and a
-`jsonReason`-carrying `Scalar` as a `Union` member — still reach zero schema signal, because neither
-has ever had a scoped design (a `Param`'s case needs a GraphQL-argument-description mechanism that
-doesn't exist anywhere in this codebase today). Filed as `docs/TASKS.md #156` rather than left
-implicitly open under a table where every literal row now reads done.
+**Refs:** `docs/FIXED.md #133`, `#145`, `#155`, `#156` (the four fixes).
 
-**Refs:** `docs/FIXED.md #133`, `#145`, `#155` (the three fixes), `docs/TASKS.md #156` (the
-split-off remainder).
+## 156 [BUG] [P4] · A Param's degraded argument type and a Union member holding a jsonReason Scalar still give no schema signal — ✅ Fixed
+
+**Symptom:** the last two threads `#132` named from the start but never gave a table row: a
+parameter's own schema degrading to a JSON `Scalar`, and a `Union` member individually degrading to
+one, both dropped their `jsonReason` on the floor — neither had a landing spot to show it, the way a
+`Prop`'s field or a map's `value:` line already does.
+
+**OAS** (gap A — a query param's own schema names a type GraphQL has no scalar for):
+```yaml
+# param-json-degrade.yaml
+parameters:
+  - name: filter
+    in: query
+    schema: { type: url }
+```
+(gap B — one `oneOf` member is bare and shapeless):
+```yaml
+# union-member-json-degrade.yaml
+schema:
+  discriminator: { propertyName: type }
+  oneOf:
+    - $ref: '#/components/schemas/Book'
+    - {}
+```
+
+**Example:**
+```graphql
+# gap A — before
+search(filter: JSON, sort: String): ...
+# after
+search("NEEDS ATTENTION: this schema's type 'url' has no GraphQL scalar equivalent -- sent as raw JSON instead." filter: JSON, sort: String): ...
+```
+```graphql
+# gap B, real union — before
+union ItemResponse = Book
+# after
+"""
+NEEDS ATTENTION: this object declares no properties of its own -- sent as raw JSON instead.
+"""
+union ItemResponse = Book
+```
+
+**Fix:**
+- `param.ts`: new private `Param.jsonReason()` reads `resultType.jsonReason` off the already-built
+  `Scalar` (`Param` extends `Type`, not `Prop`, so this is a genuinely new landing spot, not a reuse
+  of `Prop.effectiveDescription()` from `#145`). `generate()` writes it as a quoted string right
+  before the argument name — arguments sit inline in one comma-separated list, not their own line,
+  so it's `"<note>" filter: JSON`, block-quoted only if the text needs escaping (same check
+  `Prop.generate()` uses). Scope stayed to the `jsonReason` note only — this does not add general
+  `schema.description` support for arguments.
+- `union.ts`: new private `Union.memberJsonReasons()` collects the reason off any direct child that
+  is a bare `jsonReason`-carrying `Scalar` — such a member has no props, so
+  `selectedMembers()`/`dedupedSelectedProps()` already drop it silently, same as `emptyMergeReason()`
+  does for a wholly-empty merge. `writeMemberJsonNote()` renders those reasons as one block-quoted
+  note, called right before both the real-union line (`union X = A | B`) and the merged-object's type
+  line. Not called in the `interfaceBaseRef` (R2 interface-promotion) branch —
+  `promoteAllOfBase`'s Rule 1 requires every member to be an allOf `Composed`, so a bare `Scalar`
+  member always keeps that union out of interface promotion; confirmed by reading the rule, not just
+  assumed.
+
+**Verified:** fixtures `param-json-degrade.yaml` (gap A) and `union-member-json-degrade.yaml` (gap B,
+two ops sharing one `Book` schema — one discriminated for the real-union path, one not for the
+merged-object path). Tests `test_156_param_argument_json_degrade_gets_a_needs_attention_note`,
+`test_156_union_member_json_degrade_real_union`, `test_156_union_member_json_degrade_merged_object`
+(`tests/all/oas-core.test.ts`), plus `test_75_param_via_content_generates` and
+`test_84_body_map_is_sent_as_json` updated for the note their own pre-existing `filter` params now
+carry. All three new tests confirmed failing against the pre-fix code (revert-check). Full suite
+green (439 tests, 437 pass, 0 fail, 2 pre-existing `todo`).
+
+**Refs:** `src/oas/nodes/param.ts` (`jsonReason`, `generate`), `src/oas/nodes/union.ts`
+(`memberJsonReasons`, `writeMemberJsonNote`), `docs/FIXED.md #132` (where this was carved out from),
+`docs/FIXED.md #155` (the sibling fix this generalizes), `docs/FIXED.md #145` (the
+`effectiveDescription()` hook precedent this deliberately does not reuse).

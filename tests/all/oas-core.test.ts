@@ -2600,7 +2600,14 @@ test('test_75_param_via_content_generates', async () => {
   const viaContent = await runOasTest('param-via-content.yaml', ['get:/things>**'], 1, 1);
   assert.ok(viaContent !== undefined);
   const args = (schema: string) => /things\(([^)]*)\)/.exec(schema)?.[1];
-  assert.equal(args(viaContent!), 'filter: JSON, sort: String', 'object degrades to JSON, the enum to String');
+  // filter's shapeless object schema degrades to JSON — since #156 that carries its own
+  // NEEDS ATTENTION note, the same reason every other empty-object degrade already gets.
+  const filterReason = "this object declares no properties of its own — sent as raw JSON instead.";
+  assert.equal(
+    args(viaContent!),
+    `"NEEDS ATTENTION: ${filterReason.replace('—', '--')}" filter: JSON, sort: String`,
+    'object degrades to JSON with a note, the enum to String',
+  );
 
   const viaSchema = await runOasTest('param-via-schema.yaml', ['get:/things>**'], 1, 1);
   assert.equal(args(viaContent!), args(viaSchema!), 'both spellings give the same argument types');
@@ -2635,8 +2642,13 @@ test('test_84_body_map_is_sent_as_json', async (t) => {
   assert.ok(!/->entries/.test(body!), 'with no ->entries, which only reads an object');
   assert.ok(/labels\?->entries \{/.test(schema!), 'while the response still reads its map as pairs');
 
-  // a map that is not in a body is untouched: this one is a query param, JSON since #40
-  assert.ok(/snapshots\(filter: JSON\)/.test(schema!), 'a query param that is a map stays as it was');
+  // a map that is not in a body is untouched: this one is a query param, JSON since #40 — since
+  // #156 that argument also carries the reason as a NEEDS ATTENTION note.
+  const filterReason = "this object declares no properties of its own — sent as raw JSON instead.";
+  assert.ok(
+    schema!.includes(`snapshots("NEEDS ATTENTION: ${filterReason.replace('—', '--')}" filter: JSON)`),
+    'a query param that is a map stays as it was, now with its own note',
+  );
 
   // #133: an input-position map carries a description explaining the JSON degrade, and warn() logs
   // the same reason. `labels` already has its own OAS description — withJsonNote must append to
@@ -3341,4 +3353,52 @@ test('test_155_map_value_json_degrades_with_note', async (t) => {
     ),
     'plainChoiceValue carries its existing NEEDS ATTENTION note above value: JSON',
   );
+});
+
+test('test_156_param_argument_json_degrade_gets_a_needs_attention_note', async (t) => {
+  // #156 gap A: a parameter's own schema is `{ type: url }`, a type name GraphQL has no scalar
+  // for. Param.generate() never read this reason before — arguments never had a place to show it.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('param-json-degrade.yaml', ['get:/search>**'], 1, 1, {
+    skipValidation: true,
+  });
+  assert.ok(schema !== undefined);
+
+  const reason = "this schema's type 'url' has no GraphQL scalar equivalent — sent as raw JSON instead.";
+  assert.ok(
+    schema!.includes(`"NEEDS ATTENTION: ${reason.replace('—', '--')}" filter: JSON`),
+    'filter carries a NEEDS ATTENTION note right before its own argument name',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2]?.includes("unknown scalar type 'url'")),
+    'warn() still fires for the unknown type, same as before',
+  );
+});
+
+test('test_156_union_member_json_degrade_real_union', async (t) => {
+  // #156 gap B, real union: `oneOf: [ $ref Book, {} ]` with a discriminator — the second, empty
+  // member becomes a bare JSON scalar and selectedMembers() drops it from `union X = A | B` with no
+  // trace. The note now surfaces above the union line instead.
+  const schema = await runOasTest('union-member-json-degrade.yaml', ['get:/item>**'], 2, 3, {
+    connectorSpecVersion: 'v0.4',
+    federationVersion: 'v2.14',
+    composeFederationVersion: '2.15.1',
+    forceRover: true,
+  });
+  assert.ok(schema !== undefined);
+
+  const reason = 'this object declares no properties of its own — sent as raw JSON instead.';
+  const note = `"""\n${_.escapeRegExp(`NEEDS ATTENTION: ${reason.replace('—', '--')}`)}\n"""\nunion ItemResponse = Book`;
+  assert.ok(new RegExp(note).test(schema!), 'the note sits directly above the union line, member still dropped');
+});
+
+test('test_156_union_member_json_degrade_merged_object', async (t) => {
+  // #156 gap B, merged object: same fixture without a discriminator, so the union degrades to one
+  // flat type instead. The dropped member's reason now surfaces above that type's own line.
+  const schema = await runOasTest('union-member-json-degrade.yaml', ['get:/looseItem>**'], 2, 2, {});
+  assert.ok(schema !== undefined);
+
+  const reason = 'this object declares no properties of its own — sent as raw JSON instead.';
+  const note = `"""\n${_.escapeRegExp(`NEEDS ATTENTION: ${reason.replace('—', '--')}`)}\n"""\ntype LooseItemResponse {`;
+  assert.ok(new RegExp(note).test(schema!), 'the note sits directly above the merged type, member still dropped');
 });

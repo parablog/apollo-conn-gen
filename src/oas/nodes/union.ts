@@ -8,6 +8,7 @@ import {
   Prop,
   PropScalar,
   Res,
+  Scalar,
   T,
   Type,
   selectionPrefixes,
@@ -184,6 +185,7 @@ export class Union extends Type {
         // `http_rule_response` is written as `HttpRuleResponse`. see docs/FIXED.md #43
         const filtered = this.selectedMembers(selection);
 
+        this.writeMemberJsonNote(writer);
         writer
           .write('union ')
           .write(name)
@@ -221,6 +223,7 @@ export class Union extends Type {
     // Mutation argument), and `nameSuffix()` (`'Input'` when kind=input) keeps the names
     // distinct when the same schema is reached both ways. Do NOT hard-code `'type '` here —
     // it would emit an input-position merge as an output type and break the body case. See C6.
+    this.writeMemberJsonNote(writer);
     writer
       .write(this.kind + ' ')
       .write(name)
@@ -277,6 +280,24 @@ export class Union extends Type {
         return new PropScalar(prop.parent!, name, 'JSON', Schemas.withJsonNote({}, reason));
       }),
     );
+  }
+
+  // Reasons behind any member that gave up its own shape and became plain JSON — such a member has
+  // no fields, so selectedMembers() below drops it silently, which is how its reason survives.
+  // e.g. (union-member-json-degrade.yaml) `oneOf: [ $ref Book, {} ]` — the empty member becomes JSON.
+  private memberJsonReasons(): string[] {
+    return this.children
+      .filter((c): c is Scalar => c instanceof Scalar && c.jsonReason != null)
+      .map((c) => c.jsonReason!);
+  }
+
+  // Writes a block-quoted note above the union/type line for every reason memberJsonReasons()
+  // found; writes nothing when every member kept a real shape.
+  private writeMemberJsonNote(writer: Writer): void {
+    const reasons = this.memberJsonReasons();
+    if (reasons.length === 0) return;
+    const note = Schemas.withJsonNote({}, reasons.join(' ')).description!;
+    writer.write('"""\n').write(note).write('\n"""\n');
   }
 
   // two inline members easily share a name (`[inline:Input]` twice) — same suffixing as Composed

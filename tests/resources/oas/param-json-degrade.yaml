@@ -1,0 +1,24 @@
+openapi: 3.0.3
+info:
+  title: Param argument JSON degrade
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /search:
+    get:
+      operationId: search
+      parameters:
+        - name: filter
+          in: query
+          schema:
+            type: url # not a real JSON Schema type — needs skipValidation, same as unknown-scalar-response.yaml
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }

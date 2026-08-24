@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  title: Union member JSON degrade
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /item: # discriminator set -> real union; the empty member is dropped from `union X = A | B`
+    get:
+      operationId: getItem
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                discriminator: { propertyName: type }
+                oneOf:
+                  - $ref: '#/components/schemas/Book'
+                  - {} # bare, shapeless member -> Scalar('JSON', jsonReason)
+  /looseItem: # no discriminator -> merged/flat object
+    get:
+      operationId: getLooseItem
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Book'
+                  - {}
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: ['book'] }
+        title: { type: string }
+      required: [id, type, title]

@@ -5,6 +5,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 
 export class Param extends Type {
   public resultType!: IType;
@@ -54,9 +55,28 @@ export class Param extends Type {
     context.leave(this);
   }
 
+  // Why this argument's own type gave up and became plain JSON, or undefined for a real
+  // scalar/object. e.g. `schema: { type: url }` names a type GraphQL has no scalar for.
+  // see docs/FIXED.md #156
+  private jsonReason(): string | undefined {
+    return this.resultType instanceof Scalar ? this.resultType.jsonReason : undefined;
+  }
+
   public generate(context: OasContext, writer: Writer, selection: string[]): void {
     context.enter(this);
     trace(context, '-> [param::generate]', `-> in: ${this.name}`);
+
+    // Arguments sit in one comma-separated list, so the note is a quoted string right before the
+    // name: `"NEEDS ATTENTION: ..." filter: JSON`. Block-quote only if the text needs it.
+    const reason = this.jsonReason();
+    if (reason) {
+      const note = Schemas.withJsonNote({}, reason).description!;
+      if (note.includes('\n') || note.includes('\r') || note.includes('"') || note.includes('\\')) {
+        writer.write('"""\n').write(note).write('\n""" ');
+      } else {
+        writer.write('"').write(note).write('" ');
+      }
+    }
 
     writer.write(Naming.genParamName(this.name));
     writer.write(': ');
