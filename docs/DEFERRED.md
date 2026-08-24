@@ -68,7 +68,7 @@ promotes — that near-miss is pinned by `test_oas_responseType_keeps_the_list_w
 it is a bigger change than the `allOfBase` swap, and it is working code on the R6 batch path. Left for
 a quieter moment.
 
-## 73 [BUG] · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked (stripe trigger fixed 2026-08-19; identity-drift core confirmed 2026-08-24, no fix chosen yet)
+## 73 [BUG] · Node ids embed emitted names, so visit order changes selection identity — ⏸ Parked (stripe trigger fixed 2026-08-19; identity-drift core confirmed 2026-08-24; one confirmed shape fixed same day, see docs/FIXED.md #154; general problem still parked)
 
 **Symptom:** the same schema node gets a different id depending on what was expanded before it —
 so a stored selection path (web localStorage, a test pin) can stop matching, and #72's recovery
@@ -237,6 +237,13 @@ This confirms the identity-drift core of this issue is real, for a `$ref`-reache
 identity, not the member's own id. Per this step's own scope, no address scheme or fix is chosen
 here — that is follow-up work, informed by this specific failure shape (an inline `allOf` sibling
 of a stable `$ref` member, renamed only because its own parent's name shifted).
+
+**This specific shape fixed (2026-08-24), see `docs/FIXED.md #154`.** `SelectionPath.resolveSegment`
+gained a targeted third recovery step for exactly this case — a renamed `[inline:...]` member found
+among its `allOf` wrapper's other children, not just via `T.innerChild`'s single-child check. The
+saved `/a` selection above now resolves after the reorder, landing on the same field a fresh run in
+the new order would pick on its own. This closes the one repro built above; the general identity-
+drift problem (ids embedding emitted names) stays parked — see this issue's own status line.
 
 ## 79 [BUG] · Published plugin rejects `->match`-driven union selections — 📋 Upstream, awaiting a release
 

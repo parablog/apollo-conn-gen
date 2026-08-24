@@ -2916,18 +2916,24 @@ test('test_73_ref_member_under_colliding_allof_wrapper_path_fails_to_resolve_aft
 
   // Replay the path saved under order A -- as a stored selection (web localStorage, a saved
   // selection file) would -- against a fresh run browsed in order B. #72's single-target recovery
-  // (selectionPath.ts's SelectionPath.resolveSegment) can't help here: the stale segment
-  // (obj:type:[inline:Container]) sits directly under the Composed wrapper next to the stable
-  // $ref member (obj:type:.../SharedPart) -- two "obj:" children, not the single child a Prop
-  // wrapper (PropObj/PropComp/...) holds, which is the only shape T.innerChild can recover.
+  // (selectionPath.ts's SelectionPath.resolveSegment, via T.innerChild) can't reach this shape on
+  // its own: the stale segment (obj:type:[inline:Container]) sits directly under the Composed
+  // wrapper next to the stable $ref member (obj:type:.../SharedPart) -- two "obj:" children, not
+  // the single child a Prop wrapper (PropObj/PropComp/...) holds, which is the only shape
+  // T.innerChild recovers. resolveSegment's own [inline:...] fallback (docs/FIXED.md #154) picks
+  // between the Composed wrapper's children directly: the $ref member's id never changes, so it
+  // never reaches that fallback; the renamed inline sibling is the only other "obj:" child left
+  // carrying the [inline: marker, so it is recovered.
   const genResolve = await OasGen.fromFile(`${oasBasePath}/ref-member-under-colliding-allof-wrapper.yaml`, {
     showParentInSelections: false,
   });
   await genResolve.visit();
-  assert.throws(
-    () => genResolve.expanded(['get:/b>**', savedFromOrderA!]),
-    /Could not find type: obj:type:\[inline:Container\]/,
-    'a selection saved under one browse order fails to resolve at all under another -- confirms docs/DEFERRED.md #73',
+  const resolvedPaths = genResolve.expanded(['get:/b>**', savedFromOrderA!]);
+  const resolvedAOnlyPath = aOnlyPath(resolvedPaths);
+  assert.strictEqual(
+    resolvedAOnlyPath,
+    actualInOrderB,
+    'a selection saved under one browse order resolves to the same field a fresh run in the new order would pick -- docs/FIXED.md #154',
   );
 });
 

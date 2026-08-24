@@ -34,6 +34,19 @@ export class SelectionPath {
       return target;
     }
 
+    // An allOf wrapper's members are direct children, so T.innerChild above can't pick just one:
+    //   container: allOf[$ref SharedPart, { aOnly }]
+    // its plain member is named after the wrapper, and renamed along with it -- so if only one
+    // sibling still carries "[inline:", that renamed member is the one the old segment meant.
+    if (part.includes('[inline:')) {
+      const inlineMatches = collection.filter((t) => SelectionPath.sameIdClass(t.id, part) && t.id.includes('[inline:'));
+      if (inlineMatches.length === 1) {
+        const [renamedInlineMember] = inlineMatches;
+        warn(null, '[selection]', `segment ${part} not found; using ${renamedInlineMember.id} (the only renamed inline member here)`);
+        return renamedInlineMember;
+      }
+    }
+
     return undefined;
   }
 

@@ -8093,3 +8093,66 @@ file.
 PR #29 (the shipped Rust mechanism) and PR #30 (the RFC,
 `docs/rfcs/0001-selection-derived-sparse-fieldsets.md` on that repo's `anthony/rfc-selection-
 narrowing` branch) on `mdg-private/graphos-service-factory`.
+
+## 154 [BUG] [P2] · A selection saved before a spec reorder can fail to find its field at all, not just land on the wrong one — ✅ Fixed
+
+**Symptom:** a saved selection (web localStorage, a `--load-selections` file, a test-pinned path)
+that named a field folded in from an `allOf` wrapper could stop resolving entirely after the spec
+was browsed in a different order — throwing `Could not find type: ...` instead of landing on the
+field's new name. `#72`'s existing recovery (`T.innerChild`) only helps when the field's parent
+holds exactly one possible child; an `allOf` wrapper holds several members at once, so that recovery
+never applied here.
+
+**OAS** (`ref-member-under-colliding-allof-wrapper.yaml`): `/a` and `/b` each wrap a shared
+component plus their own extra field, under the same property key:
+```yaml
+/a:
+  get:
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                container:
+                  allOf:
+                    - $ref: '#/components/schemas/SharedPart'
+                    - type: object
+                      properties: { aOnly: { type: string } }
+# /b is the same shape, with bOnly instead of aOnly
+```
+
+**Cause:** whichever of `/a`/`/b` is read first keeps the plain wrapper name `Container`; the other
+collides (same property key, different extra field) and is renamed after its own operation, e.g.
+`AResponseContainer` (`typeUtils.ts`'s `resolveNameConflict`, driven by browse order — the mechanism
+`docs/DEFERRED.md #73` describes). The wrapper's other member — the inline `{ aOnly }` object, which
+has no component of its own — is named after the wrapper (`obj.ts`'s `[inline:<wrapper's name>]`
+fallback), so it silently picks up the wrapper's new name too, even though it never itself collided.
+A selection saved under the old browse order still names that object by its stale, wrapper-derived
+name (`obj:type:[inline:Container]`), and `T.innerChild` can't recover it: it only stands in for a
+parent with exactly one child, and this parent (the `allOf` wrapper) holds two — the renamed inline
+member next to the stable `$ref` member.
+
+**Fix:** `SelectionPath.resolveSegment` (`src/oas/utils/selectionPath.ts`) gains a third recovery
+step, tried after the exact-id match and after `T.innerChild`'s single-child recovery both fail: if
+the stale segment's name carries the `[inline:` marker, look among the wrapper's other children for
+the one sibling of the same kind that also carries `[inline:` in its name. A `$ref` member's name
+never changes, so it never reaches this step; if more than one sibling still qualifies, nothing is
+returned and the original "could not find type" error still fires, same as before.
+
+**Verified:** fixture `ref-member-under-colliding-allof-wrapper.yaml`, test
+`test_73_ref_member_under_colliding_allof_wrapper_path_fails_to_resolve_after_reorder`
+(`tests/all/oas-core.test.ts`) — flipped from asserting resolution throws to asserting it resolves,
+and that the resolved field's path matches what a fresh run in the new browse order produces on its
+own. Confirmed failing against the pre-fix code (the original `Could not find type:
+obj:type:[inline:Container]` error). Revert-check: removing the new branch in `resolveSegment`
+reproduces that same failure; restoring it, the test passes again. Full suite green (432 pass, 2
+pre-existing `todo`, 0 fail).
+
+**Refs:** `src/oas/utils/selectionPath.ts` (`SelectionPath.resolveSegment`), `src/oas/nodes/
+typeUtils.ts` (`T.innerChild`, unchanged), `src/oas/nodes/comp.ts` (`Composed.updateName`'s
+`[inline:...]` naming), `src/oas/nodes/obj.ts` (`Obj.updateName`'s matching fallback).
+`docs/DEFERRED.md #73` (the parent issue — this closes one specific shape of it; the general
+identity-drift problem stays parked), `docs/TASKS.md #139` (the umbrella issue this is one closed
+slice of), `docs/FIXED.md #153` (the other #139 sub-issue already closed).
