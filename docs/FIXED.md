@@ -7940,7 +7940,7 @@ Full suite green.
 
 **Refs:** `src/oas/oasGen.ts` (`generateSchema`), `src/oas/generator/typesCollector.ts`
 (`collectExpandedPaths`, unchanged), `src/oas/utils/selectionPath.ts` (`everythingUnder`). Sub-issue
-B of `docs/TASKS.md #139` (the umbrella issue, left open — sub-issue C, spec-position addressing, is
+B of `docs/DEFERRED.md #139` (the umbrella issue, parked — sub-issue C, spec-position addressing, is
 a separate decision not covered here). See `docs/FIXED.md #118` (the size measurement this fixes
 the return side of) and `docs/FIXED.md #124` (the shared-type fixture reused for the regression
 test).
@@ -8154,5 +8154,5 @@ pre-existing `todo`, 0 fail).
 typeUtils.ts` (`T.innerChild`, unchanged), `src/oas/nodes/comp.ts` (`Composed.updateName`'s
 `[inline:...]` naming), `src/oas/nodes/obj.ts` (`Obj.updateName`'s matching fallback).
 `docs/DEFERRED.md #73` (the parent issue — this closes one specific shape of it; the general
-identity-drift problem stays parked), `docs/TASKS.md #139` (the umbrella issue this is one closed
+identity-drift problem stays parked), `docs/DEFERRED.md #139` (the umbrella issue this is one closed
 slice of), `docs/FIXED.md #153` (the other #139 sub-issue already closed).

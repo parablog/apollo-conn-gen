@@ -340,8 +340,51 @@ non-blocking (full HubSpot lists run is 18.9s), and deferred:
   (wildcard `*`, #72 recovery, insertion order) and not worth it at current scale
 
 **Refs:** docs/FIXED.md #118 (the measurements), `src/oas/log/trace.ts`, #73 (why `path()` must
-not be memoized globally). The fourth bullet becomes moot under `docs/TASKS.md #139` (selection
+not be memoized globally). The fourth bullet becomes moot under `docs/DEFERRED.md #139` (selection
 externalisation), which replaces the representation these costs live in.
+
+## 139 [FEAT] · Selections are flat emitted-name path lists, not spec-position addressed — 🟡 Partly done (sub-issue B fixed, docs/FIXED.md #153; one #73 recovery shape fixed, docs/FIXED.md #154; the module rewrite itself not started)
+
+**Why:** selections are flat lists of leaf-path strings whose segments embed *emitted* names. That
+one representation is behind three standing problems: `#73` (name-derived ids make stored
+selections fragile to browse order — the parked structural-ids cure lands here),
+`docs/FIXED.md #49`-adjacent (selection size scales with tree size: hubspot lists is 38,300 path
+strings for "everything under this op", measured in `docs/FIXED.md #118`), and `#119`'s deferred
+collect-walk map (the per-path re-resolve disappears with the representation).
+Decided during `docs/FIXED.md #118` (2026-08-18): staged — the prefix-set fix shipped first; this is
+the durable half.
+
+**Two narrow slices are fixed, not the representation itself:** `docs/FIXED.md #153` (2026-08-23)
+made `generateSchema` hand back the original wildcard instead of its expansion, so "everything under
+this op" is compact again without waiting for this rewrite. `docs/FIXED.md #154` (2026-08-24) added
+one more targeted recovery rule for a specific `#73` collision shape, the same way `#72`'s
+`T.innerChild` already did for another shape. Neither touches why ids drift in the first place —
+`#73`'s general identity-drift problem stays parked, and none of the "Shape" below has been built.
+
+**Shape:** extract selection handling into its own module with **spec-position addressing** (paths
+derived from the OAS document structure, not from emitted node names), and a **selectable
+granularity mode** — the consumer chooses the selection algorithm per run:
+- **operations** — an op is the unit; "everything under this op" is one fact, no field paths. The
+  cheap mode for whole-spec generation and the CLI's `-n` default.
+- **leaf fields** — today's per-field selection, for the web app's field picking and curated
+  production connectors.
+Op-only as the *only* mode was considered and rejected (breaks web field picking, makes
+always-everything the default); as a *chosen* mode it is the right cost model.
+
+**Migration surface to design for:** web app localStorage selections, saved selection JSON files
+(`--load-selections`), test-pinned paths — all carry emitted-name paths today.
+
+**Parked, not loop-actionable — same reasoning as ROADMAP.md's R4-R10.** This is a module rewrite
+with a real cross-repo migration surface (the web app's stored selections), not a single-PR fix, and
+unlike `docs/TASKS.md #122`/`#132` it has no table of independently-scoped rows to pick from — every plan against
+it has to invent its own scope-down, which is how `#153`/`#154` ended up as narrow patches around
+the edges rather than any part of the actual rewrite. Move back to `docs/TASKS.md` once a specific,
+independently-actionable slice is scoped out (its own new numbered entry, with a priority tag) —
+not by reopening this one.
+
+**Refs:** `#73` (parked cures, sized), `#119`; `docs/FIXED.md #118`
+(the #49-adjacent measurements), `docs/FIXED.md #153`/`#154` (the two closed slices). Related:
+`docs/FIXED.md #13`/`#89` (path-dependent divergence family).
 
 ## 143 [FEAT] · Enum value casing: decide whether to normalize to SCREAMING_SNAKE_CASE — 📋 Noted (decide first)
 

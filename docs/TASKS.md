@@ -181,44 +181,6 @@ under `tests/resources/oas/folder/`.
 `/Users/fernando/.claude-personal/specs/loop-JNRpnSgn/plan.md` (local, uncommitted — re-verify it's
 still current before relying on it, it predates this migration).
 
-## 139 [FEAT] [P3] · Selections are flat emitted-name path lists, not spec-position addressed — ⬜ Open (umbrella)
-
-**Why:** selections are flat lists of leaf-path strings whose segments embed *emitted* names. That
-one representation is behind three standing problems: `docs/DEFERRED.md #73` (name-derived ids make
-stored selections fragile to browse order — the parked structural-ids cure lands here),
-`docs/FIXED.md #49`-adjacent (selection size scales with tree size: hubspot lists is 38,300 path
-strings for "everything under this op", measured in `docs/FIXED.md #118`), and
-`docs/DEFERRED.md #119`'s deferred collect-walk map (the per-path re-resolve disappears with the
-representation). Decided during `docs/FIXED.md #118` (2026-08-18): staged — the prefix-set fix
-shipped first; this is the durable half.
-
-**Sub-issue B, the size half, is fixed:** `docs/FIXED.md #153` (2026-08-23) made `generateSchema`
-hand back the original wildcard instead of its expansion, so "everything under this op" is compact
-again without waiting for this rewrite. Sub-issue C — identity fragility (`#73`) and the deferred
-collect-walk map (`#119`) — is untouched and is why this stays open.
-
-**Shape:** extract selection handling into its own module with **spec-position addressing** (paths
-derived from the OAS document structure, not from emitted node names), and a **selectable
-granularity mode** — the consumer chooses the selection algorithm per run:
-- **operations** — an op is the unit; "everything under this op" is one fact, no field paths. The
-  cheap mode for whole-spec generation and the CLI's `-n` default.
-- **leaf fields** — today's per-field selection, for the web app's field picking and curated
-  production connectors.
-Op-only as the *only* mode was considered and rejected (breaks web field picking, makes
-always-everything the default); as a *chosen* mode it is the right cost model.
-
-**Migration surface to design for:** web app localStorage selections, saved selection JSON files
-(`--load-selections`), test-pinned paths — all carry emitted-name paths today.
-
-**Not independently actionable as filed** — this is a module rewrite with a real cross-repo
-migration surface (the web app's stored selections), not a single-PR fix. P3 (umbrella/tracking)
-rather than a normal bug priority; whoever picks this up should expect to split it into sub-steps
-before implementing, the same way #122/#132 are handled.
-
-**Refs:** `docs/DEFERRED.md #73` (parked cures, sized), `docs/DEFERRED.md #119`; `docs/FIXED.md #118`
-(the #49-adjacent measurements). Related: `docs/FIXED.md #13`/`#89` (path-dependent divergence
-family).
-
 ## 140 [FEAT] [P4] · Hand-authored content has no way to survive regeneration (no CUSTOM-region round-trip) — ⬜ Open
 
 **Why:** found comparing `gen`'s output against `tools/connect-gen` (Rust)'s committed output for
