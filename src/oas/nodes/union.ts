@@ -216,13 +216,9 @@ export class Union extends Type {
 
     trace(context, '   [union::generate]', `[union] -> object: ${this.name}`);
 
-    // The merged object's keyword follows the node's `kind`, which is inherited from the parent
-    // context: a response-rooted Union is `kind='type'`; a request-body-rooted Union is
-    // `kind='input'` (Body sets it on construction — see body.ts). Both are correct: the merged
-    // object is referenced exactly as its context dictates (response -> output field, body ->
-    // Mutation argument), and `nameSuffix()` (`'Input'` when kind=input) keeps the names
-    // distinct when the same schema is reached both ways. Do NOT hard-code `'type '` here —
-    // it would emit an input-position merge as an output type and break the body case. See C6.
+    // `this.kind` (not a hardcoded 'type ') picks the keyword: 'type' for a response, 'input' for a
+    // request body (body.ts). e.g. (r2-input-union-consolidated.yaml) POST /create's `oneOf` body
+    // merges to one object — hardcoding 'type ' here would emit it as an invalid mutation argument.
     this.writeMemberJsonNote(writer);
     writer
       .write(this.kind + ' ')
