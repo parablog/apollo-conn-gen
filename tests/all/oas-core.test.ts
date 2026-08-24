@@ -3264,3 +3264,81 @@ test('test_95_array_member_does_not_borrow_its_parents_ref_name', async () => {
     "the array resolves its own name instead of borrowing the union's raw $ref",
   );
 });
+
+test('test_155_unknown_scalar_response_body_degrades_to_json_with_note', async (t) => {
+  // #155 defect 2: a get's 200 body is `{ type: 'url' }` directly — a type name GraphQL has no
+  // scalar for. #98 already reads this as JSON with a warn() line; the reason now also reaches the
+  // op's own docstring.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('unknown-scalar-response.yaml', ['get:/avatar>**'], 1, 0, {
+    skipValidation: true,
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/\bavatar: JSON/.test(schema!), 'the op answers free-form JSON');
+
+  const reason = "this schema's type 'url' has no GraphQL scalar equivalent — sent as raw JSON instead.";
+  assert.ok(
+    schema!.includes(`NEEDS ATTENTION: ${reason.replace('—', '--')}`),
+    'avatar carries a NEEDS ATTENTION note in its own operation docstring',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2]?.includes("unknown scalar type 'url'")),
+    'warn() still fires for the unknown type, same as before',
+  );
+});
+
+test('test_155_map_value_json_degrades_with_note', async (t) => {
+  // #155 defects 1, 3 and 4, plus the two map-value degrades already covered before #155 — all
+  // five are sibling map-typed properties on one type, asserted together. Defect 1 (a bare shapeless
+  // schema, factory.ts's `isShapelessObject` branch) can only be reached this way: as a whole
+  // operation response it is always intercepted first by the older `#31` fix, which reads the same
+  // shapeless shape as "no body to speak of" and answers a synthetic `success: Boolean` instead.
+  const schema = await runOasTest('map-value-json-degrades.yaml', ['get:/reports>**'], 1, 7);
+  assert.ok(schema !== undefined);
+
+  // Map.generate() always wraps a value's note in a `"""..."""` block (never the single-line `"..."`
+  // form Prop.generate() uses) — this checks the note sits directly above the given `value:` line.
+  const mapNote = (reason: string, valueLine: string) =>
+    new RegExp(
+      `"""\\n {2}NEEDS ATTENTION: ${_.escapeRegExp(reason.replace('—', '--'))}\\n {2}"""\\n {2}${_.escapeRegExp(valueLine)}`,
+    ).test(schema!);
+
+  // defect 1: a map whose values allow no properties of their own at all — the value type gives up
+  // on a real type and becomes JSON, carrying its reason up to the map.
+  assert.ok(
+    mapNote('this object declares no properties of its own — sent as raw JSON instead.', 'value: JSON'),
+    'untypedValue carries a NEEDS ATTENTION note above value: JSON',
+  );
+
+  // defect 3: a map whose values are lists of empty objects — the list's own reason surfaces above
+  // the map's `value:` line, same wording #56/#132 already use for a plain list of empty objects.
+  assert.ok(
+    mapNote('items in array have types that declare no fields - returning JSON type', 'value: [JSON]'),
+    'byGroup carries a NEEDS ATTENTION note above value: [JSON]',
+  );
+
+  // defect 4: `additionalProperties: {}` — worded softer, since the API author explicitly allowed
+  // any JSON value here rather than the schema simply having nothing left to describe.
+  assert.ok(
+    mapNote(
+      "this map's values are declared as `additionalProperties: {}` — the API explicitly allows any JSON value here, so there's no fixed shape to model as a GraphQL type.",
+      'value: JSON',
+    ),
+    'anyValue carries a NEEDS ATTENTION note above value: JSON',
+  );
+
+  // already covered before #155 (#19/#70): a map value with no fields of its own.
+  assert.ok(
+    mapNote("this map's values declare no fields of their own — sent as raw JSON instead.", 'value: JSON'),
+    'emptyObjectValue carries its existing NEEDS ATTENTION note above value: JSON',
+  );
+
+  // already covered before #155 (#108): a map value that is a choice of nothing but plain values.
+  assert.ok(
+    mapNote(
+      "a map's values are a choice of nothing but plain scalar or enum values, with no GraphQL union member to build — sent as raw JSON instead.",
+      'value: JSON',
+    ),
+    'plainChoiceValue carries its existing NEEDS ATTENTION note above value: JSON',
+  );
+});

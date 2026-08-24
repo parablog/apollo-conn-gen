@@ -178,6 +178,10 @@ export class Map extends Type {
 
     // If additionalProperties is an empty object, create a JSON scalar type
     if (Object.keys(additionalProps).length === 0) {
+      // e.g. `labels: { additionalProperties: {} }` — the API author explicitly said "a value here
+      // can be anything", so the note reads softer than a forced degrade. see docs/FIXED.md #155
+      this.valueJsonReason =
+        "this map's values are declared as `additionalProperties: {}` — the API explicitly allows any JSON value here, so there's no fixed shape to model as a GraphQL type.";
       trace(context, '-> [map::additionalProps]', 'empty additionalProperties schema, using JSON');
       this.valueType = new Scalar(this, 'JSON', { type: 'object' } as SchemaObject);
       this.add(this.valueType);
@@ -210,8 +214,40 @@ export class Map extends Type {
     if ((this.valueType instanceof Obj || this.valueType instanceof Composed) && this.valueType.props.size === 0) {
       this.valueJsonReason = "this map's values declare no fields of their own — sent as raw JSON instead.";
     }
+    // the value schema already degraded to a JSON scalar with its own reason attached (e.g. a map
+    // whose values are `{ type: 'url' }`, #155's defect 2) — carry that same reason up to the map.
+    else if (this.valueType instanceof Scalar && this.valueType.jsonReason) {
+      this.valueJsonReason = this.valueType.jsonReason;
+    }
+    // a map whose values are a list gets its own reason: the item type inside that list is what
+    // actually gave up, e.g. { additionalProperties: { type: array, items: { type: object } } }.
+    else if (this.valueType instanceof Arr) {
+      this.valueJsonReason = this.arrayValueJsonReason(context);
+    }
 
     trace(context, '<- [map::additionalProps]', 'out value type: ' + this.valueType.name);
+  }
+
+  // Why a map's value gave up on a real type when that value is a list, or undefined if the list
+  // holds real items. `fromArrayItems` never attaches a reason to the JSON scalar it builds, so
+  // this re-derives it the same way `PropArray.jsonReason()` does for a plain list field.
+  //   e.g. { additionalProperties: { type: array, items: { type: object, properties: {} } } } — a
+  //   map whose values are lists of empty objects; `value: [JSON]` gains a note above it
+  private arrayValueJsonReason(context: OasContext): string | undefined {
+    if (!(this.valueType instanceof Arr)) return undefined;
+    const item = this.valueType.itemsType;
+    if (!(item instanceof Scalar) || item.name !== 'JSON') return undefined;
+
+    if (Schemas.isShapelessObject(item.schema)) {
+      return 'items in array have types that declare no fields - returning JSON type';
+    }
+    if (Schemas.holdsPlainValues(context, item.schema)) {
+      return 'items in array have mixed array types - returning JSON type';
+    }
+    if (Schemas.holdsMixedPlainAndObjectValues(context, item.schema)) {
+      return 'items in array have both plain and object values - returning JSON type';
+    }
+    return undefined;
   }
 
   dependencies(): IType[] {

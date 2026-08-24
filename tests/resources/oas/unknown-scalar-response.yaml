@@ -1,0 +1,20 @@
+openapi: 3.0.3
+info:
+  title: Unknown scalar response body
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /avatar:
+    get:
+      operationId: getAvatar
+      responses:
+        '200':
+          description: OK
+          content:
+            # `url` is a format name in the type slot, not a real JSON Schema type — the validator
+            # rejects it, which is why this fixture loads with skipValidation. The whole response
+            # degrades straight to JSON. see docs/FIXED.md #155
+            application/json:
+              schema:
+                type: url

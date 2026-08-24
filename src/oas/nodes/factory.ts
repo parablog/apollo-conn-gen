@@ -113,7 +113,10 @@ export class Factory {
     // fall back to the JSON scalar — NOT an empty Obj, which generate() would skip, dangling the
     // reference. see docs/FIXED.md #19
     else if (Schemas.isShapelessObject(schemaObj)) {
-      result = new Scalar(parent, 'JSON', schemaObj);
+      // e.g. a map value's `additionalProperties: { additionalProperties: false }` becomes JSON —
+      // map.ts reads this reason back to note its own `value:` line. see docs/FIXED.md #155
+      const reason = 'this object declares no properties of its own — sent as raw JSON instead.';
+      result = new Scalar(parent, 'JSON', Schemas.withJsonNote(schemaObj, reason), reason);
     }
     // scalar
     else {
@@ -146,7 +149,10 @@ export class Factory {
       // a type that is no JSON Schema type is read as free-form JSON instead of stopping the run.
       //   e.g. (common-room) value: { oneOf: [{ type: url }, { type: date }] }  see docs/FIXED.md #98
       warn(null, '[factory]', `unknown scalar type '${typeStr}' becomes JSON in: ${parent.pathToRoot()}`);
-      return new Scalar(parent, 'JSON', schema!);
+      // when this is a whole response body (e.g. a get's 200 is `{ type: 'url' }` directly), the
+      // reason above now also reaches the op's own docstring, not just the build log. see docs/FIXED.md #155
+      const reason = `this schema's type '${typeStr}' has no GraphQL scalar equivalent — sent as raw JSON instead.`;
+      return new Scalar(parent, 'JSON', Schemas.withJsonNote(schema!, reason), reason);
     } else if (schema?.enum != null) {
       return new En(parent, ref ?? 'enum', schema, _.get(schema, 'enum') as string[]);
     }

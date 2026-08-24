@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: Map value JSON degrades
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /reports:
+    get:
+      operationId: getReports
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+components:
+  schemas:
+    Report:
+      type: object
+      properties:
+        # a map whose values are themselves objects with no properties allowed at all — the value
+        # type gives up and becomes JSON, carrying its reason up to the map. see docs/FIXED.md #155
+        untypedValue:
+          type: object
+          additionalProperties:
+            additionalProperties: false
+        # a map whose values are lists of empty objects — the list's own item type already gave up
+        # and became JSON, and the map now carries the same reason above `value:`. see docs/FIXED.md #155
+        byGroup:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              properties: {}
+        # `additionalProperties: {}` — the API author said a value here can be anything, so the note
+        # reads softer than a forced degrade. see docs/FIXED.md #155
+        anyValue:
+          type: object
+          additionalProperties: {}
+        # already covered before #155: a value with no fields of its own. see docs/FIXED.md #19/#70
+        emptyObjectValue:
+          type: object
+          additionalProperties:
+            type: object
+        # already covered before #155: a choice of nothing but plain values. see docs/FIXED.md #108
+        plainChoiceValue:
+          type: object
+          additionalProperties:
+            anyOf:
+              - type: string
+                enum: [low, medium, high]
+              - type: string

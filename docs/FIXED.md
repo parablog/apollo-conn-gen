@@ -6244,8 +6244,8 @@ crash rather than a missing-docstring assertion failure, since that bug blocks g
 
 **Not done here:** 13 more JSON-degrade sites across `factory.ts`, `map.ts`, `union.ts`, `propObj.ts`
 give no schema-level signal yet — each needs its own new writer plumbing (no `Prop` to hang a
-description on, or the decision happens after the description already wrote). Tracked as
-`docs/TASKS.md #132`, not folded in here.
+description on, or the decision happens after the description already wrote). Tracked as `#132`
+(later `docs/FIXED.md #132` once closed), not folded in here.
 
 **Refs:** `src/oas/utils/schemas.ts` (`withDegradeNote`), `src/oas/nodes/factory.ts` (`fromProp`,
 `fromSchema`), `src/oas/nodes/union.ts` (`dedupedSelectedProps`). See #39/#44 (C2's kind-collision
@@ -7356,7 +7356,8 @@ tests, 404 pass, 0 fail, 2 pre-existing todo).
 
 **Refs:** `src/oas/nodes/prop.ts` (`effectiveDescription`), `src/oas/nodes/propObj.ts`
 (`jsonDegradeReason`, `getValue`, `effectiveDescription`). `docs/FIXED.md #133` (the shared design,
-the first 4 sites), `docs/TASKS.md #132` (the umbrella — 11 sites still open there).
+the first 4 sites), `#132` (the umbrella — 11 sites still open there at the time; closed since, see
+`docs/FIXED.md #132`).
 
 
 ## 141 [FEAT] · OAS parameter defaults already become a GraphQL argument default — ✅ Already correct, no code change
@@ -8156,3 +8157,115 @@ typeUtils.ts` (`T.innerChild`, unchanged), `src/oas/nodes/comp.ts` (`Composed.up
 `docs/DEFERRED.md #73` (the parent issue — this closes one specific shape of it; the general
 identity-drift problem stays parked), `docs/DEFERRED.md #139` (the umbrella issue this is one closed
 slice of), `docs/FIXED.md #153` (the other #139 sub-issue already closed).
+
+## 155 [BUG] · The last four JSON-degrade sites (`factory.ts`'s two bare-`Scalar` cases, `map.ts`'s
+two value-only cases) now flag themselves in the schema — ✅ Fixed
+
+**Symptom:** the same gap `#133`/`#145` already closed for 6 sites, still open for the 4 remaining
+ones in `#132`'s table: `warn()` already logs why a field gave up and became `JSON`, but the
+reason never reached the schema itself for these — each builds a bare `Scalar` or writes straight
+into a type's `value:` line, with no `Prop` to hang a description on.
+
+**OAS** (all four, as sibling properties of one map-value-json-degrades.yaml component):
+```yaml
+byGroup:                                    # map.ts:95 — list value, its item already gave up
+  additionalProperties: { type: array, items: { type: object, properties: {} } }
+anyValue:                                   # map.ts:172 — the API author allows any JSON value here
+  additionalProperties: {}
+untypedValue:                               # factory.ts:115, reached via a map value (see Cause)
+  additionalProperties: { additionalProperties: false }
+```
+and, for `factory.ts:146` (a whole response body this time — this one has no map/prop dependency):
+```yaml
+# unknown-scalar-response.yaml
+responses:
+  '200': { content: { application/json: { schema: { type: url } } } }
+```
+
+**Example:**
+```graphql
+# before
+value: [JSON]
+
+# after
+"""
+NEEDS ATTENTION: items in array have types that declare no fields - returning JSON type
+"""
+value: [JSON]
+```
+
+**Cause / a wrinkle found while building the fixture for `factory.ts:115`:** the plan for this entry
+assumed `factory.ts:115` (a bare shapeless object, e.g. `{}`) was reachable as a whole operation
+response, same as `factory.ts:146`. It isn't: `get.ts`'s much older `#31` fix already intercepts
+every whole-response schema that is empty or shapeless — the exact same `Schemas.isShapelessObject`
+check this fix's branch uses — and swaps in a synthetic `success: Boolean` response *before*
+`Factory.fromResponse` is ever called, for every HTTP verb (`Post`/`Put`/`Patch`/`Delete` all extend
+`Get` and share this path). Since both checks use the identical predicate on the identical resolved
+schema, no whole-response input can ever reach `factory.ts:115` — confirmed by writing that fixture
+first and watching it synthesize `success: Boolean` instead of degrading to `JSON`, both before and
+after this fix's code change. `factory.ts:115` is reachable only through a caller that doesn't share
+`#31`'s guard, e.g. `Map.visitAdditionalProperties`'s own call into `Factory.fromSchema` — verified
+instead via `untypedValue` above, a map value declared as `additionalProperties: { additionalProperties: false }`.
+
+**Fix:**
+- `factory.ts:115` (`isShapelessObject`) and `factory.ts:146` (`createScalarType`'s unknown-type
+  catch-all): idiom A, same as `factory.ts:61`'s existing dangling-`$ref` fix — pass
+  `Schemas.withJsonNote(schema, reason)` and `reason` into the `Scalar` constructor's 3rd/4th args.
+- `map.ts:172` (`additionalProperties: {}`): sets `this.valueJsonReason` directly, worded softer
+  than the other three — the API author explicitly said "any JSON value is fine here," which is a
+  choice, not a shape the generator gave up on.
+- `map.ts:95` (a map's list-typed value): new private `Map.arrayValueJsonReason()`, the same
+  re-derivation idiom `PropArray.jsonReason()` already uses for a plain list field — reads the
+  list's item type back off `this.valueType.itemsType` and re-runs `Schemas.isShapelessObject` /
+  `holdsPlainValues` / `holdsMixedPlainAndObjectValues` against its schema, since `fromArrayItems`'s
+  degrade sites never got a `Prop` to hang idiom A off of. Slotted into the existing
+  `Obj`/`Composed`-props-empty check in `visitAdditionalProperties` as two more `else if` branches;
+  the middle one (`this.valueType instanceof Scalar && this.valueType.jsonReason`) is what carries
+  `factory.ts:115`/`146`'s own reason up to a map value too, which is how `untypedValue` above works.
+
+**Verified:** fixtures `unknown-scalar-response.yaml` (`factory.ts:146`, whole response) and
+`map-value-json-degrades.yaml` (one component, five sibling map-typed properties: the three new
+sites above plus the two map-value degrades `#19`/`#70` and `#108` already covered, asserted
+together to confirm nothing regressed). Tests `test_155_unknown_scalar_response_body_degrades_to_json_with_note`
+and `test_155_map_value_json_degrades_with_note` (`tests/all/oas-core.test.ts`), each asserting the
+exact `NEEDS ATTENTION: <reason>` text sits immediately above its `value:`/field line. Both confirmed
+failing against the pre-fix code (revert-check: stashed `factory.ts` + `map.ts`, reran, restored).
+Full suite green (436 tests, 434 pass, 0 fail, 2 pre-existing `todo`).
+
+**Not done here:** the umbrella's other two originally-listed threads move to `docs/TASKS.md #156`,
+not resolved here — a `Param`'s degraded argument type (GraphQL argument descriptions are unused
+anywhere in this codebase today, and the formatting/shipping questions are undecided) and a
+`jsonReason`-carrying `Scalar` as a union member (`union.ts:144`'s existing scope limit, no landing
+spot).
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema`'s `isShapelessObject` branch,
+`createScalarType`'s catch-all), `src/oas/nodes/map.ts` (`visitAdditionalProperties`,
+`arrayValueJsonReason`), `src/oas/nodes/propArray.ts` (`jsonReason`, the re-derivation idiom this
+reuses), `src/oas/nodes/get.ts` (`visitResponseContent`'s `#31` guard, unchanged but responsible for
+`factory.ts:115`'s unreachability at the response level). `docs/FIXED.md #19`/`#31` (the original
+shapeless-object and empty-response fixes), `#56` (the array-item wording this reuses), `#70`/`#108`
+(the two pre-existing map-value degrades asserted alongside), `#98` (the unknown-scalar-type
+precedent `factory.ts:146` follows), `#133`/`#145` (the first 6 sites and the shared design), `#132`
+(the umbrella — closed here for its last 4 listed sites; the Param/Union remainder split to
+`docs/TASKS.md #156`).
+
+## 132 [BUG] [P4] · Most JSON-degrade sites still give no signal in the generated schema, only the build log — ✅ Fixed for every listed site; Param/Union gap split to `docs/TASKS.md #156`
+
+**Symptom:** `warn()` logged why a field gave up and became `JSON`, but the reason never reached the
+schema itself — anyone reading the SDL (or GraphQL tooling: Studio, GraphiQL, introspection) saw a
+bare `JSON` field with no clue why. An exhaustive survey of `src/oas/` found 17 live sites.
+
+**Resolved across three fixes, closing every row this entry's table ever listed:** `#133` (4 sites:
+`factory.ts:61/212/219/225`), `#145` (2 sites: `propObj.ts`'s D1/D2), `#155` (the last 4 open rows:
+`factory.ts:115/146`, `map.ts:95/172`) — plus `map.ts:117/184` and `union.ts:144`, which landed
+alongside `#133`'s work without ever getting their own table row.
+
+**Not fully closed as a symptom — split off, not silently dropped:** two threads the "Shape" section
+named from the start but never gave a table row — a `Param`'s degraded argument type, and a
+`jsonReason`-carrying `Scalar` as a `Union` member — still reach zero schema signal, because neither
+has ever had a scoped design (a `Param`'s case needs a GraphQL-argument-description mechanism that
+doesn't exist anywhere in this codebase today). Filed as `docs/TASKS.md #156` rather than left
+implicitly open under a table where every literal row now reads done.
+
+**Refs:** `docs/FIXED.md #133`, `#145`, `#155` (the three fixes), `docs/TASKS.md #156` (the
+split-off remainder).

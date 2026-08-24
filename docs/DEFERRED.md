@@ -376,7 +376,8 @@ always-everything the default); as a *chosen* mode it is the right cost model.
 
 **Parked, not loop-actionable — same reasoning as ROADMAP.md's R4-R10.** This is a module rewrite
 with a real cross-repo migration surface (the web app's stored selections), not a single-PR fix, and
-unlike `docs/TASKS.md #122`/`#132` it has no table of independently-scoped rows to pick from — every plan against
+unlike `docs/FIXED.md #122`/`#132` — both umbrellas that decomposed into a table of independently-
+scoped rows a plan could pick one from — this one has no such table; every plan against
 it has to invent its own scope-down, which is how `#153`/`#154` ended up as narrow patches around
 the edges rather than any part of the actual rewrite. Move back to `docs/TASKS.md` once a specific,
 independently-actionable slice is scoped out (its own new numbered entry, with a priority tag) —
