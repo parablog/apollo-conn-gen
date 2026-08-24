@@ -37,7 +37,7 @@ export function applySparseFieldsets(context: OasContext, gen: OasGen, selection
       continue;
     }
 
-    const obj = mappedObject(op);
+    const obj = unwrapResponseObj(op);
     if (!obj) {
       skip('response is not an object or a list of objects');
       continue;
@@ -57,10 +57,10 @@ export function applySparseFieldsets(context: OasContext, gen: OasGen, selection
   }
 }
 
-// The object whose fields the default lists to, unwrapped the same way entity.ts/batch.ts read a
-// response: GET /products/{id} -> Product itself; GET /products -> [Product] or { results: [Product] }
-// both use Product (the array's item), since the selection is written once and used per item.
-function mappedObject(op: IType & Op): Obj | null {
+// Unwraps an op's response down to the object whose field names become the default value.
+// GET /products/{id} -> Product itself; GET /products -> [Product] or { results: [Product] } both
+// use Product (the array's item), since one selection is written and reused per item.
+function unwrapResponseObj(op: IType & Op): Obj | null {
   let node: IType | undefined = op.resultType;
   if (node instanceof Res) {
     node = node.response;
