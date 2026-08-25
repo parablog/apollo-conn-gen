@@ -92,6 +92,7 @@ export function inferEntityResolvers(
     return;
   }
 
+  const keep = context.generateOptions.keepFieldNames === true;
   // The root id of every selected path (matches how the writers pick query fields).
   const selectionRoots = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
@@ -110,7 +111,7 @@ export function inferEntityResolvers(
       continue;
     }
 
-    const selected = obj.selectedProps(selection);
+    const selected = obj.selectedProps(selection, keep);
     const everyParamMatchesSelectedScalar = pathParams.every((p) => {
       const prop = obj.props.get(p.name);
       return prop !== undefined && T.isPropScalar(prop) && selected.includes(prop);

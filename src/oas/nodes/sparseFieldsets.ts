@@ -11,6 +11,7 @@ export function applySparseFieldsets(context: OasContext, gen: OasGen, selection
   if (!paramName) {
     return;
   }
+  const keep = context.generateOptions.keepFieldNames === true;
 
   for (const op of gen.paths.values()) {
     // fields= is a read-time convention, so a write op is skipped even with a same-named param.
@@ -45,7 +46,7 @@ export function applySparseFieldsets(context: OasContext, gen: OasGen, selection
 
     // Prop.name is the raw OAS wire name, e.g. "id" -- what the REST API's own fields= expects
     const fields = obj
-      .selectedProps(selection)
+      .selectedProps(selection, keep)
       .map((prop) => prop.name)
       .sort();
     if (fields.length === 0) {

@@ -489,11 +489,24 @@ the types that carry the id.
 - "The resolvers are unreachable" is overstated, though: a type-level resolver still backfills
   fields on any entity some connector returns with its key (e.g. a partial list response).
 
+**From Adam's benchmark report (read 2026-08-25, claude.ai/code/artifact/c79bb3ab):**
+- His heuristic is **deterministic exact-name matching** of GET-by-id ops onto id-carrying types —
+  no fuzzy inference; 150 fields across 8 services, live-verified.
+- Adoption was organic: 48/57 dev tasks used the synthesized fields unprompted (schema-embedded
+  knowledge got used; discovery tools had zero voluntary adoption).
+- Isolated impact: part of the v5 arm that closed the turn gap to +8% (sonnet, 168 tasks) while
+  task completion hit 81.0.
+- Operational caveat to carry into any implementation: one agent call now fans out N concurrent
+  upstream requests — connector concurrency limits need setting deliberately.
+- Scope limit confirmed: kills *agent-side* N+1 only; wire-level N+1 needs real batch endpoints
+  (`--batch`, which his benchmark couldn't test — no upstream batch endpoints).
+
 **Not loop-actionable yet:**
 - No reference code: Adam's link-half work is in his fork and in none of PRs #5-#9 (verified) —
   ask him for the diff.
-- The FK-name → type match (`album_id` → `Album`) is an inference heuristic that needs a design
-  decision, not a mechanical port.
+- The FK-name → type match (`album_id` → `Album`) heuristic is half-answered by the report
+  (exact-name matching, above); the remaining design decision is whether we adopt exact-only or
+  allow the sanitised/kept-spelling variants #158 introduced.
 - Satisfiability territory: synthesized fields on shared types interact with composition pruning
   (never-returned types, partial-provider field keeping) — the same class of constraint that shaped
   R2's limits.
@@ -502,4 +515,5 @@ Moves to `docs/TASKS.md` once Adam's diff is in hand and the heuristic is decide
 
 **Refs:** `src/oas/nodes/entity.ts`, `src/oas/nodes/obj.ts` (`writeEntityConnector`), PRs #5-#9
 (`parablog/apollo-conn-gen`, absence verified), the codex-approved plan
-(`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's Slack follow-up (2026-08-25).
+(`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's Slack follow-up (2026-08-25) and
+benchmark report (claude.ai/code/artifact/c79bb3ab).

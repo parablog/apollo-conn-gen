@@ -77,7 +77,8 @@ export class Get extends Type implements Op {
     const description = this.operation.getDescription();
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
-    const jsonReason = this.resultJsonReason(selection);
+    const keep = context.generateOptions?.keepFieldNames === true;
+    const jsonReason = this.resultJsonReason(selection, keep);
     const paramsLine = this.paramsDocLine(context);
     const responseFieldsLine = this.responseFieldsDocLine(context, selection);
 
@@ -125,10 +126,10 @@ export class Get extends Type implements Op {
   // always a Res wrapper (see res.ts); the real answer is one step in, at Res.response. #132
   //   e.g. (github) get:/watchers answers anyOf [array of user, array of watcher] — no shared
   //   fields, so getWatchers(): JSON gains a "NEEDS ATTENTION" note explaining why
-  protected resultJsonReason(selection: string[]): string | undefined {
+  protected resultJsonReason(selection: string[], keep: boolean): string | undefined {
     const response = this.resultType instanceof Res ? this.resultType.response : this.resultType;
     if (response instanceof Union)
-      return response.emptyMergeReason(selection);
+      return response.emptyMergeReason(selection, keep);
 
     if (response instanceof Scalar)
       return response.jsonReason;

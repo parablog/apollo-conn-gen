@@ -72,22 +72,45 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-## 162 [FEAT] [P5] · `--keep-field-names` still renumbers a `foo_bar`/`fooBar` twin pair — ⬜ Open
+## 163 [BUG] [P2] · `?? $(default)` coalesce mappings break every pre-2.15 router — ⬜ Open
 
-**Example:** `properties: { foo_bar: {...}, fooBar: {...} }` — both sanitise to `fooBar`. With
-`--keep-field-names` on, the second one is still renamed to `fooBar2` instead of staying `foo_bar`.
+**Example:** `tag: tag ?? $("latest")` (the R7 default fallback, `scalar.ts:59`) — parses at
+router/plugin 2.15+, fails below it.
 
-**Why:** found scoping `docs/FIXED.md #158`'s fixture (kept deliberately free of twin pairs, so
-this stayed out of that entry). `T.numberTwinFields` (`src/oas/nodes/typeUtils.ts:381`) decides the
-collision by comparing `Naming.sanitiseField(prop.name)` with no `keep` argument, before either
-prop's own kept spelling is ever written — so a name that `--keep-field-names` would otherwise keep
-still loses to its sanitised twin.
+**Symptom:**
+- Composing with a pre-2.15 plugin rejects the syntax: `INVALID_SELECTION`, a `nom` parser error —
+  already on record as corrections to `docs/FIXED.md #108-#110`, never filed as its own entry.
+- Adam's benchmark report (2026-08-25) escalates it to runtime: deployed router **2.14.0 crashes at
+  startup** on the same syntax (`nom::ErrorKind::Eof`) — 9 of his 10 app routers, 46 coalesce sites
+  in his corpus.
+- Knock-on: his harness shimmed the mappings out to run at all, which also stripped our body-field
+  defaulting and inflated his HTTP 422 counts (report problem 4).
 
-**Shape:** not scoped yet. `numberTwinFields` is called through `selectedProps`, which none of its
-five callers (`Obj`/`Composed`/`Union`/`entity.ts`/`sparseFieldsets.ts`) currently pass a context
-to — threading `keep` through means changing that method's signature everywhere it's overridden and
-called, a wider ripple than #158's one-line pass-throughs. Needs its own investigation and fixture
-(two properties that sanitise to one field, one of them independently keepable).
+**Cause:** emission is unconditional — nothing gates the coalesce syntax on the router version the
+user targets, and no doc states the 2.15 minimum.
 
-**Refs:** `src/oas/nodes/typeUtils.ts`, `src/oas/nodes/obj.ts`, `src/oas/nodes/comp.ts`,
-`src/oas/nodes/union.ts`, `docs/FIXED.md #158`.
+**Shape (decide first):** (a) document the minimum router version and keep emission as is, or
+(b) version-gate the fallback (emit the plain mapping below a target version) — Adam suggests a
+`--target-router` flag; ours would more naturally hang off the existing version plumbing
+(`--connector-spec-version` / `--federation-version`, `src/versions.ts`). Gating changes output for
+those targets, so it needs the corpus treatment (#109's precedent).
+
+**Refs:** `src/oas/nodes/scalar.ts:56-59` (the R7 emission), `src/oas/nodes/propArray.ts:115`,
+`ROADMAP.md` R7, `docs/FIXED.md #108, #109, #110` (corrections), Adam's benchmark report
+(claude.ai/code/artifact/c79bb3ab, problem 5) and Slack thread (2026-08-24).
+
+## 164 [BUG] [P4] · Tags/pinned args degrade to `String` where Rust emits `[String!]`/`Boolean` — ⬜ Open
+
+**Example:** needs a repro — no failing OAS snippet in hand; likely an AppWorld spec's
+`tags`/`pinned` query parameters (`type: array, items: {type: string}` / `type: boolean`).
+
+**Symptom:** Adam's benchmark report, verbatim: "one known counter-fidelity nit: TS degrades
+tags/pinned args to String where Rust emits [String!]/Boolean" — the only fidelity regression his
+report found vs the Rust baseline.
+
+**Cause:** unconfirmed. Candidates: array query params flattened by the join path
+(`Params.arrayJoin` → `->joinNotNull(...)` writes a `String` arg), or a param schema shape falling
+through to the `String` default in `param.ts`. Confirm with a repro before fixing.
+
+**Refs:** `src/oas/nodes/param.ts`, `src/oas/utils/params.ts` (`arrayJoin`), Adam's benchmark
+report (claude.ai/code/artifact/c79bb3ab, "caveats").

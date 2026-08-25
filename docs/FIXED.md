@@ -8608,8 +8608,8 @@ each writer that spells a name passes the flag.
   decision (`Params.matchToPath`) now compares the spellings the flag would actually write, so the
   SDL argument and the `{$args...}` path template always agree.
 - Stays canonical on purpose: type-name synthesis, operation naming, and the twin-collision dedupe
-  (`numberTwinFields`) — a `foo_bar`/`fooBar` twin pair may still rename under the flag, filed as
-  `docs/TASKS.md #162`.
+  (`numberTwinFields`) — a `foo_bar`/`fooBar` twin pair may still rename under the flag, fixed in
+  `docs/FIXED.md #162`.
 - `--batch`'s `$batch.<keyFields>` templates already write the raw spec spelling and are untouched;
   combining `--batch` with this flag is out of scope.
 - Flag off, output is byte-identical to before.
@@ -8629,7 +8629,7 @@ real-spec full-selection tests.
 
 **Refs:** `src/oas/utils/naming.ts` (`keepsOwnSpelling`), `src/oas/utils/params.ts`
 (`matchToPath`), `docs/DEFERRED.md #73, #143`, `docs/FIXED.md #62, #81, #82, #157`,
-`docs/TASKS.md #162`, PR #6 (adamd-apollo — the flag idea; its mutable-static shape deliberately
+`docs/FIXED.md #162`, PR #6 (adamd-apollo — the flag idea; its mutable-static shape deliberately
 not copied). Adam's AppWorld benchmark report (Slack, 2026-08-24).
 
 ## 159 [FEAT] [P4] · `--skip-arg-defaults`: document defaults as prose instead of executable SDL defaults — ✅ Fixed
@@ -8727,3 +8727,61 @@ pre-existing todo); default output stays pinned byte-identical by the corpus and
 `src/oas/utils/schemas.ts` (`describeResponseFields`), `src/oas/io/operationWriter.ts`,
 `docs/FIXED.md #158, #159`, PR #8 (adamd-apollo — the flag, note format, and cap; its duck-typed
 `unknown` casts deliberately not copied). Adam's AppWorld benchmark report (Slack, 2026-08-24).
+
+## 162 [FEAT] [P5] · `--keep-field-names` still renumbers a `foo_bar`/`fooBar` twin pair — ✅ Fixed
+
+**Symptom:** #158 kept a spec's own field spelling wherever it was already safe, but the
+twin-collision dedupe (`T.numberTwinFields`) never got the flag: `{ foo_bar, fooBar }` still
+renamed the second one to `fooBar2` under `--keep-field-names`, even though keeping `foo_bar`'s own
+spelling would have avoided the collision entirely. Filed as `docs/TASKS.md #162` when #158 shipped.
+
+**OAS** (keep-twin-fields.yaml):
+```yaml
+properties:
+  foo_bar: { type: string }
+  fooBar: { type: string }
+```
+
+**Example:**
+```graphql
+# default (unchanged) -- both still camelCase to fooBar and collide
+fooBar: String       # selection: fooBar: foo_bar
+fooBar2: String      # selection: fooBar2: fooBar
+# with --keep-field-names -- each keeps its own spelling, no collision left to number around
+foo_bar: String
+fooBar: String
+```
+
+**Fix:** `numberTwinFields(props, keep)` gains a required `keep` parameter — no default, so
+`npx tsc --noEmit` enumerates every call site. Flag off keeps the existing loop verbatim, byte-
+identical. Flag on runs three passes over the same props, in whatever order they arrive, every prop
+returned (idempotent — decision below):
+- Pass A: an existing pin sitting on a name a keepable prop in this view now owns is stale (from a
+  partial view where that keepable prop was out of scope) and is evicted; every other pin stays
+  put, same as #113's guard.
+- Pass B: an unpinned keepable prop (`Naming.sanitiseField(name, true) === name`) claims its own
+  spelling unconditionally — Pass A already guaranteed the name is free.
+- Pass C: everything left claims the sanitised base name if it is free, else numbers around it with
+  the same `Naming.numberedName` call as before (a bound lambda, not the unbound `taken.has`).
+- Kept spellings always win the base name, regardless of declaration order: an unkeepable twin
+  declared before its keepable target still loses the base name to it.
+- The required param threads through every `selectedProps` override and caller: `Type`/`Obj`/
+  `Composed`/`Union`, `entity.ts`, `sparseFieldsets.ts`, `Get`/`Post`'s `resultJsonReason`, `Union`'s
+  `emptyMergeReason`/`hasSelectedProps`/`consolidate`, and `schemas.ts`'s `describeResponseFields`.
+- `schemas.ts:164`'s `--doc-response-fields` `Returns:` line now agrees with the SDL under the flag
+  too, since it reads the same keep-aware `selectedProps`.
+
+**Verified:** fixture `keep-twin-fields.yaml` (an Obj route, an inline allOf, and a discriminator-
+less inline oneOf); seven tests in `tests/all/keep-twin-fields.test.ts` — flag off still numbers
+(pins the keep=false branch), two independently-keepable twins stop colliding entirely, a literal
+wire key that already looks like a numbered field wins its own spelling over two unkeepable twins,
+the same proof across the allOf and flattened-oneOf routes, idempotency across repeated calls on
+the same `Prop` array, and a partial-view-then-full-view sequence where a stale pin is evicted once
+the keepable prop comes into scope. Full suite green (470 tests, 466 pass, 0 fail, 4 pre-existing
+todo); default output stays pinned byte-identical by the corpus and real-spec full-selection tests.
+
+**Refs:** `src/oas/nodes/typeUtils.ts` (`numberTwinFields`), `src/oas/nodes/type.ts`,
+`src/oas/nodes/obj.ts`, `src/oas/nodes/comp.ts`, `src/oas/nodes/union.ts`, `src/oas/nodes/get.ts`,
+`src/oas/nodes/post.ts`, `src/oas/nodes/res.ts`, `src/oas/nodes/entity.ts`,
+`src/oas/nodes/sparseFieldsets.ts`, `src/oas/utils/schemas.ts` (`describeResponseFields`),
+`docs/FIXED.md #69, #113, #158`.

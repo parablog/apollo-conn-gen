@@ -62,13 +62,14 @@ export class Res extends Type {
 
     const response = this.response;
     if (response) {
+      const keep = context.generateOptions?.keepFieldNames === true;
       // a plain value, or a list of them — nothing to pick apart, so pass the answer through as is.
       // A union whose merge finds no fields answers JSON, passed through the same way. see docs/FIXED.md #47, #80, #120
       if (
         T.isScalar(response) ||
         response instanceof En ||
         (response instanceof Arr && response.itemsType instanceof Scalar) ||
-        (response instanceof Union && response.isFlat() && !response.hasSelectedProps(selection))
+        (response instanceof Union && response.isFlat() && !response.hasSelectedProps(selection, keep))
       ) {
         // best attempt to just copy the value that comes out of the service. most likely the
         // value will have to be replaced by a GQL type. In fact, we could potentially use SYN_ here but

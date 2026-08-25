@@ -365,31 +365,79 @@ export class T {
   }
 
   // Siblings whose names clean to one field are never dropped: each keeps its own wire key, and
-  // later twins take numbered names both the type and the mapping write. see docs/FIXED.md #69 #113
+  // later twins take numbered names both the type and the mapping write. Under --keep-field-names,
+  // a keepable spelling claims its own name first; unkeepable twins number around it, whatever
+  // order they were declared in. see docs/FIXED.md #69 #113 #162
   //   e.g. (trello) boards: prefs/background + prefs_background -> prefsBackground, prefsBackground2
-  public static numberTwinFields(props: Prop[]): Prop[] {
+  //   e.g. (keep-twin-fields.yaml) foo_bar + fooBar, flag on -> both bare, no collision at all
+  public static numberTwinFields(props: Prop[], keep: boolean): Prop[] {
     const taken = new Map<string, Prop>();
-    const kept: Prop[] = [];
-    for (const prop of props) {
-      // a name allocated on an earlier pass stays put — reallocating in another prop order could
-      // flip which twin holds the base name between generate and select. #113
-      if (prop.renamedTo) {
-        taken.set(prop.renamedTo, prop);
+
+    if (!keep) {
+      const kept: Prop[] = [];
+      for (const prop of props) {
+        // a name allocated on an earlier pass stays put — reallocating in another prop order could
+        // flip which twin holds the base name between generate and select. #113
+        if (prop.renamedTo) {
+          taken.set(prop.renamedTo, prop);
+          kept.push(prop);
+          continue;
+        }
+        const field = Naming.sanitiseField(prop.name);
+        if (!taken.has(field)) {
+          taken.set(field, prop);
+          kept.push(prop);
+          continue;
+        }
+        const numbered = Naming.numberedName(field, (n) => taken.has(n));
+        prop.renamedTo = numbered;
+        taken.set(numbered, prop);
         kept.push(prop);
+      }
+      return kept;
+    }
+
+    // Pass A: the names a keepable prop in this view owns outright. A prop already pinned to one
+    // of these is a stale allocation from an earlier, partial view where that keepable prop was
+    // out of scope — evict it so the keepable prop can still win its own spelling below. Every
+    // other existing pin stays put, same as the keep=false loop above. see #113 #162
+    const keptNames = new Set(props.filter((p) => Naming.sanitiseField(p.name, true) === p.name).map((p) => p.name));
+    for (const prop of props) {
+      if (!prop.renamedTo) {
         continue;
       }
-      const field = Naming.sanitiseField(prop.name);
+      if (keptNames.has(prop.renamedTo)) {
+        prop.renamedTo = undefined;
+      } else {
+        taken.set(prop.renamedTo, prop);
+      }
+    }
+
+    // Pass B: an unpinned keepable prop claims its own spelling unconditionally — Pass A already
+    // guaranteed the name is free, so there is no collision to check for here. A base holder never
+    // carries renamedTo, the invariant every `renamedTo ?? sanitiseField(...)` reader relies on.
+    for (const prop of props) {
+      if (!prop.renamedTo && Naming.sanitiseField(prop.name, true) === prop.name) {
+        taken.set(prop.name, prop);
+      }
+    }
+
+    // Pass C: everything left over — an unkeepable spelling claims the sanitised base name if it
+    // is free, else numbers around whatever Passes A and B already claimed.
+    for (const prop of props) {
+      if (prop.renamedTo || taken.get(prop.name) === prop) {
+        continue;
+      }
+      const field = Naming.sanitiseField(prop.name, true);
       if (!taken.has(field)) {
         taken.set(field, prop);
-        kept.push(prop);
         continue;
       }
-      const numbered = Naming.numberedName(field, (n) => taken.has(n));
-      prop.renamedTo = numbered;
-      taken.set(numbered, prop);
-      kept.push(prop);
+      prop.renamedTo = Naming.numberedName(field, (candidate) => taken.has(candidate));
+      taken.set(prop.renamedTo, prop);
     }
-    return kept;
+
+    return props;
   }
 
   // Qualify a colliding inline name with its container, bumping `2`, `3`… until free.

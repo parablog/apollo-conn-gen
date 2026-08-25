@@ -1,0 +1,101 @@
+openapi: 3.0.3
+info:
+  title: R162 Keep Twin Fields Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # Obj route: foo_bar and fooBar each keep their own spelling under the flag, and the
+  # prefsBackground2 trio proves a literal field name wins its own spelling even against two
+  # numbered-looking twins. see docs/FIXED.md #162
+  #   e.g. flag on -> prefsBackground2 stays bare; the other two twins number around it
+  /widgets:
+    get:
+      operationId: getWidget
+      responses:
+        '200':
+          description: A widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+  # Composed route: an inline allOf folds PartA's unkeepable "tag/name" and PartB's keepable
+  # tagName onto one merged type. see docs/FIXED.md #162
+  #   e.g. flag on -> tagName stays bare, tag/name numbers to tagName2
+  /merged:
+    get:
+      operationId: getMerged
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PartA'
+                  - $ref: '#/components/schemas/PartB'
+  # Union flat-merge route: an inline oneOf with no discriminator folds ChoiceA's unkeepable
+  # "mode-x" and ChoiceB's keepable modeX onto one merged type. see docs/FIXED.md #162
+  #   e.g. flag on -> modeX stays bare, mode-x numbers to modeX2
+  /choice:
+    get:
+      operationId: getChoice
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ChoiceA'
+                  - $ref: '#/components/schemas/ChoiceB'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        # foo_bar and fooBar are each already a safe identifier, so the flag keeps both as they are.
+        # see docs/FIXED.md #162
+        #   e.g. flag on -> foo_bar, fooBar (flag off -> fooBar, fooBar2)
+        foo_bar:
+          type: string
+        fooBar:
+          type: string
+        # prefsBackground2 is a literal wire key that already reads as a numbered field name; the
+        # flag must still let it win its own spelling over the other two twins. see docs/FIXED.md #162
+        #   e.g. flag on -> prefsBackground2 (bare), prefsBackground (was prefs-background),
+        #   prefsBackground3 (was prefs/background)
+        prefs/background:
+          type: string
+        prefs-background:
+          type: string
+        prefsBackground2:
+          type: string
+    PartA:
+      type: object
+      properties:
+        name:
+          type: string
+        tag/name:
+          type: string
+    PartB:
+      type: object
+      properties:
+        id:
+          type: string
+        tagName:
+          type: string
+    ChoiceA:
+      type: object
+      properties:
+        x:
+          type: string
+        mode-x:
+          type: string
+    ChoiceB:
+      type: object
+      properties:
+        y:
+          type: string
+        modeX:
+          type: string

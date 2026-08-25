@@ -99,9 +99,9 @@ export class Obj extends Type {
     // @connect resolver per discovered GET-by-key endpoint. This is the modern
     // Connectors form — the resolver lives on the type via $this, keeping federation
     // plumbing off the public Query type.
+    const keep = context.generateOptions?.keepFieldNames === true;
     const resolvers = this.entityResolvers;
     if (resolvers.length > 0) {
-      const keep = context.generateOptions?.keepFieldNames === true;
       for (const key of Array.from(new Set(resolvers.map((r) => r.keyFields))).sort()) {
         const sanitisedKey = key
           .split(' ')
@@ -121,7 +121,7 @@ export class Obj extends Type {
       writer.write(' {\n');
     }
 
-    const selected = this.selectedProps(selection);
+    const selected = this.selectedProps(selection, keep);
     // a field cycle detection removed on another route is not written here either — the comment
     // takes its place. #89
     const overrides = context.propOverrides.get(this.id);
@@ -140,14 +140,15 @@ export class Obj extends Type {
 
   // siblings that clean to one field name write once — generate, select and dependencies all
   // read this list, so the three agree. e.g. (trello) prefs/background + prefs_background  #69
-  public override selectedProps(selection: string[]) {
-    return T.numberTwinFields(super.selectedProps(selection));
+  public override selectedProps(selection: string[], keep: boolean) {
+    return T.numberTwinFields(super.selectedProps(selection, keep), keep);
   }
 
   // the selected props (a field removed on another route swapped for its comment, like generate does — #89)
   dependencies(context: OasContext, selection: string[]): IType[] {
     const overrides = context.propOverrides.get(this.id);
-    return this.selectedProps(selection).map((prop) => overrides?.get(prop.name) ?? prop);
+    const keep = context.generateOptions?.keepFieldNames === true;
+    return this.selectedProps(selection, keep).map((prop) => overrides?.get(prop.name) ?? prop);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
@@ -155,7 +156,8 @@ export class Obj extends Type {
 
     // a route that kept the field writes the same comment as the routes where it was removed. #89
     const overrides = context.propOverrides.get(this.id);
-    const selected = this.selectedProps(selection);
+    const keep = context.generateOptions?.keepFieldNames === true;
+    const selected = this.selectedProps(selection, keep);
     for (const prop of selected) {
       (overrides?.get(prop.name) ?? prop).select(context, writer, selection);
     }

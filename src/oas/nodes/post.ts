@@ -72,7 +72,8 @@ export class Post extends Get {
 
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
-    const jsonReason = this.resultJsonReason(selection);
+    const keep = context.generateOptions?.keepFieldNames === true;
+    const jsonReason = this.resultJsonReason(selection, keep);
     const paramsLine = this.paramsDocLine(context);
     const responseFieldsLine = this.responseFieldsDocLine(context, selection);
 

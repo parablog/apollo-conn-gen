@@ -161,7 +161,9 @@ export class Schemas {
       return undefined;
     }
 
-    const names = response.selectedProps(selection).map((prop) => prop.renamedTo ?? Naming.sanitiseField(prop.name, keep));
+    const names = response
+      .selectedProps(selection, keep)
+      .map((prop) => prop.renamedTo ?? Naming.sanitiseField(prop.name, keep));
     if (names.length === 0) {
       return undefined;
     }

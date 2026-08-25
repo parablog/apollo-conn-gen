@@ -157,7 +157,9 @@ export abstract class Type implements IType {
     return pushed;
   }
 
-  public selectedProps(selection: string[]) {
+  // `_keep` is unused here: the base filter never renumbers a twin, only Obj/Composed/Union's
+  // overrides do. It stays required so every override (and every caller) carries it too. #162
+  public selectedProps(selection: string[], _keep: boolean) {
     // A prop is selected when some selection entry starts with its path. Done naively
     // (`selection.find(s => s.startsWith(prop.path()))`) this is O(props x selection) with a
     // path() rebuild per entry, which blows up on large recursive type sets (2700+ types x 20k

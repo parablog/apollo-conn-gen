@@ -100,7 +100,8 @@ export class Composed extends Type {
     }
 
     if (this.schema.allOf != null) {
-      const selected = this.selectedProps(selection);
+      const keep = context.generateOptions?.keepFieldNames === true;
+      const selected = this.selectedProps(selection, keep);
 
       if (selected.length > 0) {
         // Definition and reference must agree: references emit genTypeName(name), so the definition
@@ -140,7 +141,8 @@ export class Composed extends Type {
       this.consolidate(selection);
     }
     const overrides = context.propOverrides.get(this.id);
-    return this.selectedProps(selection).map((prop) => overrides?.get(prop.name) ?? prop);
+    const keep = context.generateOptions?.keepFieldNames === true;
+    return this.selectedProps(selection, keep).map((prop) => overrides?.get(prop.name) ?? prop);
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
@@ -153,7 +155,8 @@ export class Composed extends Type {
     if (composedSchema.allOf != null) {
       // a route that kept the field writes the same comment as the routes where it was removed. #89
       const overrides = context.propOverrides.get(this.id);
-      const selected = this.selectedProps(selection);
+      const keep = context.generateOptions?.keepFieldNames === true;
+      const selected = this.selectedProps(selection, keep);
 
       for (const prop of selected) {
         (overrides?.get(prop.name) ?? prop).select(context, writer, selection);
@@ -171,8 +174,8 @@ export class Composed extends Type {
 
   // allOf can fold two spellings of one field onto this type — number the later twin, as a plain
   // object does. e.g. (trello) boards: prefs/background + prefs_background. see docs/FIXED.md #113
-  public override selectedProps(selection: string[]) {
-    return T.numberTwinFields(super.selectedProps(selection));
+  public override selectedProps(selection: string[], keep: boolean) {
+    return T.numberTwinFields(super.selectedProps(selection, keep), keep);
   }
 
   public consolidate(selection: string[]): Set<string> {
