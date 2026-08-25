@@ -576,7 +576,14 @@ export class Factory {
   }
 
   public static fromBody(_context: OasContext, parent: IType, schema: SchemaObject, mediaType: string): IType {
-    const body = new Body(parent, 'b', schema, mediaType);
+    // Name the body after its operation, not the placeholder 'b': a synthesized input otherwise
+    // emits as `<Prefix>_BInput4Input` — semantically opaque names that benchmarked agents
+    // re-introspect before nearly every write. `<Op>Input` reads like a hand-written schema.
+    const opName =
+      typeof (parent as { getGqlOpName?: () => string }).getGqlOpName === 'function'
+        ? (parent as unknown as { getGqlOpName: () => string }).getGqlOpName()
+        : 'b';
+    const body = new Body(parent, opName, schema, mediaType);
     parent.add(body);
     return body;
   }

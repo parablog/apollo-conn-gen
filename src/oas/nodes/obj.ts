@@ -318,10 +318,12 @@ export class Obj extends Type {
         const op = parent.parent as Get;
         name = op.getGqlOpName() + 'Response';
       }
-      // for posts
+      // for posts — the kind suffix (`nameSuffix()`, 'Input') is appended at emission, so don't
+      // bake a second 'Input' into the base name (op-derived body names made this visible:
+      // `CreatePhoneAuthTokenInput` + suffix = `...InputInput`).
       else if (parent instanceof Body) {
         // const op = parent.parent as Post;
-        name = this.name + 'Input';
+        name = this.name?.endsWith('Input') ? this.name.slice(0, -'Input'.length) : this.name;
       }
       // if the parent is an object then we can use the parent name
       else if (parent instanceof Obj) {

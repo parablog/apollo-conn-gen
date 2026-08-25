@@ -34,7 +34,10 @@ export class Body extends Type {
     context.enter(this);
     trace(context, '-> [body:visit]', 'in ' + this.name);
 
-    this.visitBody(context, 'Input', this.schema);
+    // Name the payload after the body (now op-derived, see factory.fromBody) rather than the
+    // literal 'Input' — the kind suffix appends 'Input' at emission, so the payload carrying it
+    // too emitted `<Op>InputInput`.
+    this.visitBody(context, this.name, this.schema);
     this.visited = true;
 
     trace(context, '<- [body:visit]', 'out ' + this.name);
