@@ -73,8 +73,9 @@ export class Post extends Get {
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
     const jsonReason = this.resultJsonReason(selection);
+    const paramsLine = this.paramsDocLine(context);
 
-    if (summary || originalPath || jsonReason) {
+    if (summary || originalPath || jsonReason || paramsLine) {
       writer.write('  """\n').write('  ');
       if (summary) {
         writer.write(summary).write(' ');
@@ -84,6 +85,9 @@ export class Post extends Get {
       }
       if (jsonReason) {
         writer.write('\n\n  ').write(Schemas.withJsonNote({}, jsonReason).description!);
+      }
+      if (paramsLine) {
+        writer.write('\n\n  ').write(paramsLine);
       }
       writer.write('\n  """\n');
     }

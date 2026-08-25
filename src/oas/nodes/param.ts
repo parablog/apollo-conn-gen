@@ -89,7 +89,10 @@ export class Param extends Type {
       writer.write('!');
     }
 
-    if (this.defaultValue !== null && this.defaultValue !== undefined) {
+    // --skip-arg-defaults moves the default into the operation's "Params:" note (get.ts/post.ts).
+    // e.g. { type: integer, default: 5 } -> `pageLimit: Int`, and the operation's description
+    // gains "Params: pageLimit (default 5)". see docs/FIXED.md #159
+    if (this.defaultValue !== null && this.defaultValue !== undefined && !context.generateOptions?.skipArgDefaults) {
       this.writeDefaultValue(writer);
     }
 

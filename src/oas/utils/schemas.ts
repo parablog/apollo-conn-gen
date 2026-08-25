@@ -106,6 +106,41 @@ export class Schemas {
     return { ...schema, description };
   }
 
+  // Writes one parameter's default, minimum, maximum, and allowed values as plain words for the
+  // "Params:" note --skip-arg-defaults adds to an operation. Allowed-value lists show the first
+  // eight, then a count; a default drawn from such a list is spelled bare, like the list itself.
+  // see docs/FIXED.md #159. e.g. (skip-arg-defaults.yaml):
+  //   limit: { type: integer, default: 20, minimum: 1, maximum: 100 } -> 'limit (default 20, min 1, max 100)'
+  //   sort: { type: string, enum: [asc, desc], default: asc }         -> 'sort (default asc, one of asc|desc)'
+  //   region: { enum: [na, sa, ...ten values] }                       -> 'region (one of na|sa|eu|af|me|sas|eas|sea (+2 more))'
+  //   verbose: { type: boolean }                                      -> undefined
+  public static describeParamDefault(name: string, schema: SchemaObject, defaultValue: unknown): string | undefined {
+    const enumValues = schema?.enum;
+    const parts: string[] = [];
+    if (defaultValue !== null && defaultValue !== undefined) {
+      parts.push(`default ${enumValues ? String(defaultValue) : Schemas.formatParamValue(defaultValue)}`);
+    }
+    if (schema?.minimum !== undefined) {
+      parts.push(`min ${schema.minimum}`);
+    }
+    if (schema?.maximum !== undefined) {
+      parts.push(`max ${schema.maximum}`);
+    }
+    if (enumValues != null && enumValues.length > 0) {
+      const shown = enumValues.slice(0, 8).map(String).join('|');
+      const hidden = enumValues.length - 8;
+      parts.push(hidden > 0 ? `one of ${shown} (+${hidden} more)` : `one of ${shown}`);
+    }
+    return parts.length > 0 ? `${name} (${parts.join(', ')})` : undefined;
+  }
+
+  // Writes a default value the way a person would type it: text in quotes, a plain number or
+  // true/false left bare. e.g. a default of "" (an empty piece of text) becomes '""'; a default
+  // of 5 becomes '5'.
+  private static formatParamValue(value: unknown): string {
+    return typeof value === 'string' ? `"${value}"` : String(value);
+  }
+
   // A multi-byte dash character in a doc comment can crash rover mid-compose. see docs/FIXED.md #152
   private static asciiSafeDashes(text: string): string {
     return text.replace(/[‒-―−]/g, '--');

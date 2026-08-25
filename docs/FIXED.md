@@ -8631,3 +8631,57 @@ real-spec full-selection tests.
 (`matchToPath`), `docs/DEFERRED.md #73, #143`, `docs/FIXED.md #62, #81, #82, #157`,
 `docs/TASKS.md #162`, PR #6 (adamd-apollo — the flag idea; its mutable-static shape deliberately
 not copied). Adam's AppWorld benchmark report (Slack, 2026-08-24).
+
+## 159 [FEAT] [P4] · `--skip-arg-defaults`: document defaults as prose instead of executable SDL defaults — ✅ Fixed
+
+**Symptom:** AppWorld benchmark feedback (Adam, 2026-08-24): agents treat a published SDL default
+as the value to use — a pagination default of 5 against a max of 20 meant 4x more pagination calls.
+Documented as prose, agents picked sensible values themselves. PR #7's benchmark warning is
+load-bearing: shipping the flag WITHOUT the prose collapsed task completion 89.5 → 54.4 (the
+visible default was the only pagination signal), so both halves ship together under ONE flag.
+
+**Example:**
+```yaml
+parameters:
+  - name: page_limit
+    in: query
+    schema: { type: integer, default: 5, minimum: 1, maximum: 20 }
+  - name: sort
+    in: query
+    schema: { type: string, enum: [asc, desc], default: asc }
+```
+- default (unchanged): `pageLimit: Int = 5, sort: String = "asc"`
+- with the flag: `pageLimit: Int, sort: String` plus an op-docstring line
+  `Params: pageLimit (default 5, min 1, max 20), sort (default asc, one of asc|desc)`
+
+**Fix:** an opt-in `--skip-arg-defaults` flag (`GenerateOptions.skipArgDefaults`), threaded through
+`context.generateOptions` like `keepFieldNames`; both halves gated on it, default output stays
+byte-identical.
+- Suppression half: `Param.generate` skips `writeDefaultValue` under the flag
+  (`src/oas/nodes/param.ts:97`).
+- Prose half: `Get.paramsDocLine` builds the `Params:` line and both docstring writers append it —
+  `get.ts` and `post.ts` (Put/Patch/Delete extend Post); each block-opening condition extended so
+  a flag-only docstring still opens.
+- Formatter: `Schemas.describeParamDefault` beside `withJsonNote` (docstring-prose precedent;
+  shared by two writers, so it lives in neither). Reads `default`/`minimum`/`maximum`/`enum` —
+  first `minimum`/`maximum` read in the codebase. No try/catch; empty-string defaults kept
+  (`q (default "")`); enums capped at 8 values then `(+N more)`. An enum-typed default is spelled
+  the same bare way the listed values are (`default asc`, not `default "asc"`). A parameter with
+  none of the four stays out of the note; an operation whose parameters have none gets no line.
+- Names in the line come from `Naming.genParamName(name, keep)` — the same call `param.ts:81`
+  makes — so prose always shows the GraphQL-visible arg spelling, never wire names, and matches
+  `--keep-field-names` when that flag is on.
+- #156's per-argument JSON-degrade docstrings untouched (different channel).
+
+**Verified:** fixture `skip-arg-defaults.yaml`; six tests in `tests/all/skip-arg-defaults.test.ts` —
+flag off unchanged, the full note (defaults/min/max, bare enum default, the 8-value cap on a
+ten-value enum), no note when nothing is constrained, kept spelling with #158, and a CLI spawn
+pinning the Commander declaration end-to-end. Full suite green (456 tests, 452 pass, 0 fail, 4
+pre-existing todo); default output stays pinned byte-identical by the corpus and real-spec tests.
+
+**Refs:** `src/oas/nodes/param.ts`, `src/oas/nodes/get.ts` (`paramsDocLine`),
+`src/oas/nodes/post.ts`, `src/oas/utils/schemas.ts` (`describeParamDefault`),
+`docs/FIXED.md #17, #29` (the emission being gated), `#156, #158`, PR #7 (adamd-apollo — the
+coupled design and `Params:` note idea; its ungated emission, bare try/catch, dropped
+empty-string defaults, and uncapped enum lists deliberately not copied). Adam's AppWorld
+benchmark report (Slack, 2026-08-24).

@@ -47,6 +47,11 @@ export type GenerateOptions = {
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
   skipOptionalMarkers?: boolean; // skip '?' marker
+  // #159: write a parameter's default, minimum, maximum, and allowed values as a "Params:" note
+  // on the operation, keeping the default out of the argument itself.
+  //   e.g. { type: integer, default: 5, minimum: 1, maximum: 20 } -> `pageLimit: Int` plus the
+  //   description line "Params: pageLimit (default 5, min 1, max 20)"
+  skipArgDefaults?: boolean;
   // #158: keep a spec field/param spelling verbatim when it already reads safely as both a
   // GraphQL name and a bare connector-selection key, instead of always camelCasing it.
   keepFieldNames?: boolean;

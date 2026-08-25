@@ -24,6 +24,7 @@ export async function runOasTest(
     skipValidation?: boolean;
     mapper?: Mapper;
     skipOptionalArgs?: boolean;
+    skipArgDefaults?: boolean;
     keepFieldNames?: boolean;
     inferEntityResolvers?: boolean;
     baseURL?: string;
@@ -58,6 +59,7 @@ export async function runOasTest(
     showParentInSelections: false,
     mapper: opts.mapper,
     skipOptionalArgs: opts.skipOptionalArgs,
+    skipArgDefaults: opts.skipArgDefaults,
     skipOptionalMarkers: opts.skipOptionalMarkers,
     keepFieldNames: opts.keepFieldNames,
     inferEntityResolvers: opts.inferEntityResolvers,

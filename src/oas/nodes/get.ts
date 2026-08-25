@@ -78,8 +78,9 @@ export class Get extends Type implements Op {
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
     const jsonReason = this.resultJsonReason(selection);
+    const paramsLine = this.paramsDocLine(context);
 
-    if (description || summary || originalPath || jsonReason) {
+    if (description || summary || originalPath || jsonReason || paramsLine) {
       writer.write('  """\n').write('  ');
       if (description) {
         writer.write(description).write(' ');
@@ -92,6 +93,9 @@ export class Get extends Type implements Op {
       }
       if (jsonReason) {
         writer.write('\n\n  ').write(Schemas.withJsonNote({}, jsonReason).description!);
+      }
+      if (paramsLine) {
+        writer.write('\n\n  ').write(paramsLine);
       }
       writer.write('\n  """\n');
     }
@@ -126,6 +130,26 @@ export class Get extends Type implements Op {
       return response.jsonReason;
 
     return undefined;
+  }
+
+  // Builds the "Params:" note --skip-arg-defaults adds to an operation's description, naming
+  // each parameter's default, minimum, maximum, and allowed values with the same spelling the
+  // argument itself gets. see docs/FIXED.md #159
+  //   e.g. (skip-arg-defaults.yaml) get:/items with page_limit: { type: integer, default: 5,
+  //   minimum: 1, maximum: 20 } -> "Params: pageLimit (default 5, min 1, max 20)"
+  protected paramsDocLine(context: OasContext): string | undefined {
+    if (!context.generateOptions?.skipArgDefaults) {
+      return undefined;
+    }
+
+    const keep = context.generateOptions?.keepFieldNames === true;
+    const notes = this.params
+      .map((param) =>
+        Schemas.describeParamDefault(Naming.genParamName(param.name, keep), param.schema, param.defaultValue),
+      )
+      .filter((note): note is string => note !== undefined);
+
+    return notes.length > 0 ? `Params: ${notes.join(', ')}` : undefined;
   }
 
   public getGqlOpName(): string {

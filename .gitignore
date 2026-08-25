@@ -71,3 +71,5 @@ LINT-CORPUS.md
 /tests/resources/oas/incidentio.json
 /tests/resources/oas/sanity-projects.json
 /tests/resources/oas/gong.json
+
+.issue-loop
