@@ -100,6 +100,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     skipOptionalMarkers: opts.skipOptionalMarkers,
     skipArgDefaults: opts.skipArgDefaults,
     keepFieldNames: opts.keepFieldNames,
+    docResponseFields: opts.docResponseFields,
     servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
@@ -174,6 +175,11 @@ program
   .option(
     '--keep-field-names',
     'Keep spec field/param spellings that are safe both as GraphQL names and as bare connector-selection keys (no camelCasing, no aliases)',
+    false,
+  )
+  .option(
+    '--doc-response-fields',
+    'Add each operation\'s top-level response field names as a "Returns: ..." note on the operation',
     false,
   )
   .option(

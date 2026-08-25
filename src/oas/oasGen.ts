@@ -90,6 +90,7 @@ interface IGenOptions {
   skipOptionalMarkers?: boolean;
   skipArgDefaults?: boolean;
   keepFieldNames?: boolean;
+  docResponseFields?: boolean;
   servicePrefix?: string;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;

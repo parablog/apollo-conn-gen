@@ -1,8 +1,10 @@
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 import type { OasContext } from '../oasContext.js';
-import type { ReferenceObject } from '../nodes/internal.js';
+import type { IType, ReferenceObject } from '../nodes/internal.js';
+import { Arr, Obj, Res } from '../nodes/internal.js';
 import { GqlUtils } from './gql.js';
+import { Naming } from './naming.js';
 
 // Keywords that give a schema a renderable GraphQL shape; a schema with none is metadata-only. #5
 const SHAPE_KEYWORDS = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf', 'additionalProperties'];
@@ -132,6 +134,45 @@ export class Schemas {
       parts.push(hidden > 0 ? `one of ${shown} (+${hidden} more)` : `one of ${shown}`);
     }
     return parts.length > 0 ? `${name} (${parts.join(', ')})` : undefined;
+  }
+
+  // Builds the "Returns:" line --doc-response-fields adds to an operation's description, naming
+  // the top-level fields of what the operation actually sends back. Only two response shapes are
+  // covered: a single object, or a list of one kind of object. Any other response — a plain
+  // value, a mix of different types, a catch-all JSON blob, and so on — gets no line at all, so
+  // a reader never sees a guess dressed up as a fact. see docs/FIXED.md #160
+  //   e.g. (doc-response-fields.yaml) GET /items answers a list of { id, name, created_at }
+  //   objects -> 'Returns a list of items with: createdAt, id, name'
+  //   e.g. (doc-response-fields.yaml) GET /items/{item_id} answers one { id, name, created_at }
+  //   object -> 'Returns: createdAt, id, name'
+  public static describeResponseFields(resultType: IType | undefined, selection: string[], keep: boolean): string | undefined {
+    // every response is wrapped one level deep; step past that wrapper to the actual answer
+    let response = resultType instanceof Res ? resultType.response : resultType;
+
+    // a response that is a list (like GET /items above) names the one kind of thing inside it
+    let isList = false;
+    if (response instanceof Arr) {
+      response = response.itemsType;
+      isList = true;
+    }
+
+    // nothing left with fields to name — a plain value, a mix of types, a catch-all JSON blob
+    if (!(response instanceof Obj)) {
+      return undefined;
+    }
+
+    const names = response.selectedProps(selection).map((prop) => prop.renamedTo ?? Naming.sanitiseField(prop.name, keep));
+    if (names.length === 0) {
+      return undefined;
+    }
+
+    // a long field list is cut short so the line stays readable, e.g. 16 fields shows the first
+    // 14 then "(+2 more)"
+    const shown = names.slice(0, 14).join(', ');
+    const hidden = names.length - 14;
+    const fields = hidden > 0 ? `${shown} (+${hidden} more)` : shown;
+
+    return isList ? `Returns a list of items with: ${fields}` : `Returns: ${fields}`;
   }
 
   // Writes a default value the way a person would type it: text in quotes, a plain number or

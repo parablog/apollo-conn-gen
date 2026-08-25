@@ -55,6 +55,11 @@ export type GenerateOptions = {
   // #158: keep a spec field/param spelling verbatim when it already reads safely as both a
   // GraphQL name and a bare connector-selection key, instead of always camelCasing it.
   keepFieldNames?: boolean;
+  // #160: add each operation's response field names to its description as a "Returns:" line,
+  // so a reader can see what a request actually hands back without making the request first.
+  //   e.g. GET /items/{item_id} answering { id, name, created_at } gets the extra description
+  //   line "Returns: createdAt, id, name"
+  docResponseFields?: boolean;
   servicePrefix?: string; // prefix every type and root field with the service name
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;

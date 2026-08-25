@@ -19,6 +19,17 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Item'
+    # post pins the "Returns:" line on a Mutation op
+    post:
+      operationId: createItem
+      summary: Create an item
+      responses:
+        '200':
+          description: The created item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
   # the single-object shape pins "Returns: ..." (no "a list of items with")
   /items/{item_id}:
     get:
@@ -32,6 +43,52 @@ paths:
       responses:
         '200':
           description: A single item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+    # put, patch and delete inherit Post's generate — each pins the "Returns:" line for its verb
+    put:
+      operationId: updateItem
+      summary: Update an item
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The updated item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+    patch:
+      operationId: patchItem
+      summary: Patch an item
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The patched item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+    delete:
+      operationId: deleteItem
+      summary: Delete an item
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The deleted item
           content:
             application/json:
               schema:

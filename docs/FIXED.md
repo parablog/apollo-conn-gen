@@ -8685,3 +8685,45 @@ pre-existing todo); default output stays pinned byte-identical by the corpus and
 coupled design and `Params:` note idea; its ungated emission, bare try/catch, dropped
 empty-string defaults, and uncapped enum lists deliberately not copied). Adam's AppWorld
 benchmark report (Slack, 2026-08-24).
+
+## 160 [FEAT] [P4] · `--doc-response-fields`: document response fields as prose in operation docstrings — ✅ Fixed
+
+**Symptom:** AppWorld benchmark feedback (Adam, 2026-08-24): GraphQL requires a subfield selection,
+and agents guessed response field names and retried until the shape stuck. Putting the top-level
+field names in the docstring — returned by the search/introspection call the agent already makes —
+was the single biggest lever in the whole benchmark, fully closing the extra-turns gap vs baseline.
+
+**Example:** `getItem` docstring today: `Get an item by id (/items/{item_id})`. With the flag it
+gains a blank line and `Returns: createdAt, id, name`; an array response (`listItems`) gains
+`Returns a list of items with: createdAt, id, name`.
+
+**Fix:** an opt-in `--doc-response-fields` flag (`GenerateOptions.docResponseFields`), threaded
+through `context.generateOptions` like `skipArgDefaults`; emission-only, default output stays
+byte-identical.
+- Formatter: `Schemas.describeResponseFields` beside `describeParamDefault` (same shared-by-two-
+  writers rationale as #159). Exactly two shapes covered, unwrapped with `instanceof` checks:
+  `Res` → `Obj` (`Returns: …`) and `Res` → `Arr` → `Obj` (`Returns a list of items with: …`).
+  Anything else (scalar/JSON, Composed, Union, Map, …) returns undefined via explicit early
+  return — a reader never sees a guess dressed up as a fact. Composed/Union support is a separate
+  follow-up only if a repro shows agents need it.
+- Prose half: `Get.responseFieldsDocLine` builds the line and both docstring writers append it —
+  `get.ts` and `post.ts`; Put/Patch/Delete extend Post, so every verb writes it.
+- The line names the fields the user's selection keeps (`Obj.selectedProps`), spelled the
+  GraphQL-visible way (`renamedTo ?? Naming.sanitiseField(name, keep)` — exactly what `prop.ts`
+  writes), never wire names; matches `--keep-field-names` when on.
+- First 14 field names, then `(+N more)`.
+- `OperationWriter.writeQuery`/`writeMutations` hand `path.generate` the real selection only under
+  the flag; off, they hand `[]` as before.
+
+**Verified:** fixture `doc-response-fields.yaml` (object, array-of-object, 16-field object, and all
+four mutation verbs on the same `Item`); seven tests in `tests/all/doc-response-fields.test.ts` —
+flag off unchanged, single-object `Returns:`, array `Returns a list of items with:`, the 14-name
+cap with `(+2 more)`, kept spelling with #158, post/put/patch/del each carrying the line (pins the
+Post inheritance, so a future verb-specific `generate` cannot silently drop it), and a CLI spawn
+pinning the Commander declaration end-to-end. Full suite green (463 tests, 459 pass, 0 fail, 4
+pre-existing todo); default output stays pinned byte-identical by the corpus and real-spec tests.
+
+**Refs:** `src/oas/nodes/get.ts` (`responseFieldsDocLine`), `src/oas/nodes/post.ts`,
+`src/oas/utils/schemas.ts` (`describeResponseFields`), `src/oas/io/operationWriter.ts`,
+`docs/FIXED.md #158, #159`, PR #8 (adamd-apollo — the flag, note format, and cap; its duck-typed
+`unknown` casts deliberately not copied). Adam's AppWorld benchmark report (Slack, 2026-08-24).

@@ -74,8 +74,9 @@ export class Post extends Get {
     const originalPath = this.operation.path;
     const jsonReason = this.resultJsonReason(selection);
     const paramsLine = this.paramsDocLine(context);
+    const responseFieldsLine = this.responseFieldsDocLine(context, selection);
 
-    if (summary || originalPath || jsonReason || paramsLine) {
+    if (summary || originalPath || jsonReason || paramsLine || responseFieldsLine) {
       writer.write('  """\n').write('  ');
       if (summary) {
         writer.write(summary).write(' ');
@@ -88,6 +89,9 @@ export class Post extends Get {
       }
       if (paramsLine) {
         writer.write('\n\n  ').write(paramsLine);
+      }
+      if (responseFieldsLine) {
+        writer.write('\n\n  ').write(responseFieldsLine);
       }
       writer.write('\n  """\n');
     }

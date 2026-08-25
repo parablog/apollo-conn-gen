@@ -79,8 +79,9 @@ export class Get extends Type implements Op {
     const originalPath = this.operation.path;
     const jsonReason = this.resultJsonReason(selection);
     const paramsLine = this.paramsDocLine(context);
+    const responseFieldsLine = this.responseFieldsDocLine(context, selection);
 
-    if (description || summary || originalPath || jsonReason || paramsLine) {
+    if (description || summary || originalPath || jsonReason || paramsLine || responseFieldsLine) {
       writer.write('  """\n').write('  ');
       if (description) {
         writer.write(description).write(' ');
@@ -96,6 +97,9 @@ export class Get extends Type implements Op {
       }
       if (paramsLine) {
         writer.write('\n\n  ').write(paramsLine);
+      }
+      if (responseFieldsLine) {
+        writer.write('\n\n  ').write(responseFieldsLine);
       }
       writer.write('\n  """\n');
     }
@@ -150,6 +154,19 @@ export class Get extends Type implements Op {
       .filter((note): note is string => note !== undefined);
 
     return notes.length > 0 ? `Params: ${notes.join(', ')}` : undefined;
+  }
+
+  // Builds the "Returns:" line --doc-response-fields adds to an operation's description, naming
+  // the top-level fields of its response, when the flag is on. see docs/FIXED.md #160
+  //   e.g. (doc-response-fields.yaml) get:/items answers a list of { id, name, created_at }
+  //   objects -> "Returns a list of items with: createdAt, id, name"
+  protected responseFieldsDocLine(context: OasContext, selection: string[]): string | undefined {
+    if (!context.generateOptions?.docResponseFields) {
+      return undefined;
+    }
+
+    const keep = context.generateOptions?.keepFieldNames === true;
+    return Schemas.describeResponseFields(this.resultType, selection, keep);
   }
 
   public getGqlOpName(): string {

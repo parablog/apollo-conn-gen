@@ -28,7 +28,13 @@ export class OperationWriter {
     writer.write('type Query {\n');
 
     for (const path of paths) {
-      path.generate(context, writer, []);
+      // path.generate() writes the operation's description and its argument/return signature.
+      // None of that needs to know which response fields were kept — except the "Returns:"
+      // line --doc-response-fields adds, so only then does it get the real field list; with the
+      // flag off this stays [] exactly as before. see docs/FIXED.md #160
+      //   e.g. (doc-response-fields.yaml) GET /items/{item_id} keeping { id, name, created_at }
+      //   gains the description line "Returns: createdAt, id, name"; without the flag, nothing changes here
+      path.generate(context, writer, context.generateOptions?.docResponseFields ? selection : []);
       this.writeConnector(context, writer, path, selection);
       context.generatedSet.add(path.id);
     }
@@ -45,7 +51,13 @@ export class OperationWriter {
     writer.write('type Mutation {\n');
 
     for (const path of paths) {
-      path.generate(context, writer, []);
+      // path.generate() writes the operation's description and its argument/return signature.
+      // None of that needs to know which response fields were kept — except the "Returns:"
+      // line --doc-response-fields adds, so only then does it get the real field list; with the
+      // flag off this stays [] exactly as before. see docs/FIXED.md #160
+      //   e.g. (doc-response-fields.yaml) GET /items/{item_id} keeping { id, name, created_at }
+      //   gains the description line "Returns: createdAt, id, name"; without the flag, nothing changes here
+      path.generate(context, writer, context.generateOptions?.docResponseFields ? selection : []);
       this.writeConnector(context, writer, path, selection);
       context.generatedSet.add(path.id);
     }

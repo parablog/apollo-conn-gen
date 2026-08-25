@@ -72,51 +72,6 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-## 160 [FEAT] [P4] · `--doc-response-fields`: operation docstrings omit the response fields, forcing agents to guess selections — ⬜ Open
-
-**Example:** `getAuthTokens` docstring today: `Lists auth tokens (/auth/tokens)`. With the flag,
-append the top-level result field names, e.g.
-
-```
-Returns a list of items with: id, value, expiresAt
-```
-
-**Why:** AppWorld benchmark feedback (Adam, 2026-08-24): GraphQL requires a subfield selection, and
-agents guessed field names and retried until the shape stuck. Putting the fields in the docstring —
-returned by the search/introspection call the agent already makes — was the single biggest lever in
-the whole benchmark, fully closing the extra-turns gap vs baseline.
-
-**Reference:** PR #8 (adamd-apollo, `parablog/apollo-conn-gen`) — reuse the flag, note format, and
-cap; its evidence settles scope: a FLAT top-level field list alone closed the turns gap, so the
-nested typed shape this entry originally sketched is not needed for v1. Do NOT copy:
-- its duck-typed `unknown` casts (`response`/`itemsType`/`props` probing) — use the node model's
-  `T` guards; Composed/Union fall through silently there, ours declines explicitly.
-
-**Shape:** opt-in flag `--doc-response-fields` (plumbing like `skipOptionalArgs`); emission-only;
-default output stays byte-identical.
-- v1 handles exactly two shapes: `Res` → `Obj` (`Returns: …`) and `Res` → `Arr` → `Obj`
-  (`Returns a list of items with: …`), unwrapped locally with `T` guards in one function in
-  `src/oas/utils/schemas.ts` (same placement rationale as `docs/FIXED.md #159`; `entity.ts`'s private
-  `unwrapToObj` stays private — extraction deferred).
-- Anything else (scalar/JSON, Composed, Union, Map, …) → no `Returns` line via explicit early
-  return — deterministic, never an accidental empty string. Composed/Union support is a separate
-  follow-up only if a repro shows agents need it.
-- First 14 field names, then `(+N more)`.
-- Field spellings are the GraphQL-visible ones (`renamedTo ?? Naming.sanitiseField(name, keep)` —
-  exactly what `prop.ts:37` writes), never wire names; matches `--keep-field-names` when on.
-- Sites: the op docstring blocks `src/oas/nodes/get.ts:82-97` and `post.ts:77-89` (Put/Patch/Delete
-  extend Post). Ordering (path, then `Params:`, then `Returns:`) falls out of insertion order —
-  no combined #159+#160 test needed.
-- Fixture `doc-response-fields.yaml` (own fixture — `inline-body-input-names.yaml` has only object
-  `Ack {ok}` responses, no array): an object response `{id, name, created_at}`, an array of it, and
-  a 16-field object pinning the `(+2 more)` cap.
-- Preconditions met: #157 committed, #159 shipped (`docs/FIXED.md #159` — the adjacent docstring
-  lines this entry writes next to).
-
-**Refs:** `src/oas/nodes/get.ts`, `src/oas/nodes/post.ts`, `src/oas/utils/schemas.ts`, PR #8, the
-codex-approved plan (`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's AppWorld benchmark
-report (Slack, 2026-08-24).
-
 ## 162 [FEAT] [P5] · `--keep-field-names` still renumbers a `foo_bar`/`fooBar` twin pair — ⬜ Open
 
 **Example:** `properties: { foo_bar: {...}, fooBar: {...} }` — both sanitise to `fooBar`. With
