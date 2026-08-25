@@ -128,11 +128,9 @@ export class Get extends Type implements Op {
   //   fields, so getWatchers(): JSON gains a "NEEDS ATTENTION" note explaining why
   protected resultJsonReason(selection: string[], keep: boolean): string | undefined {
     const response = this.resultType instanceof Res ? this.resultType.response : this.resultType;
-    if (response instanceof Union)
-      return response.emptyMergeReason(selection, keep);
+    if (response instanceof Union) return response.emptyMergeReason(selection, keep);
 
-    if (response instanceof Scalar)
-      return response.jsonReason;
+    if (response instanceof Scalar) return response.jsonReason;
 
     return undefined;
   }

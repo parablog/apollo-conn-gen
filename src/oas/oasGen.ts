@@ -231,7 +231,9 @@ export class OasGen {
         if (!this.paths.has(key)) {
           console.warn(`[overrides] no operation matches "${key}" — override ignored.`);
         } else if (entry?.root !== undefined && entry.root !== 'query' && entry.root !== 'mutation') {
-          throw new Error(`[overrides] "${key}".root must be "query" or "mutation", got ${JSON.stringify(entry.root)}.`);
+          throw new Error(
+            `[overrides] "${key}".root must be "query" or "mutation", got ${JSON.stringify(entry.root)}.`,
+          );
         }
       }
 

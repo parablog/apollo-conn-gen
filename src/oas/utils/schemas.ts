@@ -102,9 +102,7 @@ export class Schemas {
   // -> `labels: JSON` gets a "NEEDS ATTENTION: ..." docstring. see docs/FIXED.md #133, #152
   public static withJsonNote(schema: SchemaObject, reason: string): SchemaObject {
     const note = Schemas.asciiSafeDashes(`NEEDS ATTENTION: ${reason}`);
-    const description = schema.description
-      ? `${Schemas.asciiSafeDashes(schema.description)}\n\n${note}`
-      : note;
+    const description = schema.description ? `${Schemas.asciiSafeDashes(schema.description)}\n\n${note}` : note;
     return { ...schema, description };
   }
 
@@ -145,7 +143,11 @@ export class Schemas {
   //   objects -> 'Returns a list of items with: createdAt, id, name'
   //   e.g. (doc-response-fields.yaml) GET /items/{item_id} answers one { id, name, created_at }
   //   object -> 'Returns: createdAt, id, name'
-  public static describeResponseFields(resultType: IType | undefined, selection: string[], keep: boolean): string | undefined {
+  public static describeResponseFields(
+    resultType: IType | undefined,
+    selection: string[],
+    keep: boolean,
+  ): string | undefined {
     // every response is wrapped one level deep; step past that wrapper to the actual answer
     let response = resultType instanceof Res ? resultType.response : resultType;
 

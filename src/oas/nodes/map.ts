@@ -88,10 +88,7 @@ export class Map extends Type {
     // #132: same NEEDS ATTENTION note the rest of the schema gets when a field gives up on a real
     // type — here it sits above `value:` since a map's value has no field of its own to carry it.
     if (this.valueJsonReason) {
-      writer
-        .write('  """\n  ')
-        .write(Schemas.withJsonNote({}, this.valueJsonReason).description!)
-        .write('\n  """\n');
+      writer.write('  """\n  ').write(Schemas.withJsonNote({}, this.valueJsonReason).description!).write('\n  """\n');
     }
     writer.write('  value: ');
 
