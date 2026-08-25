@@ -71,14 +71,18 @@ export class Post extends Get {
 
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
+    const constraintNote = Naming.paramConstraintNote(this.operation);
 
-    if (summary || originalPath) {
+    if (summary || originalPath || constraintNote) {
       writer.write('  """\n').write('  ');
       if (summary) {
         writer.write(summary).write(' ');
       }
       if (originalPath) {
         writer.write('(').write(originalPath).write(')');
+      }
+      if (constraintNote) {
+        writer.write('\n  ').write(constraintNote);
       }
       writer.write('\n  """\n');
     }

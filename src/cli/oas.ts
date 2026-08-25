@@ -164,6 +164,11 @@ program
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--skip-optional-markers', 'Skip the "?" optional-field markers in selections', false)
   .option(
+    '--skip-arg-defaults',
+    "Don't copy OAS parameter defaults into GraphQL argument defaults (a GraphQL default is always sent by the router, and advertised defaults anchor agentic callers)",
+    false,
+  )
+  .option(
     '--service-prefix <name>',
     'Prefix every type with "<Name>_" and every root field with "<name>_", so separately generated connectors compose without colliding',
     parseServicePrefix,

@@ -182,6 +182,33 @@ export class Naming {
     return Naming.FIELD_CONVERTER.convert(fieldName);
   }
 
+  // Compact per-parameter constraint note for the operation docstring: defaults, bounds, enums.
+  // A GraphQL `= default` in the signature is droppable (--skip-arg-defaults: it changes wire
+  // semantics and anchors agentic callers to tiny page sizes) — but the INFORMATION is
+  // load-bearing: benchmarked agents given no pagination hints silently accept server-truncated
+  // pages and answer from partial data. Constraints belong in prose, not in executable defaults.
+  public static paramConstraintNote(operation: Operation): string {
+    const parts: string[] = [];
+    let params: { name: string; schema?: Record<string, unknown> }[] = [];
+    try {
+      params = (operation.getParameters() ?? []) as { name: string; schema?: Record<string, unknown> }[];
+    } catch {
+      return '';
+    }
+    for (const p of params) {
+      const s = p.schema ?? {};
+      const bits: string[] = [];
+      if (s.default !== undefined && s.default !== null && s.default !== '') {
+        bits.push(`default ${JSON.stringify(s.default)}`);
+      }
+      if (s.minimum !== undefined) bits.push(`min ${s.minimum}`);
+      if (s.maximum !== undefined) bits.push(`max ${s.maximum}`);
+      if (Array.isArray(s.enum)) bits.push(`one of ${(s.enum as unknown[]).map((v) => JSON.stringify(v)).join('|')}`);
+      if (bits.length) parts.push(`${p.name} (${bits.join(', ')})`);
+    }
+    return parts.length ? `Params: ${parts.join('; ')}.` : '';
+  }
+
   // `writtenAs` replaces the field side of the alias — a sibling's numbered name from #69.
   //   e.g. (trello) foo_bar with writtenAs fooBar2 -> `foo_bar: fooBar2`
   public static sanitiseFieldForSelect(name: string, isInput: boolean = false, writtenAs?: string): string {

@@ -61,7 +61,10 @@ export class Param extends Type {
       writer.write('!');
     }
 
-    if (this.defaultValue !== null && this.defaultValue !== undefined) {
+    // An advertised GraphQL default is not neutral: the router fills it in (always sent on the
+    // wire, unlike an omitted OAS param), and agentic callers anchor on it (benchmarked: agents
+    // shown `pageLimit: Int = 5` make 5 their modal page size; unanchored they never pick it).
+    if (this.defaultValue !== null && this.defaultValue !== undefined && !context.generateOptions.skipArgDefaults) {
       this.writeDefaultValue(writer);
     }
 

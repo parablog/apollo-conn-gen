@@ -72,8 +72,9 @@ export class Get extends Type implements Op {
     const description = this.operation.getDescription();
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
+    const constraintNote = Naming.paramConstraintNote(this.operation);
 
-    if (description || summary || originalPath) {
+    if (description || summary || originalPath || constraintNote) {
       writer.write('  """\n').write('  ');
       if (description) {
         writer.write(description).write(' ');
@@ -83,6 +84,9 @@ export class Get extends Type implements Op {
       }
       if (originalPath) {
         writer.write('(').write(originalPath).write(')');
+      }
+      if (constraintNote) {
+        writer.write('\n  ').write(constraintNote);
       }
       writer.write('\n  """\n');
     }
