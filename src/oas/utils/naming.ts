@@ -140,6 +140,9 @@ export class Naming {
   private static readonly RESERVED_ROOT_TYPE_NAMES = new Set(['Query', 'Mutation', 'Subscription']);
 
   public static genParamName(param: string): string {
+    if (Naming.keepsOwnSpelling(param || '')) {
+      return param;
+    }
     // Split on any run of non-alphanumeric characters, camelCase the parts, then
     // guarantee a valid GraphQL identifier: non-empty and not starting with a digit.
     // (Plain `[-_.]` splitting let spaces, `$`, `%`, … and leading digits through.)
@@ -177,8 +180,21 @@ export class Naming {
     return Naming.RESERVED_ROOT_TYPE_NAMES.has(identifier) ? identifier + 'Type' : identifier;
   }
 
+  // When set (option keepFieldNames / --keep-field-names), fields and params that are already
+  // valid GraphQL identifiers keep the upstream API's own spelling instead of being camelCased.
+  // Rationale (benchmarked): renamed fields no longer match the API vernacular in callers' priors
+  // and docs, so agentic callers introspect response types just to learn the new spellings.
+  public static keepOriginalNames = false;
+
+  private static keepsOwnSpelling(name: string): boolean {
+    return Naming.keepOriginalNames && /^[_A-Za-z][_0-9A-Za-z]*$/.test(name) && !/^(null|true|false)$/.test(name);
+  }
+
   public static sanitiseField(name: string): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
+    if (Naming.keepsOwnSpelling(fieldName)) {
+      return fieldName;
+    }
     return Naming.FIELD_CONVERTER.convert(fieldName);
   }
 
@@ -186,7 +202,8 @@ export class Naming {
   //   e.g. (trello) foo_bar with writtenAs fooBar2 -> `foo_bar: fooBar2`
   public static sanitiseFieldForSelect(name: string, isInput: boolean = false, writtenAs?: string): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
-    const sanitised = writtenAs ?? Naming.FIELD_CONVERTER.convert(fieldName);
+    const sanitised =
+      writtenAs ?? (Naming.keepsOwnSpelling(fieldName) ? fieldName : Naming.FIELD_CONVERTER.convert(fieldName));
 
     // The JSON key is already a valid identifier identical to the field — no alias needed.
     if (sanitised === name) {

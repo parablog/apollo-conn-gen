@@ -27,6 +27,7 @@ interface IGenOptions {
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
   skipOptionalMarkers?: boolean;
+  keepFieldNames?: boolean;
   servicePrefix?: string;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
@@ -132,6 +133,7 @@ export class OasGen {
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
     this.options = options;
+    Naming.keepOriginalNames = options.keepFieldNames === true;
     this.collector = new TypesCollector(this);
   }
 

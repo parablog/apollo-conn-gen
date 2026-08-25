@@ -41,6 +41,7 @@ export type GenerateOptions = {
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
   skipOptionalMarkers?: boolean; // skip '?' marker
+  keepFieldNames?: boolean; // keep upstream field/param spellings when already valid identifiers
   servicePrefix?: string; // prefix every type and root field with the service name
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;

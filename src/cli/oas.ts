@@ -164,6 +164,11 @@ program
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--skip-optional-markers', 'Skip the "?" optional-field markers in selections', false)
   .option(
+    '--keep-field-names',
+    'Keep upstream field/param spellings (no camelCasing) when they are already valid GraphQL identifiers',
+    false,
+  )
+  .option(
     '--service-prefix <name>',
     'Prefix every type with "<Name>_" and every root field with "<name>_", so separately generated connectors compose without colliding',
     parseServicePrefix,
