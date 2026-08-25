@@ -41,6 +41,7 @@ export type GenerateOptions = {
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
   skipOptionalMarkers?: boolean; // skip '?' marker
+  docResponseFields?: boolean; // list response field names in each operation docstring
   servicePrefix?: string; // prefix every type and root field with the service name
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;

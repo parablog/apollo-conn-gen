@@ -71,14 +71,20 @@ export class Post extends Get {
 
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
+    const returnsNote = context.generateOptions.docResponseFields
+      ? Naming.responseFieldNote(this.resultType)
+      : '';
 
-    if (summary || originalPath) {
+    if (summary || originalPath || returnsNote) {
       writer.write('  """\n').write('  ');
       if (summary) {
         writer.write(summary).write(' ');
       }
       if (originalPath) {
         writer.write('(').write(originalPath).write(')');
+      }
+      if (returnsNote) {
+        writer.write('\n  ').write(returnsNote);
       }
       writer.write('\n  """\n');
     }

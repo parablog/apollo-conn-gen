@@ -164,6 +164,11 @@ program
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--skip-optional-markers', 'Skip the "?" optional-field markers in selections', false)
   .option(
+    '--doc-response-fields',
+    "List each operation's top-level response field names in its docstring ('Returns: …') so callers can write a valid selection without an introspection round-trip",
+    false,
+  )
+  .option(
     '--service-prefix <name>',
     'Prefix every type with "<Name>_" and every root field with "<name>_", so separately generated connectors compose without colliding',
     parseServicePrefix,

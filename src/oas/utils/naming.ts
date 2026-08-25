@@ -182,6 +182,30 @@ export class Naming {
     return Naming.FIELD_CONVERTER.convert(fieldName);
   }
 
+  // Compact "Returns: field1, field2, …" note for the operation docstring, from the resolved
+  // response type's top-level props. Benchmarked motivation: typed responses REQUIRE subfield
+  // selections (unlike an opaque JSON scalar), and agents that can't see the field names guess —
+  // the single dominant waste class in the efficiency audits ("must have a selection of
+  // subfields" / "Cannot query field" retry loops). Listing the fields in the docstring lets a
+  // caller write a valid selection without an introspection round-trip.
+  public static responseFieldNote(resultType: unknown, cap: number = 14): string {
+    let node = resultType as
+      | { response?: unknown; itemsType?: unknown; props?: Map<string, { name: string }> }
+      | undefined;
+    let listWrap = false;
+    if (node && (node as { response?: unknown }).response) node = (node as { response: never }).response;
+    if (node && (node as { itemsType?: unknown }).itemsType) {
+      listWrap = true;
+      node = (node as { itemsType: never }).itemsType;
+    }
+    const props = node?.props;
+    if (!props || typeof props.values !== 'function' || props.size === 0) return '';
+    const names = Array.from(props.values()).map((p) => Naming.sanitiseField(p.name));
+    const shown = names.slice(0, cap);
+    const more = names.length > cap ? ` (+${names.length - cap} more)` : '';
+    return `Returns${listWrap ? ' a list of items with' : ''}: ${shown.join(', ')}${more}.`;
+  }
+
   // `writtenAs` replaces the field side of the alias — a sibling's numbered name from #69.
   //   e.g. (trello) foo_bar with writtenAs fooBar2 -> `foo_bar: fooBar2`
   public static sanitiseFieldForSelect(name: string, isInput: boolean = false, writtenAs?: string): string {

@@ -72,8 +72,11 @@ export class Get extends Type implements Op {
     const description = this.operation.getDescription();
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
+    const returnsNote = context.generateOptions.docResponseFields
+      ? Naming.responseFieldNote(this.resultType)
+      : '';
 
-    if (description || summary || originalPath) {
+    if (description || summary || originalPath || returnsNote) {
       writer.write('  """\n').write('  ');
       if (description) {
         writer.write(description).write(' ');
@@ -83,6 +86,9 @@ export class Get extends Type implements Op {
       }
       if (originalPath) {
         writer.write('(').write(originalPath).write(')');
+      }
+      if (returnsNote) {
+        writer.write('\n  ').write(returnsNote);
       }
       writer.write('\n  """\n');
     }
