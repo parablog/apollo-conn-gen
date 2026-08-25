@@ -8785,3 +8785,80 @@ todo); default output stays pinned byte-identical by the corpus and real-spec fu
 `src/oas/nodes/post.ts`, `src/oas/nodes/res.ts`, `src/oas/nodes/entity.ts`,
 `src/oas/nodes/sparseFieldsets.ts`, `src/oas/utils/schemas.ts` (`describeResponseFields`),
 `docs/FIXED.md #69, #113, #158`.
+
+## 163 [BUG] [P2] · `?? $(default)` coalesce mappings crash router/plugin 2.14.0 — ✅ Fixed (docs + measured matrix, no compat flag)
+
+**Symptom:**
+- Composing with a pre-2.15 plugin can reject the coalesce syntax `tag: tag ?? $("latest")`
+  (`scalar.ts:59`) with `INVALID_SELECTION`, a `nom` parser error — already on record as
+  corrections to `#108-#110`, never filed as its own entry until now.
+- Adam's benchmark report (2026-08-25) escalated it to runtime: deployed router **2.14.0 crashes
+  at startup** on the same syntax (`nom::ErrorKind::Eof`) — 9 of his 10 app routers, 46 coalesce
+  sites in his corpus.
+- Knock-on: his harness shimmed the mappings out to run at all, which also stripped our body-field
+  defaulting and inflated his HTTP 422 counts (report problem 4).
+
+**OAS** (`coalesce-floor.yaml`) — required fields, no maps, no `?` markers, so `??` is the only
+pre-2.15 syntax the spec emits:
+```yaml
+properties:
+  name: { type: string }
+  tag: { type: string, default: latest }
+required: [name, tag]
+```
+
+**Compose matrix, measured (not extrapolated):**
+
+| plugin | result |
+| --- | --- |
+| 2.14.0 | fails — `INVALID_SELECTION`, `nom::error::ErrorKind::Eof: ?? $("latest")` |
+| 2.14.1 | passes |
+| 2.14.3 | passes |
+| 2.15.1 | passes |
+
+The 2.14.0 failure is the same parser-error class (`nom`/`Eof`) as Adam's router crash — the
+compose matrix reproduces the mechanism, though a compose-time failure and a deployed-router
+startup crash are still two different things measured two different ways; this table is not a
+claim about router runtime at any other patch.
+
+**Cause:** emission was unconditional (`scalar.ts:56-59`) and no doc stated a router-version
+floor at all; `changelog.md` additionally claimed "`??` needs 2.14 at minimum," which the matrix
+above shows is imprecise — the real gap is the single 2.14.0 patch, not "2.14" as a whole — and
+`ROADMAP.md` cited a stale "verified on 2.13.0 vs 2.14.1" note that predates the `#128` lesson
+(without `forceRover`, the local patched composer silently ignores `federation_version`, so that
+verification may never have run against a real pre-2.15 plugin).
+
+**Decision — no compat/`--target-router` flag:** a flag would only help the `??` syntax, but real
+specs almost always also use maps (`->entries`), which have **no escape flag** and fail
+composition below 2.15 regardless of patch — confluence and omni's full production specs measured
+322 and 359-361 `CONNECTORS_UNRESOLVED_FIELD` errors at plugin 2.14.0 (`#108`, `#109`). Gating just
+the coalesce syntax would still leave a map-bearing spec broken at 2.14.0, so plugin 2.14.0 is
+unrescuable by any flag scoped to `??` alone. The fix is documentation, not a knob: recommend
+2.15+ as the floor to plan around, state the measured `??` matrix honestly, and stop claiming a
+"minimum" for router runtime we can't bench. The `@link` federation version a schema declares
+(default `v2.14`) stays a separate axis from the plugin/router version doing the composing —
+composition is backward-compatible with older `@link` (`#109`) — so this doesn't touch
+`src/versions.ts`'s default or the `scalar.ts:58` emission gate.
+
+**Fix (docs, no code change):**
+- `readme.md` Versions section: recommends composition plugin/router 2.15+, states the measured
+  `??` matrix, and clarifies `--skip-optional-markers` only covers the `?` marker gap.
+- `changelog.md`'s 0.24.0 composition-requirement note: corrected "need 2.14 at minimum" to the
+  matrix + known-bad-2.14.0 wording.
+- `ROADMAP.md` R7: replaced the stale "verified on 2.13.0 vs 2.14.1" note with the matrix and a
+  pointer to this entry.
+- Split out `#165` (below-gate `scalar.ts:60-62` silently replaces a real payload value with its
+  default, plus a `propArray.ts` `?`-marker knock-on) — a distinct, pre-existing defect uncovered
+  while reading this code, out of scope for a docs-only fix.
+
+**Verified:** `coalesce-floor.yaml` + `test_163_coalesce_default_fails_composition_at_2_14_0` /
+`test_163_coalesce_default_composes_from_2_14_1` (`tests/all/oas-core.test.ts`), both `forceRover:
+true` (`#128`) so the pin is real. Doc claim check: a text search over `readme.md`/`changelog.md`/
+`ROADMAP.md` for the falsified claims found them before this fix and found none after; stashing
+the three doc files brought them back, popping made the search clean again. Full suite green.
+
+**Refs:** `src/oas/nodes/scalar.ts:56-62` (untouched — the R7 emission and its gate),
+`src/oas/nodes/propArray.ts:115-117`, `readme.md` Versions, `changelog.md` `[0.24.0]`, `ROADMAP.md`
+R7, `#108, #109, #110, #128` (the map/marker mechanism and the `forceRover` lesson), `#165` (split
+off), Adam's benchmark report (claude.ai/code/artifact/c79bb3ab, problem 5) and Slack thread
+(2026-08-24).

@@ -460,15 +460,20 @@ endpoint; these add real complexity for the long tail.
 **Done:** OAS `default:` values now coalesce instead of replacing — `tag: tag ?? $("latest")`
 keeps the real value and falls back (response and body directions; the synthetic `success`
 field keeps its pure `$(true)`). Bare literals remain below the gate — `??` needs connect
-v0.4 AND federation v2.14: the 2.13 composer rejects the grammar (verified on 2.13.0
-vs 2.14.1). `->match` literals already land via R2; `->entries` via maps; `->joinNotNull` via R8.
+v0.4 AND federation v2.14: the 2.13 composer rejects the grammar. Composed in isolation (no
+maps, no `?` markers), `??` alone fails on plugin 2.14.0 (`INVALID_SELECTION`, a `nom` parser
+error) and passes on 2.14.1, 2.14.3, and 2.15.1 — measured, not extrapolated (#163). A router
+deployed at exactly 2.14.0 also crashed on this syntax at startup in the field, so 2.15+ stays
+the recommended floor regardless of the `??`-only patch-level result (`readme.md` Versions).
+`->match` literals already land via R2; `->entries` via maps; `->joinNotNull` via R8.
 
 **Remaining (no OAS signal — needs a heuristic or user intent):** envelope unwrapping
 (`data.items`), `->first`, spreads (`...$args`), `?!`, optional chaining (parked as #16,
 archived branch `feat/optional-chaining-operator`).
 
 **Files:** `src/oas/nodes/scalar.ts` (`??` defaults), `src/oas/nodes/prop*.ts`,
-`src/oas/nodes/body.ts`. (`??` gated to connect v0.4 + federation v2.14)
+`src/oas/nodes/body.ts`. (`??` gated to connect v0.4 + federation v2.14; compose matrix in
+`docs/FIXED.md #163`)
 
 ### R8. `path` / `queryParams` as full JSONSelection — ✅ Done (one deferral)
 

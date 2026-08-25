@@ -1503,6 +1503,34 @@ test('test_16_skip_optional_markers_reaches_the_cli', async () => {
   assert.ok(!plain.stdout.includes('category? {'), 'with no marked group left');
 });
 
+test('test_163_coalesce_default_fails_composition_at_2_14_0', async () => {
+  // Adam's field report: router 2.14.0 crashed at startup (`nom::ErrorKind::Eof`) on `tag: tag ??
+  // $("latest")`. coalesce-floor.yaml isolates `??` from maps/`?` markers, pinning this to the
+  // coalesce syntax itself, not the unrelated #14/#16 gaps. see docs/FIXED.md #163
+  const output = await runOasTest(
+    'coalesce-floor.yaml',
+    ['get:/release>**'],
+    1,
+    1, { shouldFail: true, composeFederationVersion: '2.14.0', forceRover: true });
+  assert.ok(output !== undefined);
+  assert.match(output!, /INVALID_SELECTION/, 'composition rejects the `??` grammar');
+  assert.match(output!, /nom::error::ErrorKind::Eof/, 'same parser error class as the router 2.14.0 field crash');
+});
+
+test('test_163_coalesce_default_composes_from_2_14_1', async () => {
+  // 2.14.0 is the only failing patch above — the next three all accept `??` cleanly, so the
+  // real floor for this syntax alone is 2.14.1, not a flat "2.14". see docs/FIXED.md #163
+  for (const version of ['2.14.1', '2.14.3', '2.15.1']) {
+    const schema = await runOasTest(
+      'coalesce-floor.yaml',
+      ['get:/release>**'],
+      1,
+      1, { composeFederationVersion: version, forceRover: true });
+    assert.ok(schema !== undefined, `${version} should compose`);
+    assert.match(schema!, /tag: tag \?\? \$\("latest"\)/, `${version} keeps the coalesce selection`);
+  }
+});
+
 test('test_16_skip_optional_markers_moves_nothing_else', async () => {
   // petstore has neither, so these two cover the shapes where a `?` is not a marker: the arrow
   // e.g. (map-key-aliasing) `currency_options?->entries`, and (r7r8-selection) `emails ?? $("")`
