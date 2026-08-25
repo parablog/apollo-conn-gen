@@ -517,3 +517,29 @@ Moves to `docs/TASKS.md` once Adam's diff is in hand and the heuristic is decide
 (`parablog/apollo-conn-gen`, absence verified), the codex-approved plan
 (`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's Slack follow-up (2026-08-25) and
 benchmark report (claude.ai/code/artifact/c79bb3ab).
+
+## 164 [BUG] · Tags/pinned args degrade to `String` where Rust emits `[String!]`/`Boolean` — 📋 Noted, no repro at HEAD
+
+**Symptom:** Adam's benchmark report (measured on v0.24.0), verbatim: "one known counter-fidelity
+nit: TS degrades tags/pinned args to String where Rust emits [String!]/Boolean" — the only
+fidelity regression his report found vs the Rust baseline.
+
+**Probed live at HEAD — every obvious shape composes correctly, none degrades to `String`:**
+- plain array query param → `[String]` (`r7r8-selection.yaml` `ids`/`tags`)
+- `boolean` query param → `Boolean`
+- `$ref`'d boolean schema → `Boolean`
+- `$ref`'d array schema → `[String]`
+- array of `$ref`'d enum items → `[String]`
+
+**Cause:** unconfirmed. Either the bug was fixed between v0.24.0 and HEAD, or Adam's spec has a
+shape not yet probed — `oneOf` param, `nullable`, `deepObject` style are the untried candidates.
+
+**Out of scope, a separate question:** item nullability — every probe above returns `[String]`,
+not `[String!]` — is the one real fidelity delta left against the Rust baseline, but it is not the
+"degrades to String" bug the report named.
+
+Moves to `docs/TASKS.md` when Adam supplies a failing op/spec, or a re-benchmark on the next
+release still shows it.
+
+**Refs:** `src/oas/nodes/param.ts`, `src/oas/utils/params.ts` (`arrayJoin`), Adam's benchmark
+report (claude.ai/code/artifact/c79bb3ab, "caveats").

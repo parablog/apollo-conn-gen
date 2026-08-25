@@ -1531,6 +1531,52 @@ test('test_163_coalesce_default_composes_from_2_14_1', async () => {
   }
 });
 
+test('test_165_coalesce_default_below_gate_emits_bare_field', async () => {
+  // #165: below the R7 gate, the old else-branch replaced the real payload value with the OAS
+  // default (`tag: $("latest")`). It now emits nothing — same as a field with no default at all.
+  const schema = await runOasTest('coalesce-floor.yaml', ['get:/release>**'], 1, 1, { federationVersion: 'v2.13' });
+  assert.ok(schema !== undefined);
+  assert.match(schema!, /\n\s+tag\n/, 'tag emitted bare, same as a field with no default');
+  assert.doesNotMatch(schema!, /\$\("latest"\)/, 'no literal-replacement fallback');
+  assert.doesNotMatch(schema!, /\?\?/, 'and no coalesce operator — below the gate');
+});
+
+test('test_165_synthetic_success_keeps_literal_below_gate', async () => {
+  // the synthetic `success` field has no payload counterpart to coalesce from, so it keeps its
+  // pure `$(true)` literal at every version, not just at/above the R7 gate. see docs/FIXED.md #165
+  const schema = await runOasTest('body-aliases-defaults.yaml', ['post:/flush>**'], 3, 1, {
+    skipValidation: true,
+    federationVersion: 'v2.13',
+  });
+  assert.ok(schema !== undefined);
+  assert.match(schema!, /success: \$\(true\)/, 'synthetic success keeps its literal below the gate too');
+});
+
+test('test_165_array_item_marker_reapplies_below_gate', async () => {
+  // #16's `itemsHaveDefault` suppression is only valid when the default actually coalesces —
+  // below the gate the array-item default writes nothing, so the `?` marker must come back.
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, {
+    skipValidation: true,
+    federationVersion: 'v2.13',
+  });
+  assert.ok(schema !== undefined);
+  assert.match(schema!, /\n\s+emails\?\n/, 'array-item default marker re-applies below the gate');
+  assert.doesNotMatch(schema!, /\$\(""\)/, 'no literal-replacement fallback for the array items');
+});
+
+test('test_165_scalar_field_marker_reapplies_below_gate', async () => {
+  // Same knock-on as the array case, one level up: propScalar.ts's own `writesDefaultFallback`
+  // makes the identical "a default covers a missing key" assumption for a plain scalar field —
+  // r7r8-selection's `tag` is optional with a default and no rename, so it exercises it directly.
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, {
+    skipValidation: true,
+    federationVersion: 'v2.13',
+  });
+  assert.ok(schema !== undefined);
+  assert.match(schema!, /\n\s+tag\?\n/, 'scalar-field default marker re-applies below the gate');
+  assert.doesNotMatch(schema!, /\?\?/, 'no coalesce operator below the gate');
+});
+
 test('test_16_skip_optional_markers_moves_nothing_else', async () => {
   // petstore has neither, so these two cover the shapes where a `?` is not a marker: the arrow
   // e.g. (map-key-aliasing) `currency_options?->entries`, and (r7r8-selection) `emails ?? $("")`

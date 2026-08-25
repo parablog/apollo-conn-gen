@@ -8862,3 +8862,41 @@ the three doc files brought them back, popping made the search clean again. Full
 R7, `#108, #109, #110, #128` (the map/marker mechanism and the `forceRover` lesson), `#165` (split
 off), Adam's benchmark report (claude.ai/code/artifact/c79bb3ab, problem 5) and Slack thread
 (2026-08-24).
+
+## 165 [BUG] [P2] · Below the `??` version gate, a real payload value is silently replaced by its OAS default — ✅ Fixed
+
+**OAS** (`coalesce-floor.yaml`), generated at `--federation-version v2.13`:
+```yaml
+tag: { type: string, default: latest }
+```
+```graphql
+# before: the OAS default silently replaces every real value
+tag: $("latest")
+# after: nothing — a missing key now warns instead of silently defaulting
+tag
+```
+
+**Symptom:** `scalar.ts:60-62`'s pre-`??` fallback wrote `$(value)` unconditionally below the R7
+gate (`connect v0.4` + `federation v2.14`) — the real payload value was discarded every response.
+
+**Knock-on:** `propArray.ts:116-117` and `propScalar.ts:61` both suppressed the `?` optional
+marker on the assumption a default always covers a missing key — below the gate it covers
+nothing, so a genuinely optional field lost its marker too.
+
+**Fix:** `Scalar.coalescesDefault(context)` — one predicate: true for the synthetic `success`
+field at every version, true for a real field only at/above the gate, false otherwise.
+`Scalar.select()` returns early (writes nothing) when false. `propArray.ts` and `propScalar.ts`
+gate their `?`-marker suppression on the same predicate instead of a bare `schema.default != null`
+check.
+
+**Verified:** 4 new tests, `tests/all/oas-core.test.ts` (`test_165_*`): bare field below the gate,
+synthetic `success` keeps `$(true)` at every version, both marker knock-ons re-apply. Revert-check:
+stashing only the `src/` edits leaves exactly those 3 non-synthetic tests red, popping restores
+green. At-gate output (`tag: tag ?? $("latest")`, synthetic `$(true)`) confirmed byte-identical by
+the existing `#16`/`#163`/R7 tests. Full suite green (476 tests, 472 pass, 0 fail, 4 pre-existing
+todo).
+
+**Refs:** `src/oas/nodes/scalar.ts` (`coalescesDefault`), `src/oas/nodes/propArray.ts:115-117`,
+`src/oas/nodes/propScalar.ts:58-61`, `tests/resources/oas/coalesce-floor.yaml`,
+`tests/resources/oas/r7r8-selection.yaml`, `tests/resources/oas/body-aliases-defaults.yaml`
+(synthetic-success fixture), `docs/FIXED.md #16, #163`.

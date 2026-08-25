@@ -37,8 +37,27 @@ export class Scalar extends Type {
     context.leave(this);
   }
 
-  public select(context: OasContext, writer: Writer, _selection: string[]) {
+  // whether this default covers a missing key, e.g. (coalesce-floor) `tag`'s `default: latest`
+  // below federation v2.14 covers nothing — no `??` grammar to fall back to. see docs/FIXED.md #165
+  public coalescesDefault(context: OasContext): boolean {
     if (this.schema.default == null) {
+      return false;
+    }
+
+    const ownerSchema = (this.parent?.parent as { schema?: SchemaObject } | undefined)?.schema;
+    if (ownerSchema?.format === APOLLO_SYNTHETIC_OBJ) {
+      return true;
+    }
+
+    const connect = context.generateOptions.connectorSpecVersion ?? DEFAULT_VERSIONS.connectorSpecVersion;
+    const federation = context.generateOptions.federationVersion ?? DEFAULT_VERSIONS.federationVersion;
+    return meetsMinimum(connect, 'v0.4') && meetsMinimum(federation, 'v2.14');
+  }
+
+  public select(context: OasContext, writer: Writer, _selection: string[]) {
+    if (!this.coalescesDefault(context)) {
+      // no default, or a real field below the gate with no safe literal-replacement form —
+      // write nothing, same as a field with no default. see docs/FIXED.md #165
       return;
     }
 
@@ -46,19 +65,14 @@ export class Scalar extends Type {
     // the literal. Numbers/booleans stay bare. see docs/FIXED.md #28
     const value = typeof this.schema.default === 'string' ? `"${this.schema.default}"` : String(this.schema.default);
 
-    // the synthetic `success` field has no payload counterpart to coalesce from — keep $(true)
     const ownerSchema = (this.parent?.parent as { schema?: SchemaObject } | undefined)?.schema;
-    const synthetic = ownerSchema?.format === APOLLO_SYNTHETIC_OBJ;
-
-    const connect = context.generateOptions.connectorSpecVersion ?? DEFAULT_VERSIONS.connectorSpecVersion;
-    const federation = context.generateOptions.federationVersion ?? DEFAULT_VERSIONS.federationVersion;
+    if (ownerSchema?.format === APOLLO_SYNTHETIC_OBJ) {
+      // the synthetic `success` field has no payload counterpart to coalesce from — keep $(true)
+      writer.write(': $(').write(value).write(')');
+      return;
+    }
 
     // emit `tag: tag ?? $("latest")` — real value first, default as fallback. see ROADMAP R7
-    // `??` needs connect v0.4 + federation v2.14; older targets keep the replacing literal
-    if (!synthetic && meetsMinimum(connect, 'v0.4') && meetsMinimum(federation, 'v2.14')) {
-      writer.write(': ').write(this.parent!.name).write(' ?? $(').write(value).write(')');
-    } else {
-      writer.write(': $(').write(value).write(')');
-    }
+    writer.write(': ').write(this.parent!.name).write(' ?? $(').write(value).write(')');
   }
 }

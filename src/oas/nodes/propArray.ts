@@ -111,9 +111,9 @@ export class PropArray extends Prop {
     const sanitised = this.fieldForSelect(context);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
-    // #16: items with a default already cover a missing key, e.g. (r7r8-selection)
-    // `emails: emails ?? $("")` — adding `?` on top would make the line invalid
-    const itemsHaveDefault = this.items instanceof Scalar && this.items.schema.default != null;
+    // #16/#165: items with a default only cover a missing key when it's actually written, e.g.
+    // (r7r8-selection) `emails: emails ?? $("")` — below the gate it writes nothing, so `?` stays
+    const itemsHaveDefault = this.items instanceof Scalar && this.items.coalescesDefault(context);
     if (!itemsHaveDefault && this.isOptionalInSelection(context)) {
       writer.write('?');
     }

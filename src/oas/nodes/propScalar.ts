@@ -1,4 +1,4 @@
-import { Factory, IType, Prop } from './internal.js';
+import { Factory, IType, Prop, Scalar } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -55,10 +55,10 @@ export class PropScalar extends Prop {
     const sanitised = this.fieldForSelect(context);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
-    // we can only write the default value if and only if the name is the same as the sanitised name,
-    // otherwise we'll end up with an expression like "someField: some_field: $(value)" which is not legal.
-    // `!= null`, not truthiness — `default: 0` and `default: false` are real defaults. see #29
-    const writesDefaultFallback = sanitised === this.name && this.schema.default != null;
+    // aliasing already writes its own colon, and only an actually-written default covers a
+    // missing key — a real field's default writes nothing below the gate. see docs/FIXED.md #165
+    const writesDefaultFallback =
+      sanitised === this.name && this.propType instanceof Scalar && this.propType.coalescesDefault(context);
     if (writesDefaultFallback) {
       for (const child of this.children) {
         child.select(context, writer, selection);

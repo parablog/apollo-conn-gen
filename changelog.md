@@ -62,12 +62,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   under-validates `->entries` selections with no available workaround, and rejects connectors that
   are actually correct (this is what issues #73 and #109 turned out to be, not generator bugs).
   Optional-field (`?`) selections have the same gap below 2.15 but can be avoided with
-  `--skip-optional-markers` (composes down to 2.14.3), with no flag to avoid the map gap.
-  Default-value (`??`) selections are a separate case, measured in isolation (#163): they compose
-  fine on 2.14.1, 2.14.3, and 2.15.1, but fail on 2.14.0 specifically (`INVALID_SELECTION`, a `nom`
-  parser error) — the same syntax also crashed a router deployed at exactly 2.14.0 at startup, in
-  the field. In practice, almost any real spec has a map value somewhere, so 2.15+ stays the
-  requirement to plan for regardless of the `??` patch-level nuance.
+  `--skip-optional-markers` (composes down to 2.14.3). Default-value (`??`) selections fail only
+  on plugin 2.14.0 (#163). Use composition 2.15 or newer.
 
 ### Added
 
