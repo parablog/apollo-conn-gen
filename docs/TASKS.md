@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 145 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 146 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -71,3 +71,144 @@ Invariants the entries below rely on:
   `context.lookupRef`, which returns the **same `SchemaObject` instance** per ref.
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
+
+## 158 [FEAT] [P4] · `--keep-field-names`: preserve spec spellings that are already valid GraphQL — ⬜ Open
+
+**Example:** `properties: { access_token: { type: string } }`
+- today: `accessToken: String` in SDL, selection alias `accessToken: access_token`
+- with the flag: `access_token: String`, no alias needed
+
+**Why:** AppWorld benchmark feedback (Adam, 2026-08-24): agents see `accessToken` in the schema but
+`access_token` in the upstream API docs, and burn search/introspection turns deciding which is real.
+- `Naming.genParamName` camelCases every field/param unconditionally (`src/oas/utils/naming.ts:142-151`).
+- The wire stays correct via aliases, but the schema no longer matches the spec's own vocabulary.
+
+**Reference:** PR #6 (adamd-apollo, `parablog/apollo-conn-gen`) — reuse its flag plumbing shape and
+keep-own-spelling guard idea; do NOT copy:
+- its mutable static `Naming.keepOriginalNames` — gen is consumed as a library (web app), a static
+  leaks across generations; thread `context.generateOptions` instead, no statics anywhere.
+- its guard admits `__`-prefixed names (reserved in GraphQL) — exclude them.
+- it ships no tests and no identity caution.
+
+**Shape:** opt-in flag, plumbing like `skipOptionalArgs` (`src/cli/oas.ts` ~L165 block + opts map
+~L99 + `GenerateOptions` field `oasContext.ts:37`); default output stays byte-identical.
+- Guard: keep the spelling iff it matches `/^[_A-Za-z][_0-9A-Za-z]*$/`, doesn't start with `__`,
+  and isn't `true|false|null`; sanitise as today otherwise.
+- Mechanism: `genParamName`/`sanitiseField`/`sanitiseFieldForSelect` gain a trailing `keep = false`
+  param; only spelling-writing call sites pass it. Type-name synthesis (`naming.ts:259/280`) and
+  match keys (`params.ts:24/57`) stay canonical.
+- Sites — SDL: `param.ts:81`, `prop.ts:37`, `propCircRef.ts:48`, `obj.ts:107` (`@key`).
+  Selection: `prop.ts:86` `fieldForSelect()` gains a context param (6 one-line subclass callers);
+  `propRef.ts:90`. Mappings: `obj.ts:184` (`$this`), `operationWriter.ts:159`, `:131`
+  `templatedPath` gets context from `writeConnector:94`.
+- 14 files, 11 of them one-line pass-throughs; ripple beyond this list → stop, back to codex.
+- `sanitiseFieldForSelect` already emits no alias when sanitised === original (`naming.ts:192`).
+- Narrowed contract: `numberTwinFields` (`typeUtils.ts:381`) keeps canonical dedupe, so a
+  `foo_bar`/`fooBar` twin pair may still rename — file that as #162 during this entry's ceremony;
+  keep twin pairs out of the fixture.
+- **Identity** change under the flag (renamed nodes → new ids/paths): same `docs/DEFERRED.md #73`
+  caution as `docs/FIXED.md #157`; no recovery code — selections under one flag setting are
+  self-consistent.
+- Fixture `keep-field-names.yaml`: fields `owner_id`, `created_at`, non-identifier `content-type`,
+  reserved-ish `__meta`; query param `page_size`. Flag on: `owner_id` in SDL, bare in the selection,
+  arg `page_size` spelled the same in queryParams; `content-type`/`__meta` rename exactly as today.
+- Precondition: the #157 fix is committed first (its SHA is the failing-first baseline).
+- Same fidelity-over-convention direction as the parked enum-casing decision (`docs/DEFERRED.md #143`).
+
+**Refs:** `src/oas/utils/naming.ts`, `docs/DEFERRED.md #73, #143`, `docs/FIXED.md #1`, PR #6, the
+codex-approved plan (`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's AppWorld benchmark
+report (Slack, 2026-08-24).
+
+## 159 [FEAT] [P4] · `--skip-arg-defaults`: document defaults as prose instead of executable SDL defaults — ⬜ Open
+
+**Example:**
+```yaml
+parameters:
+  - name: page_limit
+    in: query
+    schema: { type: integer, default: 5, minimum: 1, maximum: 20 }
+```
+- today: `pageLimit: Int = 5`
+- with the flag: `pageLimit: Int` plus an op-docstring line `Params: pageLimit (default 5, min 1, max 20)`
+
+**Why:** AppWorld benchmark feedback (Adam, 2026-08-24): agents treat a published SDL default as the
+value to use — a pagination default of 5 against a max of 20 meant 4x more pagination calls.
+Documented as prose, agents picked sensible values themselves.
+
+**Reference:** PR #7 (adamd-apollo, `parablog/apollo-conn-gen`) — reuse the coupled design and the
+`Params:` note idea; its benchmark warning is load-bearing: shipping the flag WITHOUT the prose
+collapsed task completion 89.5 → 54.4 (the visible default was the only pagination signal), so both
+halves ship together under ONE flag. Do NOT copy:
+- its `Params:` note is emitted ungated — that changes default output; gate both halves on the flag.
+- its bare try/catch around `getParameters()`; its dropping of empty-string defaults; its uncapped
+  enum lists.
+- its helper sits in `Naming`; ours goes in `src/oas/utils/schemas.ts` (see below).
+
+**Shape:** one opt-in flag, both halves gated on it; default output stays byte-identical. Plumbing
+like `skipOptionalArgs` (`src/cli/oas.ts` ~L165 + opts map ~L99 + `GenerateOptions`, `oasContext.ts:37`).
+- Gate `writeDefaultValue` at `src/oas/nodes/param.ts:92` (context in scope).
+- Write the `Params:` line inside the existing op docstring blocks `get.ts:82-96` / `post.ts:78-88`;
+  extend the block-opening condition (`get.ts:82`) so a flag-only docstring still opens.
+- Formatter: one function in `src/oas/utils/schemas.ts` beside `withJsonNote` (docstring-prose
+  precedent; shared by two writers, so it lives in neither). Reads `default`/`minimum`/`maximum`/
+  `enum` — first `minimum`/`maximum` read in the codebase. No try/catch; keep empty-string
+  defaults; cap enums at 8 values then `(+N more)`.
+- Names in the line come from `Naming.genParamName(name, keep)` — the same call `param.ts:81`
+  makes — so prose always shows the GraphQL-visible arg spelling, never wire names (and matches
+  `--keep-field-names` when that flag is on).
+- Leave #156's per-argument JSON-degrade docstrings untouched (different channel, no merge needed).
+- Fixture `arg-defaults-prose.yaml`: `limit` int default 20/min 1/max 100; `page_size` int default
+  10; `sort` string enum `asc|desc` default `asc`; `q` string default `""`. Flag on: defaults
+  stripped from args and the docstring gains exactly
+  `Params: limit (default 20, min 1, max 100), pageSize (default 10), sort (default asc, one of asc|desc), q (default "")`.
+  Ops with no constrained params get no line.
+- Do after #158 (this entry's tests combine its flag for name spelling); precondition: #157 committed.
+
+**Refs:** `src/oas/nodes/param.ts`, `src/oas/nodes/get.ts`, `src/oas/nodes/post.ts`,
+`src/oas/utils/schemas.ts`, `docs/FIXED.md #17, #29` (the emission being gated), PR #7, the
+codex-approved plan (`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's AppWorld benchmark
+report (Slack, 2026-08-24).
+
+## 160 [FEAT] [P4] · `--doc-response-fields`: operation docstrings omit the response fields, forcing agents to guess selections — ⬜ Open
+
+**Example:** `getAuthTokens` docstring today: `Lists auth tokens (/auth/tokens)`. With the flag,
+append the top-level result field names, e.g.
+
+```
+Returns a list of items with: id, value, expiresAt
+```
+
+**Why:** AppWorld benchmark feedback (Adam, 2026-08-24): GraphQL requires a subfield selection, and
+agents guessed field names and retried until the shape stuck. Putting the fields in the docstring —
+returned by the search/introspection call the agent already makes — was the single biggest lever in
+the whole benchmark, fully closing the extra-turns gap vs baseline.
+
+**Reference:** PR #8 (adamd-apollo, `parablog/apollo-conn-gen`) — reuse the flag, note format, and
+cap; its evidence settles scope: a FLAT top-level field list alone closed the turns gap, so the
+nested typed shape this entry originally sketched is not needed for v1. Do NOT copy:
+- its duck-typed `unknown` casts (`response`/`itemsType`/`props` probing) — use the node model's
+  `T` guards; Composed/Union fall through silently there, ours declines explicitly.
+
+**Shape:** opt-in flag `--doc-response-fields` (plumbing like `skipOptionalArgs`); emission-only;
+default output stays byte-identical.
+- v1 handles exactly two shapes: `Res` → `Obj` (`Returns: …`) and `Res` → `Arr` → `Obj`
+  (`Returns a list of items with: …`), unwrapped locally with `T` guards in one function in
+  `src/oas/utils/schemas.ts` (same placement rationale as #159; `entity.ts`'s private
+  `unwrapToObj` stays private — extraction deferred).
+- Anything else (scalar/JSON, Composed, Union, Map, …) → no `Returns` line via explicit early
+  return — deterministic, never an accidental empty string. Composed/Union support is a separate
+  follow-up only if a repro shows agents need it.
+- First 14 field names, then `(+N more)`.
+- Field spellings are the GraphQL-visible ones (`renamedTo ?? Naming.sanitiseField(name, keep)` —
+  exactly what `prop.ts:37` writes), never wire names; matches `--keep-field-names` when on.
+- Sites: the op docstring blocks `src/oas/nodes/get.ts:82-97` and `post.ts:77-89` (Put/Patch/Delete
+  extend Post). Ordering (path, then `Params:`, then `Returns:`) falls out of insertion order —
+  no combined #159+#160 test needed.
+- Fixture `doc-response-fields.yaml` (own fixture — `inline-body-input-names.yaml` has only object
+  `Ack {ok}` responses, no array): an object response `{id, name, created_at}`, an array of it, and
+  a 16-field object pinning the `(+2 more)` cap.
+- Do after #159 (adjacent docstring lines); precondition: #157 committed.
+
+**Refs:** `src/oas/nodes/get.ts`, `src/oas/nodes/post.ts`, `src/oas/utils/schemas.ts`, PR #8, the
+codex-approved plan (`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's AppWorld benchmark
+report (Slack, 2026-08-24).

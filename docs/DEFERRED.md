@@ -474,3 +474,32 @@ no-repro cases" scope, not `docs/TASKS.md`'s loop-actionable one.
 **Refs:** `graphos-service-factory/docs/ts-gen-comparison.md`; the plan this comparison followed
 (`graphos-service-factory`, criterion 3's caveat) is where this was first flagged as needing a
 follow-up.
+
+## 161 [FEAT] · Entity link half: synthesized reference fields on id-carrying types — 📋 Noted (waiting on Adam's fork diff)
+
+**Example:** `Song { album_id }` plus an R1-resolved `Album` → emit a `Song.album: Album` field
+selecting `album: { id: $.album_id }`, so the router can traverse song → album through the
+type-level resolver.
+
+**Why:** AppWorld follow-up (Adam, Slack, 2026-08-25): `--infer-entity-resolvers` emits the
+resolver half only — `@key` plus the type-level `@connect`/`$this` on the entity itself
+(`src/oas/nodes/entity.ts`, `obj.ts` `writeEntityConnector`). Nothing emits the linking field on
+the types that carry the id.
+- Without it, cross-type traversal queries don't exist — that part of Adam's claim is confirmed.
+- "The resolvers are unreachable" is overstated, though: a type-level resolver still backfills
+  fields on any entity some connector returns with its key (e.g. a partial list response).
+
+**Not loop-actionable yet:**
+- No reference code: Adam's link-half work is in his fork and in none of PRs #5-#9 (verified) —
+  ask him for the diff.
+- The FK-name → type match (`album_id` → `Album`) is an inference heuristic that needs a design
+  decision, not a mechanical port.
+- Satisfiability territory: synthesized fields on shared types interact with composition pruning
+  (never-returned types, partial-provider field keeping) — the same class of constraint that shaped
+  R2's limits.
+
+Moves to `docs/TASKS.md` once Adam's diff is in hand and the heuristic is decided.
+
+**Refs:** `src/oas/nodes/entity.ts`, `src/oas/nodes/obj.ts` (`writeEntityConnector`), PRs #5-#9
+(`parablog/apollo-conn-gen`, absence verified), the codex-approved plan
+(`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's Slack follow-up (2026-08-25).
