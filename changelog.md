@@ -6,6 +6,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.26.0]
+
+### Added
+
+- New `--keep-field-names` option to keep the API's own field and argument spellings
+  (`owner_id`, `page_size`) where they are already valid GraphQL names, instead of
+  camelCasing them. Spelling twins (`foo_bar` + `fooBar`) each keep their own name.
+  Details in README.md. Issues #158, #162.
+- New `--skip-arg-defaults` option to move argument defaults out of the SDL and into prose:
+  each operation documents its defaults, ranges and allowed values in a `Params:` docstring
+  line. Issue #159.
+- New `--doc-response-fields` option to document each operation's top-level response fields
+  in a `Returns:` docstring line. Issue #160.
+- New per-operation override to place an operation under Query or Mutation when the HTTP
+  method disagrees with its real semantics. Format details in README.md. Issue #150.
+- Sparse-by-default REST reads (`fields=`-style query params) can now default that
+  parameter to the generated selection. Details in README.md. Issue #151.
+- Hand-authored schema content can now survive regeneration: a marked CUSTOM region
+  round-trips unchanged. Details in README.md. Issue #140.
+
+### Changed
+
+- **Migration note (#157):** an operation with an inline request body now names its input
+  type after the operation (`CreateAuthTokensInput`), replacing the placeholder-`b` names.
+  Update clients pinned to the old names.
+- **Composition requirement:** default-value (`??`) selections fail to compose only on
+  plugin 2.14.0. Use composition/router 2.15 or newer — the README's Versions section has
+  the measured details. Issue #163.
+
+### Fixed
+
+- Targeting `--federation-version v2.13` no longer replaces real response values with
+  their OAS defaults — the field emits plain and keeps its optional marker. Issue #165.
+- Identifier-shaped fields (`id`, `*_id`) are now typed `ID`, even when the spec declares
+  another scalar type. Issues #142, #146.
+- A 200 response declared with no body no longer collapses to a synthetic Boolean that
+  loses real payload data — it degrades to `JSON`. Issue #147.
+- A response schema that is present but `null` no longer crashes the CLI — it degrades
+  cleanly. Issue #148.
+- A request body declared only under a non-`application/json` media type now ships with
+  its declared `Content-Type` instead of a mislabeled one. Issue #149.
+- An "everything under this op" selection stays one compact wildcard instead of expanding
+  into one string per field. Issue #153.
+- A selection saved before a spec reorder finds its renamed inline `allOf` member again
+  instead of failing outright. Issue #154.
+- A selection path recovered after an identity drift no longer answers empty — its segment
+  string is re-derived after recovery. Issue #135.
+- A Swagger 2.0 `formData` request body is no longer dropped — it maps as a form body.
+  Issue #137.
+- Every remaining field degraded to `JSON` now carries its reason in the schema docstring —
+  parameters, union members, and the last object sites join 0.25.0's first pass, with
+  cleaner note text. Issues #132, #145, #152, #156.
+
 ## [0.25.0]
 
 ### Added
