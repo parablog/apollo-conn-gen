@@ -28,8 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- **Migration note (#157):** an operation with an inline request body now names its input
-  type after the operation (`CreateAuthTokensInput`), replacing the placeholder-`b` names.
+- **Migration note (#157):** a request body written inline in the spec now gets an input
+  type named after its operation — `createAuthTokens` takes `CreateAuthTokensInput`,
+  previously `InputInput` (or `BInput2Input`, `BInput4Input`, … when several collided).
   Update clients pinned to the old names.
 - **Composition requirement:** default-value (`??`) selections fail to compose only on
   plugin 2.14.0. Use composition/router 2.15 or newer — the README's Versions section has
