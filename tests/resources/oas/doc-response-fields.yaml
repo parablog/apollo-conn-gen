@@ -1,0 +1,80 @@
+openapi: 3.0.3
+info:
+  title: R160 Doc Response Fields Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # the array-of-object shape pins "Returns a list of items with: ..."
+  /items:
+    get:
+      operationId: listItems
+      summary: List items
+      responses:
+        '200':
+          description: A list of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+  # the single-object shape pins "Returns: ..." (no "a list of items with")
+  /items/{item_id}:
+    get:
+      operationId: getItem
+      summary: Get an item by id
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: A single item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+  # a 16-field object pins the first-14-then-"(+2 more)" cap
+  /wide:
+    get:
+      operationId: getWideThing
+      summary: Get a many-fielded thing
+      responses:
+        '200':
+          description: A many-fielded thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WideThing'
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+    WideThing:
+      type: object
+      properties:
+        field01: { type: string }
+        field02: { type: string }
+        field03: { type: string }
+        field04: { type: string }
+        field05: { type: string }
+        field06: { type: string }
+        field07: { type: string }
+        field08: { type: string }
+        field09: { type: string }
+        field10: { type: string }
+        field11: { type: string }
+        field12: { type: string }
+        field13: { type: string }
+        field14: { type: string }
+        field15: { type: string }
+        field16: { type: string }
