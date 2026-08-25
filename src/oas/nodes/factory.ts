@@ -239,9 +239,12 @@ export class Factory {
   private static createArrayType(parent: IType | Res, schema: SchemaObject | null, context: OasContext) {
     // Array schema case.
     let parentName = parent.name;
-    if (parent instanceof Res) {
-      const get = parent.parent as Get; // Assume parent.parent is a GetOp.
-      parentName = _.upperFirst(get.getGqlOpName());
+    if (parent instanceof Res || parent instanceof Body) {
+      // Name an inline array the same way its op names any other inline payload — e.g. operation
+      // createUploads sending `{ type: array, items: { type: object, ... } }` names the item
+      // CreateUploads, not the placeholder body name "b". #157
+      const op = parent.parent as Get; // Assume parent.parent is a GetOp.
+      parentName = _.upperFirst(op.getGqlOpName());
     } else if (parent instanceof Union && T.isRef(parentName)) {
       // an Arr is a wrapper, not a component of its own — carrying the raw $ref would alias it with
       // the parent in name-keyed maps (context.refCount, context.types). #95

@@ -38,7 +38,7 @@ test('test_86_list_of_plain_values_stays', async () => {
   const reason = 'items in array have mixed array types - returning JSON type';
   assert.ok(
     new RegExp(
-      `input InputInput \\{\\n {2}"NEEDS ATTENTION: ${_.escapeRegExp(reason)}"\\n {2}ids: \\[JSON\\]!\\n\\}`,
+      `input CreateConvertInput \\{\\n {2}"NEEDS ATTENTION: ${_.escapeRegExp(reason)}"\\n {2}ids: \\[JSON\\]!\\n\\}`,
     ).test(schema!),
     'the body field keeps the note above it',
   );

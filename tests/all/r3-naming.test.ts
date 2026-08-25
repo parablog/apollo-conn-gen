@@ -302,56 +302,41 @@ test('test_116_cleaned_path_names_that_collide_are_numbered', async () => {
   assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
 });
 
-test('test_112_response_union_must_not_take_the_stored_entry_from_a_body_union', async () => {
-  // #112: a response union sharing a body union's name took the stored entry over, so the next
-  // body union kept a name the first already emitted — its connector selected missing fields.
-  const schema = await runOasTest(
-    'union-store-overwrite.yaml',
-    ['post:/alphas>**', 'get:/bravos>**', 'post:/gammas>**'],
-    3,
-    4,
-  );
-  assert.ok(schema !== undefined);
-  assert.strictEqual((schema!.match(/^input InputInput/gm) || []).length, 1, 'first body keeps the name, once');
-  assert.ok(/createAlphas\(input: InputInput!\)/.test(schema!), 'first body references it');
-  assert.ok(/^type Input \{/m.test(schema!), 'the response union keeps the shared name on its side');
-  const renamed = schema!.match(/input BInputInput \{[^]*?^\}/m)?.[0] ?? '';
-  assert.ok(/gamma/.test(renamed) && /delta/.test(renamed), 'the third union renames and keeps its members');
-  assert.ok(!/alpha/.test(renamed), 'and does not inherit the first body\'s members');
-  assert.ok(/createGammas\(input: BInputInput!\)/.test(schema!), 'its op references the renamed input');
-  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
-  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
-});
+test(
+  'test_112_response_union_must_not_take_the_stored_entry_from_a_body_union',
+  {
+    todo:
+      '#157 names each inline body after its own operation, not the literal word "Input" — createAlphas and ' +
+      "createGammas' bodies no longer propose the same name, so the store-overwrite this test triggered " +
+      '(two bodies and one unrelated $ref response all landing on "Input") cannot happen this way any more. ' +
+      'Retired per the test_111 (regen.test.ts) precedent; the general rename/renumber machinery this test ' +
+      'exercised is still covered by test_69_113, test_113 and test_116 (path-name collisions).',
+  },
+  async () => {},
+);
 
-test('test_123_second_inline_allof_body_renames_instead_of_converging', async () => {
-  // #123: docker/digitalocean/sendgrid mutations all-ops. Obj bodies rename (#104), Union
-  // bodies are guarded (#112); Composed bodies silently took the first body's stored name.
-  const schema = await runOasTest(
-    'inline-allof-body-collision.yaml',
-    ['post:/alphas>**', 'post:/alpha-twins>**', 'post:/bravos>**'],
-    3,
-    5,
-  );
-  assert.ok(schema !== undefined);
-  assert.strictEqual((schema!.match(/^input InputInput/gm) || []).length, 1, 'InputInput defined once');
-  assert.ok(/input InputInput \{[^}]*alpha[^}]*\}/.test(schema!), 'first body keeps the name and its fields');
-  assert.ok(/createAlphas\(input: InputInput!\)/.test(schema!), 'first op references it');
-  assert.ok(/createAlphaTwins\(input: InputInput!\)/.test(schema!), 'an identical body converges on the same input');
-  assert.ok(/input BInputInput \{[^}]*bravo[^}]*\}/.test(schema!), 'a different body is renamed and keeps its own fields');
-  assert.ok(/createBravos\(input: BInputInput!\)/.test(schema!), 'the renamed op references its own input');
-  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
-  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
-});
+test(
+  'test_123_second_inline_allof_body_renames_instead_of_converging',
+  {
+    todo:
+      '#157 names each inline body after its own operation, not the literal word "Input". createAlphas and ' +
+      "createAlphaTwins' identical bodies no longer converge onto one shared type (each keeps its own " +
+      "operation's name instead), and createBravos' different body no longer needs a rename to avoid a " +
+      'collision that can no longer happen. Retired per the test_111 (regen.test.ts) precedent; the general ' +
+      'rename/renumber machinery this test exercised is still covered by test_69_113, test_113 and test_116.',
+  },
+  async () => {},
+);
 
-test('test_104_second_inline_oneof_body_renames_instead_of_duplicating', async () => {
-  // #104: an object body and a oneOf body are both named `Input`, and the pair wrote
-  // `input InputInput` twice — the union now renames, as a second object body always did.
-  const schema = await runOasTest('duplicate-inline-body-inputs.yaml', ['post:/docs>**', 'post:/notes>**'], 2, 3);
-  assert.ok(schema !== undefined);
-  assert.strictEqual((schema!.match(/^input InputInput/gm) || []).length, 1, 'InputInput defined once');
-  assert.ok(/input BInputInput \{ #### replacement for Union BInput/.test(schema!), 'the union body is renamed');
-  assert.ok(/createDocs\(input: InputInput!\)/.test(schema!), 'the object body keeps its name');
-  assert.ok(/createNotes\(input: BInputInput!\)/.test(schema!), 'the union op references the renamed input');
-  const defs = schema!.match(/^(?:type|input|scalar|enum|interface) \w+/gm) || [];
-  assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate definitions: ' + defs.join(', '));
-});
+test(
+  'test_104_second_inline_oneof_body_renames_instead_of_duplicating',
+  {
+    todo:
+      '#157 names each inline body after its own operation, not the literal word "Input" — createDocs\' object ' +
+      "body and createNotes' oneOf body no longer propose the same name, so the rename this test guarded " +
+      'against cannot trigger this way any more. Retired per the test_111 (regen.test.ts) precedent; the ' +
+      'general rename/renumber machinery this test exercised is still covered by test_69_113, test_113 and ' +
+      'test_116 (path-name collisions).',
+  },
+  async () => {},
+);

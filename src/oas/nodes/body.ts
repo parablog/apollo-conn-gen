@@ -1,8 +1,9 @@
-import { Arr, Factory, IType, Prop, ReferenceObject, Scalar, Type } from './internal.js';
+import { Arr, Factory, Get, IType, Prop, ReferenceObject, Scalar, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import _ from 'lodash';
 
 export class Body extends Type {
   public schema: SchemaObject;
@@ -34,7 +35,11 @@ export class Body extends Type {
     context.enter(this);
     trace(context, '-> [body:visit]', 'in ' + this.name);
 
-    this.visitBody(context, 'Input', this.schema);
+    // Name the payload after the operation that sends it, not the placeholder "Input" — e.g.
+    // operation createAuthToken's payload becomes CreateAuthToken, so its input type reads
+    // CreateAuthTokenInput, not a name like BInput4Input. #157
+    const opName = _.upperFirst((this.parent as Get).getGqlOpName());
+    this.visitBody(context, opName, this.schema);
     this.visited = true;
 
     trace(context, '<- [body:visit]', 'out ' + this.name);

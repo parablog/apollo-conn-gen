@@ -1551,7 +1551,7 @@ test('test_anyof_only_body_keeps_its_members', async () => {
   // see docs/FIXED.md #50
   const schema = await runOasTest('anyof-only-body.yaml', ['post:/records>**'], 1, 2);
   assert.ok(schema !== undefined);
-  assert.ok(/input InputInput \{[^}]*\bname: String!/.test(schema!), 'the body carries the anyOf members');
+  assert.ok(/input CreateRecordsInput \{[^}]*\bname: String!/.test(schema!), 'the body carries the anyOf members');
   assert.ok(!/input \w+ \{\s*\}/.test(schema!), 'no empty input block is written');
   assert.ok(/body: """[^"]*\bpriority\b/.test(schema!), 'the members reach the body selection');
 });
@@ -2414,7 +2414,7 @@ test('test_67_allof_decorated_array_body_keeps_the_field', async () => {
   const schema = await runOasTest('allof-array-body.yaml', ['post:/firewalls/{firewallId}/tags>**'], 1, 2);
   assert.ok(schema !== undefined);
   assert.ok(/tags: \[String\]\n/.test(schema!), 'the wrapped array is the field, nullable');
-  assert.ok(/input: InputInput!/.test(schema!), 'the body argument stays');
+  assert.ok(/input: CreateFirewallsByFirewallIdTagsInput!/.test(schema!), 'the body argument stays');
   assert.ok(/tags\n/.test(schema!), 'and the body mapping sends it');
 });
 
@@ -2768,9 +2768,9 @@ test('test_83_form_body_is_sent_with_its_content_type', async () => {
   // 4 types, not 5: since #84 the `metadata` map is one JSON field, with no entry type of its own
   const schema = await runOasTest('form-encoded-body.yaml', ['post:/approve>**', 'post:/customers>**'], 8, 4);
   assert.ok(schema !== undefined);
-  assert.ok(/createApprove\(input: InputInput!\)/.test(schema!), 'the flat form takes an argument');
+  assert.ok(/createApprove\(input: CreateApproveInput!\)/.test(schema!), 'the flat form takes an argument');
   assert.ok(/app_id: appId\n/.test(schema!), 'and sends its fields');
-  assert.ok(/createCustomers\(input: BInputInput!\)/.test(schema!), 'the nested form takes one too');
+  assert.ok(/createCustomers\(input: CreateCustomersInput!\)/.test(schema!), 'the nested form takes one too');
   assert.ok(/address \{\n\s+city\n\s+line1\n/.test(schema!), 'sending the nested object');
   assert.ok(/expand\n/.test(schema!), 'and the list');
   assert.equal(
@@ -2798,7 +2798,7 @@ test('test_83_json_still_wins_over_a_form', async () => {
   const schema = await runOasTest('form-encoded-body.yaml', ['post:/both>**', 'post:/coupons>**'], 8, 3);
   assert.ok(schema !== undefined);
   assert.ok(/createBoth\(input: AddressInput!\)/.test(schema!), 'the JSON body is the one taken');
-  assert.ok(/createCoupons\(input: InputInput!\)/.test(schema!), 'a referenced form is sent as well');
+  assert.ok(/createCoupons\(input: CreateCouponsInput!\)/.test(schema!), 'a referenced form is sent as well');
   assert.equal(
     schema!.match(/\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/g)?.length,
     1,
@@ -2812,7 +2812,7 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   // anyOf, not as a map, so #84 does not reach it.
   const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 97);
   assert.ok(customers !== undefined);
-  assert.ok(/createV1Customers\(input: InputInput!\)/.test(customers!), 'stripe takes its form body');
+  assert.ok(/createV1Customers\(input: CreateV1CustomersInput!\)/.test(customers!), 'stripe takes its form body');
   assert.ok(
     /\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/.test(customers!),
     'with the header',
@@ -2833,7 +2833,7 @@ test('test_137_multipart_with_only_plain_strings_maps_as_a_form', async () => {
   // as a form, the same way #83 already does for application/x-www-form-urlencoded.
   const schema = await runOasTest('form-encoded-body.yaml', ['post:/receipt>**'], 8, 2);
   assert.ok(schema !== undefined);
-  assert.ok(/createReceipt\(input: InputInput!\)/.test(schema!), 'the multipart form takes an argument');
+  assert.ok(/createReceipt\(input: CreateReceiptInput!\)/.test(schema!), 'the multipart form takes an argument');
   assert.ok(/note\n\s+payer\n/.test(schema!), 'and sends its fields');
   assert.ok(
     /\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/.test(schema!),
@@ -2848,7 +2848,7 @@ test('test_137_swagger2_formdata_maps_as_a_form', async () => {
   // string fields now map as a form; /avatar mixes in a file field and stays bodyless, unchanged.
   const schema = await runOasTest('swagger2-formdata.yaml', ['post:/upload>**', 'post:/avatar>**', 'post:/note>**'], 3, 5);
   assert.ok(schema !== undefined);
-  assert.ok(/createUpload\(input: InputInput!\)/.test(schema!), 'the plain-string form takes an argument');
+  assert.ok(/createUpload\(input: CreateUploadInput!\)/.test(schema!), 'the plain-string form takes an argument');
   assert.ok(/description\n\s+title\n/.test(schema!), 'and sends its fields');
   assert.equal(
     schema!.match(/\{ name: "Content-Type", value: "application\/x-www-form-urlencoded" \}/g)?.length,
@@ -3009,8 +3009,11 @@ test(
     // explicit sign-off — this test's job is to catch a silent regression, not to be skipped.
     // 327: #147 turns one undescribed 200 (put:/app/properties/{propertyKey}) from a synthesized
     // wrapper type into JSON -- one fewer type generated.
+    // 337: #157 names each inline request body after its own operation instead of the placeholder
+    // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
+    // keep their own, ten more types generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/confluence-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('confluence-full.json', selections, 213, 327, {
+    const schema = await runOasTest('confluence-full.json', selections, 213, 337, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3055,8 +3058,11 @@ test(
     // PagerDuty had no corpus entry at all before this — not stale, simply untested.
     // 332: #147 turns one undescribed 200 (delete:/schedules/{id}/overrides/{override_id}, which
     // also declares a real 204 -- the 200 wins by the existing preference order) into JSON.
+    // 344: #157 names each inline request body after its own operation instead of the placeholder
+    // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
+    // keep their own, twelve more types generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/pagerduty-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('pagerduty-full.json', selections, 95, 332, {
+    const schema = await runOasTest('pagerduty-full.json', selections, 95, 344, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3081,8 +3087,11 @@ test(
 test(
   'test_122_asana_full_production_selection',
   async () => {
+    // 448: #157 names each inline request body after its own operation instead of the placeholder
+    // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
+    // keep their own, 21 more types generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/asana-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('asana.yaml', selections, 167, 427, {
+    const schema = await runOasTest('asana.yaml', selections, 167, 448, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3096,8 +3105,11 @@ test(
 test(
   'test_122_box_full_production_selection',
   async () => {
+    // 765: #157 names each inline request body after its own operation instead of the placeholder
+    // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
+    // keep their own, two more types generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/box-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('box.yaml', selections, 258, 763, {
+    const schema = await runOasTest('box.yaml', selections, 258, 765, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3111,8 +3123,11 @@ test(
 test(
   'test_122_digitalocean_full_production_selection',
   async () => {
+    // 1298: #157 names each inline request body after its own operation instead of the placeholder
+    // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
+    // keep their own, 14 more types generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/digitalocean-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1284, {
+    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1298, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3195,7 +3210,7 @@ test('test_136_bare_op_selection_visits_the_full_mutation_body', async () => {
   // same reason. see docs/FIXED.md #136
   const schema = await runOasTest('bare-op-nested-body.yaml', ['post:/widgets'], 1, 3);
   assert.ok(schema !== undefined);
-  assert.ok(/input InputInput \{/.test(schema!), 'the body input type is emitted, not blank');
+  assert.ok(/input CreateWidgetsInput \{/.test(schema!), 'the body input type is emitted, not blank');
   assert.ok(/detail: DetailInput/.test(schema!), 'the nested object field survives in the input');
   assert.ok(/detail \{\n\s+color\n\s*\}/.test(schema!), 'and the body mapping reaches into it too');
 });
@@ -3415,4 +3430,38 @@ test('test_156_union_member_json_degrade_merged_object', async (t) => {
   const reason = 'this object declares no properties of its own — sent as raw JSON instead.';
   const note = `"""\n${_.escapeRegExp(`NEEDS ATTENTION: ${reason.replace('—', '--')}`)}\n"""\ntype LooseItemResponse {`;
   assert.ok(new RegExp(note).test(schema!), 'the note sits directly above the merged type, member still dropped');
+});
+
+test('test_157_inline_body_inputs_named_after_their_operation', async () => {
+  // #157: every inline request body used to be named the literal word "Input", so the second
+  // one onward collided and picked up a counter (e.g. operation createAuthTokens used to write
+  // `input BInput4Input`). Each inline body now takes its own operation's name instead.
+  const schema = await runOasTest(
+    'inline-body-input-names.yaml',
+    ['post:/authTokens>**', 'post:/widgets>**', 'post:/uploads>**', 'post:/refBody>**'],
+    4,
+    5,
+  );
+  assert.ok(schema !== undefined);
+
+  assert.ok(/input CreateAuthTokensInput \{\s*token: String\s*\}/.test(schema!), 'the first body takes its op name');
+  assert.ok(/createAuthTokens\(input: CreateAuthTokensInput!\)/.test(schema!), 'the first op references it');
+
+  // a second, unrelated inline body no longer collides with the first — each keeps its own name,
+  // with no counter needed
+  assert.ok(/input CreateWidgetsInput \{\s*name: String\s*\}/.test(schema!), 'the second body keeps its own name');
+  assert.ok(/createWidgets\(input: CreateWidgetsInput!\)/.test(schema!), 'the second op references it');
+
+  // an inline array of inline objects: the item type is named after the operation too, not the
+  // body's own placeholder name
+  assert.ok(/input CreateUploadsItemInput \{\s*fileName: String\s*\}/.test(schema!), 'the array item takes the op name');
+  assert.ok(/createUploads\(input: \[CreateUploadsItemInput!\]!\)/.test(schema!), 'the op takes a list of that item');
+
+  // a body referenced through components/requestBodies keeps the component's own name — this fix
+  // only changes inline bodies
+  assert.ok(/input RefPayloadInput \{\s*value: String\s*\}/.test(schema!), 'a referenced body keeps its component name');
+  assert.ok(/createRefBody\(input: RefPayloadInput!\)/.test(schema!), 'its op references the component name, unchanged');
+
+  assert.ok(!/InputInput/.test(schema!), 'the placeholder name is gone');
+  assert.ok(!/BInput/.test(schema!), 'no collision counter is needed');
 });

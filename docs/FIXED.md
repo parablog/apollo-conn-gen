@@ -8477,3 +8477,82 @@ specifically. Full suite green (443 tests, 442 pass, 0 fail, 1 pre-existing `tod
 `tests/all/regions.test.ts`, `src/index.ts` (export). `tools/connect-gen/src/emit/regions.rs` (the
 Rust mechanism this ports); `graphos-service-factory/scripts/gen-ts.mjs` +
 `scripts/gen-ts.test.mjs` (the external prototype it supersedes as a follow-up).
+
+## 157 [FEAT] [P4] · Synthesized body input types carry the placeholder `b`, not the operation name — ✅ Fixed
+
+**Symptom:** an operation with an inline (non-`$ref`) request body got an input type named after
+nothing in the spec. Every inline body payload was called the literal word `Input`; the second one
+onward collided, was renamed through its parent's placeholder name (`b`, every request body node's
+literal name) plus a counter, and the writer's `Input` suffix landed on top — e.g. AppWorld's Phone
+spec wrote `Phone_BInput4Input` where `Phone_CreateAuthTokenInput` was meant. AppWorld benchmark
+feedback (Adam, 2026-08-24): the meaningless names cost agents extra introspection turns to work
+out what each tool's input is.
+
+**OAS** (inline-body-input-names.yaml — the body's schema is written directly in the operation, so
+there is no component name to borrow):
+```yaml
+/authTokens:
+  post:
+    operationId: createAuthTokens
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              token: { type: string }
+```
+
+**Example:**
+```graphql
+# before -- the first op takes "InputInput"; colliding ones take BInput2Input, BInput4Input, ...
+createAuthTokens(input: InputInput!): ...
+# after -- named after its own operation
+createAuthTokens(input: CreateAuthTokensInput!): ...
+```
+
+**Fix:** name every inline body payload after its own operation — the mirror of what response
+payloads already do (`Obj.updateName`'s `op.getGqlOpName() + 'Response'`). Two edits:
+- `Body.visit` (`body.ts`) passes `_.upperFirst(op.getGqlOpName())` as the payload name instead of
+  the literal `'Input'`; `nameSuffix()` still appends `Input` at write time.
+- `Factory.createArrayType` (`factory.ts`): the existing name-after-the-op branch for `Res` now
+  covers `Body` too, so an inline array body's inline item reads `CreateUploadsItemInput`, not
+  `BItemInput`.
+- Untouched on purpose: a `$ref` body keeps its component name (`visitBodyRef`), a scalar/JSON body
+  keeps its name (the `Scalar` guard), and the Body node's own id stays `body:b` so that segment of
+  every saved selection path does not move.
+- Default output changed, no flag (decided in the approved plan): the fix only helps agents if it
+  is the default, and the one-time break of the byte-identical-default convention was accepted.
+
+**Identity note:** the payload segment of saved selections changes spelling (`obj:input:Input` →
+e.g. `obj:input:CreateAuthTokens`). A Body has exactly one child, so the single-target drift
+recovery already in place (#135's write-back over `T.innerChild`) resolves the old spelling to the
+same output — pinned by `test_157_pre_rename_body_payload_path_still_resolves`
+(`tests/all/regen.test.ts`), which asserts old-spelling and fresh-spelling output are strictly
+equal.
+
+**Known ceiling:** an op-derived name colliding with a same-named component schema still renames
+through the parent's `b` — e.g. `BCreateAuthTokens2`. Rare (it needs a component literally named
+after the operation), left as-is.
+
+**Retired tests:** `test_104`, `test_112`, `test_123` (`tests/all/r3-naming.test.ts`) each needed
+two different operations' bodies to propose the same literal `Input` name — a trigger this fix
+removes structurally. Retired as `todo` per the `test_111` precedent (see #111/#134/#136); their
+fixtures stay in the repo, and the rename/renumber machinery they exercised is still covered by
+`test_69_113`, `test_113` and `test_116` (path-name collisions).
+
+**Verified:** fixture `inline-body-input-names.yaml` (a plain inline body, a second one proving no
+collision counter appears, an inline array of inline objects, and a `$ref` body staying
+`RefPayloadInput`). Test `test_157_inline_body_inputs_named_after_their_operation`
+(`tests/all/oas-core.test.ts`), plus the regen test above. Revert-check: backing out the two source
+edits fails exactly the 16 tests that pin the fix — the new naming test and 15 pre-existing tests
+whose assertions moved to op-derived names — and nothing else. The five real-corpus full-selection
+tests (confluence, pagerduty, asana, box, digitalocean) pin +2 to +21 more types each: bodies that
+only converged because they shared the accidental name `Input` now keep their own type; composition
+still passes for all five. Full suite green (445 tests, 441 pass, 0 fail, 4 todo — 1 pre-existing
+plus the 3 retired above).
+
+**Refs:** `src/oas/nodes/body.ts` (`Body.visit`), `src/oas/nodes/factory.ts` (`createArrayType`),
+`docs/DEFERRED.md #73` (the general identity-drift parking), `docs/FIXED.md #135, #154` (the
+recovery paths that absorb the rename), `docs/TASKS.md #158` (the sibling AppWorld item that
+inherits this entry's identity caution). Adam's AppWorld benchmark report (Slack, 2026-08-24).

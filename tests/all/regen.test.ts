@@ -148,6 +148,21 @@ test('test_72_recovery_never_guesses_among_siblings', async () => {
   );
 });
 
+test('test_157_pre_rename_body_payload_path_still_resolves', async () => {
+  // #157: an inline body's payload used to be named the literal word "Input" (e.g.
+  // obj:input:Input); it is now named after its own operation (obj:input:CreateAuthTokens). A
+  // selection saved with the old spelling must still resolve to the same output as the new one —
+  // the same drift recovery test_135 relies on, applied to a body payload instead of a response.
+  const oldSpelling = await freshGen('inline-body-input-names.yaml');
+  const drifted = oldSpelling.generateSchema(['post:/authTokens>body:b>obj:input:Input>**', 'post:/authTokens>res:r>**']);
+
+  const fresh = await freshGen('inline-body-input-names.yaml');
+  const straight = fresh.generateSchema(['post:/authTokens>body:b>obj:input:CreateAuthTokens>**', 'post:/authTokens>res:r>**']);
+
+  assert.strictEqual(drifted, straight, 'the old-spelling selection generates what the fresh spelling does');
+  assert.ok(drifted.includes('token: String'), 'the selected field is actually present, not just its empty parent type');
+});
+
 test('test_71_same_selection_is_idempotent', async () => {
   const gen = await freshGen('petstore.yaml');
   const a1 = gen.generateSchema(['get:/pet/{petId}>**']);

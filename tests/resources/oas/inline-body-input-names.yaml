@@ -1,0 +1,103 @@
+# #157: an inline request body used to be named after the literal word "Input" for every
+# operation, so the second one onward collided and picked up a counter (e.g. BInput4Input).
+# Each of these bodies is now named after its own operation instead.
+openapi: 3.0.3
+info:
+  title: Inline body input names
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /authTokens:
+    post:
+      operationId: createAuthTokens
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+  # a second, unrelated inline object body — it used to collide with /authTokens' body because
+  # both were named the literal "Input"; naming each after its own operation avoids that entirely
+  /widgets:
+    post:
+      operationId: createWidgets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+  # an inline array of inline objects — the array's item type used to be named after the body's
+  # own placeholder name ("b"), reading BItemInput; it now reads CreateUploadsItemInput
+  /uploads:
+    post:
+      operationId: createUploads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  fileName:
+                    type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+  # a body referenced through components/requestBodies keeps the component's own name — this fix
+  # only touches inline bodies
+  /refBody:
+    post:
+      operationId: createRefBody
+      requestBody:
+        $ref: '#/components/requestBodies/RefPayload'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+components:
+  requestBodies:
+    RefPayload:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RefPayload'
+  schemas:
+    RefPayload:
+      type: object
+      properties:
+        value:
+          type: string
+    Ack:
+      type: object
+      properties:
+        ok:
+          type: boolean

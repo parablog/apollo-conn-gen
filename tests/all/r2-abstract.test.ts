@@ -197,10 +197,11 @@ test('test_R2_union_discriminator_no_mapping_uses_bare_refname', async () => {
 test('test_R2_input_union_consolidated_kind_is_intentional (C6 investigation)', async () => {
   // C6: the review claimed a Body-rooted Union emitting `input ResultUnion { … }` was invalid SDL,
   // but the investigation proved otherwise. When `oneOf` is a *request body*, the merged object
-  // IS an input — referenced as `input InputInput!` from the Mutation field — so `kind='input'`
-  // (inherited from Body) is correct, not a bug. Hard-coding `'type '` here would break this case.
-  // This test locks the correct behavior: the merged object is emitted with the `input` keyword,
-  // the Mutation references it as `input InputInput!`, and the SDL composes cleanly at fed 2.12.
+  // IS an input — referenced as `input CreateCreateInput!` from the Mutation field — so
+  // `kind='input'` (inherited from Body) is correct, not a bug. Hard-coding `'type '` here would
+  // break this case. This test locks the correct behavior: the merged object is emitted with the
+  // `input` keyword, the Mutation references it as `input CreateCreateInput!`, and the SDL
+  // composes cleanly at fed 2.12.
   const schema = await runOasTest(
     'r2-input-union-consolidated.yaml',
     ['post:/create>**'],
@@ -214,15 +215,16 @@ test('test_R2_input_union_consolidated_kind_is_intentional (C6 investigation)', 
   assert.ok(!/\bunion \w+ =/.test(schema!), 'no real union for an input-position oneOf');
   assert.ok(!/->match\(/.test(schema!), 'no ->match for an input-position oneOf');
   // The merged object is emitted with the `input` keyword (not `type`), since it lives in input
-  // position. `nameSuffix()` adds `Input` so the name is `InputInput` — distinct from any output
-  // sibling reached by the same schema.
+  // position. The body is named after its own operation (#157), and `nameSuffix()` adds `Input` on
+  // top, so the name is `CreateCreateInput` — distinct from any output sibling reached by the same
+  // schema.
   assert.ok(
-    /input InputInput \{ #### replacement for Union Input/.test(schema!),
+    /input CreateCreateInput \{ #### replacement for Union CreateCreate/.test(schema!),
     'merged input-position union must use the `input` keyword and the Input-suffixed name',
   );
   // The Mutation references it as an input type — a valid GraphQL input-field reference.
   assert.ok(
-    schema!.includes('createCreate(input: InputInput!)'),
+    schema!.includes('createCreate(input: CreateCreateInput!)'),
     'the Mutation must reference the merged input type by its Input-suffixed name',
   );
   // runOasTest already asserted composition passed (it returns the schema only on compose success),
