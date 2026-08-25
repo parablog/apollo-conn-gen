@@ -108,7 +108,7 @@ export class PropArray extends Prop {
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [prop-array:select]', 'in: ' + this.name);
 
-    const sanitised = this.fieldForSelect();
+    const sanitised = this.fieldForSelect(context);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
     // #16: items with a default already cover a missing key, e.g. (r7r8-selection)

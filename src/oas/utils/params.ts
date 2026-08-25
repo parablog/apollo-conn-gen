@@ -10,7 +10,10 @@ export class Params {
   //   (omni)     `/v1/labels/{labelName}`  declares `name`     -> renamed to `labelName`
   //   (mindbody) `/add-ons/{addOnId}`      declares `addonId`  -> renamed to `addOnId`
   //   (omni)     `/v1/api-keys/{id}`       declares nothing    -> `id: String!` invented
-  public static matchToPath(parameters: ParameterObject[], path: string): ParameterObject[] {
+  // `keep` is the `--keep-field-names` flag: "really differ" below is then judged by the spellings
+  // the flag would actually write, so a param is still renamed to match its token even when kept.
+  //   e.g. `/labels/{labelName}` declaring `label_name` is renamed to `labelName`, not left as-is
+  public static matchToPath(parameters: ParameterObject[], path: string, keep: boolean = false): ParameterObject[] {
     const pathTokens = Params.findPathTokens(path);
     const pathParams = parameters.filter((p) => p.in?.toLowerCase() === 'path');
 
@@ -21,7 +24,7 @@ export class Params {
     // `{labelName}`, and entity resolvers look up properties by the raw name. see docs/FIXED.md #81
     const renames = new Map(
       Array.from(matched, ([token, param]): [ParameterObject, string] => [param, token]).filter(
-        ([p, token]) => Naming.genParamName(p.name) !== Naming.genParamName(token),
+        ([p, token]) => Naming.genParamName(p.name, keep) !== Naming.genParamName(token, keep),
       ),
     );
 

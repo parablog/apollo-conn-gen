@@ -52,7 +52,7 @@ export class PropEn extends Prop {
 
   public select(context: OasContext, writer: Writer, selection: string[]): void {
     trace(context, '   [prop:select]', this.name);
-    const sanitised = this.fieldForSelect();
+    const sanitised = this.fieldForSelect(context);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
     if (this.isOptionalInSelection(context)) {
       writer.write('?');

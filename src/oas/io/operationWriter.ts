@@ -91,7 +91,7 @@ export class OperationWriter {
     // queryParams). Warnings are owned by the plan — see security.ts.
     const { header: headerAuth, query: queryAuth } = this.security.forOp(op);
 
-    const path = this.templatedPath(op, override);
+    const path = this.templatedPath(context, op, override);
 
     // body is emitted last; its presence is cheap to compute up front. the body block streams
     // through the node tree (Body.select), so unlike query/headers it writes to `writer` directly
@@ -125,10 +125,12 @@ export class OperationWriter {
   }
 
   // template each {elem} as {$args.<sanitised>} (the arg name), not the raw OAS key. see docs/FIXED.md #2
-  // an override path may already template (`{$args.id}`, `{$config.v}`) — leave `$` segments alone
-  private templatedPath(op: Op, override?: OverrideEntry): string {
+  // an override path may already template (`{$args.id}`) — leave `$` segments alone
+  //   e.g. GET /pets/{pet_id} -> http: { GET: "/pets/{$args.petId}" }
+  private templatedPath(context: OasContext, op: Op, override?: OverrideEntry): string {
+    const keep = context.generateOptions?.keepFieldNames === true;
     return (override?.path ?? op.operation.path).replace(/\{([^}]+)\}/g, (m, name) =>
-      name.startsWith('$') ? m : `{$args.${Naming.genParamName(name)}}`,
+      name.startsWith('$') ? m : `{$args.${Naming.genParamName(name, keep)}}`,
     );
   }
 
@@ -153,10 +155,11 @@ export class OperationWriter {
     }
 
     // e.g. `"api-version": $('2024-01')` appended, `"ids": ids->joinNotNull(";")` replaced
+    const keep = context.generateOptions?.keepFieldNames === true;
     const entries = this.mergeOverrides(
       queryParams,
       override?.queryParams ?? {},
-      (p) => `${Naming.genParamName(p.name)}${this.arrayJoin(p)}`,
+      (p) => `${Naming.genParamName(p.name, keep)}${this.arrayJoin(p)}`,
     );
 
     // R5 slice 3: apiKey-in-query auth merges into the same query-param object as a JSONSelection

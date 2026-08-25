@@ -156,7 +156,8 @@ export class Get extends Type implements Op {
 
     // every `{token}` in the path needs a parameter of the same name, whatever the spec called it
     // e.g. (omni) `get /v1/api-keys/{id}` declares no parameters at all. see docs/FIXED.md #81
-    const parameters = Params.matchToPath(declared, this.operation.path);
+    const keep = context.generateOptions?.keepFieldNames === true;
+    const parameters = Params.matchToPath(declared, this.operation.path, keep);
 
     this.params = parameters
       .filter((p) => !p.in || (p.in && (p.in as string).toLowerCase() !== 'header'))

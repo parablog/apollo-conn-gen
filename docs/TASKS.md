@@ -72,53 +72,6 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-## 158 [FEAT] [P4] · `--keep-field-names`: preserve spec spellings that are already valid GraphQL — ⬜ Open
-
-**Example:** `properties: { access_token: { type: string } }`
-- today: `accessToken: String` in SDL, selection alias `accessToken: access_token`
-- with the flag: `access_token: String`, no alias needed
-
-**Why:** AppWorld benchmark feedback (Adam, 2026-08-24): agents see `accessToken` in the schema but
-`access_token` in the upstream API docs, and burn search/introspection turns deciding which is real.
-- `Naming.genParamName` camelCases every field/param unconditionally (`src/oas/utils/naming.ts:142-151`).
-- The wire stays correct via aliases, but the schema no longer matches the spec's own vocabulary.
-
-**Reference:** PR #6 (adamd-apollo, `parablog/apollo-conn-gen`) — reuse its flag plumbing shape and
-keep-own-spelling guard idea; do NOT copy:
-- its mutable static `Naming.keepOriginalNames` — gen is consumed as a library (web app), a static
-  leaks across generations; thread `context.generateOptions` instead, no statics anywhere.
-- its guard admits `__`-prefixed names (reserved in GraphQL) — exclude them.
-- it ships no tests and no identity caution.
-
-**Shape:** opt-in flag, plumbing like `skipOptionalArgs` (`src/cli/oas.ts` ~L165 block + opts map
-~L99 + `GenerateOptions` field `oasContext.ts:37`); default output stays byte-identical.
-- Guard: keep the spelling iff it matches `/^[_A-Za-z][_0-9A-Za-z]*$/`, doesn't start with `__`,
-  and isn't `true|false|null`; sanitise as today otherwise.
-- Mechanism: `genParamName`/`sanitiseField`/`sanitiseFieldForSelect` gain a trailing `keep = false`
-  param; only spelling-writing call sites pass it. Type-name synthesis (`naming.ts:259/280`) and
-  match keys (`params.ts:24/57`) stay canonical.
-- Sites — SDL: `param.ts:81`, `prop.ts:37`, `propCircRef.ts:48`, `obj.ts:107` (`@key`).
-  Selection: `prop.ts:86` `fieldForSelect()` gains a context param (6 one-line subclass callers);
-  `propRef.ts:90`. Mappings: `obj.ts:184` (`$this`), `operationWriter.ts:159`, `:131`
-  `templatedPath` gets context from `writeConnector:94`.
-- 14 files, 11 of them one-line pass-throughs; ripple beyond this list → stop, back to codex.
-- `sanitiseFieldForSelect` already emits no alias when sanitised === original (`naming.ts:192`).
-- Narrowed contract: `numberTwinFields` (`typeUtils.ts:381`) keeps canonical dedupe, so a
-  `foo_bar`/`fooBar` twin pair may still rename — file that as #162 during this entry's ceremony;
-  keep twin pairs out of the fixture.
-- **Identity** change under the flag (renamed nodes → new ids/paths): same `docs/DEFERRED.md #73`
-  caution as `docs/FIXED.md #157`; no recovery code — selections under one flag setting are
-  self-consistent.
-- Fixture `keep-field-names.yaml`: fields `owner_id`, `created_at`, non-identifier `content-type`,
-  reserved-ish `__meta`; query param `page_size`. Flag on: `owner_id` in SDL, bare in the selection,
-  arg `page_size` spelled the same in queryParams; `content-type`/`__meta` rename exactly as today.
-- Precondition: the #157 fix is committed first (its SHA is the failing-first baseline).
-- Same fidelity-over-convention direction as the parked enum-casing decision (`docs/DEFERRED.md #143`).
-
-**Refs:** `src/oas/utils/naming.ts`, `docs/DEFERRED.md #73, #143`, `docs/FIXED.md #1`, PR #6, the
-codex-approved plan (`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's AppWorld benchmark
-report (Slack, 2026-08-24).
-
 ## 159 [FEAT] [P4] · `--skip-arg-defaults`: document defaults as prose instead of executable SDL defaults — ⬜ Open
 
 **Example:**
@@ -212,3 +165,23 @@ default output stays byte-identical.
 **Refs:** `src/oas/nodes/get.ts`, `src/oas/nodes/post.ts`, `src/oas/utils/schemas.ts`, PR #8, the
 codex-approved plan (`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's AppWorld benchmark
 report (Slack, 2026-08-24).
+
+## 162 [FEAT] [P5] · `--keep-field-names` still renumbers a `foo_bar`/`fooBar` twin pair — ⬜ Open
+
+**Example:** `properties: { foo_bar: {...}, fooBar: {...} }` — both sanitise to `fooBar`. With
+`--keep-field-names` on, the second one is still renamed to `fooBar2` instead of staying `foo_bar`.
+
+**Why:** found scoping `docs/FIXED.md #158`'s fixture (kept deliberately free of twin pairs, so
+this stayed out of that entry). `T.numberTwinFields` (`src/oas/nodes/typeUtils.ts:381`) decides the
+collision by comparing `Naming.sanitiseField(prop.name)` with no `keep` argument, before either
+prop's own kept spelling is ever written — so a name that `--keep-field-names` would otherwise keep
+still loses to its sanitised twin.
+
+**Shape:** not scoped yet. `numberTwinFields` is called through `selectedProps`, which none of its
+five callers (`Obj`/`Composed`/`Union`/`entity.ts`/`sparseFieldsets.ts`) currently pass a context
+to — threading `keep` through means changing that method's signature everywhere it's overridden and
+called, a wider ripple than #158's one-line pass-throughs. Needs its own investigation and fixture
+(two properties that sanitise to one field, one of them independently keepable).
+
+**Refs:** `src/oas/nodes/typeUtils.ts`, `src/oas/nodes/obj.ts`, `src/oas/nodes/comp.ts`,
+`src/oas/nodes/union.ts`, `docs/FIXED.md #158`.

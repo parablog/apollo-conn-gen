@@ -98,6 +98,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     mapper: mapper,
     skipOptionalArgs: opts.skipOptionalArgs,
     skipOptionalMarkers: opts.skipOptionalMarkers,
+    keepFieldNames: opts.keepFieldNames,
     servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
@@ -164,6 +165,11 @@ program
   .option('--directives <file>', 'Load directives (Type or Type.field -> ["@…"]) from a JSON file')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)
   .option('--skip-optional-markers', 'Skip the "?" optional-field markers in selections', false)
+  .option(
+    '--keep-field-names',
+    'Keep spec field/param spellings that are safe both as GraphQL names and as bare connector-selection keys (no camelCasing, no aliases)',
+    false,
+  )
   .option(
     '--service-prefix <name>',
     'Prefix every type with "<Name>_" and every root field with "<name>_", so separately generated connectors compose without colliding',

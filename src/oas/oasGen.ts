@@ -88,6 +88,7 @@ interface IGenOptions {
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
   skipOptionalMarkers?: boolean;
+  keepFieldNames?: boolean;
   servicePrefix?: string;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;

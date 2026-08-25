@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: R158 Keep Field Names Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # a snake_case query param and a mix of field spellings — the flag's main case
+  /items:
+    get:
+      operationId: listItems
+      summary: List items
+      parameters:
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: A list of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+  # path param name matches its field exactly — the entity-resolver shape
+  /items/{item_id}:
+    get:
+      operationId: getItem
+      summary: Get an item by id
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+  # the path token is already camelCase, but the declared parameter is snake_case — under the
+  # flag both the SDL argument and the {$args…} path template must still agree on one spelling
+  /labels/{labelName}:
+    get:
+      operationId: getLabel
+      summary: Get a label by name
+      parameters:
+        - name: label_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A label
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Label'
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        item_id:
+          type: string
+        owner_id:
+          type: string
+        created_at:
+          type: string
+        # not a plain identifier — kept spellings still camelCase and alias this one
+        content-type:
+          type: string
+        # GraphQL reserves the "__" prefix for its own introspection names — stays camelCased
+        __meta:
+          type: string
+        # reads as the literal `null` inside a connector selection — stays camelCased (#82)
+        null_sort:
+          type: string
+        # a direct self-cycle: cut and commented out, same as with the flag off (#10)
+        parent_item:
+          $ref: '#/components/schemas/Item'
+    Label:
+      type: object
+      properties:
+        label_name:
+          type: string

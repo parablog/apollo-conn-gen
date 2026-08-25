@@ -139,7 +139,13 @@ export class Naming {
   // `Subscription`) can't also be an ordinary type. see docs/FIXED.md #45
   private static readonly RESERVED_ROOT_TYPE_NAMES = new Set(['Query', 'Mutation', 'Subscription']);
 
-  public static genParamName(param: string): string {
+  // `keep` is the `--keep-field-names` flag: a safe-to-keep spelling is written verbatim.
+  //   e.g. `access_token` -> kept as `access_token`, so the schema matches the API's own docs
+  public static genParamName(param: string, keep: boolean = false): string {
+    if (keep && Naming.keepsOwnSpelling(param)) {
+      return param;
+    }
+
     // Split on any run of non-alphanumeric characters, camelCase the parts, then
     // guarantee a valid GraphQL identifier: non-empty and not starting with a digit.
     // (Plain `[-_.]` splitting let spaces, `$`, `%`, … and leading digits through.)
@@ -148,6 +154,13 @@ export class Naming {
       return Naming.NUMBER_PREFIX;
     }
     return /^[0-9]/.test(camel) ? Naming.NUMBER_PREFIX + camel : camel;
+  }
+
+  // A safe-to-keep spelling: a plain identifier, not `__`-prefixed (reserved by GraphQL), and
+  // not `null`/`true`/`false` (those read as literals inside a connector selection, see #62/#82).
+  //   e.g. `owner_id` -> kept; `content-type`, `__meta`, `null_sort` all still get camelCased.
+  private static keepsOwnSpelling(name: string): boolean {
+    return /^[_A-Za-z][_0-9A-Za-z]*$/.test(name) && !/^null|^(true|false)$/.test(name) && !name.startsWith('__');
   }
 
   // What joins the node ids in a selection path, e.g. `get:/graph>res:r>obj:type:#/c/s/Content`
@@ -177,16 +190,24 @@ export class Naming {
     return Naming.RESERVED_ROOT_TYPE_NAMES.has(identifier) ? identifier + 'Type' : identifier;
   }
 
-  public static sanitiseField(name: string): string {
+  public static sanitiseField(name: string, keep: boolean = false): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
+    if (keep && Naming.keepsOwnSpelling(fieldName)) {
+      return fieldName;
+    }
     return Naming.FIELD_CONVERTER.convert(fieldName);
   }
 
   // `writtenAs` replaces the field side of the alias — a sibling's numbered name from #69.
   //   e.g. (trello) foo_bar with writtenAs fooBar2 -> `foo_bar: fooBar2`
-  public static sanitiseFieldForSelect(name: string, isInput: boolean = false, writtenAs?: string): string {
+  public static sanitiseFieldForSelect(
+    name: string,
+    isInput: boolean = false,
+    writtenAs?: string,
+    keep: boolean = false,
+  ): string {
     const fieldName = name.startsWith('@') ? name.substring(1) : name;
-    const sanitised = writtenAs ?? Naming.FIELD_CONVERTER.convert(fieldName);
+    const sanitised = writtenAs ?? Naming.sanitiseField(name, keep);
 
     // The JSON key is already a valid identifier identical to the field — no alias needed.
     if (sanitised === name) {

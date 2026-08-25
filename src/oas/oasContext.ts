@@ -47,6 +47,9 @@ export type GenerateOptions = {
   mapper?: Mapper;
   skipOptionalArgs?: boolean;
   skipOptionalMarkers?: boolean; // skip '?' marker
+  // #158: keep a spec field/param spelling verbatim when it already reads safely as both a
+  // GraphQL name and a bare connector-selection key, instead of always camelCasing it.
+  keepFieldNames?: boolean;
   servicePrefix?: string; // prefix every type and root field with the service name
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;

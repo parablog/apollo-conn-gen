@@ -97,7 +97,7 @@ export class PropObj extends Prop {
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [prop-obj:select]', 'in ' + this.name + ', obj: ' + this.obj.name);
 
-    const sanitised = this.fieldForSelect();
+    const sanitised = this.fieldForSelect(context);
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
     if (this.isOptionalInSelection(context)) {

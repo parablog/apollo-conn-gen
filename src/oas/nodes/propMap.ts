@@ -59,7 +59,7 @@ export class PropMap extends Prop {
     trace(context, '-> [prop-map:select]', 'in ' + this.name + ', map: ' + this.map.name);
 
     const fieldName = this.name;
-    const sanitised = this.fieldForSelect();
+    const sanitised = this.fieldForSelect(context);
 
     // sanitised is already "alias: \"original\"" when the JSON key needs one — write it once. When
     // it doesn't (sanitised === fieldName), keep a self-alias (name: name); some composers need it

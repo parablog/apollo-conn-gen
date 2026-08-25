@@ -52,7 +52,7 @@ export class PropScalar extends Prop {
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '   [prop:select]', this.name);
-    const sanitised = this.fieldForSelect();
+    const sanitised = this.fieldForSelect(context);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
     // we can only write the default value if and only if the name is the same as the sanitised name,

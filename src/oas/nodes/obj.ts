@@ -101,10 +101,11 @@ export class Obj extends Type {
     // plumbing off the public Query type.
     const resolvers = this.entityResolvers;
     if (resolvers.length > 0) {
+      const keep = context.generateOptions?.keepFieldNames === true;
       for (const key of Array.from(new Set(resolvers.map((r) => r.keyFields))).sort()) {
         const sanitisedKey = key
           .split(' ')
-          .map((field) => Naming.sanitiseField(field))
+          .map((field) => Naming.sanitiseField(field, keep))
           .join(' ');
         writer.write(` @key(fields: "${sanitisedKey}")`);
       }
@@ -179,9 +180,10 @@ export class Obj extends Type {
     const i6 = ' '.repeat(6);
 
     // Rewrite each {param} to {$this.param} (vs {$args.param} for Query-field connectors).
+    const keep = context.generateOptions?.keepFieldNames === true;
     const path = resolver.path.replace(
       /\{([a-zA-Z0-9_]+)\}/g,
-      (_match, param) => `{$this.${Naming.sanitiseField(param)}}`,
+      (_match, param) => `{$this.${Naming.sanitiseField(param, keep)}}`,
     );
 
     writer

@@ -34,7 +34,7 @@ export abstract class Prop extends Type {
 
     writer
       .write('  ')
-      .write(this.renamedTo ?? Naming.sanitiseField(this.name))
+      .write(this.renamedTo ?? Naming.sanitiseField(this.name, context.generateOptions?.keepFieldNames === true))
       .write(': ');
 
     this.generateValue(context, writer);
@@ -82,7 +82,12 @@ export abstract class Prop extends Type {
 
   // The field as the selection writes it: the JSON key aliased to the written name when they differ.
   //   e.g. (trello) foo_bar renamed to fooBar2 -> body `foo_bar: fooBar2`, response `fooBar2: foo_bar`
-  protected fieldForSelect(): string {
-    return Naming.sanitiseFieldForSelect(this.name, this.parent?.kind === 'input', this.renamedTo);
+  protected fieldForSelect(context: OasContext): string {
+    return Naming.sanitiseFieldForSelect(
+      this.name,
+      this.parent?.kind === 'input',
+      this.renamedTo,
+      context.generateOptions?.keepFieldNames === true,
+    );
   }
 }

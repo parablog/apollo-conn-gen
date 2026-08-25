@@ -78,7 +78,7 @@ export class Param extends Type {
       }
     }
 
-    writer.write(Naming.genParamName(this.name));
+    writer.write(Naming.genParamName(this.name, context.generateOptions?.keepFieldNames === true));
     writer.write(': ');
 
     this.resultType.generate(context, writer, selection);

@@ -45,7 +45,7 @@ export class PropCircRef extends Prop {
     }
     writer
       .write('  # ')
-      .write(Naming.sanitiseField(this.name))
+      .write(Naming.sanitiseField(this.name, context.generateOptions?.keepFieldNames === true))
       .write(': ')
       .write(value)
       .write(' - circular reference omitted\n');

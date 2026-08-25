@@ -8554,5 +8554,80 @@ plus the 3 retired above).
 
 **Refs:** `src/oas/nodes/body.ts` (`Body.visit`), `src/oas/nodes/factory.ts` (`createArrayType`),
 `docs/DEFERRED.md #73` (the general identity-drift parking), `docs/FIXED.md #135, #154` (the
-recovery paths that absorb the rename), `docs/TASKS.md #158` (the sibling AppWorld item that
+recovery paths that absorb the rename), `docs/FIXED.md #158` (the sibling AppWorld item that
 inherits this entry's identity caution). Adam's AppWorld benchmark report (Slack, 2026-08-24).
+
+## 158 [FEAT] [P4] · `--keep-field-names`: preserve spec spellings that are already valid GraphQL — ✅ Fixed
+
+**Symptom:** the generator camelCases every field and parameter name, so the schema stops matching
+the API's own vocabulary. An agent reads `access_token` in the upstream API docs but finds
+`accessToken` in the schema, and burns extra search/introspection turns deciding which one is real.
+AppWorld benchmark feedback (Adam, 2026-08-24). The wire was always correct — a selection alias
+(`accessToken: access_token`) mapped the renamed field back to its JSON key — but the vocabulary
+mismatch is what costs the agent.
+
+**OAS** (keep-field-names.yaml — spellings that are already valid GraphQL next to ones that are not):
+```yaml
+/items:
+  get:
+    parameters:
+      - name: page_size
+        in: query
+components:
+  schemas:
+    Item:
+      properties:
+        owner_id: { type: string }
+        content-type: { type: string }   # not a plain identifier
+        __meta: { type: string }         # "__" prefix is reserved by GraphQL
+        null_sort: { type: string }      # reads as the literal null in a selection
+```
+
+**Example:**
+```graphql
+# default (unchanged) -- camelCased field, selection alias back to the wire key
+ownerId: String          # selection: ownerId: owner_id
+# with --keep-field-names -- the spec's own spelling, written bare, no alias
+owner_id: String         # selection: owner_id
+```
+
+**Fix:** an opt-in `--keep-field-names` flag (`GenerateOptions.keepFieldNames`), threaded through
+`context.generateOptions` like `skipOptionalArgs` — no statics, gen is consumed as a library.
+`Naming.genParamName` / `sanitiseField` / `sanitiseFieldForSelect` gain a trailing `keep = false`;
+each writer that spells a name passes the flag.
+- The guard (`Naming.keepsOwnSpelling`): a name is kept only when it is safe in BOTH grammars — a
+  plain identifier (`/^[_A-Za-z][_0-9A-Za-z]*$/`), not `__`-prefixed, and not starting with `null`
+  or exactly `true`/`false` (those read as literals in a selection — the #62/#82 rule).
+- So `owner_id` and `page_size` are kept; `content-type`, `__meta`, and `null_sort` rename exactly
+  as before, flag or no flag.
+- Every spelling-writing site respects the flag: SDL fields and arguments, selections (a kept name
+  emits bare, no alias), `@key(fields:)`, `{$this...}` entity templates, `{$args...}` path
+  templates, queryParams, and the commented-out circular-reference line.
+- A path parameter declared under a different name than its `{token}` in the URL is still renamed
+  to the token — `/labels/{labelName}` declaring `label_name` becomes `labelName`. The #81 rename
+  decision (`Params.matchToPath`) now compares the spellings the flag would actually write, so the
+  SDL argument and the `{$args...}` path template always agree.
+- Stays canonical on purpose: type-name synthesis, operation naming, and the twin-collision dedupe
+  (`numberTwinFields`) — a `foo_bar`/`fooBar` twin pair may still rename under the flag, filed as
+  `docs/TASKS.md #162`.
+- `--batch`'s `$batch.<keyFields>` templates already write the raw spec spelling and are untouched;
+  combining `--batch` with this flag is out of scope.
+- Flag off, output is byte-identical to before.
+
+**Identity note:** under the flag, kept names give their nodes new ids and paths — the same
+`docs/DEFERRED.md #73` caution as #157. No recovery code on purpose: selections made under one
+flag setting are self-consistent. Same fidelity-over-convention direction as the parked
+enum-casing decision (`docs/DEFERRED.md #143`).
+
+**Verified:** fixture `keep-field-names.yaml`; six tests in `tests/all/keep-field-names.test.ts` —
+flag off unchanged, keepable spellings bare everywhere, unkeepable ones renaming as before (pinning
+the both-grammars guard against a looser GraphQL-only one), entity/path/circular outputs, the
+path-token mismatch, and a CLI spawn pinning the Commander declaration end-to-end. Reverting only
+the `matchToPath` comparison fails exactly the mismatch test. Full suite green (451 tests, 447
+pass, 0 fail, 4 pre-existing todo); default output stays pinned byte-identical by the corpus and
+real-spec full-selection tests.
+
+**Refs:** `src/oas/utils/naming.ts` (`keepsOwnSpelling`), `src/oas/utils/params.ts`
+(`matchToPath`), `docs/DEFERRED.md #73, #143`, `docs/FIXED.md #62, #81, #82, #157`,
+`docs/TASKS.md #162`, PR #6 (adamd-apollo — the flag idea; its mutable-static shape deliberately
+not copied). Adam's AppWorld benchmark report (Slack, 2026-08-24).
