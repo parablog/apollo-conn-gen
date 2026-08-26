@@ -475,49 +475,6 @@ no-repro cases" scope, not `docs/TASKS.md`'s loop-actionable one.
 (`graphos-service-factory`, criterion 3's caveat) is where this was first flagged as needing a
 follow-up.
 
-## 161 [FEAT] · Entity link half: synthesized reference fields on id-carrying types — 📋 Noted (waiting on Adam's fork diff)
-
-**Example:** `Song { album_id }` plus an R1-resolved `Album` → emit a `Song.album: Album` field
-selecting `album: { id: $.album_id }`, so the router can traverse song → album through the
-type-level resolver.
-
-**Why:** AppWorld follow-up (Adam, Slack, 2026-08-25): `--infer-entity-resolvers` emits the
-resolver half only — `@key` plus the type-level `@connect`/`$this` on the entity itself
-(`src/oas/nodes/entity.ts`, `obj.ts` `writeEntityConnector`). Nothing emits the linking field on
-the types that carry the id.
-- Without it, cross-type traversal queries don't exist — that part of Adam's claim is confirmed.
-- "The resolvers are unreachable" is overstated, though: a type-level resolver still backfills
-  fields on any entity some connector returns with its key (e.g. a partial list response).
-
-**From Adam's benchmark report (read 2026-08-25, claude.ai/code/artifact/c79bb3ab):**
-- His heuristic is **deterministic exact-name matching** of GET-by-id ops onto id-carrying types —
-  no fuzzy inference; 150 fields across 8 services, live-verified.
-- Adoption was organic: 48/57 dev tasks used the synthesized fields unprompted (schema-embedded
-  knowledge got used; discovery tools had zero voluntary adoption).
-- Isolated impact: part of the v5 arm that closed the turn gap to +8% (sonnet, 168 tasks) while
-  task completion hit 81.0.
-- Operational caveat to carry into any implementation: one agent call now fans out N concurrent
-  upstream requests — connector concurrency limits need setting deliberately.
-- Scope limit confirmed: kills *agent-side* N+1 only; wire-level N+1 needs real batch endpoints
-  (`--batch`, which his benchmark couldn't test — no upstream batch endpoints).
-
-**Not loop-actionable yet:**
-- No reference code: Adam's link-half work is in his fork and in none of PRs #5-#9 (verified) —
-  ask him for the diff.
-- The FK-name → type match (`album_id` → `Album`) heuristic is half-answered by the report
-  (exact-name matching, above); the remaining design decision is whether we adopt exact-only or
-  allow the sanitised/kept-spelling variants #158 introduced.
-- Satisfiability territory: synthesized fields on shared types interact with composition pruning
-  (never-returned types, partial-provider field keeping) — the same class of constraint that shaped
-  R2's limits.
-
-Moves to `docs/TASKS.md` once Adam's diff is in hand and the heuristic is decided.
-
-**Refs:** `src/oas/nodes/entity.ts`, `src/oas/nodes/obj.ts` (`writeEntityConnector`), PRs #5-#9
-(`parablog/apollo-conn-gen`, absence verified), the codex-approved plan
-(`~/.claude-personal/specs/loop-nXHoSHEN/plan.md`). Adam's Slack follow-up (2026-08-25) and
-benchmark report (claude.ai/code/artifact/c79bb3ab).
-
 ## 164 [BUG] · Tags/pinned args degrade to `String` where Rust emits `[String!]`/`Boolean` — 📋 Noted, no repro at HEAD
 
 **Symptom:** Adam's benchmark report (measured on v0.24.0), verbatim: "one known counter-fidelity
@@ -536,7 +493,7 @@ shape not yet probed — `oneOf` param, `nullable`, `deepObject` style are the u
 
 **Out of scope, a separate question:** item nullability — every probe above returns `[String]`,
 not `[String!]` — is the one real fidelity delta left against the Rust baseline, but it is not the
-"degrades to String" bug the report named.
+"degrades to String" bug the report named. Filed as `docs/TASKS.md #166`.
 
 Moves to `docs/TASKS.md` when Adam supplies a failing op/spec, or a re-benchmark on the next
 release still shows it.
