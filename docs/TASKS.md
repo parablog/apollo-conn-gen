@@ -72,4 +72,24 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-No open entries right now — #161 moved to `docs/FIXED.md`.
+## 168 [BUG] [P5] · R1 `@key`/`$this` ignore twin renames — the key can point at the wrong twin — ⬜ Open
+
+**Example:** `Take { take_Id, take_id }` — both clean to `takeId`; the sibling claims it and the
+key numbers to `takeId2` (#69) — yet R1 emits `@key(fields: "takeId")` and `{$this.takeId}`, the
+sibling's field.
+
+**Symptom:** the resolver keys on the sibling's value — a partial response backfilled through R1
+fetches the wrong resource.
+
+**OAS:** `tests/resources/oas/entity-link.yaml`'s `Take` (and `Loop`) already build this shape.
+
+**Cause:** both derivations use `Naming.sanitiseField(raw)` and never consult `renamedTo` —
+`@key` in `obj.ts` `generate()`, `$this` in `writeEntityConnector`.
+
+- Latent: needs a case-twin colliding with the key param's name.
+- The #161 link stub mirrors the same derivation on purpose (`propEntityLink.ts` `select()`), so
+  links stay consistent with the `@key` today — a fix must move all three together.
+
+**Refs:** `src/oas/nodes/obj.ts`, `src/oas/nodes/propEntityLink.ts`,
+`tests/all/entity-link.test.ts` (`test_161_target_twin_rename_stub_matches_key` pins today's
+shape).
