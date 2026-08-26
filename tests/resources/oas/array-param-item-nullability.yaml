@@ -1,0 +1,55 @@
+openapi: 3.0.0
+info:
+  title: array param items get ! unless their items schema is nullable
+  version: 1.0.0
+# see docs/FIXED.md #166
+# A query string can't send a null entry inside a list, so an array parameter's items get `!`
+# unless the items schema says nullable: true — same rule as #55's outer argument bang, one level
+# down. A response field keeps its plain `[String]` on purpose (out of scope here).
+servers:
+  - url: https://example.com
+paths:
+  /things:
+    get:
+      operationId: getThings
+      parameters:
+        # plain items, no nullable -> item slots can't be null -> [String!]
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+        # items explicitly nullable -> item slots may be null -> [String]
+        - name: optionalTags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              nullable: true
+        # the nullable flag lives on the referenced component, not the items line itself -> [String]
+        - name: refTags
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/NullableName"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  # same shape as tags above, but a response field, not a parameter -> stays [String]
+                  labels:
+                    type: array
+                    items:
+                      type: string
+components:
+  schemas:
+    NullableName:
+      type: string
+      nullable: true

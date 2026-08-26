@@ -1045,6 +1045,19 @@ test('test_required_and_nullable_emits_a_nullable_field', async () => {
   assert.ok(/since: String[^!]/.test(schema!), 'required + nullable parameter -> no !');
 });
 
+test('test_166_array_param_items_get_non_null_unless_nullable', async () => {
+  // A query string has no way to send a null entry inside a list, so a parameter's array items get
+  // `!` unless the items schema says nullable: true — #55's rule, one level down. see docs/FIXED.md #166
+  const schema = await runOasTest('array-param-item-nullability.yaml', ['get:/things>**'], 1, 1, {
+    skipValidation: true,
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/\btags: \[String!\]/.test(schema!), 'plain items -> item slots cannot be null');
+  assert.ok(/\boptionalTags: \[String\]/.test(schema!), 'items nullable: true -> item slots may be null');
+  assert.ok(/\brefTags: \[String\]/.test(schema!), 'nullable on the referenced component counts too');
+  assert.ok(/\blabels: \[String\]\n/.test(schema!), 'a response field keeps null-tolerant items, untouched');
+});
+
 test('test_59_required_nested_array_bang_stays_on_the_line', async () => {
   // #59: a required list of lists ended its own line before the `!` was written, so the `!` landed
   // alone on the next one. Parses fine (line breaks mean nothing), reads wrong.
@@ -2018,7 +2031,9 @@ test('test_object_array_param_degrades_to_json_scalar', async () => {
   // ([JSON], not a flattened bare JSON). see docs/FIXED.md #40. runOasTest composes via rover.
   const schema = await runOasTest('param-object-array.yaml', ['get:/search>**'], 1, 1);
   assert.ok(schema !== undefined);
-  assert.ok(/\bfilters: \[JSON\]/.test(schema!), 'object array param degraded to [JSON]');
+  // docs/FIXED.md #166: ! is about whether the list slot can be null, not whether the item's shape is known, so
+  // the degraded JSON item still gets it, same as any other non-nullable array item.
+  assert.ok(/\bfilters: \[JSON!\]/.test(schema!), 'object array param degraded to [JSON!]');
   assert.ok(!/type SearchFilter\s*\{/.test(schema!), 'no inline type body for the degraded param');
 });
 

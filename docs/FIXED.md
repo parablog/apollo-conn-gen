@@ -8901,6 +8901,52 @@ todo).
 `tests/resources/oas/r7r8-selection.yaml`, `tests/resources/oas/body-aliases-defaults.yaml`
 (synthetic-success fixture), `docs/FIXED.md #16, #163`.
 
+## 166 [BUG] [P4] · Array args allow null items the API can't take — `[String]` where Rust emits `[String!]` — ✅ Fixed
+
+**OAS** (a plain array query param — items are non-nullable unless the spec says `nullable: true`):
+```yaml
+- name: tags
+  in: query
+  schema:
+    type: array
+    items: { type: string }
+```
+
+**Example:**
+```graphql
+# before -- null items look acceptable, but the API cannot take them
+things(tags: [String], ...)
+# after -- faithful: the item is non-null, only the whole argument is optional
+things(tags: [String!], ...)
+```
+
+**Symptom:** the Rust generator emits `[String!]` for the same param; ours said `[String]`. The
+outer `!` for a required param already existed (`param.ts:88`, #55's `nullable` exception), but the
+item-level `!` was never written for any array.
+
+**Cause:** `arr.ts` wrote `[` + item type + `]` and never read the items schema's `nullable` at all.
+
+**Fix:** `Arr.generate` (`arr.ts`) writes `!` after the item type when the array belongs directly to
+a query/path parameter (`this.parent instanceof Param`) and the items schema — or the component a
+`$ref` points at — isn't marked `nullable: true`. No new state: `Arr` already carried both `items`
+(the raw items schema) and `parent` from `factory.ts`'s existing array construction, so `param.ts`
+is untouched. The rule applies unconditionally, including when the item degraded to `JSON` (#40) —
+`!` is about whether the list slot can hold null, not whether the item's shape is known, so `[JSON]`
+becomes `[JSON!]` too. Response fields keep their null-tolerant `[String]` on purpose — a `[String!]`
+output field would break at runtime on one null item — so the fix only fires when the array's
+parent is a `Param`.
+
+**Verified:** new fixture `array-param-item-nullability.yaml` (plain items, `nullable: true` items,
+a `$ref` to a nullable component, and a response field of the same shape as a negative control) +
+`test_166_array_param_items_get_non_null_unless_nullable` (`tests/all/oas-core.test.ts`). Also
+updated `test_object_array_param_degrades_to_json_scalar`'s assertion from `[JSON]` to `[JSON!]`.
+Revert-check: undoing the `arr.ts` edit fails both the new test and the updated assertion; restoring
+it passes both. Full suite green (473 tests). A scoped `digitalocean.yaml` corpus sweep (145 ops)
+still composes 100% clean.
+
+**Refs:** `src/oas/nodes/arr.ts`, `src/oas/nodes/param.ts:86-89` (#55), `tests/resources/oas/array-param-item-nullability.yaml`, `docs/DEFERRED.md #164` (where the nit was first recorded), Adam's
+benchmark report (claude.ai/code/artifact/c79bb3ab, "caveats").
+
 ## 161 [FEAT] [P4] · Entity link half: key-only reference fields on id-carrying types — ✅ Fixed
 
 **Symptom:** `--infer-entity-resolvers` emitted only the resolver half (`@key` + type-level
