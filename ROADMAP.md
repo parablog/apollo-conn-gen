@@ -509,15 +509,34 @@ this is user intent by design, like the rest of the overrides.
 
 **Files:** `src/oas/io/operationWriter.ts` (`writeBodyOverride`).
 
-### R10. Reusable `@mapping` emission (connect v0.5) — 🟡 In progress
+### R10. Reusable `@mapping` emission — ⏸ Parked (not Apollo's v0.5)
 
-**Status:** Branch `feat/r10-reusable-mappings` (commits `b7dfff6`, `fe3277d`). Emits reusable
-`@mapping` selections under `--reusable-mappings`, gated to connect v0.5; tests compose against a
-local composer build (`tests/all/r10-mappings.test.ts`). Not yet in the coverage matrix above —
-add the spec-surface row when it merges.
+**Status (2026-08-26):** parked on a design question, not a version wait. Read router
+`origin/dev` source directly: Apollo's real connect v0.5 (unreleased, requires federation >=
+2.16, no shipped composition plugin) is JSONSelection expression additions only — **no
+`@mapping` directive exists anywhere upstream**. gen's R10 and Apollo's v0.5 are unrelated
+designs sharing a version number, and the number is theirs.
+- The June branch (`feat/r10-reusable-mappings`, base ~0.15.1, 205 commits behind main) composes
+  only against the gitignored patched composer (`tools/local/apollo-federation-cli`, a local
+  federation fork with `@mapping` bolted on).
+- Futures: propose `@mapping` upstream (the ~35-40% whole-spec SDL/token reduction is the
+  pitch), keep it fork-only, or drop it. Needs an upstream conversation before any code.
+- Whatever happens, it stops claiming v0.5 — gen branch, web's
+  `REUSABLE_MAPPINGS_CONNECT_VERSION`, and the patched composer all do today.
+- If revived: fresh branch off main, spec-first analysis; the old branch is reference only (its
+  fixtures and tests port nearly verbatim, its src diff predates the current node layer).
 
-**Files:** `src/oas/nodes/typeUtils.ts`, `propArray.ts`/`propComp.ts`/`propObj.ts`,
-`src/oas/io/writer.ts`, `src/versions.ts`. (gate: v0.5)
+### R16. Connect v0.5 JSONSelection expressions for the degrade paths — 📋 Noted (blocked upstream)
+
+**Why:** the real v0.5 (router `origin/dev`) adds expression methods — `has`, `match_if`,
+`filter`, `map`, comparisons, arithmetic and more. Several "no clean GraphQL equivalent →
+`JSON`" degrade branches become expressible selections instead of warned abandonments.
+
+**Shape:** emission gated with the R7 pattern (`meetsMinimum(connect, 'v0.5')`). Gate only the
+genuinely new methods, read from `ConnectSpec`'s own source — gen already emits `->joinNotNull`
+composing on v0.4, so secondhand v0.5 method lists mix old and new.
+
+**Blocked on:** a released federation 2.16 composition plugin (newest today: 2.15.2).
 
 ### R14. Manual directive declarations — ✅ Done
 
