@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 153 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 154 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -72,44 +72,4 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-## 161 [FEAT] [P4] · Entity link half: key-only reference fields on id-carrying types — ⬜ Open
-
-**Plan (adopted 2026-08-26):** `~/.claude-personal/plans/issue-161.md` — the loop pickup follows it.
-Settled there: automatic coupling to the flag (no new flag) · link nullability matches the source
-scalar · self-link guard (`host !== target`) · regex singularizer (irregular plurals unhandled).
-
-**Example:** `Song { album_id }` plus an R1-resolved `Album` → emit a `Song.album: Album` field
-selecting `album: { id: $.album_id }`, so the router can traverse song → album through the
-type-level resolver.
-
-**Why:**
-- `--infer-entity-resolvers` emits the resolver half only (`@key` + type-level `@connect`,
-  `entity.ts` / `obj.ts` `writeEntityConnector`); nothing links to it, so cross-type traversal
-  queries don't exist.
-- Measured (Adam, 168-task AppWorld runs): agents used the link fields organically in 76-85% of
-  tasks; read-side N+1 orchestration moved entirely to the router; part of the sonnet accuracy
-  fix-set.
-- Caveat to carry into the design: one agent call fans out N concurrent upstream requests —
-  connector concurrency limits need setting deliberately.
-
-**Shape (decided — Adam's description, 2026-08-26; his prototype is a ~190-line post-generation
-SDL transform, not generator code):**
-- Coupled to `--infer-entity-resolvers`: link fields only target types R1 resolved.
-- Match: a root GET whose path ends in exactly one path param ↔ any emitted object type carrying
-  a scalar field with that exact name. Exact-name only — no fuzzy matching, no kept-spelling
-  variants.
-- Emit a **key-only** link field: named from the singularized last static path segment
-  (`/songs/{song_id}` → `song`), typed as the by-id op's response type, selection maps just the
-  key and lets the type-level resolver complete the entity.
-- NOT the prototype's shape (duplicated http + selection per link) — Adam's own recommendation.
-- Guards, ported: skip if the field name already exists; skip ops with required args beyond the
-  path param; skip placements where the target type can reach the host type through the SDL type
-  graph (composer `CIRCULAR_REFERENCE` — he hit it on spotify albums⇄songs).
-- His per-call `access_token` argument wart doesn't apply here — `@source`-level auth.
-
-**Risk area:** the reachability guard walks the SDL type graph — the satisfiability/pruning
-territory that shaped R2's limits (never-returned types, partial-provider field keeping).
-
-**Refs:** `src/oas/nodes/entity.ts`, `src/oas/nodes/obj.ts` (`writeEntityConnector`), Adam's
-Slack follow-ups (2025-08-25/26 — Python transform file requested) and benchmark report
-(claude.ai/code/artifact/c79bb3ab).
+No open entries right now — #161 moved to `docs/FIXED.md`.

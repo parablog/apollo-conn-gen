@@ -1,0 +1,391 @@
+openapi: 3.0.3
+info:
+  title: Music Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /albums/{album_id}:
+    get:
+      operationId: getAlbum
+      summary: Get an album by id
+      parameters:
+        - name: album_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: An album
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+  # one path param, but the path does not end in it -- must not become a link source. #161
+  /albums/{album_id}/details:
+    get:
+      operationId: getAlbumDetails
+      summary: Get extended album details
+      parameters:
+        - name: album_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Extended album details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+  /songs/{song_id}:
+    get:
+      operationId: getSong
+      summary: Get a song by id
+      parameters:
+        - name: song_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A song
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Song'
+  /tracks/{track_id}:
+    get:
+      operationId: getTrack
+      summary: Get a track by id
+      parameters:
+        - name: track_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A track
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Track'
+  /playlists/{playlist_id}:
+    get:
+      operationId: getPlaylist
+      summary: Get a playlist by id
+      parameters:
+        - name: playlist_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A playlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Playlist'
+  /concerts/{concert_id}:
+    get:
+      operationId: getConcert
+      summary: Get a concert by id
+      parameters:
+        - name: concert_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A concert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Concert'
+  # a second required param (mode) besides the path param -- must not become a link source. #161
+  /widgets/{widget_id}:
+    get:
+      operationId: getWidget
+      summary: Get a widget by id
+      parameters:
+        - name: widget_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: mode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+  /gadgets/{gadget_id}:
+    get:
+      operationId: getGadget
+      summary: Get a gadget by id
+      parameters:
+        - name: gadget_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A gadget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gadget'
+  # discs and cuts point at each other's key -- only the first by op-id sort order should link. #161
+  /discs/{disc_id}:
+    get:
+      operationId: getDisc
+      summary: Get a disc by id
+      parameters:
+        - name: disc_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A disc
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Disc'
+  /cuts/{cut_id}:
+    get:
+      operationId: getCut
+      summary: Get a cut by id
+      parameters:
+        - name: cut_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A cut
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cut'
+  # Take's key twins with its own take_Id sibling -- covers the target-side rename case. #161
+  /takes/{take_id}:
+    get:
+      operationId: getTake
+      summary: Get a take by id
+      parameters:
+        - name: take_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A take
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Take'
+  /mixes/{mix_id}:
+    get:
+      operationId: getMix
+      summary: Get a mix by id
+      parameters:
+        - name: mix_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A mix
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mix'
+  # Loop carries Beat's key next to its own beat_Id sibling -- the host-side rename case. #161
+  /beats/{beat_id}:
+    get:
+      operationId: getBeat
+      summary: Get a beat by id
+      parameters:
+        - name: beat_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A beat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Beat'
+  /loops/{loop_id}:
+    get:
+      operationId: getLoop
+      summary: Get a loop by id
+      parameters:
+        - name: loop_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A loop
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Loop'
+components:
+  schemas:
+    Album:
+      type: object
+      required: [album_id]
+      properties:
+        album_id:
+          type: string
+          description: Unique identifier of the album
+        name:
+          type: string
+    Song:
+      type: object
+      required: [song_id, album_id]
+      properties:
+        song_id:
+          type: string
+        name:
+          type: string
+        album_id:
+          type: string
+    # album_id is NOT required here, on purpose -- covers the optional-source nullability case. #161
+    Track:
+      type: object
+      required: [track_id]
+      properties:
+        track_id:
+          type: string
+        name:
+          type: string
+        album_id:
+          type: string
+    Playlist:
+      type: object
+      required: [playlist_id, album_id]
+      properties:
+        playlist_id:
+          type: string
+        name:
+          type: string
+        album_id:
+          type: string
+    # already declares its own "album" field -- the link must be skipped, not overwrite it. #161
+    Concert:
+      type: object
+      required: [concert_id, album_id]
+      properties:
+        concert_id:
+          type: string
+        name:
+          type: string
+        album_id:
+          type: string
+        album:
+          type: string
+    Widget:
+      type: object
+      required: [widget_id]
+      properties:
+        widget_id:
+          type: string
+        name:
+          type: string
+    Gadget:
+      type: object
+      required: [gadget_id, widget_id]
+      properties:
+        gadget_id:
+          type: string
+        name:
+          type: string
+        widget_id:
+          type: string
+    # take_Id ties with the take_id key under the case-insensitive sort, so declaration order
+    # wins: take_Id claims takeId and the key numbers to takeId2. #161
+    Take:
+      type: object
+      required: [take_id]
+      properties:
+        take_Id:
+          type: string
+        take_id:
+          type: string
+        name:
+          type: string
+    Mix:
+      type: object
+      required: [mix_id, take_id]
+      properties:
+        mix_id:
+          type: string
+        name:
+          type: string
+        take_id:
+          type: string
+    Beat:
+      type: object
+      required: [beat_id]
+      properties:
+        beat_id:
+          type: string
+        name:
+          type: string
+    # same declaration-order tie as Take: beat_Id claims beatId, beat_id numbers to beatId2. #161
+    Loop:
+      type: object
+      required: [loop_id, beat_id]
+      properties:
+        beat_Id:
+          type: string
+        loop_id:
+          type: string
+        name:
+          type: string
+        beat_id:
+          type: string
+    Disc:
+      type: object
+      required: [disc_id, cut_id]
+      properties:
+        disc_id:
+          type: string
+        name:
+          type: string
+        cut_id:
+          type: string
+    Cut:
+      type: object
+      required: [cut_id, disc_id]
+      properties:
+        cut_id:
+          type: string
+        name:
+          type: string
+        disc_id:
+          type: string

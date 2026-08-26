@@ -1,6 +1,6 @@
 import { OasGen } from '../oasGen.js';
 import { IType, T } from '../nodes/internal.js';
-import { inferEntityResolvers } from '../nodes/entity.js';
+import { inferEntityLinks, inferEntityResolvers } from '../nodes/entity.js';
 import { applyBatchResolvers } from '../nodes/batch.js';
 import { applySparseFieldsets } from '../nodes/sparseFieldsets.js';
 import { promoteAllOfBase } from '../nodes/allOfBase.js';
@@ -61,6 +61,10 @@ export class Writer {
     // loop below generates, so each entity type can emit @key + its type-level
     // @connect/$this resolver. Resets first, so it's a no-op when the flag is off.
     inferEntityResolvers(context, this.gen, types, selection);
+
+    // #161: key-only reference fields on other types pointing at an R1-resolved entity — reads
+    // the resolvers just attached above, so it runs right after.
+    inferEntityLinks(context, this.gen, types, selection);
 
     // R6: add batch resolvers (needs the R1 @key above) when a --batch file was given.
     applyBatchResolvers(context, this.gen, types);

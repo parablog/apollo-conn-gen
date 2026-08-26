@@ -1,4 +1,4 @@
-import { Arr, Body, Composed, Factory, Get, IType, PropArray, Type, Res, T } from './internal.js';
+import { Arr, Body, Composed, Factory, Get, IType, Prop, PropArray, Type, Res, T } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -12,6 +12,9 @@ export class Obj extends Type {
   // R1: type-level entity resolvers discovered for this type (empty unless inferred).
   // Set by `inferEntityResolvers`; drives @key + type-level @connect/$this in generate().
   entityResolvers: EntityResolver[] = [];
+  // #161: key-only reference fields discovered for this type (empty unless inferred).
+  // Set by `inferEntityLinks`; flows through generate()/select()/dependencies() via selectedProps().
+  entityLinkProps: Prop[] = [];
   // R2: when promoted to a GraphQL interface (a shared allOf base of a discriminated oneOf),
   // emit `interface` instead of `type`. Id-neutral on purpose — `id` embeds `kind`, so we must
   // NOT mutate `kind` (it would desync generatedSet/dedup/deletion keys). Set by promoteAllOfBase.
@@ -141,7 +144,7 @@ export class Obj extends Type {
   // siblings that clean to one field name write once — generate, select and dependencies all
   // read this list, so the three agree. e.g. (trello) prefs/background + prefs_background  #69
   public override selectedProps(selection: string[], keep: boolean) {
-    return T.numberTwinFields(super.selectedProps(selection, keep), keep);
+    return T.numberTwinFields([...super.selectedProps(selection, keep), ...this.entityLinkProps], keep);
   }
 
   // the selected props (a field removed on another route swapped for its comment, like generate does — #89)

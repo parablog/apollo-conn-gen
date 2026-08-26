@@ -8900,3 +8900,63 @@ todo).
 `src/oas/nodes/propScalar.ts:58-61`, `tests/resources/oas/coalesce-floor.yaml`,
 `tests/resources/oas/r7r8-selection.yaml`, `tests/resources/oas/body-aliases-defaults.yaml`
 (synthetic-success fixture), `docs/FIXED.md #16, #163`.
+
+## 161 [FEAT] [P4] · Entity link half: key-only reference fields on id-carrying types — ✅ Fixed
+
+**Symptom:** `--infer-entity-resolvers` emitted only the resolver half (`@key` + type-level
+`@connect`) — nothing in the schema pointed *at* that resolver, so cross-type traversal queries
+didn't exist and read-side N+1 orchestration stayed entirely client-side. Adam's 168-task AppWorld
+benchmark: agents used hand-added link fields organically in 76-85% of tasks.
+
+**Example:** `Album { album_id, name }` is R1-resolved (`GET /albums/{album_id}`); any other
+selected type carrying `album_id`, e.g. `Song { song_id, name, album_id }`, gains a key-only field:
+```graphql
+type Song @key(fields: "songId") @connect(... http: { GET: "/songs/{$this.songId}" } ...) {
+  songId: String!
+  name: String
+  albumId: String!
+  album: Album!        # new -- key-only, selects just Album's own key
+}
+```
+and its connector selection gains:
+```
+album: {
+  albumId: album_id
+}
+```
+(the entity-stub form connectors uses for a synthetic key, not a real nested JSON object — see
+`references/entities.md` in the `apollo-connectors` skill.)
+
+**Fix:** `inferEntityLinks` (`src/oas/nodes/entity.ts`), run right after `inferEntityResolvers` in
+`writer.ts` since it reads the resolvers that pass just attached:
+- Candidates: a selected root GET whose path ends in exactly one path param, with no other
+  required param, resolving (via R1's own `entityResolvers`) to an already-resolved type. Field
+  name = the op's last static path segment, singularized (plain regex, irregular plurals
+  unhandled).
+- Sorted by op id, then matched against every other selected type carrying a same-named scalar
+  field — skipping a name already taken (an existing prop, or an already-added link) and skipping
+  a placement that would let the target reach back to the host (BFS over `dependencies()`, same
+  idiom as `typesCollector.collectReachable`). That guard is what stops a mutual pair (e.g.
+  albums<->songs, both carrying each other's key) from linking both directions and closing a cycle
+  the composer rejects — only the first-sorted direction links.
+- New node `PropEntityLink` (`src/oas/nodes/propEntityLink.ts`): a `Prop` subclass whose SDL type
+  is the target and whose `select()` hand-writes the two-line stub above (not `PropObj`'s
+  recursive form — there's no real nested JSON at that key). Its own `required` mirrors the
+  *source* scalar's, so `Album!` vs `Album` follows the same nullability the API itself declares.
+- `Obj.entityLinkProps` (new field, sibling to `entityResolvers`) flows into
+  `generate()`/`select()`/`dependencies()` for free through the existing `selectedProps()`.
+- No new flag — coupled to `--infer-entity-resolvers`, matching the resolver half it completes.
+
+**Verified:** new fixture `entity-link.yaml` + 8 tests in `tests/all/entity-link.test.ts`
+(`test_161_*`): happy path (required source -> `Album!`), a path-param-not-terminal rejection, a
+field-name collision, an extra-required-param rejection, the mutual/circular guard (only the
+first-sorted direction links, schema still composes), two independent hosts linking to the same
+target, an optional source (`Album`, no bang), and the flag-off byte-identical check. Revert-check:
+stashing `propEntityLink.ts`/`entity.ts`/`obj.ts`/`writer.ts`/`internal.ts` fails all 4
+link-present tests, restoring passes all 8. Full suite green (485 tests, 481 pass, 0 fail, 4
+pre-existing todo).
+
+**Refs:** `src/oas/nodes/propEntityLink.ts`, `src/oas/nodes/entity.ts` (`inferEntityLinks`),
+`src/oas/nodes/obj.ts` (`entityLinkProps`), `src/oas/io/writer.ts`,
+`tests/resources/oas/entity-link.yaml`, `~/.claude-personal/plans/issue-161.md`, Adam's benchmark
+report (claude.ai/code/artifact/c79bb3ab).

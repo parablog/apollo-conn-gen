@@ -1,4 +1,4 @@
-import { IType, Obj, Res, T } from './internal.js';
+import { IType, Obj, Prop, PropEntityLink, Res, T } from './internal.js';
 import { Naming } from '../utils/naming.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
@@ -136,4 +136,126 @@ export function inferEntityResolvers(
       source: 'api',
     });
   }
+}
+
+// A candidate link source: a root GET-by-id op ending in its one path param, resolving to an
+// R1-resolved type. e.g. (entity-link) GET /albums/{album_id} -> Album. #161
+interface EntityLinkCandidate {
+  opId: string;
+  target: Obj;
+  targetKeyProp: Prop;
+  fieldName: string;
+}
+
+// #161: key-only reference fields. A root GET ending in one path param, resolving to an
+// R1-resolved type, seeds a field on any other selected type carrying that same scalar name.
+// e.g. (entity-link) Song.album_id -> Song.album: Album, coupled to --infer-entity-resolvers.
+export function inferEntityLinks(context: OasContext, gen: OasGen, types: Map<string, IType>, selection: string[]): void {
+  for (const type of types.values()) {
+    if (type instanceof Obj) {
+      type.entityLinkProps = [];
+    }
+  }
+
+  if (!context.generateOptions.inferEntityResolvers) {
+    return;
+  }
+
+  const keep = context.generateOptions.keepFieldNames === true;
+  const selectionRoots = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
+
+  const candidates: EntityLinkCandidate[] = [];
+
+  for (const op of gen.paths.values()) {
+    if (!T.isOp(op) || op.verb !== 'GET' || !selectionRoots.has(op.id)) {
+      continue;
+    }
+
+    const pathParams = op.params.filter((p) => p.parameter.in && p.parameter.in.toLowerCase() === 'path');
+    if (pathParams.length !== 1 || op.params.some((p) => p !== pathParams[0] && p.required)) {
+      continue;
+    }
+
+    const param = pathParams[0];
+    if (op.operation.path.split('/').pop() !== `{${param.name}}`) {
+      continue;
+    }
+
+    const obj = unwrapToObj(op.resultType);
+    const target = obj && types.get(obj.id);
+    if (!(target instanceof Obj) || target.entityResolvers.length === 0) {
+      continue;
+    }
+
+    const resolver = target.entityResolvers.find((r) => r.keyFields === param.name);
+    const targetKeyProp = resolver && target.props.get(param.name);
+    if (!targetKeyProp) {
+      continue;
+    }
+
+    const staticSegments = op.operation.path.split('/').filter((s) => s && s !== `{${param.name}}`);
+    const lastStaticSegment = staticSegments[staticSegments.length - 1];
+    if (!lastStaticSegment) {
+      continue;
+    }
+
+    candidates.push({ opId: op.id, target, targetKeyProp, fieldName: singularize(lastStaticSegment) });
+  }
+
+  candidates.sort((a, b) => a.opId.localeCompare(b.opId));
+
+  for (const { target, targetKeyProp, fieldName } of candidates) {
+    for (const host of types.values()) {
+      if (!(host instanceof Obj) || host === target) {
+        continue;
+      }
+
+      const sourceProp = host.props.get(targetKeyProp.name);
+      if (!sourceProp || !T.isPropScalar(sourceProp) || !host.selectedProps(selection, keep).includes(sourceProp)) {
+        continue;
+      }
+
+      const fieldTaken = host.props.has(fieldName) || host.entityLinkProps.some((p) => p.name === fieldName);
+      if (fieldTaken || reaches(context, selection, target, host)) {
+        continue;
+      }
+
+      host.entityLinkProps.push(new PropEntityLink(host, fieldName, target, targetKeyProp, sourceProp));
+    }
+  }
+}
+
+// Whether `from` can already reach `to` via dependencies(), the same idiom
+// typesCollector.collectReachable uses -- blocks a link that would close a cycle. #161
+// e.g. (entity-link) albums<->songs: the second direction is skipped once the first links.
+function reaches(context: OasContext, selection: string[], from: IType, to: IType): boolean {
+  const visited = new Set<IType>();
+  const queue: IType[] = [from];
+  while (queue.length > 0) {
+    const node = queue.pop()!;
+    if (node === to) {
+      return true;
+    }
+    if (visited.has(node)) {
+      continue;
+    }
+    visited.add(node);
+    queue.push(...node.dependencies(context, selection));
+  }
+  return false;
+}
+
+// A plain regex plural-to-singular pass (irregular plurals unhandled) for turning a path's last
+// static segment into a field name. e.g. "albums" -> "album", "categories" -> "category". #161
+function singularize(word: string): string {
+  if (/ies$/i.test(word) && word.length > 3) {
+    return word.slice(0, -3) + 'y';
+  }
+  if (/(?:s|x|z|ch|sh)es$/i.test(word)) {
+    return word.slice(0, -2);
+  }
+  if (/s$/i.test(word) && !/ss$/i.test(word)) {
+    return word.slice(0, -1);
+  }
+  return word;
 }

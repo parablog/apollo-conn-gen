@@ -551,6 +551,8 @@ spec keeps them as long as the declared names still exist. A working example liv
 
 With `--infer-entity-resolvers` (library: `inferEntityResolvers`), operations whose path parameters match fields of the returned type qualify as entity resolvers: the generator emits the type-level `@connect` with `$this` bindings (or `entity: true`) and the matching `@key`, so other subgraphs can reference the entity.
 
+The same flag also links to those entities: for each root GET whose path ends in exactly one path parameter and resolves to an entity type, any *other* generated type carrying a scalar field of that same name gains a key-only reference field, named after the op's last path segment (singularized) and typed as the entity. Only the key is selected — the type-level resolver above fills in the rest. A candidate that would close a reference cycle (two types pointing at each other's key) is skipped.
+
 ### Transform Rules
 
 The tool supports loading multiple transform rules from a JSON file to apply complex name transformations. This is useful when you need to apply multiple transformations in sequence or maintain a set of consistent naming rules.
