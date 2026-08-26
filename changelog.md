@@ -10,16 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- Types carrying another type's id now link to it: `Song { album_id }` gains an
-  `album: Album` field the entity resolver completes. Requires `--infer-entity-resolvers`;
-  regenerating adds the fields. Details in README.md. Issue #161.
+- `--infer-entity-resolvers` now also links entities: a type carrying an entity's id gets a
+  field returning it (`song { album { name } }` in one query). Details in README.md.
+  Issue #161.
 
 ### Fixed
 
-- Array-typed arguments no longer accept null items: `tags: [String]` is now
-  `tags: [String!]`, unless the spec marks the items nullable. Issue #166.
-- `@key` and its resolver now follow a key field's rename when spelling twins collide
-  (`take_id` → `takeId2`). Issue #168.
+- Array items now follow the spec property for null items. Issue #166.
+- Entity keys now follow a key field renamed by a collision (`take_id` → `takeId2`).
+  Issue #168.
 
 ## [0.26.0]
 
