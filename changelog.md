@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.27.0]
+
+### Added
+
+- Types carrying another type's id now link to it: `Song { album_id }` gains an
+  `album: Album` field the entity resolver completes. Requires `--infer-entity-resolvers`;
+  regenerating adds the fields. Details in README.md. Issue #161.
+
+### Fixed
+
+- Array-typed arguments no longer accept null items: `tags: [String]` is now
+  `tags: [String!]`, unless the spec marks the items nullable. Issue #166.
+- `@key` and its resolver now follow a key field's rename when spelling twins collide
+  (`take_id` → `takeId2`). Issue #168.
+
 ## [0.26.0]
 
 ### Added
