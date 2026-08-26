@@ -29,6 +29,7 @@ KNOWN_ISSUES.md
 /LINT-CORPUS-*.md
 /TEST_CORPUS.md
 /tests/all/corpus.test.ts
+/tests/resources/oas/docusign.json
 /tests/resources/oas/googlebooks.yaml
 /tests/resources/oas/slack.yaml
 /tests/resources/oas/digitalocean.yaml

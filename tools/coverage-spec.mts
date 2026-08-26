@@ -33,6 +33,7 @@ const base = './tests/resources/oas';
 
 // Vendor corpus plus tracked real fixtures that are broad enough to measure beyond one smoke test.
 const ALL_SPECS = [
+  'docusign.json',
   'googlebooks.yaml',
   'slack.yaml',
   'digitalocean.yaml',
