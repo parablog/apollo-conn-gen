@@ -63,9 +63,7 @@ export class Arr extends Type {
   // A $ref item is resolved first, since "nullable: true" may live on the referenced schema instead.
   private static itemsAreNullable(context: OasContext, items: SchemaObject | ReferenceObject | undefined): boolean {
     if (!items) return false;
-    const resolved = ('$ref' in items ? context.resolvePointer(items.$ref ?? null) : items) as
-      | SchemaObject
-      | undefined;
+    const resolved = ('$ref' in items ? context.resolvePointer(items.$ref ?? null) : items) as SchemaObject | undefined;
     return resolved?.nullable === true;
   }
 

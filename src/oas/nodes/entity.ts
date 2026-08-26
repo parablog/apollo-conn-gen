@@ -150,7 +150,12 @@ interface EntityLinkCandidate {
 // #161: key-only reference fields. A root GET ending in one path param, resolving to an
 // R1-resolved type, seeds a field on any other selected type carrying that same scalar name.
 // e.g. (entity-link) Song.album_id -> Song.album: Album, coupled to --infer-entity-resolvers.
-export function inferEntityLinks(context: OasContext, gen: OasGen, types: Map<string, IType>, selection: string[]): void {
+export function inferEntityLinks(
+  context: OasContext,
+  gen: OasGen,
+  types: Map<string, IType>,
+  selection: string[],
+): void {
   for (const type of types.values()) {
     if (type instanceof Obj) {
       type.entityLinkProps = [];
