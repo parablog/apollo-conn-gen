@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 155 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 156 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -72,4 +72,32 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-No open entries right now — #168 moved to `docs/FIXED.md`.
+## 170 [BUG] [P2] · Map-of-union response emits a zero-field type — invalid SDL — ⬜ Open
+
+**Symptom:** `[gen] generated an invalid GraphQL schema: Syntax Error: Expected Name, found "}"`
+— a type with an empty body; the output self-check throws instead of shipping it.
+
+**OAS:** (motion.json, local vendor spec) `SchedulesGetResponse.models.schedules`:
+```json
+{ "type": "object", "additionalProperties": { "oneOf": [ { "type": "object", "…": "…" } ] } }
+```
+
+- Repro: `post:/v2/schedules>**` (also the whole-spec mutations compose).
+- The empty type body is the bug; the throw is the guard working as designed.
+
+**Cause:** not fully traced — the map-valued `oneOf` path produces a type with no fields.
+
+**Refs:** `COVERAGE-mutations.md` gap histogram, `TEST_CORPUS.md` (Motion).
+
+## 171 [BUG] [P2] · Motion mutation ops generate but fail compose — ⬜ Open
+
+**Symptom:** five motion.json mutation ops compose-fail: `GRAPH_QL_ERROR` ×4, `INVALID_BODY` ×1.
+
+- Repro: `post:/v2/views>**` (the GRAPH_QL_ERROR class), `post:/v2/tasks/query>**`
+  (INVALID_BODY).
+- Diagnose the first before assuming five distinct bugs — likely the same map/union shape family
+  as #170.
+
+**Cause:** not yet traced.
+
+**Refs:** `COVERAGE-mutations.md` gap histogram, `TEST_CORPUS.md` (Motion).

@@ -9050,3 +9050,49 @@ restoring passes both. Full suite green (488 tests, 484 pass, 0 fail, 4 pre-exis
 **Refs:** `src/oas/nodes/obj.ts`, `src/oas/nodes/propEntityLink.ts`,
 `tests/resources/oas/entity-link.yaml`,
 `~/.claude-personal/plans/adam-s-sent-us-feedback-jiggly-trinket.md`.
+
+## 169 [BUG] [P2] · A standalone `type: 'null'` schema throws the generator — ✅ Fixed
+
+**Symptom:** `Error: Cannot handle property type null` — the whole op dies instead of degrading
+with a warning.
+
+**OAS:** (profound.yaml, local vendor spec)
+```yaml
+pagination:
+  type: 'null'
+```
+
+**Example:**
+```graphql
+# before: throws, the op never generates
+# after: degrades to JSON, same as any other shapeless schema
+pagination: JSON
+```
+
+**Cause:** OAS 3.1 has three spellings of "may be null". Two were already normalized by #60
+(`Nullability.normalize`): the type array `type: [string, 'null']` and a choice arm inside
+`oneOf`/`anyOf`. The task log originally blamed the choice-arm spelling, but that one was already
+handled — profound's 631 choice-arm occurrences all generate cleanly. The real, untouched third
+spelling is a schema that is just `type: 'null'` on its own — "this value is always null" — which
+`Factory.fromProp` had no branch for and threw on. profound has exactly two such properties,
+`ShoppingTriggeredPromptsQuery.pagination` and `ShoppingTriggeredTopicsQuery.pagination`, matching
+its two GEN-THROWs.
+
+**Fix:** `Nullability.normalize` (`src/oas/utils/nullability.ts`) now checks for the standalone
+spelling first: `type === 'null'` sets `nullable: true` and deletes `type`, leaving a shapeless
+schema. Downstream, existing paths finish the job with no new branches: in a prop, the #133
+default (`factory.ts`) warns and emits `JSON`; in a non-prop position, the #19 shapeless-schema
+degrade does the same; `nullable: true` keeps the `!` off even when the field is `required` (#55's
+guard).
+
+**Tests:** `test_169_standalone_null_type_degrades_to_json` in `tests/all/oas-core.test.ts`,
+fixture `tests/resources/oas/standalone-null-type.yaml` — a standalone-null field in both request
+(required) and response (optional) position, each degrading to `JSON` with no `!`, sibling fields
+untouched. Revert-check: stashing `nullability.ts` fails the test with the original throw,
+restoring passes. Full suite green.
+
+**AST:** no node change — normalization rewrites the schema before any node is built.
+
+**Refs:** `src/oas/utils/nullability.ts`, `tests/resources/oas/standalone-null-type.yaml`,
+`tests/all/oas-core.test.ts`, #60 (the other two spellings), #55 (required + nullable guard), #33
+(the null-member skip this family builds on).

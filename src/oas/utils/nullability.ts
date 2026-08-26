@@ -28,6 +28,13 @@ export class Nullability {
   public static normalize(schema: SchemaObject): void {
     const source = schema as Record<string, unknown>;
 
+    // The standalone spelling: `type: 'null'` alone — the value is always null. No shape
+    // survives; same nullable-JSON landing as a null-only choice list. see docs/FIXED.md #169
+    if (source.type === 'null') {
+      source.nullable = true;
+      delete source.type;
+    }
+
     // OAS 3.1 writes "may be null" as a list of types — keep the first real one, mark nullable:
     //   { type: [string, 'null'] }  ->  { type: string, nullable: true }
     if (Array.isArray(source.type)) {

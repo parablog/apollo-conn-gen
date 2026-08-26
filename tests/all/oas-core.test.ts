@@ -1135,6 +1135,19 @@ test('test_required_and_nullable_31_type_array', async () => {
   assert.ok(/refB: String\n/.test(schema!), 'second visit must agree with the first');
 });
 
+test('test_169_standalone_null_type_degrades_to_json', async () => {
+  // The third OAS 3.1 spelling of "may be null" — not a type array (#55) or a null choice arm
+  // (#60), but a schema that IS just `type: 'null'`. No shape survives, so it lands as JSON, same
+  // as a null-only choice list. profound.yaml's `pagination: { type: 'null' }` (request and
+  // response) is the real-world trigger. see docs/FIXED.md #169
+  const schema = await runOasTest('standalone-null-type.yaml', ['post:/thing>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/pagination: JSON\n/.test(schema!), 'input-position standalone null type -> JSON, no !');
+  assert.ok(!/pagination: JSON!/.test(schema!), 'required does not force a ! onto the nullable field');
+  assert.ok(/name: String!\n/.test(schema!), 'the required sibling field is untouched');
+  assert.ok(/id: ID\n/.test(schema!), 'the response-position sibling field is untouched');
+});
+
 test('test_shapeless_object_schema_becomes_json_scalar', async () => {
   // `{}` / `{ additionalProperties: false }` schemas (Slack shares pattern) used to throw
   // "Cannot handle schema" when reached via fromSchema (array items, members). They are objects

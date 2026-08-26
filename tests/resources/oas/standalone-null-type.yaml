@@ -1,0 +1,46 @@
+openapi: 3.1.0
+info:
+  title: "standalone type:'null' schema"
+  version: 1.0.0
+# see docs/FIXED.md #169
+# The third OAS 3.1 spelling of "may be null" — not a type array (#55) or a null choice arm (#60),
+# but a schema that IS just `type: 'null'`: the value is always null. profound.yaml's
+# `pagination: { type: 'null' }` is the real-world shape this mirrors, in both request and response
+# position.
+servers:
+  - url: https://example.com
+paths:
+  /thing:
+    post:
+      operationId: createThing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThingInput"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThingResponse"
+components:
+  schemas:
+    ThingInput:
+      type: object
+      required:
+        - name
+        - pagination
+      properties:
+        name:
+          type: string
+        pagination:
+          type: "null"
+    ThingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        pagination:
+          type: "null"
