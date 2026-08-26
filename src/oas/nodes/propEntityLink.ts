@@ -48,8 +48,8 @@ export class PropEntityLink extends Prop {
     const keep = context.generateOptions?.keepFieldNames === true;
     const base = context.indent + context.stack.length;
     const name = this.renamedTo ?? Naming.sanitiseField(this.name, keep);
-    // the key must match the target's @key, which cleans the raw name -- renames never apply. see docs/FIXED.md #161
-    const sourceRef = Naming.sanitiseFieldForSelect(this.sourceProp.name, false, undefined, keep);
+    // the key must match the target's @key, which now honors a twin rename too. see docs/FIXED.md #168
+    const sourceRef = Naming.sanitiseFieldForSelect(this.sourceProp.name, false, this.targetKeyProp.renamedTo, keep);
 
     writer
       .write(' '.repeat(base))

@@ -121,3 +121,19 @@ test('test_R1_entity_multi_key_two_resolvers_sorted', async () => {
   const resolverCount = schema!.split('{$this.').length - 1;
   assert.strictEqual(resolverCount, 2, `expected two $this resolvers, got ${resolverCount}`);
 });
+
+test('test_168_twin_key_uses_numbered_field', async () => {
+  // Take's key (take_id) loses the #69 twin race to its own take_Id sibling and numbers to
+  // takeId2 -- @key and $this must follow that rename, with no #161 link in play. see docs/FIXED.md #168
+  const paths = [
+    'get:/takes/{take_id}>res:r>obj:type:#/c/s/Take>prop:scalar:take_Id',
+    'get:/takes/{take_id}>res:r>obj:type:#/c/s/Take>prop:scalar:take_id',
+    'get:/takes/{take_id}>res:r>obj:type:#/c/s/Take>prop:scalar:name',
+  ];
+
+  const schema = await runOasTest('entity-link.yaml', paths, 14, 1, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('takeId2: String!'), 'expected the key twin to take a numbered name on Take');
+  assert.ok(schema!.includes('@key(fields: "takeId2")'), 'expected the @key to follow the key prop\'s own rename');
+  assert.ok(schema!.includes('http: { GET: "/takes/{$this.takeId2}" }'), 'expected the $this resolver to follow the rename');
+});

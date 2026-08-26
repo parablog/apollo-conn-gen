@@ -9006,3 +9006,47 @@ pre-existing todo).
 `src/oas/nodes/obj.ts` (`entityLinkProps`), `src/oas/io/writer.ts`,
 `tests/resources/oas/entity-link.yaml`, `~/.claude-personal/plans/issue-161.md`, Adam's benchmark
 report (claude.ai/code/artifact/c79bb3ab).
+
+## 168 [BUG] [P5] · R1 `@key`/`$this` ignore twin renames — the key can point at the wrong twin — ✅ Fixed
+
+**Example:** `Take { take_Id, take_id }` — both clean to `takeId`; the sibling claims it and the
+key numbers to `takeId2` (#69):
+```graphql
+# before: @key/$this point at the sibling's clean name, not the key's own rename
+type Take @key(fields: "takeId") @connect(... http: { GET: "/takes/{$this.takeId}" } ...) { ... }
+# after: @key/$this follow the key prop's own rename
+type Take @key(fields: "takeId2") @connect(... http: { GET: "/takes/{$this.takeId2}" } ...) {
+  takeId2: String!
+  ...
+}
+```
+
+**Symptom:** the resolver keyed on the sibling's value — a partial response backfilled through R1
+fetched the wrong resource.
+
+**Cause:** both derivations read `Naming.sanitiseField(raw)` and never consulted `renamedTo` —
+`@key` in `obj.ts` `generate()`, `$this` in `writeEntityConnector`. The #161 link stub mirrored the
+same derivation on purpose, so all three needed to move together.
+
+**Fix:** three one-line lookups, all reading the `renamedTo` that #69's `numberTwinFields` already
+sets before any of the three run (during `collect()`, ahead of `writeSchema()`):
+- `obj.ts` `generate()`: the `@key` field list —
+  `this.props.get(field)?.renamedTo ?? Naming.sanitiseField(field, keep)`.
+- `obj.ts` `writeEntityConnector()`: the `{param}` -> `{$this.field}` path rewrite — same lookup.
+- `propEntityLink.ts` `select()`: the stub's key now passes `this.targetKeyProp.renamedTo` as
+  `sanitiseFieldForSelect`'s `writtenAs` arg, so it keeps matching the (now-correct) `@key`; the
+  stub's value stays the raw source key, unchanged.
+- `writeBatchConnector` is out of scope: its `$batch` key mappings come verbatim from the user's
+  `--batch` config, nothing derived.
+
+**Verified:** `tests/all/entity-link.test.ts` `test_161_target_twin_rename_stub_matches_key` flips
+to pin the fixed shape (`@key(fields: "takeId2")`, `{$this.takeId2}`, stub
+`take: { takeId2: take_id }`); `test_161_host_twin_rename_value_stays_raw` stays green untouched
+(no target-side twin, nothing changes). New `tests/all/r1-entity.test.ts`
+`test_168_twin_key_uses_numbered_field` pins the same `@key`/`$this` fix on `Take` alone, no #161
+link in play. Revert-check: stashing `obj.ts`/`propEntityLink.ts` fails both target tests,
+restoring passes both. Full suite green (488 tests, 484 pass, 0 fail, 4 pre-existing todo).
+
+**Refs:** `src/oas/nodes/obj.ts`, `src/oas/nodes/propEntityLink.ts`,
+`tests/resources/oas/entity-link.yaml`,
+`~/.claude-personal/plans/adam-s-sent-us-feedback-jiggly-trinket.md`.

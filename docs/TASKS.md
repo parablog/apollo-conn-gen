@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 154 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 155 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -72,24 +72,4 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-## 168 [BUG] [P5] · R1 `@key`/`$this` ignore twin renames — the key can point at the wrong twin — ⬜ Open
-
-**Example:** `Take { take_Id, take_id }` — both clean to `takeId`; the sibling claims it and the
-key numbers to `takeId2` (#69) — yet R1 emits `@key(fields: "takeId")` and `{$this.takeId}`, the
-sibling's field.
-
-**Symptom:** the resolver keys on the sibling's value — a partial response backfilled through R1
-fetches the wrong resource.
-
-**OAS:** `tests/resources/oas/entity-link.yaml`'s `Take` (and `Loop`) already build this shape.
-
-**Cause:** both derivations use `Naming.sanitiseField(raw)` and never consult `renamedTo` —
-`@key` in `obj.ts` `generate()`, `$this` in `writeEntityConnector`.
-
-- Latent: needs a case-twin colliding with the key param's name.
-- The #161 link stub mirrors the same derivation on purpose (`propEntityLink.ts` `select()`), so
-  links stay consistent with the `@key` today — a fix must move all three together.
-
-**Refs:** `src/oas/nodes/obj.ts`, `src/oas/nodes/propEntityLink.ts`,
-`tests/all/entity-link.test.ts` (`test_161_target_twin_rename_stub_matches_key` pins today's
-shape).
+No open entries right now — #168 moved to `docs/FIXED.md`.

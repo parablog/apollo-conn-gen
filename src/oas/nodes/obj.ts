@@ -108,7 +108,7 @@ export class Obj extends Type {
       for (const key of Array.from(new Set(resolvers.map((r) => r.keyFields))).sort()) {
         const sanitisedKey = key
           .split(' ')
-          .map((field) => Naming.sanitiseField(field, keep))
+          .map((field) => this.props.get(field)?.renamedTo ?? Naming.sanitiseField(field, keep))
           .join(' ');
         writer.write(` @key(fields: "${sanitisedKey}")`);
       }
@@ -188,7 +188,7 @@ export class Obj extends Type {
     const keep = context.generateOptions?.keepFieldNames === true;
     const path = resolver.path.replace(
       /\{([a-zA-Z0-9_]+)\}/g,
-      (_match, param) => `{$this.${Naming.sanitiseField(param, keep)}}`,
+      (_match, param) => `{$this.${this.props.get(param)?.renamedTo ?? Naming.sanitiseField(param, keep)}}`,
     );
 
     writer

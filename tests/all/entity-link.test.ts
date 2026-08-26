@@ -128,8 +128,8 @@ test('test_161_two_hosts_independent_links', async () => {
 });
 
 test('test_161_target_twin_rename_stub_matches_key', async () => {
-  // Take's key twins with its own take_Id sibling and numbers to takeId2, but the @key stays on
-  // the raw name's clean form -- the stub's key must match the @key, so it ignores the rename too.
+  // Take's key loses the twin race to its own take_Id sibling and numbers to takeId2 -- the @key
+  // and the stub must follow the key prop's own rename, not the sibling's clean name. see docs/FIXED.md #168
   const paths = [
     'get:/takes/{take_id}>res:r>obj:type:#/c/s/Take>prop:scalar:take_Id',
     'get:/takes/{take_id}>res:r>obj:type:#/c/s/Take>prop:scalar:take_id',
@@ -142,11 +142,12 @@ test('test_161_target_twin_rename_stub_matches_key', async () => {
   const schema = await runOasTest('entity-link.yaml', paths, PATHS_SIZE, 2, { inferEntityResolvers: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('takeId2: String!'), 'expected the key twin to take a numbered name on Take');
-  assert.ok(schema!.includes('@key(fields: "takeId")'), "expected the @key on the raw name's clean form");
+  assert.ok(schema!.includes('@key(fields: "takeId2")'), 'expected the @key to follow the key prop\'s own rename');
+  assert.ok(schema!.includes('{$this.takeId2}'), 'expected the $this resolver to follow the key prop\'s own rename');
   assert.ok(schema!.includes('take: Take!'), 'expected a required take link on Mix');
   assert.ok(
-    /take:\s*\{\s*takeId:\s*take_id\s*\}/.test(schema!),
-    'the stub key must match the @key, not the renamed twin',
+    /take:\s*\{\s*takeId2:\s*take_id\s*\}/.test(schema!),
+    'the stub key must match the renamed @key, value stays the raw source key',
   );
 });
 
