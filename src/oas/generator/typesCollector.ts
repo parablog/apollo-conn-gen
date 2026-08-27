@@ -23,7 +23,6 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { SelectionPath } from '../utils/selectionPath.js';
-import { GqlUtils } from '../utils/gql.js';
 
 export class TypesCollector {
   types: Map<string, IType> = new Map();
@@ -376,11 +375,11 @@ class PathsCollector {
         const listOfValues = child instanceof PropArray && child.items instanceof Scalar;
         const nestedListOfValues =
           child instanceof PropArray && child.items instanceof Arr && child.items.itemsType instanceof Scalar;
-        // a list of enum values is a leaf too, but only when the enum has a legal GraphQL form
-        // (#24) — without it the field vanishes and an only-property body goes empty. see docs/FIXED.md #170
+        // a list of enum values is a leaf too, or the field vanishes and an only-property body
+        // goes empty; illegal values are degraded to plain strings long before reaching here.
         //   e.g. (motion) include: { type: array, items: { type: string, enum: [workHours] } }
-        const listOfEnumValues =
-          child instanceof PropArray && child.items instanceof En && GqlUtils.isGqlEnum(child.items.schema);
+        // see docs/FIXED.md #170 #172
+        const listOfEnumValues = child instanceof PropArray && child.items instanceof En;
         if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues) {
           newSelection.add(child.path());
         } else if (child instanceof PropEn) {

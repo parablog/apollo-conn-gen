@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Illegal enum values
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /events:
+    post:
+      operationId: postEvents
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventsPostRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  statuses:
+                    type: array
+                    items: { type: string, enum: [active, inactive] }
+                  # illegal AND typeless — used to throw in getGQLScalarType instead of degrading
+                  flags:
+                    type: array
+                    items: { enum: ['a.b', 'c.d'] }
+components:
+  schemas:
+    # the only property is a list of enum values with no legal GraphQL form ("FILE.UPLOADED" has a
+    # dot) — before #172 this silently dropped the whole field (and the whole input type with it)
+    EventsPostRequest:
+      type: object
+      properties:
+        events:
+          type: array
+          items: { type: string, enum: ['FILE.UPLOADED', 'FILE.DELETED'] }

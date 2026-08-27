@@ -137,6 +137,12 @@ export class Factory {
       if (typeStr === 'array') {
         throw new Error(`Should have been handled already? ${typeStr}, schema: ${JSON.stringify(schema)}`);
       } else if (schema?.enum != null) {
+        if (!GqlUtils.isGqlEnum(schema)) {
+          // enum values with no legal GraphQL name form degrade to the base scalar, so the field
+          // keeps its values as plain strings. see docs/FIXED.md #172
+          //   e.g. (box) triggers: { items: { type: string, enum: [FILE.UPLOADED, …] } } -> triggers: [String]
+          return new Scalar(parent, GqlUtils.gqlScalar(typeStr as string) || 'String', schema);
+        }
         // a bare (non-property) enum keeps its component name, same as Obj/Union/Composed above —
         // otherwise every such enum collides on the generic name 'enum'. see docs/FIXED.md #120
         return new En(parent, ref ?? 'enum', schema, schema.enum! as string[]);
@@ -154,6 +160,10 @@ export class Factory {
       const reason = `this schema's type '${typeStr}' has no GraphQL scalar equivalent — sent as raw JSON instead.`;
       return new Scalar(parent, 'JSON', Schemas.withJsonNote(schema!, reason), reason);
     } else if (schema?.enum != null) {
+      if (!GqlUtils.isGqlEnum(schema)) {
+        // same degrade as the site above; with no `type` at all, enum values read as strings. see docs/FIXED.md #172
+        return new Scalar(parent, 'String', schema);
+      }
       return new En(parent, ref ?? 'enum', schema, _.get(schema, 'enum') as string[]);
     }
     // or we have no idea how to handle this

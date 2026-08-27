@@ -3613,3 +3613,18 @@ test('test_170_array_of_enum_body_property_is_selectable', async () => {
   assert.ok(/include: \[Enum\]/.test(schema!), 'the array-of-enum field references the enum it actually defines');
   assert.ok(/^enum Enum \{/m.test(schema!), 'and that enum is emitted');
 });
+
+test('test_172_illegal_enum_values_degrade_to_base_scalar', async () => {
+  // #172: an array-item enum with values that have no legal GraphQL enum form (e.g. "FILE.UPLOADED"
+  // has a dot) built an invalid En node — #170's leaf guard then silently dropped the whole field,
+  // rather than degrading it the way a property enum already does (#24).
+  //   e.g. events: { type: array, items: { type: string, enum: ["FILE.UPLOADED", "FILE.DELETED"] } }
+  const schema = await runOasTest('illegal-enum-values.yaml', ['post:/events>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/events: \[String\]/.test(schema!), 'the illegal-valued field degrades to a list of strings');
+  assert.ok(/events\s*\n/.test(schema!), 'and still appears in the body selection');
+  assert.ok(!/FILE/.test(schema!), 'no enum definition is emitted for the illegal values');
+  assert.ok(/statuses: \[Enum\]/.test(schema!), 'the legal sibling keeps its enum-typed field');
+  assert.ok(/^enum Enum \{/m.test(schema!), 'and its enum definition is still emitted');
+  assert.ok(/flags: \[String\]/.test(schema!), 'an illegal enum with no type at all degrades too, not throws');
+});

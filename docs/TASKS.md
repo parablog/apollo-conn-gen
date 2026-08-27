@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 158 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 159 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -72,26 +72,18 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-## 172 [BUG] [P4] · Array of non-identifier enum values is silently dropped from selection — ⬜ Open
+## 173 [BUG] [P4] · Inline non-prop enums are all named `Enum` — ⬜ Open
 
-**Symptom:** a `PropArray`-of-`En` field whose enum values aren't legal GraphQL names never appears
-in a `>**` selection — the field just vanishes, no warning, no degrade.
+**Symptom:** every inline array-item enum uses the same name (`include: [Enum]`) — two of them in
+one spec collide.
 
-**OAS:** (box.yaml) webhook `triggers` — values like `"FILE.UPLOADED"` fail `GqlUtils.isGqlEnum`
-(a `.` isn't legal in a GraphQL name); omni.yaml has the same shape with `:`.
-```json
-{ "type": "array", "items": { "type": "string", "enum": ["FILE.UPLOADED", "FILE.DELETED"] } }
-```
+**OAS:** (motion) `include: { type: array, items: { type: string, enum: [workHours] } }`
 
-- Repro: any spec with an array-of-enum property whose values contain `:`/`.`/spaces — omni and
-  box both have one.
+**Cause:** `createScalarType` uses `ref ?? 'enum'` as a fallback name — #57 gave prop-path enums
+names like `OrderStatus`, but the non-prop path never got the same treatment.
 
-**Cause:** #170's leaf guard (`typesCollector.ts`) skips a `PropArray`-of-`En` whose values fail
-`GqlUtils.isGqlEnum`, on purpose — an illegal name written raw is what broke omni/box's SDL. But
-the guard just excludes the field from selection instead of degrading it, the same silent-drop
-behavior #24 already solved for scalar enum fields.
-- Right fix: reuse #24's degrade — emit the base scalar (`[String]`) instead of skipping the
-  field — or sanitize the illegal values in `En.generate()`.
+- Warning: renaming changes identity (node ids and paths change), so the fix must check for
+  selection-path issues.
 
-**Refs:** `src/oas/generator/typesCollector.ts` (the guard), `src/oas/nodes/en.ts` (`generate`),
-#24 (scalar-enum degrade precedent), #170 (introduced the guard).
+**Refs:** `src/oas/nodes/factory.ts` (`createScalarType`), `src/oas/nodes/en.ts` (`visit`), #57,
+#120, #172.

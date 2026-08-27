@@ -9209,3 +9209,76 @@ eligibility), not the tree shape.
 map as a list), #26/#125 (the same class of "type reachable but field never selected" bug), #170
 (the fifth motion mutation op, `post:/v2/tasks/query`, was resolved independently by #170's
 array-of-enum fix — this entry covers the remaining four `GRAPH_QL_ERROR` failures).
+
+## 172 [BUG] [P4] · Array of non-identifier enum values is silently dropped from selection — ✅ Fixed
+
+**Symptom:** an array-item enum whose values have no legal GraphQL enum form (e.g. `"FILE.UPLOADED"`
+has a `.`) vanished from the selection entirely — no field, no warning, no degrade. When it was the
+request body's only property, the whole input type collapsed to zero fields, the same invalid-SDL
+crash #170 hit.
+
+**OAS:** (box.yaml) webhook `triggers`, (omni.yaml) the same shape with `:` — local repro is
+`illegal-enum-values.yaml`:
+```json
+{ "type": "array", "items": { "type": "string", "enum": ["FILE.UPLOADED", "FILE.DELETED"] } }
+```
+
+**Example:**
+```graphql
+# before: the field is absent — no `events` anywhere in the SDL or the body selection
+# after: degrades to its base scalar, same call #24 already made for property enums
+events: [String]
+#   body: "$args.input { events }"
+```
+
+**Cause:** the bug was never in #170's collector guard or in `En.generate()` — both were working as
+designed. It was upstream: `Factory.createScalarType` (`src/oas/nodes/factory.ts`) builds an `En`
+node at two call sites for any bare/array-item enum, with no legal-name check — the
+`GqlUtils.isGqlEnum` guard `fromProp` already applies to property enums (#24) was never applied to
+these other two `En`-construction sites. So an illegal-valued enum still built an (invalid) `En`,
+and #170's leaf guard in `typesCollector.ts` correctly refused to select a `PropArray`-of-`En` that
+fails `isGqlEnum` — that refusal is what silently dropped the field.
+
+**Fix:** the same #24 guard, applied at `createScalarType`'s two `En` sites — degrade to the base
+scalar instead of building an `En`:
+```ts
+if (!GqlUtils.isGqlEnum(schema)) {
+  return new Scalar(parent, GqlUtils.gqlScalar(typeStr as string) || 'String', schema);
+}
+```
+No `warn()` — nothing is lost, the value just stays a plain string, same as #24. The base scalar
+comes from `gqlScalar` with a `String` fallback, not `getGQLScalarType`, which throws on a `type`
+it doesn't know — an illegal enum with no `type` key at all (fixture's `flags`) degrades to
+`String` instead of dying there. With this in
+place an illegal enum never reaches `typesCollector.ts` as an `En` at all, so #170's
+`GqlUtils.isGqlEnum(child.items.schema)` half of the leaf guard is now dead code — simplified to
+`child instanceof PropArray && child.items instanceof En` (the existing `listOfValues` case already
+covers the degraded `[String]`).
+
+We rejected sanitizing the illegal values instead (stripping `.`, mapping to `_`, etc.): connectors
+selection has to match the wire value exactly, so a sanitized enum member would stop matching what
+the API actually returns. Degrading to the base scalar is the only fix that keeps wire-value
+fidelity — the same tradeoff #24 already made for property enums.
+
+**Tests:** `test_172_illegal_enum_values_degrade_to_base_scalar` in `tests/all/oas-core.test.ts`,
+fixture `tests/resources/oas/illegal-enum-values.yaml`. Pre-fix, the test fails the same way #170
+originally did: `[gen] generated an invalid GraphQL schema: Syntax Error: Expected Name, found "}"`
+— the illegal-enum field is the request body's only property, so dropping it empties the whole
+input type. `test_109_omni_full_production_selection` and `test_122_box_full_production_selection`
+(both called out in #170 as having illegal-valued arrays that stayed unselected) are unchanged —
+same type counts as before (418 and 766) — a degraded `[String]` field doesn't add a new type, it
+just makes a previously-dropped field reappear on the existing type. Revert-check: stashing
+`factory.ts` alone still fails `test_172_*`, now via an invalid-enum-value SDL parse error instead
+of the empty-input-type one (`typesCollector.ts`'s simplified guard no longer filters the field
+out); restoring passes. Full suite green (498 tests, 494 pass, 0 fail, 4 pre-existing todo).
+
+**AST:** shape change, not emission-only — an illegal-valued enum now builds a `Scalar` node
+instead of an `En`, at the same two `createScalarType` sites #120 named. `typesCollector.ts`'s leaf
+check narrows to match (no behavior change there: `isGqlEnum` was already always true by the time
+an `En` could reach it).
+
+**Refs:** `src/oas/nodes/factory.ts` (`createScalarType`, the two `En` sites),
+`src/oas/generator/typesCollector.ts` (the simplified leaf guard), `src/oas/utils/gql.ts`
+(`isGqlEnum`/`getGQLScalarType`), #24 (the property-enum degrade this reuses), #120 (named the same
+two `createScalarType` sites), #170 (introduced the guard whose refusal was silently dropping the
+field).

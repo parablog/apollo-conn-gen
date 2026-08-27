@@ -150,6 +150,8 @@ export class Map extends Type {
     if (this.valueType instanceof Map) {
       // a map value that is itself a map opens its own entries wrapper, matching the nested
       // entry type the SDL already writes. see docs/FIXED.md #171
+      //   e.g. (motion) customFields: { additionalProperties: { additionalProperties: {…} } }
+      //   -> customFields->entries { key value: value->entries { key value {…} } }
       writer.write(': value');
       this.valueType.selectEntries(context, writer, selection);
     } else if (this.needsValueSelection()) {
