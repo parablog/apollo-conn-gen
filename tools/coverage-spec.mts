@@ -494,7 +494,13 @@ async function sweepSpecInWorker(file: string, slots: Int32Array): Promise<SpecO
     register();
     import(${JSON.stringify(import.meta.url)});
   `;
-  const worker = new Worker(bootstrap, { eval: true, workerData: { file, slots, argv: process.argv.slice(2) } });
+  // a whole-spec sweep of the biggest specs (docusign's 247 mutation ops) outgrows the default
+  // worker heap and dies with ERR_WORKER_OUT_OF_MEMORY — give each sweep real room instead.
+  const worker = new Worker(bootstrap, {
+    eval: true,
+    workerData: { file, slots, argv: process.argv.slice(2) },
+    resourceLimits: { maxOldGenerationSizeMb: 8192 },
+  });
   return new Promise<SpecOutcome>((resolve, reject) => {
     worker.once('message', resolve);
     worker.once('error', reject);
