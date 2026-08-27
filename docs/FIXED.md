@@ -9147,4 +9147,65 @@ tests, 492 pass, 0 fail, 4 pre-existing todo).
 **Refs:** `src/oas/generator/typesCollector.ts`, `src/oas/nodes/propArray.ts`,
 `src/oas/utils/gql.ts` (`isGqlEnum`), #24 (`PropEn` leaf / the legal-enum guard), #96 (list-of-values
 leaf), #15 (definition/reference discipline), #172 (invalid-enum arrays silently dropped instead of
-degrading), #171 (motion mutation compose failures, probed after this fix — still open).
+degrading), #171 (motion mutation compose failures, probed after this fix — fixed separately).
+
+## 171 [BUG] [P2] · Map-of-map selection writes only one `->entries` level — selection/SDL disagree, compose fails — ✅ Fixed
+
+**Symptom:** `GRAPH_QL_ERROR: [test_spec] No matching shape found for selection. Attempted 1
+different shape variations and all failed.` The generated SDL types are correct; the connector
+selection silently skips a wrapper rover expects.
+
+**OAS:** (motion.json, local vendor spec) a map whose values are themselves maps:
+```json
+{ "additionalProperties": { "additionalProperties": { "oneOf": [ /* … */ ] } } }
+```
+
+- Repro: `post:/v2/views>**` — `Views.definition.filters.projects.filters.customFields`.
+- Generation was correct: nested entry types are emitted (`CustomFieldsEntry { key, value:
+  CustomFieldsEntryEntry }`, `CustomFieldsEntryEntry { key, value: … }`). The selection wasn't:
+  `customFields: customFields?->entries { key value { <innermost fields> } }` — one `->entries`
+  level short. Hand-patched to the two-level form below, it composes clean on rover 2.15.1:
+  `customFields: customFields?->entries { key value: value->entries { key value { … } } }`
+
+**Cause:** two separate bugs, both needed to fix and both needed to even build a test fixture:
+- `src/oas/nodes/map.ts` (`Map.selectEntries`): when a map's value is itself a `Map`, nothing
+  wrote the inner `->entries` wrapper — `Map.select` just delegated straight into the value's own
+  fields, dropping a level every time a map nests inside a map.
+- `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`): found while building this fix's
+  test fixture, not in the original repro (motion's real `customFields` values are objects, which
+  masks it). A `Map` nested inside another `Map`'s `valueType` — the exact map-of-map shape this
+  bug is about — was caught by neither of the two existing "map value is plain, stop recursing"
+  checks (a `PropMap` directly under a property, or a whole-response map under `Res`). When the
+  *innermost* value is a plain scalar (not an object), no leaf path was ever recorded for it, so
+  the whole field was silently dropped from the schema — not malformed, just absent. Same #26/#125
+  class of bug as #170. A map-of-map-of-object survives by accident (the object's own props are
+  true `PropScalar` leaves, caught elsewhere in the same walk); a map-of-map-of-scalar does not.
+
+**Fix:**
+- `Map.selectEntries` now checks `this.valueType instanceof Map` as its own first-checked
+  condition (not nested inside `needsValueSelection()`, so a map-of-map-of-scalar takes this
+  branch too), and recurses: `value: value->entries { … }` — self-aliased the same way
+  `PropMap.select` credits a field name through `->entries`. Recursion covers any nesting depth.
+- `collectExpandedPaths`'s leaf check gains a third case alongside the existing two: a `Map` whose
+  own parent is another `Map` is now checked the same way a `PropMap`'s value already was.
+
+**Tests:** `test_171_nested_map_selects_both_entries_levels` in `tests/all/oas-core.test.ts`,
+fixture `tests/resources/oas/nested-map-selection.yaml` — a map-of-map-of-object and a
+map-of-map-of-scalar sibling, both asserted on the exact emitted selection shape and composed via
+`runOasTest`. Bonus sweep of the other motion ops that shared the original symptom (`patch:/v2/views/{viewId}`,
+`post:/v3/views`, `patch:/v3/views/{viewId}`, `post:/team-schedule/views`, `get:/v2/views`,
+`get:/v3/views`) all compose clean. Revert-check: stashing `map.ts` alone fails
+`test_171_*` (compose throws before the assertions run); restoring passes. Corpus baseline shift:
+`test_109_omni_full_production_selection` gains two types, 418 (was 416) — omni's `selectionMap`
+field is a map-of-map that now gets its own `SelectionMapEntry`/`SelectionMapEntryEntry` types,
+confirmed by diffing the exact type list before/after. Full suite green (497 tests, 493 pass, 0
+fail, 4 pre-existing todo).
+
+**AST:** emission-only for `Map.selectEntries` — the node tree and generated SDL types were already
+correct. The `collectExpandedPaths` change affects which paths reach `newSelection` (selection
+eligibility), not the tree shape.
+
+**Refs:** `src/oas/nodes/map.ts`, `src/oas/generator/typesCollector.ts`, #90 (`->entries` reads a
+map as a list), #26/#125 (the same class of "type reachable but field never selected" bug), #170
+(the fifth motion mutation op, `post:/v2/tasks/query`, was resolved independently by #170's
+array-of-enum fix — this entry covers the remaining four `GRAPH_QL_ERROR` failures).

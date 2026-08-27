@@ -147,7 +147,12 @@ export class Map extends Type {
     writer.write(' '.repeat(context.indent + context.stack.length)).write('key\n');
     writer.write(' '.repeat(context.indent + context.stack.length)).write('value');
 
-    if (this.needsValueSelection()) {
+    if (this.valueType instanceof Map) {
+      // a map value that is itself a map opens its own entries wrapper, matching the nested
+      // entry type the SDL already writes. see docs/FIXED.md #171
+      writer.write(': value');
+      this.valueType.selectEntries(context, writer, selection);
+    } else if (this.needsValueSelection()) {
       writer.write(' {').write('\n');
       context.enter(this);
       this.valueType!.select(context, writer, selection);

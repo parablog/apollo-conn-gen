@@ -2093,6 +2093,25 @@ test('test_map_field_key_aliasing_not_duplicated', async () => {
   assert.match(sdl, /currencyOptions: currency_options\?->entries \{/);
 });
 
+test('test_171_nested_map_selects_both_entries_levels', async () => {
+  // A map whose values are themselves maps (map-of-map, e.g. motion's customFields) only wrote the
+  // outer ->entries level — selection and SDL shape disagreed and rover refused to compose.
+  // see docs/FIXED.md #171
+  const schema = await runOasTest('nested-map-selection.yaml', ['get:/records>**'], 1, 6);
+  assert.ok(schema !== undefined);
+
+  assert.match(
+    schema!,
+    /customFields:\s*customFields\?->entries\s*\{\s*key\s*value:\s*value->entries\s*\{\s*key\s*value\s*\{/,
+    'map-of-map-of-object gets a nested value->entries wrapper, then the object fields',
+  );
+  assert.match(
+    schema!,
+    /scores:\s*scores\?->entries\s*\{\s*key\s*value:\s*value->entries\s*\{\s*key\s*value\s*\}\s*\}/,
+    'map-of-map-of-scalar gets the same nested wrapper, but the innermost value is written plain (no braces)',
+  );
+});
+
 test('test_oas31_type_array_collapses_to_nullable_scalar', async () => {
   // OAS 3.1 nullable syntax `type: [string, 'null']` (no more `nullable: true`) reached
   // createScalarType as the literal "string,null" and threw. The array collapses to its first
@@ -3146,8 +3165,10 @@ test(
     // update-schedule operations) from synthesized wrapper types into JSON.
     // still 416: #170 makes list-of-enum-values properties selectable, but omni's has values with
     // a ":" -- it fails #24's legal-name guard and stays unselected, same as before #170.
+    // 418: #171 gives a map-of-map its inner entries level; omni's selectionMap field gains its
+    // own two new types, SelectionMapEntry and SelectionMapEntryEntry.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('omni-full.json', selections, 163, 416, {
+    const schema = await runOasTest('omni-full.json', selections, 163, 418, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',

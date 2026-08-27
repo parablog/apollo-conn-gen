@@ -376,10 +376,9 @@ class PathsCollector {
         const listOfValues = child instanceof PropArray && child.items instanceof Scalar;
         const nestedListOfValues =
           child instanceof PropArray && child.items instanceof Arr && child.items.itemsType instanceof Scalar;
-        // a list of enum values is a leaf too — without it, motion's SchedulesGetRequest, where
-        // it's the only property, collapses to an empty input type. see docs/FIXED.md #170
+        // a list of enum values is a leaf too, but only when the enum has a legal GraphQL form
+        // (#24) — without it the field vanishes and an only-property body goes empty. see docs/FIXED.md #170
         //   e.g. (motion) include: { type: array, items: { type: string, enum: [workHours] } }
-        // only when the enum has a legal GraphQL form; else it stays unselected, as before #170. #24
         const listOfEnumValues =
           child instanceof PropArray && child.items instanceof En && GqlUtils.isGqlEnum(child.items.schema);
         if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues) {
@@ -418,7 +417,11 @@ class PathsCollector {
           // (whole values only — a cycle-cut value would select bare against a composite SDL type  #76)
           const mapUnderProp = child instanceof PropMap ? child.map : undefined;
           const mapAsResponse = child instanceof MapNode && child.parent instanceof Res ? child : undefined;
-          const map = mapUnderProp ?? mapAsResponse;
+          // a map nested inside another map's value fits neither case above, so a map of maps of
+          // plain values silently lost its whole field. see docs/FIXED.md #171
+          //   e.g. additionalProperties: { additionalProperties: { type: integer } }
+          const mapNested = child instanceof MapNode && child.parent instanceof MapNode ? child : undefined;
+          const map = mapUnderProp ?? mapAsResponse ?? mapNested;
           if (map?.valueType && T.isWholeMapValue(map.valueType)) {
             newSelection.add(child.path());
           }

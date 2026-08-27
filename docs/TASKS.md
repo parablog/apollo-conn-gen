@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 157 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 158 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -71,19 +71,6 @@ Invariants the entries below rely on:
   `context.lookupRef`, which returns the **same `SchemaObject` instance** per ref.
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
-
-## 171 [BUG] [P2] · Motion mutation ops generate but fail compose — ⬜ Open
-
-**Symptom:** motion.json mutation ops compose-fail: `GRAPH_QL_ERROR` ×4 (was five ops — the
-`INVALID_BODY` one, `post:/v2/tasks/query`, was resolved by #170's fix, retested 2026-08-27).
-
-- Repro: `post:/v2/views>**` — still failing after #170.
-- Both bodies are saturated with #170's array-of-enum shape (nested wrappers whose only property
-  is `value: [enum]`), but #170 alone didn't clear this class — something else is also wrong.
-
-**Cause:** not yet traced.
-
-**Refs:** `COVERAGE-mutations.md` gap histogram, `TEST_CORPUS.md` (Motion).
 
 ## 172 [BUG] [P4] · Array of non-identifier enum values is silently dropped from selection — ⬜ Open
 

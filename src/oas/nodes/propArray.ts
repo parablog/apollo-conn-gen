@@ -56,10 +56,9 @@ export class PropArray extends Prop {
   //   e.g. (box) name_conflicts -> `[[NameConflictsItem]]`, not `[name_conflicts]`      #59
   public override getValue(context: OasContext): string {
     const inner = T.findLastArrayItemIn(this.items)!;
-    // a list of enum values must point at the enum's real emitted name, not its raw one — an inline
-    // enum with no field of its own is literally named "enum", which becomes "Enum" once written out.
-    //   e.g. (motion) include: { type: array, items: { type: string, enum: [workHours] } }
-    //   -> include: [Enum], matching `enum Enum { ... }` — not `include: [enum]`, pointing at nothing   #170
+    // a list of enum values points at the enum's emitted name — an inline one is literally named
+    // "enum", written out as "Enum". see docs/FIXED.md #170
+    //   e.g. (motion) include: { type: array, items: { enum: [workHours] } } -> include: [Enum]
     const name = T.isContainer(inner)
       ? Naming.genTypeName(inner.name) + (inner as Type).nameSuffix()
       : inner instanceof En

@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: Nested Map Selection Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # a map whose values are themselves maps (map-of-map) — selectEntries only wrote the outer
+  # ->entries wrapper and skipped the inner one, so selection and SDL disagreed. see docs/FIXED.md #171
+  /records:
+    get:
+      operationId: getRecords
+      responses:
+        '200':
+          description: A record.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  customFields:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      additionalProperties:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          label:
+                            type: string
+                  scores:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      additionalProperties:
+                        type: integer
