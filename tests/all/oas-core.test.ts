@@ -477,7 +477,9 @@ test('test_037_oas_test_022_common-room_01', async () => {
   ];
 
   // last 2 args: don't expect to fail, and skip validation
-  await runOasTest('common-room-core.json', paths, 22, 12, { skipValidation: true });
+  // 13: #170 makes ApiTagCreationProperties.entityTypes (a list of enum values) selectable -- it
+  // used to be silently dropped, so its enum type never got generated. One more type now.
+  await runOasTest('common-room-core.json', paths, 22, 13, { skipValidation: true });
   // await runOasTest("common-room-original.json", paths, 9, 19, { skipValidation: true });
 });
 
@@ -2912,7 +2914,9 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   // #83: 326 of the 445 dropped bodies are stripe's, and every one of them is a form — each used to
   // come out with nothing to send. `metadata` comes out `JSON` because stripe writes it as an
   // anyOf, not as a map, so #84 does not reach it.
-  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 97);
+  // 98: #170 makes a list-of-enum-values property selectable that used to be silently dropped --
+  // one more type generated.
+  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 98);
   assert.ok(customers !== undefined);
   assert.ok(/createV1Customers\(input: CreateV1CustomersInput!\)/.test(customers!), 'stripe takes its form body');
   assert.ok(
@@ -3080,8 +3084,10 @@ test(
     // array-item unions (discountsUnion, account_tax_idsUnion, InvoiceDiscountsUnion — each used
     // to silently merge away its string branch) plus 3 more types only they reached — see
     // docs/FIXED.md #131.
+    // 360: #170 makes a list-of-enum-values property selectable that used to be silently dropped --
+    // one more type generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
-    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 359, {
+    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 360, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.13',
@@ -3138,6 +3144,8 @@ test(
     // off PageInfo's name.
     // 416: #147 turns four undescribed 200s (the download-file/status, delete-yaml and
     // update-schedule operations) from synthesized wrapper types into JSON.
+    // still 416: #170 makes list-of-enum-values properties selectable, but omni's has values with
+    // a ":" -- it fails #24's legal-name guard and stays unselected, same as before #170.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
     const schema = await runOasTest('omni-full.json', selections, 163, 416, {
       skipValidation: true,
@@ -3210,8 +3218,11 @@ test(
     // 765: #157 names each inline request body after its own operation instead of the placeholder
     // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
     // keep their own, two more types generated.
+    // 766: #170 makes list-of-enum-values properties selectable -- box has both legal ones (its
+    // search `fields` param) and illegal ones (webhook triggers use "."); #24's guard keeps the
+    // illegal ones out, so only the legal one's anonymous enum type is newly generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/box-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('box.yaml', selections, 258, 765, {
+    const schema = await runOasTest('box.yaml', selections, 258, 766, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3228,8 +3239,10 @@ test(
     // 1298: #157 names each inline request body after its own operation instead of the placeholder
     // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
     // keep their own, 14 more types generated.
+    // 1299: #170 makes a list-of-enum-values property selectable that used to be silently dropped --
+    // one more type generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/digitalocean-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1298, {
+    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1299, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3566,4 +3579,16 @@ test('test_157_inline_body_inputs_named_after_their_operation', async () => {
 
   assert.ok(!/InputInput/.test(schema!), 'the placeholder name is gone');
   assert.ok(!/BInput/.test(schema!), 'no collision counter is needed');
+});
+
+test('test_170_array_of_enum_body_property_is_selectable', async () => {
+  // #170: a property that is a list of enum values had no leaf case in `>**`, so the field never
+  // entered the selection — and motion's SchedulesGetRequest, where it is the only property, lost
+  // its whole input type (an empty `input SchedulesGetRequestInput { }` is invalid SDL).
+  //   e.g. include: { type: array, items: { type: string, enum: [workHours] } }
+  const schema = await runOasTest('array-of-enum-body-property.yaml', ['post:/schedules>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/input SchedulesGetRequestInput \{/.test(schema!), 'the input type is written, not empty');
+  assert.ok(/include: \[Enum\]/.test(schema!), 'the array-of-enum field references the enum it actually defines');
+  assert.ok(/^enum Enum \{/m.test(schema!), 'and that enum is emitted');
 });

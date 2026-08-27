@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info:
+  title: Array of enum body property
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /schedules:
+    post:
+      operationId: getSchedules
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SchedulesGetRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { id: { type: string } } }
+components:
+  schemas:
+    # the only property is a list of enum values, so losing the field loses the whole input type
+    SchedulesGetRequest:
+      type: object
+      properties:
+        include:
+          type: array
+          items: { type: string, enum: [workHours] }

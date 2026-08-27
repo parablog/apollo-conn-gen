@@ -1,4 +1,4 @@
-import { Arr, IType, Prop, Scalar, T, Type } from './internal.js';
+import { Arr, En, IType, Prop, Scalar, T, Type } from './internal.js';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
@@ -56,7 +56,15 @@ export class PropArray extends Prop {
   //   e.g. (box) name_conflicts -> `[[NameConflictsItem]]`, not `[name_conflicts]`      #59
   public override getValue(context: OasContext): string {
     const inner = T.findLastArrayItemIn(this.items)!;
-    const name = T.isContainer(inner) ? Naming.genTypeName(inner.name) + (inner as Type).nameSuffix() : inner.name;
+    // a list of enum values must point at the enum's real emitted name, not its raw one — an inline
+    // enum with no field of its own is literally named "enum", which becomes "Enum" once written out.
+    //   e.g. (motion) include: { type: array, items: { type: string, enum: [workHours] } }
+    //   -> include: [Enum], matching `enum Enum { ... }` — not `include: [enum]`, pointing at nothing   #170
+    const name = T.isContainer(inner)
+      ? Naming.genTypeName(inner.name) + (inner as Type).nameSuffix()
+      : inner instanceof En
+        ? Naming.genTypeName(inner.name)
+        : inner.name;
 
     // one pair of brackets per list on the way down
     let value = `[${name}]`;

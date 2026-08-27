@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 156 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 157 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -72,32 +72,39 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-## 170 [BUG] [P2] · Map-of-union response emits a zero-field type — invalid SDL — ⬜ Open
-
-**Symptom:** `[gen] generated an invalid GraphQL schema: Syntax Error: Expected Name, found "}"`
-— a type with an empty body; the output self-check throws instead of shipping it.
-
-**OAS:** (motion.json, local vendor spec) `SchedulesGetResponse.models.schedules`:
-```json
-{ "type": "object", "additionalProperties": { "oneOf": [ { "type": "object", "…": "…" } ] } }
-```
-
-- Repro: `post:/v2/schedules>**` (also the whole-spec mutations compose).
-- The empty type body is the bug; the throw is the guard working as designed.
-
-**Cause:** not fully traced — the map-valued `oneOf` path produces a type with no fields.
-
-**Refs:** `COVERAGE-mutations.md` gap histogram, `TEST_CORPUS.md` (Motion).
-
 ## 171 [BUG] [P2] · Motion mutation ops generate but fail compose — ⬜ Open
 
-**Symptom:** five motion.json mutation ops compose-fail: `GRAPH_QL_ERROR` ×4, `INVALID_BODY` ×1.
+**Symptom:** motion.json mutation ops compose-fail: `GRAPH_QL_ERROR` ×4 (was five ops — the
+`INVALID_BODY` one, `post:/v2/tasks/query`, was resolved by #170's fix, retested 2026-08-27).
 
-- Repro: `post:/v2/views>**` (the GRAPH_QL_ERROR class), `post:/v2/tasks/query>**`
-  (INVALID_BODY).
-- Diagnose the first before assuming five distinct bugs — likely the same map/union shape family
-  as #170.
+- Repro: `post:/v2/views>**` — still failing after #170.
+- Both bodies are saturated with #170's array-of-enum shape (nested wrappers whose only property
+  is `value: [enum]`), but #170 alone didn't clear this class — something else is also wrong.
 
 **Cause:** not yet traced.
 
 **Refs:** `COVERAGE-mutations.md` gap histogram, `TEST_CORPUS.md` (Motion).
+
+## 172 [BUG] [P4] · Array of non-identifier enum values is silently dropped from selection — ⬜ Open
+
+**Symptom:** a `PropArray`-of-`En` field whose enum values aren't legal GraphQL names never appears
+in a `>**` selection — the field just vanishes, no warning, no degrade.
+
+**OAS:** (box.yaml) webhook `triggers` — values like `"FILE.UPLOADED"` fail `GqlUtils.isGqlEnum`
+(a `.` isn't legal in a GraphQL name); omni.yaml has the same shape with `:`.
+```json
+{ "type": "array", "items": { "type": "string", "enum": ["FILE.UPLOADED", "FILE.DELETED"] } }
+```
+
+- Repro: any spec with an array-of-enum property whose values contain `:`/`.`/spaces — omni and
+  box both have one.
+
+**Cause:** #170's leaf guard (`typesCollector.ts`) skips a `PropArray`-of-`En` whose values fail
+`GqlUtils.isGqlEnum`, on purpose — an illegal name written raw is what broke omni/box's SDL. But
+the guard just excludes the field from selection instead of degrading it, the same silent-drop
+behavior #24 already solved for scalar enum fields.
+- Right fix: reuse #24's degrade — emit the base scalar (`[String]`) instead of skipping the
+  field — or sanitize the illegal values in `En.generate()`.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (the guard), `src/oas/nodes/en.ts` (`generate`),
+#24 (scalar-enum degrade precedent), #170 (introduced the guard).

@@ -23,6 +23,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { SelectionPath } from '../utils/selectionPath.js';
+import { GqlUtils } from '../utils/gql.js';
 
 export class TypesCollector {
   types: Map<string, IType> = new Map();
@@ -375,7 +376,13 @@ class PathsCollector {
         const listOfValues = child instanceof PropArray && child.items instanceof Scalar;
         const nestedListOfValues =
           child instanceof PropArray && child.items instanceof Arr && child.items.itemsType instanceof Scalar;
-        if (T.isPropScalar(child) || listOfValues || nestedListOfValues) {
+        // a list of enum values is a leaf too — without it, motion's SchedulesGetRequest, where
+        // it's the only property, collapses to an empty input type. see docs/FIXED.md #170
+        //   e.g. (motion) include: { type: array, items: { type: string, enum: [workHours] } }
+        // only when the enum has a legal GraphQL form; else it stays unselected, as before #170. #24
+        const listOfEnumValues =
+          child instanceof PropArray && child.items instanceof En && GqlUtils.isGqlEnum(child.items.schema);
+        if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues) {
           newSelection.add(child.path());
         } else if (child instanceof PropEn) {
           // enum props are leaves too — without this, `>**` silently drops every enum field

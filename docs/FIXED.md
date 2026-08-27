@@ -9096,3 +9096,55 @@ restoring passes. Full suite green.
 **Refs:** `src/oas/utils/nullability.ts`, `tests/resources/oas/standalone-null-type.yaml`,
 `tests/all/oas-core.test.ts`, #60 (the other two spellings), #55 (required + nullable guard), #33
 (the null-member skip this family builds on).
+
+## 170 [BUG] [P2] · Array-of-enum body property is never selected — empty input type, invalid SDL — ✅ Fixed
+
+**Symptom:** `[gen] generated an invalid GraphQL schema: Syntax Error: Expected Name, found "}"`
+— `input SchedulesGetRequestInput { }` has no fields; the output self-check throws instead of
+shipping it (the throw is the guard working as designed).
+
+**OAS:** (motion.json, local vendor spec) `SchedulesGetRequest` — the request body's only property:
+```json
+{ "include": { "type": "array", "items": { "type": "string", "enum": ["workHours"] } } }
+```
+
+- Repro: `post:/v2/schedules>**` (also kills the whole-spec mutations compose).
+- An earlier diagnosis blamed the response's map-of-`oneOf` — wrong: that map value has six real
+  properties and generates fine. The `Input` suffix pins the empty type to the request body.
+
+**Cause:** two halves, both needed:
+- `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`): the `>**` walk treats a
+  `PropArray`-of-`Scalar` and a `PropEn` as leaves, but a `PropArray` whose items are an `En` is
+  neither — the field never enters the selection, and as the body's only property the input type
+  collapses to zero fields.
+- `src/oas/nodes/propArray.ts` (`getValue`): a non-container item is referenced by its raw
+  `name`, while `En.generate` (`en.ts`) defines the enum under `Naming.genTypeName(name)` — once
+  the first half makes the field selectable, an array-of-enum reference can dangle.
+
+**Fix:** made the leaf selectable, but only when the enum has a legal GraphQL form. The first pass
+made every array-of-enum property selectable unconditionally, which broke
+`test_109_omni_full_production_selection` and `test_122_box_full_production_selection` — both
+specs have enum values with illegal characters (`:`, `.`) that `En.generate()` writes raw, an
+invalid GraphQL name. The leaf now reuses #24's `GqlUtils.isGqlEnum` guard:
+```ts
+const listOfEnumValues =
+  child instanceof PropArray && child.items instanceof En && GqlUtils.isGqlEnum(child.items.schema);
+```
+A valid-enum array becomes a selectable leaf; an invalid-enum array stays unselected, same as
+before this fix — filed separately as #172, since silently dropping the field is itself imperfect.
+
+**Tests:** `test_170_array_of_enum_body_property_is_selectable` in `tests/all/oas-core.test.ts`,
+fixture `tests/resources/oas/array-of-enum-body-property.yaml`. `test_109_omni_full_production_selection`
+stays at its pre-#170 type count (416) — omni's only array-of-enum field has `:` in its values and
+fails the guard. `test_122_box_full_production_selection` gains one type (766, was 765) — box has
+both a legal array-of-enum (its search `fields` param) and illegal ones (webhook triggers use
+`.`); only the legal one's anonymous enum type is newly generated. Three more corpus baselines
+gained one type each the same way (stripe `post:/v1/customers` and curated, digitalocean full,
+common-room) — every shift is a previously-dropped legal field now selected. Revert-check: stashing
+`typesCollector.ts`/`propArray.ts` fails `test_170_*`, restoring passes. Full suite green (496
+tests, 492 pass, 0 fail, 4 pre-existing todo).
+
+**Refs:** `src/oas/generator/typesCollector.ts`, `src/oas/nodes/propArray.ts`,
+`src/oas/utils/gql.ts` (`isGqlEnum`), #24 (`PropEn` leaf / the legal-enum guard), #96 (list-of-values
+leaf), #15 (definition/reference discipline), #172 (invalid-enum arrays silently dropped instead of
+degrading), #171 (motion mutation compose failures, probed after this fix — still open).
