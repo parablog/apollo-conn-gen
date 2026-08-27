@@ -5,13 +5,13 @@ import { MediaTypeObject, ParameterObject, ResponseObject, SchemaObject } from '
 import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { Media } from '../utils/media.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import { Params } from '../utils/params.js';
 import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 import _ from 'lodash';
 
-const JSON_MEDIA_TYPE = /^application\/(?:.*\+)?json/i;
 
 // statuses that, per the HTTP spec itself, never carry a body -- these are the only ones where
 // inventing a plain "it worked" answer is safe. any other 2xx with no described content might
@@ -293,7 +293,7 @@ export class Get extends Type implements Op {
   //   e.g. (response-201-only.yaml) `201: { content: { application/json } }` -> true   #85
   private sendsJson(context: OasContext, response: ResponseObject | ReferenceObject): boolean {
     const resolved = this.resolveResponse(context, response);
-    return resolved ? Object.keys(resolved.content ?? {}).some((key) => JSON_MEDIA_TYPE.test(key)) : false;
+    return resolved ? Media.findJsonMediaType(Object.keys(resolved.content ?? {})) != null : false;
   }
 
   // `code` is what we're reading right now (a real status, or a $ref path once we've followed one).
@@ -310,7 +310,7 @@ export class Get extends Type implements Op {
       const availableKeys = _.keys(response.content);
 
       trace(context, `  [${code}]`, `Available content types: ${availableKeys.join(', ')}`);
-      const keys = _.first(availableKeys.filter((k) => JSON_MEDIA_TYPE.test(k)));
+      const keys = Media.findJsonMediaType(availableKeys);
       trace(context, `  [${code}]`, `Matched JSON key: ${keys || 'none'}`);
 
       const json = keys ? response.content![keys] : undefined;

@@ -3,6 +3,7 @@ import { ResponseObject, SchemaObject } from 'oas/types';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Op } from '../nodes/internal.js';
+import { Media } from '../utils/media.js';
 import { Writer } from './writer.js';
 
 // R4 (opt-in): the `errors:` block of a connector — `message` from the documented error body,
@@ -62,7 +63,7 @@ export class ErrorsWriter {
         continue;
       }
       const resolved = this.deref(context, response) as ResponseObject | null;
-      const mediaKey = Object.keys(resolved?.content ?? {}).find((k) => /^application\/(?:.*\+)?json/i.test(k));
+      const mediaKey = Media.findJsonMediaType(Object.keys(resolved?.content ?? {}));
       const schema = mediaKey
         ? (this.deref(context, resolved!.content![mediaKey].schema) as SchemaObject | null)
         : null;

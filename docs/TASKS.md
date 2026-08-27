@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 160 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 161 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -72,4 +72,49 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-No open entries right now — #173 moved to docs/FIXED.md.
+## 174 [BUG] [P4] · Generating one docusign mutation can need more than 8 GB of memory — ⬜ Open
+
+**Symptom:** the coverage harness's per-op sweep of docusign's 247 mutation ops dies with
+`ERR_WORKER_OUT_OF_MEMORY` below a 16 GB worker heap — generation alone, before any compose runs.
+
+- The spec is 2 MB; whole-spec production generation emits a ~1-2 MB schema without drama.
+- A peak three orders of magnitude above the output size is not explained by the spec being big.
+- The harness now sweeps heavy specs one at a time (`HEAVY_SPEC_BYTES`, `tools/coverage-spec.mts`)
+  so runs complete — that contains the symptom, it doesn't explain it.
+
+**First step is measurement, not a fix:** find WHICH op peaks (`COV_TRACE=1` names each op as it
+generates) and where the memory lives (`node --max-old-space-size` bisection, or a heap snapshot
+around the worst op). File the real cause as its own entry once known.
+
+**Refs:** `tools/coverage-spec.mts` (`COV_WORKER_HEAP_MB`, the heavy-sweep token),
+`tests/resources/oas/docusign.json` (local vendor spec), `TEST_CORPUS.md` (DocuSign).
+
+## 176 [FEAT] [P1] · Lint check: every spec-declared response field is emitted or accounted for — ⬜ Open
+
+**Why:** no check compares the output against the SOURCE spec — counts, compose, and selection
+lint all validate the output against itself. A whole spec's responses degraded to a synthesized
+`{ success: Boolean }` and every gate stayed green; only a human looking at the web tree caught
+it. The same silent-loss shape shipped three times in one week (dropped response fields, dropped
+array fields, stubbed responses). One check closes the class.
+
+**OAS:** (docusign.json) the case that motivated this:
+```
+spec: 200 -> serviceInformation { buildVersion, linkedSites, … }    emitted: { success: Boolean }
+```
+
+**Shape:** a new check in `src/oas/lint/` — per selected operation, resolve the OAS
+success-response schema and walk it against the emitted response type:
+- every spec property appears as a field, or is ACCOUNTED FOR — a documented degrade leaves
+  tracks the check can read (a JSON scalar's reason note, a removed-for-a-loop comment, an
+  illegal enum's base scalar), because every degrade warns (standing rule).
+- a synthesized response is legitimate only when the spec declares no schema at all; a spec that
+  offered more is a diagnostic.
+- silent loss — a spec property with no field and no tracks — is the diagnostic this exists for.
+- the hard part is the accounted-for list, not the walk: merged unions, twin renames, map
+  entries, interface promotion all move fields on purpose. `docs/FIXED.md` is effectively the
+  spec of deliberate degrades; expect the first corpus run to drive its refinement.
+- runs where lint already runs (`tools/lint-corpus.mts` sweeps every corpus op today), so the
+  guard lands corpus-wide, not per-fixture.
+
+**Refs:** `src/oas/lint/` (`responseShape.ts` already resolves OAS response schemas), #175 (the
+motivating miss), #170/#172 (the same class), `tools/lint-corpus.mts`.

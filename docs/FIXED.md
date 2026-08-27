@@ -9397,3 +9397,52 @@ Its shape (the underlying `SchemaObject`, its `items` values) is untouched.
 what the fix's gate matches against), #57 (the property-path rename this extends to the array-item
 path), #120 (the `ref ?? 'enum'` fallback that started the literal name), #170/#172 (made array-item
 enums reach generation/selection at all, which turned the shared name into a shared definition).
+
+## 175 [BUG] [P1] · A `*/*` media type reads as no content — whole specs silently degrade — ✅ Fixed
+
+**Symptom:** every response shows only the synthesized `{ success: Boolean }` wrapper and a
+request body is dropped — the schema is there, published under the wildcard media type, and the
+generator never reads it. Found by Fernando in the web app; the first human look at docusign's
+output.
+
+**OAS:** (docusign.json, local vendor spec) Swagger 2.0 with doc-level
+`produces: ["application/json"]` but `produces: []` on 401 of its 414 operations. The converter
+keeps the schema under the wildcard:
+```json
+"200": { "content": { "*/*": { "schema": { "$ref": "#/components/schemas/serviceInformation" } } } }
+```
+
+**Example:**
+```graphql
+# before                                      # after
+type Service_informationResponse {            type ServiceInformation {
+  success: Boolean                              buildVersion: String
+}                                               ...real fields
+```
+
+**Cause:** three copies of the same lookup only accepted `application/(…+)json` and read `*/*`
+as "no content": the success-response pick (`get.ts`, two sites), the request-body pick
+(`post.ts` `findSendableMediaType` — the `consumes: []` twin, body dropped), and the error-body
+pick (`io/errorsWriter.ts`).
+
+**Why every check was green:** the corpus test pinned counts only (the wrapper is also one
+type), compose accepts a Boolean field, and lint reads whatever selection it was given. Nothing
+asserted a response FIELD.
+
+**Fix:** one shared helper, `Media.findJsonMediaType` (`src/oas/utils/media.ts`): a JSON media
+type first, else `*/*` — a schema published under "any representation" reads as JSON, the same
+reading everything downstream already assumes. All three call sites consult it. Content-Type on
+send needs no change: `body.ts` already answers "default application/json" for a type with no
+`+json` suffix.
+
+**AST:** shape change — ops that synthesized a stub response (or lost their body) now build
+their real subtree.
+
+**Tests:** `test_175_wildcard_media_type_reads_as_json`, fixture `wildcard-media-type.yaml`
+(wildcard response + wildcard body + a plain-JSON sibling pinning no change there).
+`test_corpus_docusign` now also asserts a real response field (`buildVersion: String`) — counts
+alone stayed green through this bug.
+
+**Refs:** `src/oas/utils/media.ts`, `src/oas/nodes/get.ts`, `src/oas/nodes/post.ts`,
+`src/oas/io/errorsWriter.ts`, #85 (the sendsJson guard this extends), #33 (the non-JSON
+fallback), #137 (the form-body pick beside it), `TEST_CORPUS.md` (DocuSign).

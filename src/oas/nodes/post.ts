@@ -4,6 +4,7 @@ import { OasContext } from '../oasContext.js';
 import { Operation } from 'oas/operation';
 import { SchemaObject } from 'oas/types';
 import { trace, warn } from '../log/trace.js';
+import { Media } from '../utils/media.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import _ from 'lodash';
@@ -165,7 +166,7 @@ export class Post extends Get {
   // Multipart and binary have no mapping we can write, so they are not picked at all.
   // e.g. (stripe) post:/v1/customers: [application/x-www-form-urlencoded] -> the form   #83
   private static findSendableMediaType(mediaTypes: string[]): string | undefined {
-    const json = mediaTypes.find((type) => /^application\/(?:.*\+)?json/i.test(type));
+    const json = Media.findJsonMediaType(mediaTypes);
     return json ?? mediaTypes.find((type) => type.toLowerCase().startsWith('application/x-www-form-urlencoded'));
   }
 

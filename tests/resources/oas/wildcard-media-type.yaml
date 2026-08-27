@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info:
+  title: "wildcard media type"
+  version: 1.0.0
+# see docs/FIXED.md #175
+# The shape swagger2openapi writes for a Swagger 2.0 op with `produces: []` / `consumes: []`:
+# the schema survives under the wildcard media type. e.g. (docusign) 401 of 414 operations.
+servers:
+  - url: https://example.com
+paths:
+  /reports:
+    get:
+      operationId: getReports
+      responses:
+        '200':
+          description: ok
+          content:
+            "*/*":
+              schema: { $ref: '#/components/schemas/Report' }
+    post:
+      operationId: createReport
+      requestBody:
+        content:
+          "*/*":
+            schema: { $ref: '#/components/schemas/ReportInput' }
+      responses:
+        '200':
+          description: ok
+          content:
+            "*/*":
+              schema: { $ref: '#/components/schemas/Report' }
+  /plain:
+    get:
+      operationId: getPlain
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Report' }
+components:
+  schemas:
+    Report:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+    ReportInput:
+      type: object
+      properties:
+        name: { type: string }

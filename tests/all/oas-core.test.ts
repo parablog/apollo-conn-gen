@@ -2096,6 +2096,18 @@ test('test_map_field_key_aliasing_not_duplicated', async () => {
   assert.match(sdl, /currencyOptions: currency_options\?->entries \{/);
 });
 
+test('test_175_wildcard_media_type_reads_as_json', async () => {
+  // A schema published under the wildcard media type used to read as "no content": the response
+  // synthesized `{ success: Boolean }` and a request body was dropped. see docs/FIXED.md #175
+  //   e.g. (docusign) produces: [] converts to content: { '*/*': { schema: $ref serviceInformation } }
+  const schema = await runOasTest('wildcard-media-type.yaml', ['get:/reports>**', 'post:/reports>**', 'get:/plain>**'], 3, 2);
+  assert.ok(schema !== undefined);
+  assert.match(schema!, /type Report \{/, 'the wildcard response emits its real type');
+  assert.match(schema!, /name: String\n/, 'with its real fields, not a synthesized success flag');
+  assert.ok(!/success: Boolean/.test(schema!), 'no synthesized response stands in for it');
+  assert.match(schema!, /createReports\(input: ReportInputInput!\)/, 'the wildcard request body is kept');
+});
+
 test('test_171_nested_map_selects_both_entries_levels', async () => {
   // A map whose values are themselves maps (map-of-map, e.g. motion's customFields) only wrote the
   // outer ->entries level — selection and SDL shape disagreed and rover refused to compose.
@@ -2975,7 +2987,9 @@ test('test_137_swagger2_formdata_maps_as_a_form', async () => {
   // time the spec is read, they have already become a requestBody with a content type picked from
   // `consumes` (multipart/form-data here, since /upload and /avatar both declare it). /upload's two
   // string fields now map as a form; /avatar mixes in a file field and stays bodyless, unchanged.
-  const schema = await runOasTest('swagger2-formdata.yaml', ['post:/upload>**', 'post:/avatar>**', 'post:/note>**'], 3, 5);
+  // 3 types since #175: the ops' shared `Result` response reads for real now (the fixture has no
+  // `produces`, so it converts to the wildcard media type) — the per-op stand-in types are gone.
+  const schema = await runOasTest('swagger2-formdata.yaml', ['post:/upload>**', 'post:/avatar>**', 'post:/note>**'], 3, 3);
   assert.ok(schema !== undefined);
   assert.ok(/createUpload\(input: CreateUploadInput!\)/.test(schema!), 'the plain-string form takes an argument');
   assert.ok(/description\n\s+title\n/.test(schema!), 'and sends its fields');
@@ -2984,7 +2998,7 @@ test('test_137_swagger2_formdata_maps_as_a_form', async () => {
     2,
     'both /upload and /note (already a form by default) carry the header',
   );
-  assert.ok(/createAvatar: CreateAvatarResponse/.test(schema!), 'a file field keeps the body dropped');
+  assert.ok(/createAvatar: Result/.test(schema!), 'a file field keeps the body dropped');
   assert.ok(!/createAvatar\(/.test(schema!), 'so /avatar takes no argument');
 });
 
