@@ -479,6 +479,9 @@ test('test_037_oas_test_022_common-room_01', async () => {
   // last 2 args: don't expect to fail, and skip validation
   // 13: #170 makes ApiTagCreationProperties.entityTypes (a list of enum values) selectable -- it
   // used to be silently dropped, so its enum type never got generated. One more type now.
+  // #173 renames it: entityTypes now owns InlineApiTagCreationPropertiesEntityTypes instead of the
+  // shared name Enum (ApiTagCreationProperties is itself a consolidated allOf member, hence the
+  // Inline prefix) -- count unchanged.
   await runOasTest('common-room-core.json', paths, 22, 13, { skipValidation: true });
   // await runOasTest("common-room-original.json", paths, 9, 19, { skipValidation: true });
 });
@@ -2934,7 +2937,8 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   // come out with nothing to send. `metadata` comes out `JSON` because stripe writes it as an
   // anyOf, not as a map, so #84 does not reach it.
   // 98: #170 makes a list-of-enum-values property selectable that used to be silently dropped --
-  // one more type generated.
+  // one more type generated. #173 renames it: BankAccount.availablePayoutMethods now owns
+  // BankAccountAvailablePayoutMethods instead of the shared name Enum -- count unchanged.
   const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 98);
   assert.ok(customers !== undefined);
   assert.ok(/createV1Customers\(input: CreateV1CustomersInput!\)/.test(customers!), 'stripe takes its form body');
@@ -3105,8 +3109,12 @@ test(
     // docs/FIXED.md #131.
     // 360: #170 makes a list-of-enum-values property selectable that used to be silently dropped --
     // one more type generated.
+    // 363: #173 splits the one shared Enum wherever two array-item enums collided on it -- here that
+    // is BankAccount.availablePayoutMethods, PaymentIntent/CreateV1PaymentIntents' own
+    // excludedPaymentMethodTypes (a split collision, like #57's Order/OrderItem case), and Invoices'
+    // paymentSettings.paymentMethodTypes -- four distinct enums where one shared Enum stood before.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
-    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 360, {
+    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 363, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.13',
@@ -3242,8 +3250,13 @@ test(
     // 766: #170 makes list-of-enum-values properties selectable -- box has both legal ones (its
     // search `fields` param) and illegal ones (webhook triggers use "."); #24's guard keeps the
     // illegal ones out, so only the legal one's anonymous enum type is newly generated.
+    // 767: #173 splits the one shared Enum wherever two array-item enums collided on it -- box has
+    // one such pair, FileFull.sharedLinkPermissionOptions and FolderFull.allowedSharedLinkAccessLevels
+    // (owners are consolidated allOf members, so the split names carry their [inline:...] prefix:
+    // InlineFileFullSharedLinkPermissionOptions, InlineFolderFullAllowedSharedLinkAccessLevels),
+    // so one more type generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/box-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('box.yaml', selections, 258, 766, {
+    const schema = await runOasTest('box.yaml', selections, 258, 767, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3262,8 +3275,10 @@ test(
     // keep their own, 14 more types generated.
     // 1299: #170 makes a list-of-enum-values property selectable that used to be silently dropped --
     // one more type generated.
+    // 1312: #173 splits the one shared Enum wherever two array-item enums collided on it -- digitalocean
+    // has fourteen such fields, so thirteen more types generated (the shared Enum -> its first split).
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/digitalocean-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1299, {
+    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1312, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3610,8 +3625,13 @@ test('test_170_array_of_enum_body_property_is_selectable', async () => {
   const schema = await runOasTest('array-of-enum-body-property.yaml', ['post:/schedules>**'], 1, 3);
   assert.ok(schema !== undefined);
   assert.ok(/input SchedulesGetRequestInput \{/.test(schema!), 'the input type is written, not empty');
-  assert.ok(/include: \[Enum\]/.test(schema!), 'the array-of-enum field references the enum it actually defines');
-  assert.ok(/^enum Enum \{/m.test(schema!), 'and that enum is emitted');
+  // #173: an inline array-item enum now takes its field's name, so this owns
+  // SchedulesGetRequestInclude instead of the shared name Enum.
+  assert.ok(
+    /include: \[SchedulesGetRequestInclude\]/.test(schema!),
+    'the array-of-enum field references the enum it actually defines',
+  );
+  assert.ok(/^enum SchedulesGetRequestInclude \{/m.test(schema!), 'and that enum is emitted');
 });
 
 test('test_172_illegal_enum_values_degrade_to_base_scalar', async () => {
@@ -3624,7 +3644,25 @@ test('test_172_illegal_enum_values_degrade_to_base_scalar', async () => {
   assert.ok(/events: \[String\]/.test(schema!), 'the illegal-valued field degrades to a list of strings');
   assert.ok(/events\s*\n/.test(schema!), 'and still appears in the body selection');
   assert.ok(!/FILE/.test(schema!), 'no enum definition is emitted for the illegal values');
-  assert.ok(/statuses: \[Enum\]/.test(schema!), 'the legal sibling keeps its enum-typed field');
-  assert.ok(/^enum Enum \{/m.test(schema!), 'and its enum definition is still emitted');
+  // #173: an inline array-item enum now takes its field's name, so this owns
+  // CreateEventsResponseStatuses instead of the shared name Enum. statuses lives on the (inline,
+  // op-named) response object, not the EventsPostRequest body — CreateEventsResponse is its owner.
+  assert.ok(
+    /statuses: \[CreateEventsResponseStatuses\]/.test(schema!),
+    'the legal sibling keeps its enum-typed field',
+  );
+  assert.ok(/^enum CreateEventsResponseStatuses \{/m.test(schema!), 'and its enum definition is still emitted');
   assert.ok(/flags: \[String\]/.test(schema!), 'an illegal enum with no type at all degrades too, not throws');
+});
+
+test('test_173_array_item_enum_named_after_its_field', async () => {
+  // #173: every inline array-item enum was named the literal 'enum' (id 'enum:enum') — two such
+  // fields on the same type collapsed onto one shared definition instead of two distinct ones.
+  //   e.g. colors: { items: { enum: [red, green, blue] } }, sizes: { items: { enum: [small, …] } }
+  const schema = await runOasTest('array-item-enum-naming.yaml', ['get:/widgets>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/colors: \[WidgetColors\]/.test(schema!), 'colors references its own owner-prefixed enum');
+  assert.ok(/sizes: \[WidgetSizes\]/.test(schema!), 'sizes references its own owner-prefixed enum');
+  assert.ok(/^enum WidgetColors \{/m.test(schema!), 'colors gets a distinct enum definition');
+  assert.ok(/^enum WidgetSizes \{/m.test(schema!), 'sizes gets a distinct enum definition');
 });

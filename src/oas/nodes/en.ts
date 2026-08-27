@@ -1,4 +1,4 @@
-import { IType, Param, Res, T, Type, Union } from './internal.js';
+import { IType, Param, PropArray, Res, T, Type, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -32,6 +32,13 @@ export class En extends Type {
     trace(context, '-> [enum:visit]', 'in: ' + this.items.toString());
 
     if (!context.inContextOf(Param, this)) {
+      // an inline array-item enum has no name of its own — take its field's name, so the rename
+      // below gives it the owner-prefixed form instead of the shared name Enum.
+      //   e.g. (motion) include: { type: array, items: { enum: [workHours] } } -> enum SchedulesGetRequestInclude
+      // see docs/FIXED.md #173
+      if (this.name === 'enum' && this.parent instanceof PropArray) {
+        this.name = this.parent.name;
+      }
       // rename an inline enum, i.e: status: { type: string, enum: [placed, approved, delivered] }   # -> enum OrderStatus
       if (!T.isRef(this.name) && this.name !== 'enum') {
         T.resolveNameConflict(this, context);

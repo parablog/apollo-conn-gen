@@ -1,0 +1,29 @@
+openapi: 3.0.0
+info:
+  title: array item enum naming
+  version: 1.0.0
+# #173: two array-of-enum fields on the same type used to share the literal name Enum and the
+# literal id enum:enum, so the dedup collapsed them into one shared definition.
+servers:
+  - url: https://example.com
+paths:
+  /widgets:
+    get:
+      operationId: getWidgets
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Widget" }
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        colors:
+          type: array
+          items: { type: string, enum: [red, green, blue] }
+        sizes:
+          type: array
+          items: { type: string, enum: [small, medium, large] }

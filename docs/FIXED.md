@@ -9282,3 +9282,118 @@ an `En` could reach it).
 (`isGqlEnum`/`getGQLScalarType`), #24 (the property-enum degrade this reuses), #120 (named the same
 two `createScalarType` sites), #170 (introduced the guard whose refusal was silently dropping the
 field).
+
+## 173 [BUG] [P4] · Inline array-item enums all shared the name `Enum` and merged into one definition — ✅ Fixed
+
+**Symptom:** every inline array-item enum was named the literal `Enum` (id `enum:enum`) — two such
+fields on the same type collapsed onto one shared definition instead of two, silently merging their
+distinct value sets. digitalocean's full production selection had fourteen fields sharing one `Enum`.
+
+**OAS:** two array-of-enum fields on the same object (`array-item-enum-naming.yaml`):
+```yaml
+Widget:
+  properties:
+    colors: { type: array, items: { type: string, enum: [red, green, blue] } }
+    sizes: { type: array, items: { type: string, enum: [small, medium, large] } }
+```
+
+**Example:**
+```graphql
+# before: both fields reference the one shared definition — whichever field's En visits last wins
+# context.store('enum', …), so colors ends up pointing at sizes' own values, not its own
+colors: [Enum]
+sizes: [Enum]
+enum Enum { small, medium, large }   # sizes' values; colors' own (red, green, blue) are gone
+
+# after: each field owns its own owner-prefixed enum, #57's naming pattern extended to this path
+colors: [WidgetColors]
+sizes: [WidgetSizes]
+enum WidgetColors { red, green, blue }
+enum WidgetSizes { small, medium, large }
+```
+
+**Cause — same `'enum'` literal, three fixes deep:**
+- #120 gave `Factory.createScalarType` (`factory.ts`) a `ref ?? 'enum'` fallback name for a bare
+  (non-prop) enum, so a distinct component at least kept its own `$ref` name — but an inline
+  array-item enum has no `$ref`, so it always fell through to the literal `'enum'`.
+- #57 gave the *property*-path enum a real name to rename from in the first place —
+  `Factory.fromProp` constructs that `En` under its own field's name (`ref ?? propName`), never the
+  literal `'enum'` — then `En.visit`'s `T.resolveNameConflict` call turns it into the owner-prefixed
+  form (`Order.status` -> `OrderStatus`). That call sits behind a `this.name !== 'enum'` gate (there
+  is nothing to qualify a still-nameless bare enum with), which a property-path `En` always clears
+  since it never starts out named `'enum'` — but an array-item `En`, built via `createScalarType`'s
+  `ref ?? 'enum'` fallback, always starts out exactly `'enum'` and never clears the gate.
+- #170/#172 made array-item enums actually reach generation/selection (previously dropped or
+  degraded) — which is what turned the shared *name* into a shared *definition*: every array-item
+  enum reaching `En.visit` now collided on the same id `enum:enum`, and `context.store('enum', …)`
+  (a name-keyed `Map`, last `set()` wins) kept whichever field's `En` visited last, silently
+  pointing every other field's reference at that one field's value set.
+
+**Fix:** `En.visit` (`en.ts`), immediately before the existing rename gate, borrows the field's name
+when there's a `PropArray` to borrow it from:
+```ts
+if (this.name === 'enum' && this.parent instanceof PropArray) {
+  this.name = this.parent.name;
+}
+```
+With a real name in place, the existing `T.resolveNameConflict` call below it runs unchanged and
+computes the owner-prefixed name (`findNonPropParent` walks past the `PropArray` automatically, the
+same as for any other `Prop`). The gate is exactly `name === 'enum' && parent instanceof
+PropArray` — nothing wider: a bare op-level array item's `En` (parent is `Arr`, not `PropArray`)
+keeps `'enum'`, as does a nested array-of-arrays' innermost `En` (its immediate parent is the inner
+`Arr`), a map-value array's `En`, and an `allOf`-member enum. `createScalarType`,
+`resolveNameConflict`, the collector, and `PropArray.getValue` are all untouched.
+
+**Identity:** renaming an inline array-item `En` changes its id (`enum:enum` ->
+`enum:WidgetColors`) and its `path()` — the same identity change #57 already made for property-path
+enums, so the concern this entry originally flagged ("renaming changes identity … must check for
+selection-path issues") is the same one #57 already resolved. Selections stay unaffected: a
+connector's `selection: """ … """` block and `PropArray.getValue`'s emitted type reference both
+address a field through its `Prop`/`PropArray` node, never through the `En`'s own id —
+`En.select()` is a no-op. The `En`'s id only ever surfaces as a name-keyed dedup key
+(`context.types`) and in the generated SDL, both of which this fix changes on purpose.
+
+**Tests:** `test_173_array_item_enum_named_after_its_field` in `tests/all/oas-core.test.ts`, fixture
+`tests/resources/oas/array-item-enum-naming.yaml` — one object with two array-of-enum fields,
+distinct value sets, composed via `runOasTest` (no `skipValidation`). Pre-fix it fails (`2 is not
+equal to 3`; both fields resolve to the one shared `enum:enum` id, and both end up referencing
+`sizes`' value set — the last-visited `En` instance is what `context.store('enum', …)` leaves
+behind); post-fix each field gets its own owner-prefixed enum.
+Corpus baselines shift wherever the shared id was merging distinct enums — every shift is that
+split becoming visible, not a regression:
+- `test_170_array_of_enum_body_property_is_selectable` / `test_172_illegal_enum_values_degrade_to_base_scalar`:
+  counts unchanged (1, 3); names updated to their owner-prefixed form (`SchedulesGetRequestInclude`,
+  `CreateEventsResponseStatuses` — the latter's owner is the inline, op-named response object
+  `CreateEventsResponse`, not the `EventsPostRequest` body).
+- `test_83_stripe_writes_its_form_bodies` / `test_037_oas_test_022_common-room_01`: counts unchanged
+  (98, 13) — comment-only, noting the enum's new owner-prefixed name
+  (`BankAccountAvailablePayoutMethods`, `InlineApiTagCreationPropertiesEntityTypes` — the `Inline`
+  prefix marks a consolidated `allOf` member as the owner, same as #9's naming for those).
+- `test_122_box_full_production_selection`: 766 -> 767 — one pair
+  (`FileFull.sharedLinkPermissionOptions`, `FolderFull.allowedSharedLinkAccessLevels`, both
+  consolidated `allOf` members) splits into `InlineFileFullSharedLinkPermissionOptions` /
+  `InlineFolderFullAllowedSharedLinkAccessLevels`.
+- `test_73_curated_multi_op_stripe_selection_composes`: 360 -> 363 — four fields split off the one
+  shared `Enum`: `BankAccountAvailablePayoutMethods`, `PaymentIntentExcludedPaymentMethodTypes`,
+  `CreateV1PaymentIntentsExcludedPaymentMethodTypes`, `InvoicesPaymentSettingsPaymentMethodTypes`.
+- `test_122_digitalocean_full_production_selection`: 1299 -> 1312 — the fourteen-way merge splits
+  into fourteen owner-prefixed enums (`DropletsItemImageRegions`,
+  `InlineSubscriptionTiersEligibilityReasons`, `ChecksRegions`, `CreateV2UptimeChecksChecksRegions`,
+  and ten more `...Regions`/`...ImageRegions` fields across the droplet/image/uptime-check response
+  shapes — the full fourteen are logged against the SDL diff, each an owning type + field pair).
+
+SDL diffs for box, stripe-curated, and digitalocean (pre-fix vs. post-fix, same selection) confirm
+every changed line is one of: a reference site following its field's new type name, the existing
+`enum Enum { }` block renamed to its first split's name, or a wholly new `enum` block for the rest
+of a merged group — nothing else moved. Revert-check: stashing `en.ts` alone fails `test_173_*`
+(`2 is not equal to 3`, both fields still resolve to `enum:enum`); restoring passes. Full suite
+green (499 tests, 495 pass, 0 fail, 4 pre-existing todo).
+
+**AST:** identity change — an inline array-item `En`'s `name`/`id` move (from the literal `'enum'`
+to its owner-prefixed form), the same class of change #57 already made for the property-path case.
+Its shape (the underlying `SchemaObject`, its `items` values) is untouched.
+
+**Refs:** `src/oas/nodes/en.ts` (`visit`), `src/oas/nodes/propArray.ts` (`PropArray`, unchanged but
+what the fix's gate matches against), #57 (the property-path rename this extends to the array-item
+path), #120 (the `ref ?? 'enum'` fallback that started the literal name), #170/#172 (made array-item
+enums reach generation/selection at all, which turned the shared name into a shared definition).

@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 159 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 160 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -72,18 +72,4 @@ Invariants the entries below rely on:
 - Fixes are either **emission-only** (tree untouched, only `generate`/`select` output changes),
   **identity** changes (a rename → new id/path, same shape), or **shape** changes (different nodes).
 
-## 173 [BUG] [P4] · Inline non-prop enums are all named `Enum` — ⬜ Open
-
-**Symptom:** every inline array-item enum uses the same name (`include: [Enum]`) — two of them in
-one spec collide.
-
-**OAS:** (motion) `include: { type: array, items: { type: string, enum: [workHours] } }`
-
-**Cause:** `createScalarType` uses `ref ?? 'enum'` as a fallback name — #57 gave prop-path enums
-names like `OrderStatus`, but the non-prop path never got the same treatment.
-
-- Warning: renaming changes identity (node ids and paths change), so the fix must check for
-  selection-path issues.
-
-**Refs:** `src/oas/nodes/factory.ts` (`createScalarType`), `src/oas/nodes/en.ts` (`visit`), #57,
-#120, #172.
+No open entries right now — #173 moved to docs/FIXED.md.
