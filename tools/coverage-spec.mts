@@ -159,17 +159,17 @@ async function loadBase(file: string): Promise<{ gen: OasGen; skip: boolean } | 
   return null;
 }
 
+// takes the schema as a file, not a string — schemas are written to disk as soon as they are
+// generated, so a big spec's sweep never holds them all in memory at once (docusign: 247).
 async function compose(
   op: string,
-  schema: string,
+  schemaFile: string,
   fed: string,
   idx: number | string,
   timeoutMs: number = COMPOSE_TIMEOUT_MS,
 ): Promise<{ ok: boolean; code?: string; out?: string }> {
   if (TRACE) process.stderr.write(`    compose ${idx} ${op}\n`);
-  const schemaFile = path.join(tmp, `schema-${idx}.graphql`);
   const sgFile = path.join(tmp, `supergraph-${idx}.yaml`);
-  fs.writeFileSync(schemaFile, schema);
   fs.writeFileSync(
     sgFile,
     `federation_version: =${fed}\nsubgraphs:\n  test_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${schemaFile}\n  sample_spec:\n    routing_url: http://localhost\n    schema:\n      file: ${path.join(tmp, 'sample.graphql')}\n`,
@@ -296,7 +296,9 @@ async function runPass(
   };
   const verdicts: Record<string, string> = {};
   // Phase 1 (sequential, CPU): fresh gen per op -> classify generation, collect compose candidates.
-  const candidates: { op: string; schema: string }[] = [];
+  // Each schema goes straight to a file; keeping all of a big spec's schemas in memory through the
+  // compose phase is what ran the sweep worker out of memory (docusign, 247 schemas).
+  const candidates: { op: string; file: string; bytes: number }[] = [];
   for (const op of ops) {
     const sel = SelectionPath.everythingUnder(op); // full-subtree selection, exactly like the corpus tests / vet-spec
     if (TRACE) process.stderr.write(`    gen ${passKey} ${op}\n`);
@@ -314,7 +316,9 @@ async function runPass(
         verdicts[op] = 'GEN-EMPTY';
         continue;
       }
-      candidates.push({ op, schema });
+      const file = path.join(tmp, `schema-${passKey}-${candidates.length}.graphql`);
+      fs.writeFileSync(file, schema);
+      candidates.push({ op, file, bytes: Buffer.byteLength(schema) });
     } catch (e: any) {
       r.genThrow++;
       addBucket(r.buckets, `GEN-THROW: ${genKey(e)}`, op);
@@ -324,13 +328,13 @@ async function runPass(
   // Phase 2 (pooled): compose candidates via rover. Big schemas run one at a time so a heavy op
   // can't be multiplied by the pool — the idx keeps counting across both so each writes its own files.
   const fed = PASSES[passKey].fed;
-  const small = candidates.filter((c) => c.schema.length < BIG_SCHEMA_BYTES);
-  const big = candidates.filter((c) => c.schema.length >= BIG_SCHEMA_BYTES);
+  const small = candidates.filter((c) => c.bytes < BIG_SCHEMA_BYTES);
+  const big = candidates.filter((c) => c.bytes >= BIG_SCHEMA_BYTES);
   const composed = new Map<string, { ok: boolean; code?: string }>();
   (
-    await pool(small, (c, i) => withSlot(slots, 0, concurrency, () => compose(c.op, c.schema, fed, i)), concurrency)
+    await pool(small, (c, i) => withSlot(slots, 0, concurrency, () => compose(c.op, c.file, fed, i)), concurrency)
   ).forEach((res, i) => composed.set(small[i].op, res));
-  (await pool(big, (c, i) => withSlot(slots, 1, 1, () => compose(c.op, c.schema, fed, small.length + i)), 1)).forEach(
+  (await pool(big, (c, i) => withSlot(slots, 1, 1, () => compose(c.op, c.file, fed, small.length + i)), 1)).forEach(
     (res, i) => composed.set(big[i].op, res),
   );
   for (const { op } of candidates) {
@@ -387,8 +391,10 @@ async function runWholeSpec(
     return 'GEN-THROW';
   }
   // always the single-slot path: the all-ops schema is the memory-risk class (#49), whatever its size
+  const wholeFile = path.join(tmp, `schema-whole-${passKey}.graphql`);
+  fs.writeFileSync(wholeFile, schema);
   const res = await withSlot(slots, 1, 1, () =>
-    compose(`all-ops(${ops.length})`, schema, PASSES[passKey].fed, `whole-${passKey}`, WHOLE_TIMEOUT_MS),
+    compose(`all-ops(${ops.length})`, wholeFile, PASSES[passKey].fed, `whole-${passKey}`, WHOLE_TIMEOUT_MS),
   );
   if (res.ok) return 'OK';
   if (res.code === 'TIMEOUT') {
