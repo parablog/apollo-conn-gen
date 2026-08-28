@@ -142,7 +142,7 @@ export class Factory {
         return new En(parent, ref ?? 'enum', schema, schema.enum! as string[]);
       }
       // scalar case — gqlScalar knows `date`/`date-time` mean String, like fromProp's branch below
-      const scalarType = GqlUtils.gqlScalar(typeStr as string);
+      const scalarType = GqlUtils.gqlScalarFor(schema, typeStr as string);
       if (scalarType) {
         return new Scalar(parent, scalarType, schema!);
       }
@@ -434,15 +434,16 @@ export class Factory {
         }
       }
       // 3rd tries for scalar
-      else if (GqlUtils.gqlScalar(type as string)) {
-        let scalar = GqlUtils.gqlScalar(type as string) as string;
+      else if (GqlUtils.gqlScalarFor(schemaObj, type as string)) {
+        let scalar = GqlUtils.gqlScalarFor(schemaObj, type as string) as string;
+        const stringifiedNumber = scalar === 'String' && GqlUtils.gqlScalar(type as string) === 'Int';
         // A property named "id"/"*Id"/"*ID" reads as GraphQL's ID scalar regardless of the spec's
         // declared type, e.g. `id: { type: integer, format: uuid }` -> ID, not Int. #142/#146
         const looksLikeId = propName === 'id' || propName.endsWith('Id') || propName.endsWith('ID');
         if (looksLikeId) {
           scalar = 'ID';
         }
-        prop = new PropScalar(parent, propName, scalar, schemaObj);
+        prop = new PropScalar(parent, propName, scalar, schemaObj, stringifiedNumber && !looksLikeId);
       }
       // or we don't know how to handle this
       else {
