@@ -27,6 +27,7 @@ export async function runOasTest(
     skipArgDefaults?: boolean;
     keepFieldNames?: boolean;
     docResponseFields?: boolean;
+    docPagination?: boolean;
     inferEntityResolvers?: boolean;
     baseURL?: string;
     overrides?: OverridesConfig;
@@ -64,6 +65,7 @@ export async function runOasTest(
     skipOptionalMarkers: opts.skipOptionalMarkers,
     keepFieldNames: opts.keepFieldNames,
     docResponseFields: opts.docResponseFields,
+    docPagination: opts.docPagination,
     inferEntityResolvers: opts.inferEntityResolvers,
     emitConnectorErrors: opts.emitConnectorErrors,
     skipAuth: opts.skipAuth,
