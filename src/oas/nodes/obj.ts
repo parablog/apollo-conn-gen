@@ -197,10 +197,39 @@ export class Obj extends Type {
       .write('@connect(\n')
       .write(i6)
       .write(`source: "${resolver.source}"\n`)
-      .write(i6)
-      .write(`http: { ${resolver.verb}: "${path}" }\n`)
-      .write(i6)
-      .write('selection: """\n');
+      .write(i6);
+
+    // The op this resolver was inferred from may carry per-@connect auth (a per-op-mode header,
+    // or apiKey-in-query in any mode — @source has no queryParams). Without it the router-side
+    // entity fetch hits the protected endpoint unauthenticated. Same emission shape as an op
+    // connector's requestMethod; uniform-mode header auth stays on @source and is not repeated.
+    if (resolver.headerAuth || resolver.queryAuth) {
+      const i8 = ' '.repeat(8);
+      writer.write('http: {\n').write(i8).write(`${resolver.verb}: "${path}"\n`);
+      if (resolver.queryAuth) {
+        writer
+          .write(i8)
+          .write('queryParams: """\n')
+          .write(' '.repeat(10))
+          .write(`"${resolver.queryAuth.name}": ${resolver.queryAuth.value}\n`)
+          .write(i8)
+          .write('"""\n');
+      }
+      if (resolver.headerAuth) {
+        writer
+          .write(i8)
+          .write('headers: [{ name: "')
+          .write(resolver.headerAuth.name)
+          .write('", value: "')
+          .write(resolver.headerAuth.value)
+          .write('" }]\n');
+      }
+      writer.write(i6).write('}\n');
+    } else {
+      writer.write(`http: { ${resolver.verb}: "${path}" }\n`);
+    }
+
+    writer.write(i6).write('selection: """\n');
 
     // Base the selection at 6 spaces like a Query connector. `select` adds
     // `context.stack.length` (this object is mid-generation on the stack), so subtract it.

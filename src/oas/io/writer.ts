@@ -14,6 +14,7 @@ import _ from 'lodash';
 export class Writer {
   private schemaWriter: SchemaWriter;
   private operationWriter: OperationWriter;
+  private security: SecurityPlan;
   public buffer: string[];
 
   constructor(public gen: OasGen) {
@@ -21,12 +22,12 @@ export class Writer {
     // resolve the spec's security once (schemes, global requirement, per-op mode) and share it —
     // schemaWriter (@source) and operationWriter (per-@connect) both query it instead of re-walking
     // the whole spec per operation.
-    const security = SecurityPlan.from(gen.parser, {
+    this.security = SecurityPlan.from(gen.parser, {
       skipAuth: gen.options.skipAuth,
       authValuePrefix: gen.options.authValuePrefix,
     });
-    this.schemaWriter = new SchemaWriter(gen, security);
-    this.operationWriter = new OperationWriter(gen, security);
+    this.schemaWriter = new SchemaWriter(gen, this.security);
+    this.operationWriter = new OperationWriter(gen, this.security);
   }
 
   public write(input: string): Writer {
@@ -60,7 +61,7 @@ export class Writer {
     // Attach entity resolvers onto the (single, canonical) collected type instances the
     // loop below generates, so each entity type can emit @key + its type-level
     // @connect/$this resolver. Resets first, so it's a no-op when the flag is off.
-    inferEntityResolvers(context, this.gen, types, selection);
+    inferEntityResolvers(context, this.gen, types, selection, this.security);
 
     // #161: key-only reference fields on other types pointing at an R1-resolved entity — reads
     // the resolvers just attached above, so it runs right after.
