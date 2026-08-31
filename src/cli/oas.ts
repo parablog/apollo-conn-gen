@@ -101,6 +101,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     skipArgDefaults: opts.skipArgDefaults,
     keepFieldNames: opts.keepFieldNames,
     docResponseFields: opts.docResponseFields,
+    docPagination: opts.docPagination,
     servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
@@ -181,6 +182,10 @@ program
     '--doc-response-fields',
     'Add each operation\'s top-level response field names as a "Returns: ..." note on the operation',
     false,
+  )
+  .option(
+    '--doc-pagination',
+    'Note on every operation with pagination parameters that a full page is not necessarily the last page',
   )
   .option(
     '--service-prefix <name>',

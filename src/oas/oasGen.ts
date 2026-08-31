@@ -91,6 +91,8 @@ interface IGenOptions {
   skipArgDefaults?: boolean;
   keepFieldNames?: boolean;
   docResponseFields?: boolean;
+  // #170: note on paginated operations that a full page is not necessarily the last page
+  docPagination?: boolean;
   servicePrefix?: string;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;

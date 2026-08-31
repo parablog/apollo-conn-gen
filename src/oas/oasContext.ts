@@ -55,6 +55,14 @@ export type GenerateOptions = {
   // #158: keep a spec field/param spelling verbatim when it already reads safely as both a
   // GraphQL name and a bare connector-selection key, instead of always camelCasing it.
   keepFieldNames?: boolean;
+  // #170: note on every paginated operation that a full page is not necessarily the last
+  // page, so a reader doesn't treat one page as the complete result set. An operation is
+  // paginated when any parameter's name carries a "page" token (page_index, pageLimit,
+  // per_page, ...) or is exactly "cursor" or "offset".
+  //   e.g. (doc-pagination.yaml) get:/items with page_index/page_limit gains the description
+  //   line "Returns one page of results; a full page is not necessarily the last page."
+  docPagination?: boolean;
+
   // #160: add each operation's response field names to its description as a "Returns:" line,
   // so a reader can see what a request actually hands back without making the request first.
   //   e.g. GET /items/{item_id} answering { id, name, created_at } gets the extra description

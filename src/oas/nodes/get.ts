@@ -81,8 +81,9 @@ export class Get extends Type implements Op {
     const jsonReason = this.resultJsonReason(selection, keep);
     const paramsLine = this.paramsDocLine(context);
     const responseFieldsLine = this.responseFieldsDocLine(context, selection);
+    const paginationLine = this.paginationDocLine(context);
 
-    if (description || summary || originalPath || jsonReason || paramsLine || responseFieldsLine) {
+    if (description || summary || originalPath || jsonReason || paramsLine || responseFieldsLine || paginationLine) {
       writer.write('  """\n').write('  ');
       if (description) {
         writer.write(description).write(' ');
@@ -101,6 +102,10 @@ export class Get extends Type implements Op {
       }
       if (responseFieldsLine) {
         writer.write('\n\n  ').write(responseFieldsLine);
+      }
+      if (paginationLine) {
+        // ride the "Returns ..." paragraph when there is one — the note completes that sentence
+        writer.write(responseFieldsLine ? '\n  ' : '\n\n  ').write(paginationLine);
       }
       writer.write('\n  """\n');
     }
@@ -153,6 +158,28 @@ export class Get extends Type implements Op {
       .filter((note): note is string => note !== undefined);
 
     return notes.length > 0 ? `Params: ${notes.join(', ')}` : undefined;
+  }
+
+  // Builds the pagination note --doc-pagination adds to an operation's description, when any
+  // parameter's name carries a "page" token or is exactly "cursor"/"offset". A page-sized
+  // response otherwise reads as complete, so the note says the one thing the signature can't:
+  // a full page is not necessarily the last page. see docs/FIXED.md #170
+  //   e.g. (doc-pagination.yaml) get:/items(page_index, page_limit) -> "Returns one page of
+  //   results; a full page is not necessarily the last page."
+  protected paginationDocLine(context: OasContext): string | undefined {
+    if (!context.generateOptions?.docPagination) {
+      return undefined;
+    }
+
+    const paginates = this.params.some((param) => {
+      const tokens = param.name
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/);
+      return tokens.includes('page') || param.name.toLowerCase() === 'cursor' || param.name.toLowerCase() === 'offset';
+    });
+
+    return paginates ? 'Returns one page of results; a full page is not necessarily the last page.' : undefined;
   }
 
   // Builds the "Returns:" line --doc-response-fields adds to an operation's description, naming
