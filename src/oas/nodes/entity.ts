@@ -1,4 +1,5 @@
 import { IType, Obj, Prop, PropEntityLink, Res, T } from './internal.js';
+import type { NameValue, SecurityPlan } from '../io/security.js';
 import { Naming } from '../utils/naming.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
@@ -23,6 +24,10 @@ export interface EntityResolver {
   source: string;
   /** R6: set on a batch resolver — same @key/selection, but $batch instead of $this. */
   batch?: BatchSpec;
+  /** The qualifying op's per-@connect auth header (per-op security mode only), if any. */
+  headerAuth?: NameValue | null;
+  /** The qualifying op's apiKey-in-query auth (any mode — @source has no queryParams), if any. */
+  queryAuth?: NameValue | null;
 }
 
 /** R6: the batch `@connect` spec attached to a resolver — built by `applyBatchResolvers`. */
@@ -80,6 +85,7 @@ export function inferEntityResolvers(
   gen: OasGen,
   types: Map<string, IType>,
   selection: string[],
+  security?: SecurityPlan,
 ): void {
   // Reset on the canonical (generated) type instances so a re-run can't leak resolvers.
   for (const type of types.values()) {
@@ -127,6 +133,14 @@ export function inferEntityResolvers(
       continue;
     }
 
+    // The resolver must authenticate exactly like the op it was inferred from: in uniform
+    // mode the @source header already covers it, but a per-op header or an apiKey-in-query
+    // credential lives on each @connect — without it, every router-side entity fetch to a
+    // protected endpoint fails. Resolved here because the plan lives with the writer; the
+    // writer resolves the same op again for its Query field, so dropped-scheme warnings can
+    // repeat for an op that is both selected and a resolver.
+    const { header: headerAuth, query: queryAuth } = security?.forOp(op) ?? { header: null, query: null };
+
     // Composite key for this resolver: path-param names in path order, single-space
     // joined (e.g. "id" or "orgId id"). Each qualifying op is one type-level resolver.
     target.entityResolvers.push({
@@ -134,6 +148,8 @@ export function inferEntityResolvers(
       path: op.operation.path,
       verb: op.verb,
       source: 'api',
+      headerAuth,
+      queryAuth,
     });
   }
 }
