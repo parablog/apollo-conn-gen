@@ -13,6 +13,9 @@ export class PropScalar extends Prop {
     name: string,
     public type: string,
     public schema: SchemaObject,
+    // set when an out-of-Int32 `integer` was widened to String (gqlScalarFor): the upstream JSON
+    // still carries a number, so response selections must coerce it or the field resolves null.
+    public stringifiedNumber: boolean = false,
   ) {
     super(parent, name, schema);
   }
@@ -52,7 +55,13 @@ export class PropScalar extends Prop {
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '   [prop:select]', this.name);
-    const sanitised = this.fieldForSelect(context);
+    let sanitised = this.fieldForSelect(context);
+    if (this.stringifiedNumber && this.parent?.kind !== 'input') {
+      // `field: field->jsonStringify` (or `alias: key->jsonStringify` when renamed)
+      sanitised = sanitised.includes(':')
+        ? `${sanitised}->jsonStringify`
+        : `${sanitised}: ${sanitised}->jsonStringify`;
+    }
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
     // aliasing already writes its own colon, and only an actually-written default covers a

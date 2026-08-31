@@ -1,0 +1,56 @@
+openapi: 3.0.0
+info:
+  title: Int64 widening
+  version: 1.0.0
+servers:
+  - url: http://localhost:9000
+paths:
+  /cards:
+    get:
+      operationId: listCards
+      responses:
+        '200':
+          description: list of cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Card'
+    post:
+      operationId: createCard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [card_number]
+              properties:
+                card_number:
+                  type: integer
+                  format: int64
+                cvv_number:
+                  type: integer
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+components:
+  schemas:
+    Card:
+      type: object
+      properties:
+        card_number:
+          # no format, but the declared range exceeds Int32 — bounds alone must widen it
+          type: integer
+          maximum: 9999999999999999
+        cvv_number:
+          type: integer
+          maximum: 999
+        id:
+          type: integer
+          format: int64

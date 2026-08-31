@@ -48,4 +48,31 @@ export class GqlUtils {
         return false;
     }
   }
+
+  // GraphQL's Int is spec-defined as SIGNED 32-BIT. An OAS `integer` maps to it soundly only
+  // when nothing in the spec says the value can exceed that range. `format: int64` or declared
+  // JSON-Schema bounds outside Int32 are proof it can — emit String instead: a wider numeric
+  // type doesn't survive transport (integer literals beyond 2^31 fail the router's connectors
+  // argument parsing regardless of the declared GraphQL type, and Float loses precision past
+  // 2^53), while a quoted string round-trips exactly and upstreams coerce numeric strings.
+  //   e.g. a 16-digit `card_number` { type: integer, exclusiveMaximum: 1e16 } as Int! makes
+  //   every legal value unrepresentable — the operation cannot ever be called successfully.
+  private static readonly INT32_MIN = -(2 ** 31);
+  private static readonly INT32_MAX = 2 ** 31 - 1;
+
+  public static gqlScalarFor(schema: { type?: unknown; format?: unknown; minimum?: unknown; maximum?: unknown; exclusiveMinimum?: unknown; exclusiveMaximum?: unknown } | null | undefined, typeStr: string): string | false {
+    const base = GqlUtils.gqlScalar(typeStr);
+    if (base !== 'Int' || !schema) {
+      return base;
+    }
+    if (schema.format === 'int64') {
+      return 'String';
+    }
+    const bounds = [schema.minimum, schema.maximum, schema.exclusiveMinimum, schema.exclusiveMaximum]
+      .filter((b): b is number => typeof b === 'number');
+    if (bounds.some((b) => b < GqlUtils.INT32_MIN || b > GqlUtils.INT32_MAX)) {
+      return 'String';
+    }
+    return base;
+  }
 }
