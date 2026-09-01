@@ -333,11 +333,14 @@ export class Obj extends Type {
     }
 
     // The key is always there, but the value may still be null — that field stays nullable.
-    // e.g. required: [reqNullable], reqNullable: { type: string, nullable: true } -> String. #55
+    // e.g. reqNullable: { type: string, nullable: true } -> String. #55. A collapsed anyOf (#177)
+    // moves prop.schema elsewhere, so the property's own declared schema is checked too.
     if (_.isArray(this.schema.required)) {
+      const properties = this.schema.properties as Record<string, SchemaObject> | undefined;
       this.schema.required.forEach((name) => {
         const prop = this.props.get(name);
-        if (prop && prop.schema?.nullable !== true) prop.required = true;
+        const declared = properties?.[name];
+        if (prop && prop.schema?.nullable !== true && declared?.nullable !== true) prop.required = true;
       });
     }
 

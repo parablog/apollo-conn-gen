@@ -1153,6 +1153,19 @@ test('test_169_standalone_null_type_degrades_to_json', async () => {
   assert.ok(/id: ID\n/.test(schema!), 'the response-position sibling field is untouched');
 });
 
+test('test_177_anyof_nullable_ref_property_keeps_its_type', async () => {
+  // OAS 3.1's nullable reference, `anyOf: [$ref X, null]`. #60 strips the null arm; nothing in
+  // fromProp read the one-member anyOf left behind, so the field landed as JSON with the #133
+  // note. Now the property form of #20's collapse. see docs/FIXED.md #177
+  const schema = await runOasTest('anyof-nullable-ref-property.yaml', ['get:/previews/{id}>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(/tags: NamedResourceDiffList\n/.test(schema!), 'required + [$ref, null] -> the real type, no !');
+  assert.ok(/prompt: NamedResourceDiffList\n/.test(schema!), 'optional [$ref, null] -> the real type');
+  assert.ok(/id: ID!\n/.test(schema!), 'the required sibling field is untouched');
+  assert.ok(/added: \[String\]\n/.test(schema!), 'the selection walks into the collapsed member');
+  assert.ok(!/NEEDS ATTENTION/.test(schema!), 'no degrade note');
+});
+
 test('test_shapeless_object_schema_becomes_json_scalar', async () => {
   // `{}` / `{ additionalProperties: false }` schemas (Slack shares pattern) used to throw
   // "Cannot handle schema" when reached via fromSchema (array items, members). They are objects
@@ -2951,7 +2964,9 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   // 98: #170 makes a list-of-enum-values property selectable that used to be silently dropped --
   // one more type generated. #173 renames it: BankAccount.availablePayoutMethods now owns
   // BankAccountAvailablePayoutMethods instead of the shared name Enum -- count unchanged.
-  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 98);
+  // 184: #177 resolves stripe's anyOf: [$ref, null] fields (address, cash_balance, invoice_settings,
+  // tax, shipping and their nested members) to their real type instead of JSON -- 86 more types.
+  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 184);
   assert.ok(customers !== undefined);
   assert.ok(/createV1Customers\(input: CreateV1CustomersInput!\)/.test(customers!), 'stripe takes its form body');
   assert.ok(
@@ -3127,8 +3142,10 @@ test(
     // is BankAccount.availablePayoutMethods, PaymentIntent/CreateV1PaymentIntents' own
     // excludedPaymentMethodTypes (a split collision, like #57's Order/OrderItem case), and Invoices'
     // paymentSettings.paymentMethodTypes -- four distinct enums where one shared Enum stood before.
+    // 728: #177 resolves stripe's anyOf: [$ref, null] fields to their real type instead of JSON,
+    // across the full curated selection -- 365 more types generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
-    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 363, {
+    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 728, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.13',
@@ -3214,8 +3231,9 @@ test(
     // 344: #157 names each inline request body after its own operation instead of the placeholder
     // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
     // keep their own, twelve more types generated.
+    // 345: #177 resolves one anyOf: [$ref, null] field to its real type instead of JSON.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/pagerduty-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('pagerduty-full.json', selections, 95, 344, {
+    const schema = await runOasTest('pagerduty-full.json', selections, 95, 345, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3291,8 +3309,10 @@ test(
     // one more type generated.
     // 1312: #173 splits the one shared Enum wherever two array-item enums collided on it -- digitalocean
     // has fourteen such fields, so thirteen more types generated (the shared Enum -> its first split).
+    // 1354: #177 resolves digitalocean's anyOf: [$ref, null] fields to their real type instead of
+    // JSON -- 42 more types generated.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/digitalocean-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1312, {
+    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1354, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',

@@ -335,6 +335,17 @@ export class Factory {
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
     Nullability.normalize(schemaObj);
 
+    // OAS 3.1's nullable-reference spelling, `anyOf: [$ref X, {type: 'null'}]`, is a one-member
+    // anyOf once the null branch above is stripped — the field IS that member, the property form
+    // of the same collapse fromSchema already does. #177
+    //   e.g. (profound) tags: { anyOf: [ $ref NamedResourceDiffList, { type: 'null' } ] } -> tags: NamedResourceDiffList
+    if (schemaObj.anyOf && !schemaObj.oneOf && !schemaObj.allOf) {
+      const real = schemaObj.anyOf.filter((m) => !Schemas.isShapelessObject(m as SchemaObject));
+      if (real.length === 1) {
+        return this.fromProp(context, parent, propName, real[0] as SchemaObject | ReferenceObject);
+      }
+    }
+
     // An `allOf` that only decorates one non-object schema IS that schema — merging it as an
     // object gives zero fields and the field vanishes. e.g. (digitalocean) tags:
     //   { allOf: [ $ref -> { type: array, items: {type: string} }, { description: … } ] } -> [String]  #67
