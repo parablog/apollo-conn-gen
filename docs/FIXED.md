@@ -9560,3 +9560,73 @@ and next steps.
 **Refs:** `src/oas/nodes/comp.ts`, `src/oas/nodes/union.ts`, `src/oas/nodes/ref.ts` (why the
 leak is per-spec, not per-op), `src/oas/oasContext.ts` (`inContextOf`, `stack`),
 `src/tests/runners.ts`, #180 (NOT fixed by this), #10.
+
+## 179 [BUG] [P2] · `trace()` floods a piped stdout during synchronous generation — slow runs become OOM crashes — ✅ Fixed
+
+**Symptom:** a generation whose stdout is an async pipe (`node ... | grep`, an exec with piped
+stdio) can run the process out of memory; the identical run to a terminal or a file only runs
+slower. Scoped to manual piped runs — the coverage sweep worker does NOT hit this: it replaces
+`console.log`/`warn`/`error` with no-ops (`tools/coverage-spec.mts:27-29`) before generating, so
+the sweep's own docusign OOM (see #180) was never this bug.
+
+**Measured (2026-08-31, docusign.json, `post:/v2.1/accounts/{accountId}/envelopes`,
+everythingUnder selected):**
+- one op alone writes **8.3 GB** of trace lines over the course of generating it.
+- muted, or written to `/dev/null` or a file: finishes in 116-183 s at 2.0-2.8 GB peak RSS.
+- piped to `grep` instead: OOM at 11-13 GB in ~200 s — independent of how many other selections
+  ride along in the same process.
+
+**Example:**
+```
+# before (default): one pair of lines per node the generator visits
+ -> [context::enter]
+ <- [context::leave]
+ ...millions more for a large spec
+
+# after (default): nothing. { verbose: true } (CLI: -v) turns the lines back on.
+```
+
+**Cause:** `trace()` (`src/oas/log/trace.ts`) called `console.log` unconditionally, once per
+node the generator visits. `generateSchema` is one long synchronous call, so Node never pauses
+partway through to let anything drain — including its own output. A file or a real terminal
+accepts a write synchronously, so a flood of lines there only costs time; a pipe (another
+process reading the output — a worker thread handing its output to its parent, `grep`) reads
+asynchronously, and writes that outpace the reader queue up in the process heap with nothing
+capping how large that queue can grow.
+
+**Fix:** `trace()` now checks the gen's `verbose` option before writing, the same pattern
+already used by the JSON-side tracer (`src/json/walker/log/trace.ts`):
+```ts
+export function trace(ctx: OasContext | null, loc: string, log: string) {
+  if (!ctx?.generateOptions.verbose) return;
+  console.log(' '.repeat(ctx.size()), loc, log);
+}
+```
+`verbose` is a new option on `GenerateOptions` (`src/oas/oasContext.ts`) and, separately, on
+`IGenOptions` (`src/oas/oasGen.ts` — the type `OasGen.fromFile`/`fromData` actually accept) —
+both need it, or `fromFile` rejects the option outright. The CLI's existing `-v --verbose` flag
+already flows into these options unchanged (`src/cli/oas.ts` spreads its parsed options straight
+into `OasGen.fromFile`), so the CLI itself needed no change. `lintSelections`
+(`src/oas/lint/index.ts`) called `trace(null, ...)` directly; it now passes `gen?.context ??
+null` so it follows whichever gen it was given, and stays silent (as before) when linting
+without one loaded. `warn()` — the sibling function that surfaces "this spec couldn't be read
+cleanly" notices — is untouched: those must keep firing regardless of `verbose`.
+
+**AST:** untouched — this only changes what gets logged, not any generated node or schema.
+
+**Tests:** `test_179_trace_is_silent_unless_verbose` (`tests/all/oas-core.test.ts`), fixture
+`petstore.yaml` — the bug isn't tied to any particular spec shape, so the existing minimal
+fixture covers it. Builds a gen without `verbose`, visits it and generates a schema, and asserts
+`console.log` was never called; builds a second gen with `verbose: true` and asserts a trace
+line (`-> [context::enter]`) shows up. Revert-check: `trace.ts` reverted to its pre-fix
+unconditional `console.log` fails the first assertion (337 calls instead of 0); restored,
+passes. Full suite: 514 tests, 510 pass, 4 pre-existing todo, 0 fail.
+
+**Not a #180 fix.** Muting trace does not prevent #180's crash on the docusign all-ops mutations
+pass — it only delays it (12.2 min to OOM unmuted, 27.7 min muted, per #180's own measurement).
+#180 stays open.
+
+**Refs:** `src/oas/log/trace.ts`, `src/oas/oasContext.ts` (`GenerateOptions`),
+`src/oas/oasGen.ts` (`IGenOptions`), `src/oas/lint/index.ts` (`lintSelections`),
+`src/json/walker/log/trace.ts` (the existing pattern this follows), `tools/coverage-spec.mts:27-29`
+(why the sweep worker was unaffected), #180 (separate, still open), #174 (superseded narrowing).

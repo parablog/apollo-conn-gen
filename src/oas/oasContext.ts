@@ -74,6 +74,8 @@ export type GenerateOptions = {
   skipAuth?: boolean;
   authValuePrefix?: string; // text written before an apiKey header value
   directives?: DirectivesConfig; // directives to apply
+  // #179: write trace() lines to console.log. Off by default — a big spec emits gigabytes.
+  verbose?: boolean;
 };
 
 // Max nested $ref hops resolvePointer will follow before giving up (guards against ref cycles).

@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 163 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 164 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -126,36 +126,6 @@ success-response schema and walk it against the emitted response type:
 
 **Refs:** `src/oas/lint/` (`responseShape.ts` already resolves OAS response schemas), #175 (the
 motivating miss), #170/#172 (the same class), `tools/lint-corpus.mts`.
-
-## 179 [BUG] [P2] · `trace()` floods a piped stdout during synchronous generation — slow runs become OOM crashes — ⬜ Open
-
-**Symptom:** the coverage-mutations sweep worker OOMs its 16 GB heap on docusign's all-ops pass
-in ~12 minutes. Any heavy generation whose stdout is an async pipe (a worker thread's
-stdout-to-parent, `node ... | grep`, an exec with piped stdio) dies the same way; the identical
-run to a terminal or a file is merely slow.
-
-**Measured (2026-08-31, docusign.json, all mutation ops):**
-- one op alone (`post:/v2.1/accounts/{accountId}/envelopes`, everythingUnder) emits **8.3 GB**
-  of trace output.
-- that op with trace muted, or written to /dev/null or a file: completes in 116-183 s at
-  2.0-2.8 GB peak RSS.
-- the same op with stdout piped to grep: OOM at 11-13 GB in ~200 s — independent of how many
-  other selections ride along (N=1/2/4/8 all identical) and of selection order.
-
-**Cause:** `trace()` (`src/oas/log/trace.ts`) is an unconditional `console.log`.
-`generateSchema` is fully synchronous, so the event loop never yields during a multi-minute
-call — writes to an async pipe consumer cannot drain and queue in the process heap without
-bound. File and POSIX-terminal writes are synchronous, so they cost time, not memory — which is
-why in-terminal runs were "only" slow and the sweep's worker (stdout piped to the parent) is
-what crashed.
-
-**Fix direction:** gate `trace()` behind an env flag / logger level, off by default. Also fixes
-timing numbers: every measured generation currently includes console I/O for millions of lines.
-
-**Correction 2026-09-01:** the coverage sweep worker replaces `console.log`/`warn`/`error` with
-no-ops (`tools/coverage-spec.mts:27-29`), so the flood only bites manual piped runs
-(`node ... | grep`), not the sweep; the `verbose` gate in the loopdeck/179 worktree remains the
-fix for that path.
 
 **Refs:** `src/oas/log/trace.ts`, `tools/coverage-spec.mts` (`sweepSpecInWorker` — the piped
 worker stdout), #174 (the sweep OOM this explains), #180 (the independent slowness underneath).

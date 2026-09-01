@@ -40,10 +40,10 @@ const CHECKS: Check[] = [ArrowTargetCheck.run, PathInResponseCheck.run];
  */
 export function lintSelections(sdl: string, gen?: OasGen): LintDiagnostic[] {
   // one line per run, not per field: this runs on every keystroke in the editor
-  trace(null, '-> [lint:selections]', `in: ${sdl.length} chars`);
+  trace(gen?.context ?? null, '-> [lint:selections]', `in: ${sdl.length} chars`);
   const schema = SchemaReader.read(sdl);
   const found = schema.unreadable ? [] : CHECKS.flatMap((check) => check(schema, gen));
   found.sort((left, right) => left.from - right.from);
-  trace(null, '<- [lint:selections]', `out: ${found.length} found`);
+  trace(gen?.context ?? null, '<- [lint:selections]', `out: ${found.length} found`);
   return found;
 }

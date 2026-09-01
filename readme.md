@@ -232,6 +232,7 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 | `authValuePrefix`        | `string`           | —                          | Text written before an API-key header value, e.g. `Token token=`. Only applies to an API key in a header.                                            |
 | `servicePrefix`          | `string`           | —                          | Prefix every type with `<Name>_` and every root field with `<name>_`, so separately generated connectors compose without colliding.                  |
 | `showParentInSelections` | `boolean`          | `false`                    | Annotate selection output with the parent each field comes from (debugging aid).                                                                     |
+| `verbose`                | `boolean`          | `false`                    | Write the generator's trace lines to `console.log` (CLI: `-v`). Off by default — a big spec emits gigabytes.                                         |
 
 ### Security schemes and auth
 

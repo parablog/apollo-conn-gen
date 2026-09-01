@@ -99,6 +99,7 @@ interface IGenOptions {
   skipAuth?: boolean;
   authValuePrefix?: string;
   directives?: DirectivesConfig;
+  verbose?: boolean;
 }
 
 export class OasGen {

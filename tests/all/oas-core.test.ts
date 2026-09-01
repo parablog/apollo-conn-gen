@@ -3700,3 +3700,32 @@ test('test_173_array_item_enum_named_after_its_field', async () => {
   assert.ok(/^enum WidgetColors \{/m.test(schema!), 'colors gets a distinct enum definition');
   assert.ok(/^enum WidgetSizes \{/m.test(schema!), 'sizes gets a distinct enum definition');
 });
+
+test('test_179_trace_is_silent_unless_verbose', async (t) => {
+  // #179: trace() used to call console.log unconditionally, once per node visited — a big spec
+  // (e.g. docusign's 400+ operations) could write millions of lines in one generation, which
+  // ran the process out of memory when its output went to a pipe instead of a terminal. Now it
+  // only writes when the gen is built with verbose: true.
+  const logSpy = t.mock.method(console, 'log');
+  const quiet = await OasGen.fromFile(`${oasBasePath}/petstore.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+  });
+  logSpy.mock.resetCalls(); // fromFile's own 'loaded file'/'converted' lines aren't trace output
+  await quiet.visit();
+  quiet.generateSchema(['get:/pet/{petId}>**']);
+  assert.strictEqual(logSpy.mock.callCount(), 0, 'no trace output by default');
+
+  const loud = await OasGen.fromFile(`${oasBasePath}/petstore.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+    verbose: true,
+  });
+  logSpy.mock.resetCalls();
+  await loud.visit();
+  loud.generateSchema(['get:/pet/{petId}>**']);
+  assert.ok(
+    logSpy.mock.calls.some((c) => c.arguments[1] === '-> [context::enter]'),
+    'verbose: true turns trace output back on',
+  );
+});
