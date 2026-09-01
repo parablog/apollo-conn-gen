@@ -76,6 +76,14 @@ const ALL_SPECS = [
   'incidentio.json',
   'sanity-projects.json',
   'gong.json',
+  // P1 tier of the Apollo x Xolvio connector catalog (added 2026-08-26; provenance in TEST_CORPUS.md).
+  'profound.yaml',
+  'motion.json',
+  // Pre-bundled mirror (ballerina-platform/openapi-connectors) — the live official spec is a path
+  // index of external HTTP $refs whose sub-schema URLs are Akamai-blocked.
+  'mailchimp.json',
+  'fullstory-events.json',
+  'fullstory-users.json',
 ];
 
 // One pass at the current shipping versions (connect v0.4 / fed v2.14, per DEFAULT_VERSIONS): real
@@ -104,7 +112,24 @@ const opsLabel = verbsSel === 'get' ? 'GET' : verbsSel === 'mutations' ? 'mutati
 const outFile = process.env.COV_OUT ?? (verbsSel === 'get' ? 'COVERAGE.md' : `COVERAGE-${verbsSel}.md`);
 // --specs a.yaml,b.json sweeps just that subset, e.g. probing a fix across the two specs it touches
 const someSpecs = getArg('--specs');
-const specs = onlySpec ? [onlySpec] : someSpecs ? someSpecs.split(',') : ALL_SPECS;
+// ALL_SPECS is a catalog of filenames, not a guarantee the files exist — the vendor corpus is
+// gitignored (real specs carry example secrets), so nobody but whoever built up their own local
+// tests/resources/oas/ has all of it. Run against whichever cataloged specs are actually present
+// rather than crashing (or worse, silently reporting an absent file as a LOAD-FAIL alongside real
+// generator bugs) on a fresh checkout. An explicit --spec/--specs request is unfiltered: naming a
+// file that doesn't exist there is a mistake worth erroring on, not something to skip quietly.
+const specs = onlySpec
+  ? [onlySpec]
+  : someSpecs
+    ? someSpecs.split(',')
+    : ALL_SPECS.filter((f) => fs.existsSync(path.join(base, f)));
+// Only meaningful for the default (whole-catalog) run — an explicit --spec/--specs isn't filtered
+// above, so there's nothing "missing" to report for it.
+const missingSpecs = onlySpec || someSpecs ? [] : ALL_SPECS.filter((f) => !specs.includes(f));
+if (missingSpecs.length || (!onlySpec && !someSpecs)) {
+  process.stderr.write(`${specs.length}/${ALL_SPECS.length} cataloged specs present locally\n`);
+  if (missingSpecs.length) process.stderr.write(`  missing (not run, not scored): ${missingSpecs.join(', ')}\n`);
+}
 // --whole off skips the all-ops column's generate+compose (default on)
 const wholeSel = getArg('--whole', 'on') !== 'off';
 const passKeys = ['abstract'] as (keyof typeof PASSES)[];
@@ -128,6 +153,9 @@ const COMPOSE_TIMEOUT_MS = Number(process.env.COV_COMPOSE_TIMEOUT) || 30_000;
 const WHOLE_TIMEOUT_MS = Number(process.env.COV_WHOLE_TIMEOUT) || 120_000;
 // Above this SDL size we compose one at a time — eight rovers on a 300K schema each is what ate 60 GB.
 const BIG_SCHEMA_BYTES = 200_000;
+// Above this spec-FILE size the whole sweep runs one at a time — several docusign-class sweeps at
+// once (each may need most of the 16 GB worker heap) ran the machine itself out of memory.
+const HEAVY_SPEC_BYTES = Number(process.env.COV_HEAVY_SPEC_BYTES) || 1_000_000;
 // A fresh dir per run (same reason as runners.ts): the GET and mutations sweeps name their files
 // by index, so a shared dir would swap schemas between them when the two passes run concurrently.
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'oas-coverage-'));
@@ -305,12 +333,13 @@ async function runPass(
     try {
       const g = new OasGen(parser, genOptions(passKey, skip) as any);
       await g.visit();
-      const types = g.getTypes([sel]);
       const schema = g.generateSchema([sel]);
-      // types.size === 0 alone isn't "empty" — a scalar-rooted op (e.g. a write returning a bare
-      // `true`) legitimately needs no auxiliary `type X {}` while still emitting a real
-      // Query/Mutation field. Only call it empty when the schema has no such field either.
-      if (types.size === 0 && !/type (Query|Mutation) \{/.test(schema)) {
+      // A schema with no `type Query {`/`type Mutation {` block has no root field at all — the
+      // one case worth calling "nothing was generated". A write that answers with a bare `true`
+      // (e.g. a DELETE with an empty body) still gets a real Mutation field even though it needs
+      // no auxiliary `type X {}` around it, so checking for the root field (not the type count)
+      // is what tells "op generated nothing" apart from "op generated, output just has no types".
+      if (!/type (Query|Mutation) \{/.test(schema)) {
         r.genEmpty++;
         addBucket(r.buckets, 'GEN-EMPTY', op);
         verdicts[op] = 'GEN-EMPTY';
@@ -380,9 +409,8 @@ async function runWholeSpec(
   try {
     const g = new OasGen(parser, genOptions(passKey, skip) as any);
     await g.visit();
-    const types = g.getTypes(sels);
     schema = g.generateSchema(sels);
-    if (types.size === 0 && !/type (Query|Mutation) \{/.test(schema)) {
+    if (!/type (Query|Mutation) \{/.test(schema)) {
       addBucket(buckets, 'WHOLE:GEN-EMPTY', 'all ops');
       return 'GEN-EMPTY';
     }
@@ -422,6 +450,15 @@ const reports: (SpecReport | undefined)[] = [];
 const globalBuckets = new Map<string, Bucket>();
 
 async function sweepSpec(file: string, slots: Int32Array): Promise<SpecOutcome> {
+  // slots[2] is the heavy-sweep token: a docusign-class spec can take most of the worker heap,
+  // so only one of them sweeps at a time — small specs keep full parallelism.
+  if (fs.statSync(`${base}/${file}`).size >= HEAVY_SPEC_BYTES) {
+    return withSlot(slots, 2, 1, () => sweepSpecNow(file, slots));
+  }
+  return sweepSpecNow(file, slots);
+}
+
+async function sweepSpecNow(file: string, slots: Int32Array): Promise<SpecOutcome> {
   process.stderr.write(`== ${file} ==\n`);
   const extraBuckets: SpecOutcome['extraBuckets'] = [];
   const loaded = await loadBase(file);
@@ -500,12 +537,12 @@ async function sweepSpecInWorker(file: string, slots: Int32Array): Promise<SpecO
     register();
     import(${JSON.stringify(import.meta.url)});
   `;
-  // a whole-spec sweep of the biggest specs (docusign's 247 mutation ops) outgrows the default
-  // worker heap and dies with ERR_WORKER_OUT_OF_MEMORY — give each sweep real room instead.
+  // generating one docusign mutation can peak past 8 GB on its own — a 16 GB in-process run got
+  // through all 247, so the worker gets the same room. COV_WORKER_HEAP_MB overrides it.
   const worker = new Worker(bootstrap, {
     eval: true,
     workerData: { file, slots, argv: process.argv.slice(2) },
-    resourceLimits: { maxOldGenerationSizeMb: 8192 },
+    resourceLimits: { maxOldGenerationSizeMb: Number(process.env.COV_WORKER_HEAP_MB) || 16384 },
   });
   return new Promise<SpecOutcome>((resolve, reject) => {
     worker.once('message', resolve);
@@ -516,7 +553,7 @@ async function sweepSpecInWorker(file: string, slots: Int32Array): Promise<SpecO
 
 if (isMainThread) {
   const specWorkers = Math.max(1, Math.min(workers, specs.length));
-  const slots = new Int32Array(new SharedArrayBuffer(8));
+  const slots = new Int32Array(new SharedArrayBuffer(12));
   await pool(
     specs,
     async (file, i) => {
@@ -576,6 +613,14 @@ Buckets: **OK** generated + composed · **DEGRADED** retired (was the consolidat
 (\`gen-ts.mjs\`) does, and what per-op composes cannot see (cross-op collisions, shared types
 selected from several positions). Per-verb, not full-spec: the combined read+write compose is only
 measured by a \`--verbs all\` run. \`FAIL [<code> ×<n>]\` counts that code's own occurrences.
+${
+  missingSpecs.length
+    ? `\n**Partial corpus:** ${specs.length}/${ALL_SPECS.length} cataloged specs present locally. The
+vendor corpus is gitignored (real specs carry example secrets), so this reflects whatever's in
+this machine's \`tests/resources/oas/\`, not a fixed shared set. Missing, not run, not scored:
+${missingSpecs.map((f) => `\`${f}\``).join(', ')}.\n`
+    : ''
+}
 \n## Coverage (real unions, connect ${PASSES.abstract.connectorSpecVersion}, fed ${PASSES.abstract.fed})\n\n${passTable('abstract')}\n
 ## Gap histogram (all specs, all selected passes)
 

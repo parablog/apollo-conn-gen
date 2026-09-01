@@ -52,6 +52,32 @@ test('test_coverage_all_ops_zero_ops_is_na_not_failure', () => {
   assert.ok(!/WHOLE:/.test(report), 'no failure buckets from the empty verb set');
 });
 
+test('test_174_each_pass_builds_its_tree_once', () => {
+  // #174: runPass and runWholeSpec each used to call getTypes(sel) then generateSchema(sel) —
+  // two full tree builds (TypesCollector.collect) per pass instead of one, doubling peak memory
+  // on a heavy spec (docusign's 247-op all-ops pass held two 247-op trees at once). One op with
+  // --limit 1 should cost exactly 2 builds: one per-op pass, one all-ops pass.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cov-tool-'));
+  const collectsFile = path.join(dir, 'collects.txt');
+  const res = spawnSync(
+    'node',
+    ['--import', 'tsx/esm', '--import', './tests/all/_countCollects.ts', 'tools/coverage-spec.mts', '--workers', '1', '--spec', 'petstore.yaml', '--limit', '1'],
+    {
+      encoding: 'utf-8',
+      timeout: 240_000,
+      env: {
+        ...process.env,
+        COV_OUT: path.join(dir, 'out.md'),
+        COV_DUMP: path.join(dir, 'dump'),
+        COV_COLLECTS: collectsFile,
+      },
+    },
+  );
+  assert.strictEqual(res.status, 0, 'tool exits clean: ' + (res.stderr || '').slice(-400));
+  const collects = fs.readFileSync(collectsFile, 'utf-8');
+  assert.strictEqual(collects, '2', 'one tree build per pass (per-op + all-ops), not two');
+});
+
 test('test_coverage_whole_verdict_helper', () => {
   const one = wholeVerdict('  CONNECTORS_UNRESOLVED_FIELD: [x] a\n  CONNECTORS_UNRESOLVED_FIELD: [x] b\n');
   assert.strictEqual(one.verdict, 'FAIL [CONNECTORS_UNRESOLVED_FIELD ×2]');
