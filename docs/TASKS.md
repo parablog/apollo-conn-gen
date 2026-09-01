@@ -163,6 +163,21 @@ with `--trace-gc` for V8's own heap numbers. Prime suspect to measure first:
 line (a million-line op is hundreds of MB of paths), held for all 247 ops in one `collect`;
 second: the `Writer` buffer (one array entry per write).
 
+**2026-09-01 (cont'd):** `collector.expanded` measured directly instead of estimated — all 247
+docusign mutation ops, `getTypes`-only (skips writer/parse), one process: **9,123,861 path
+strings, 4.38 GB of raw string bytes, 11.4 min wall, 4.81 GB peak RSS.** Per-op top is
+`put:/v2.1/accounts/{accountId}/templates/{templateId}/documents/{documentId}` at 372 MB /
+688,688 paths — the heaviest op by expanded-path bytes is NOT the heaviest by SDL bytes (that
+was `post:/v2.1/.../envelopes` at 27.1 MB SDL); correcting that assumption here. The capped
+`--max-old-space-size=6144 --trace-gc` all-ops run was judged unnecessary and skipped — these
+numbers already answer the question.
+
+**Conclusion so far:** `collector.expanded`'s path-string list is the measured prime suspect —
+the real all-ops `generateSchema` builds it in one combined `collect()` call across all 247
+selections at once, so (unlike this sequential per-op measurement, which disposes between
+calls) that one array would hold something close to the full 4.38 GB simultaneously, on top of
+the rest of the tree/Writer. Fix design is still open — not yet acted on.
+
 **Refs:** #179 (the crash half), #174 (superseded narrowing — the sweep OOM was the pipe
 flood, not tree weight), #181 (the stack leak — real but ruled out as #180's driver),
 docs/DEFERRED.md #139 (granularity mode — the likely product-level relief for docusign-class
