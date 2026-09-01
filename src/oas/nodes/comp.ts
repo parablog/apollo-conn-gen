@@ -96,10 +96,7 @@ export class Composed extends Type {
 
     if (context.inContextOf(Res, this)) {
       writer.write(Naming.genTypeName(this.name));
-      return;
-    }
-
-    if (this.schema.allOf != null) {
+    } else if (this.schema.allOf != null) {
       const keep = context.generateOptions?.keepFieldNames === true;
       const selected = this.selectedProps(selection, keep);
 

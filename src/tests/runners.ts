@@ -1,5 +1,6 @@
 import { BatchConfig, JsonGen, DirectivesConfig, OasGen, OverridesConfig } from '../index.js';
 import { JsonContext, JsonType } from '../json/index.js';
+import { OasContext } from '../oas/oasContext.js';
 import assert from 'node:assert';
 import path from 'path';
 import os from 'os';
@@ -85,7 +86,28 @@ export async function runOasTest(
     `${types.size} is not equal to ${typesSize}:  ${Array.from(types.keys()).join(',\n')}`,
   );
 
-  const schema = gen.generateSchema(paths);
+  // #181: comp.ts/union.ts used to `return` out of generate() before reaching context.leave(),
+  // leaking the entry enter() pushed — every fixture whose op returns a Composed/Union caught it.
+  let enterCalls = 0;
+  let leaveCalls = 0;
+  const origEnter = OasContext.prototype.enter;
+  const origLeave = OasContext.prototype.leave;
+  OasContext.prototype.enter = function (type) {
+    enterCalls++;
+    return origEnter.call(this, type);
+  };
+  OasContext.prototype.leave = function (type) {
+    leaveCalls++;
+    return origLeave.call(this, type);
+  };
+  let schema: string;
+  try {
+    schema = gen.generateSchema(paths);
+  } finally {
+    OasContext.prototype.enter = origEnter;
+    OasContext.prototype.leave = origLeave;
+  }
+  assert.strictEqual(enterCalls, leaveCalls, 'context stack balanced');
   assert.ok(schema !== undefined);
 
   // A fresh dir per call — tests run concurrently and many share the same fixture file, so a

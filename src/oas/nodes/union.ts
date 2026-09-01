@@ -152,11 +152,10 @@ export class Union extends Type {
       // a merge with no fields is never written — the field answers JSON instead  #80
       if (this.isFlat() && !this.hasSelectedProps(selection, keep)) {
         writer.write('JSON');
-        return;
+      } else {
+        // R2: when promoted to an interface, the field returns the base interface, not the union name.
+        writer.write(Naming.genTypeName(this.interfaceBaseRef ?? this.name));
       }
-      // R2: when promoted to an interface, the field returns the base interface, not the union name.
-      writer.write(Naming.genTypeName(this.interfaceBaseRef ?? this.name));
-      return;
     }
     // generate traditional union
     else {
