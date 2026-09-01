@@ -500,3 +500,54 @@ release still shows it.
 
 **Refs:** `src/oas/nodes/param.ts`, `src/oas/utils/params.ts` (`arrayJoin`), Adam's benchmark
 report (claude.ai/code/artifact/c79bb3ab, "caveats").
+
+## 178 [BUG] · DocuSign's largest ops time out compose — real combinatorial breadth, not a missed cycle — 📋 Noted, no code change
+
+**Symptom:** the corpus coverage sweep (`tools/coverage-spec.mts`) reports 14/167 DocuSign GET ops
+as `COMPOSE-FAIL [TIMEOUT]` (`COVERAGE.md`), e.g.
+`get:/v2.1/accounts/{accountId}/bulk_send_batch/{bulkSendBatchId}/envelopes`. A generation-only
+measurement (no rover) shows why: `get:/v2.1/accounts/{accountId}/templates` alone generates a
+28.7MB SDL file — 157 unique types, but a `selection: """ … """` block over 1,000,000 lines. 22 of
+DocuSign's 167 GET ops produce ≥200KB schemas (`BIG_SCHEMA_BYTES`).
+
+**First hypothesis, ruled out: a missed cycle.** The cycle cutter (`Factory.cyclicAncestor`,
+`src/oas/nodes/factory.ts:554`, `docs/FIXED.md #10`) compares schema-object identity only along the
+current straight-line ancestor path, so it deliberately does not cut a shared, non-recursive
+component reached via sibling branches. Traced the deepest occurrence of the repeated `rights?`/
+`options?` leaf (the `settingsMetadata` wrapper DocuSign attaches to almost every field): max
+nesting depth 20, no field/type name repeats along that path (`envelopeTemplates → powerForm →
+envelopes → folders → folderItems → recipients → inPersonSigners → notaryHost → tabs →
+prefillTabs → radioGroupTabs → radios → extensionData → connectedFieldsData → propertyName`). No
+self-referential loop — the cutter is working correctly here.
+
+**Actual cause: genuine combinatorial breadth in DocuSign's real schema.** Within `templates`'
+selection, `recipients?` opens 12 times (DocuSign's ~10-12 recipient-role sub-objects — signers,
+agents, inPersonSigners, notaries, witnesses…, several of which nest *another* full recipient-shaped
+object, e.g. `inPersonSigner.notaryHost`, each carrying its own complete `tabs`), which fans out to
+64 `tabs?` blocks, each expanding across ~30 tab-type arrays (`checkboxTabs`, `textTabs`,
+`radioGroupTabs`, …) × ~150 fields, many with a `*Metadata` companion object (`rights`/`options`/…)
+attached per field. That is how 12 `recipients?` sites become 3,100-3,500 occurrences of individual
+leaf metadata fields.
+
+**Same class of thing as #10's own Confluence case** ("~2,700 types and a ~20,000-entry selection...
+path multiplicity"), just far more extreme here because DocuSign nests full recipient objects inside
+other recipient objects. `everythingUnder` (full-subtree selection — what the coverage sweep and the
+CLI's `-n` default both use) has no depth/breadth cap, so a spec this cross-linked expands without
+bound.
+
+**Not fixed here — this is a policy/product question, not a bug fix.** Raising
+`COV_COMPOSE_TIMEOUT` only treats the symptom: even if rover eventually composed a 28MB single-op
+schema, the resulting connector would ship a multi-megabyte selection mapping, unusable in practice
+regardless of whether compose finishes in time. The real lever is `docs/DEFERRED.md #139`'s parked
+"selectable granularity mode" (operations vs leaf fields) — an op-only or depth-capped mode would
+keep DocuSign's `templates`/`envelopes`-class ops generatable without the current runaway expansion.
+No capping was attempted here.
+
+**Not yet looked at:** the sweep's other 4 DocuSign failures, `COMPOSE-FAIL [INVALID_GRAPHQL]`
+(example: `get:/v2.1/accounts/{accountId}/bulk_send_lists/{bulkSendListId}`) — a different bug,
+found in the same sweep, not investigated yet.
+
+**Refs:** `src/oas/nodes/factory.ts` (`cyclicAncestor`), `docs/FIXED.md #10` (the cycle-cut design +
+Confluence's matching path-multiplicity precedent), `docs/DEFERRED.md #139` (selectable granularity
+mode — the likely real fix), `tools/coverage-spec.mts` (`BIG_SCHEMA_BYTES`, `COV_COMPOSE_TIMEOUT`),
+`COVERAGE.md` (docusign.json row).

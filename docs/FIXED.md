@@ -9446,3 +9446,117 @@ alone stayed green through this bug.
 **Refs:** `src/oas/utils/media.ts`, `src/oas/nodes/get.ts`, `src/oas/nodes/post.ts`,
 `src/oas/io/errorsWriter.ts`, #85 (the sendsJson guard this extends), #33 (the non-JSON
 fallback), #137 (the form-body pick beside it), `TEST_CORPUS.md` (DocuSign).
+
+## 177 [BUG] [P1] · A property whose schema is `anyOf` degrades to JSON — no `anyOf` branch in `fromProp` — ✅ Fixed
+
+**Symptom:** a field spelled `anyOf: [$ref X, {type: 'null'}]` — OAS 3.1's nullable-reference
+form, which Stainless-generated specs use for nearly every optional object field — emits as
+`JSON` with the "shape didn't match any known pattern" note instead of its real type.
+
+**OAS:** (profound.yaml) `PromptUpdatePreview.tags`, and 173 more fields like it:
+```yaml
+tags:
+  anyOf:
+    - $ref: '#/components/schemas/NamedResourceDiffList'
+    - type: 'null'
+  description: Tags added and removed.
+```
+
+**Example:**
+```graphql
+# before                            # after
+type PromptUpdatePreview {          type PromptUpdatePreview {
+  tags: JSON                          tags: NamedResourceDiffList
+}                                    }
+```
+
+- Measured against the graphos-service-factory PR #31 connector (same spec, byte-identical):
+  the TS schema carries 210 JSON fields to the Rust connector's 92, and 174 of them are this
+  one fall-through; 24 of 111 shared operations reach fewer fields than the Rust output.
+- The null arm is already stripped (a lone `$ref` deliberately keeps its choice list) — what's
+  left is a one-member `anyOf` that nothing in the property path reads.
+
+**Cause:** `Factory.fromProp` checks `oneOf`/`allOf` in both its typed and typeless chains but
+never `anyOf` — only `fromSchema` reads `anyOf` members, so a prop-position schema fell to the
+JSON default.
+
+**Fix:** `fromProp` (`src/oas/nodes/factory.ts`) now collapses a one-member `anyOf` — after
+`Schemas.isShapelessObject` filters the stripped null arm — to that member and recurses, the
+property form of #20's schema-level collapse. Collapsing moves the resolved type off the
+original property's own `schema`, so `Obj`'s required-check (`src/oas/nodes/obj.ts`) now also
+reads the property's *declared* schema (`this.schema.properties[name]`) for the nullable flag,
+not just the post-collapse one, so a required nullable-ref property still comes out nullable.
+
+**Measured impact:** profound.yaml 174 fields recovered from JSON; stripe
+`post:/v1/customers>**` +86 types (`address`, `cash_balance`, `invoice_settings`, `tax`,
+`shipping` and their nested members), stripe-curated +365, pagerduty-full +1,
+digitalocean-full +42 — all previously JSON.
+
+**Tests:** `test_177_anyof_nullable_ref_property_keeps_its_type`, fixture
+`anyof-nullable-ref-property.yaml` (required + optional `anyOf` property, plus an untouched
+required sibling and a selection into the collapsed member's own fields).
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromProp`), `src/oas/nodes/obj.ts` (required-check),
+#60 (why a `$ref` choice survives the null strip), #20 (the schema-level `anyOf`/`allOf`
+collapse this extends to property position), #86/#131 (the anyOf cases handled earlier,
+items-position only), graphos-service-factory PR #31 (the Rust connector comparison that
+surfaced it).
+
+## 181 [BUG] [P3] · Composed/Union.generate skipped context.leave when answering a response by name — ✅ Fixed
+
+**Symptom:** after an inline `oneOf`/`allOf` response is written, the context stack keeps one
+stale entry for the rest of the generation — every later selection/body line (indent =
+`context.indent + context.stack.length`, e.g. `propScalar.ts:56`) is one column wider per leak,
+and trace lines likewise. Measured: stripe-curated.yaml, all curated selections, 1 leak, SDL
+825,025 → 812,994 bytes (-12,031). Real, but minor — see "why only one" under Cause.
+
+**OAS:** an operation whose `200` response schema is an inline `oneOf`/`allOf` (no `$ref`):
+```yaml
+responses:
+  '200':
+    content:
+      application/json:
+        schema:
+          oneOf:
+            - $ref: '#/components/schemas/Book'
+            - $ref: '#/components/schemas/Movie'
+```
+
+**Example:** every line after the leaked op shifts one column:
+```graphql
+# before                          # after (one leaked entry still on the stack)
+selection: """                    selection: """
+$.title                            $.title
+"""                                """
+```
+
+**Cause:** `Composed.generate` and `Union.generate` both call `context.enter(this)`, then — when
+answering a response with just the type name (`inContextOf(Res)`) — `return` without reaching
+`context.leave(this)` at the end of the function. `obj.ts:77` and `en.ts:63` do the same
+"am I under a Res?" check but *before* `enter`, which is the correct shape. Why this fires at
+most once per spec rather than once per operation: `Ref.generate` (`src/oas/nodes/ref.ts:63-80`)
+answers a *named* (`$ref`) response itself — it writes the sanitised name directly and never
+descends into the referenced Composed/Union's own `generate()`. Only an *inline*, unnamed
+oneOf/allOf response reaches `comp.ts`/`union.ts` in Res context at all, and the writer
+generates each named type once — so stripe-curated's whole curated selection (587 paths) leaked
+exactly once, not 587 times.
+
+**Fix:** two edits, no new abstraction. `comp.ts` `generate`: the `inContextOf(Res)` early
+return becomes the first arm of the existing `if`/`else if` chain, so the function always
+reaches `context.leave(this)`. `union.ts` `generate`: the `inContextOf(Res)` arm's two bare
+`return`s become an `if (flat && no selected props) write 'JSON' else write name`, falling
+through to the same `context.leave(this)`. No try/finally, no self-healing `leave`.
+
+**Tests:** `src/tests/runners.ts` `runOasTest` now spies `OasContext.prototype.enter`/`leave`
+around every `generateSchema` call and asserts `enterCalls === leaveCalls` (stack balanced) —
+one guard covering the whole corpus rather than a single fixture test. Revert-check: red on
+`test_80_union_of_unions_merges_member_fields` with the fix reverted (`19 !== 18`), green
+restored. Full suite: 498/498 passing (4 todo), no test tripped on the one-column shift.
+
+**Not a #180 fix.** #180 (the docusign 247-op mutations pass) is a much larger, separate memory
+problem — re-measuring it after this fix did not resolve it; see #180 for the current numbers
+and next steps.
+
+**Refs:** `src/oas/nodes/comp.ts`, `src/oas/nodes/union.ts`, `src/oas/nodes/ref.ts` (why the
+leak is per-spec, not per-op), `src/oas/oasContext.ts` (`inContextOf`, `stack`),
+`src/tests/runners.ts`, #180 (NOT fixed by this), #10.

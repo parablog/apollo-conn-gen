@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 161 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 163 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -82,9 +82,17 @@ Invariants the entries below rely on:
 - The harness now sweeps heavy specs one at a time (`HEAVY_SPEC_BYTES`, `tools/coverage-spec.mts`)
   so runs complete — that contains the symptom, it doesn't explain it.
 
+- Narrowed 2026-08-27 (second failed sweep): per-op generation of all 247 fits under 16 GB — an
+  in-process run finished every generation and 230 composes at that limit. The kill is the
+  ALL-OPS pass: one generation holding all 247 mutation subtrees in a single tree passes 16 GB.
+  The GET side's whole-schema generates fine, so the weight is the envelope INPUT trees.
+
 **First step is measurement, not a fix:** find WHICH op peaks (`COV_TRACE=1` names each op as it
 generates) and where the memory lives (`node --max-old-space-size` bisection, or a heap snapshot
 around the worst op). File the real cause as its own entry once known.
+
+**Correction 2026-09-01:** the sweep worker mutes `console.log` (`tools/coverage-spec.mts:27-29`),
+so its OOM was never the trace flood — see #180 for what remains.
 
 **Refs:** `tools/coverage-spec.mts` (`COV_WORKER_HEAP_MB`, the heavy-sweep token),
 `tests/resources/oas/docusign.json` (local vendor spec), `TEST_CORPUS.md` (DocuSign).
@@ -118,3 +126,74 @@ success-response schema and walk it against the emitted response type:
 
 **Refs:** `src/oas/lint/` (`responseShape.ts` already resolves OAS response schemas), #175 (the
 motivating miss), #170/#172 (the same class), `tools/lint-corpus.mts`.
+
+## 179 [BUG] [P2] · `trace()` floods a piped stdout during synchronous generation — slow runs become OOM crashes — ⬜ Open
+
+**Symptom:** the coverage-mutations sweep worker OOMs its 16 GB heap on docusign's all-ops pass
+in ~12 minutes. Any heavy generation whose stdout is an async pipe (a worker thread's
+stdout-to-parent, `node ... | grep`, an exec with piped stdio) dies the same way; the identical
+run to a terminal or a file is merely slow.
+
+**Measured (2026-08-31, docusign.json, all mutation ops):**
+- one op alone (`post:/v2.1/accounts/{accountId}/envelopes`, everythingUnder) emits **8.3 GB**
+  of trace output.
+- that op with trace muted, or written to /dev/null or a file: completes in 116-183 s at
+  2.0-2.8 GB peak RSS.
+- the same op with stdout piped to grep: OOM at 11-13 GB in ~200 s — independent of how many
+  other selections ride along (N=1/2/4/8 all identical) and of selection order.
+
+**Cause:** `trace()` (`src/oas/log/trace.ts`) is an unconditional `console.log`.
+`generateSchema` is fully synchronous, so the event loop never yields during a multi-minute
+call — writes to an async pipe consumer cannot drain and queue in the process heap without
+bound. File and POSIX-terminal writes are synchronous, so they cost time, not memory — which is
+why in-terminal runs were "only" slow and the sweep's worker (stdout piped to the parent) is
+what crashed.
+
+**Fix direction:** gate `trace()` behind an env flag / logger level, off by default. Also fixes
+timing numbers: every measured generation currently includes console I/O for millions of lines.
+
+**Correction 2026-09-01:** the coverage sweep worker replaces `console.log`/`warn`/`error` with
+no-ops (`tools/coverage-spec.mts:27-29`), so the flood only bites manual piped runs
+(`node ... | grep`), not the sweep; the `verbose` gate in the loopdeck/179 worktree remains the
+fix for that path.
+
+**Refs:** `src/oas/log/trace.ts`, `tools/coverage-spec.mts` (`sweepSpecInWorker` — the piped
+worker stdout), #174 (the sweep OOM this explains), #180 (the independent slowness underneath).
+
+## 180 [BUG] [P3] · All-ops mutations generation OOMs even with logging muted — real memory growth in the combined-selection walk — ⬜ Open
+
+**Symptom:** ONE `generateSchema` over all 247 docusign mutation selections, `trace()` muted,
+16 GB heap: genuine OOM at ~27.7 minutes ("Ineffective mark-compacts near heap limit", the
+V8 heap-limit signature). External 10 s RSS sampling reads lower (11.7 GB) but demonstrably
+misses the final spike — it under-read the unmuted crash the same way while V8's own GC log
+showed 16.37 GB right before death. This is the bug that blocks docusign's all-ops mutations
+column in the sweep.
+
+- Per-op cost is fine: all 247 ops generated individually total 387 MB SDL, max RSS 3.9 GB,
+  worst single op 62 s. The combined walk is the problem, not the trees.
+- Hot pattern in the walk: `compositeTemplates > inlineTemplates > documents > tabs >
+  notarySealTabs > notarySeal` re-expands each sibling `*Metadata` field (all the same
+  `propertyMetadata` shape) per path — the same path-multiplicity class as #174/#10, but on the
+  input/body side, compounding across templates × documents × tabs.
+- Where per-op bytes live (heaviest op, 27.1 MB SDL): 25 MB is `body: """..."""` mapping
+  blocks; the 155 `input` defs are 1 MB. #174's "envelope INPUT trees" hypothesis refined: the
+  weight is the body mapping selections, not the input type definitions.
+
+**Not the same bug as #179:** muting trace does NOT prevent the crash, it only delays it —
+12.2 min to OOM unmuted, 27.7 min muted (~2.3x). The two problems stack but are independent;
+fixing #179 alone leaves this one killing the pass. Raising `COV_WORKER_HEAP_MB` is unproven
+relief at best — growth reached 16 GB steadily, so more heap likely buys minutes.
+
+**2026-09-01:** Stack leak ruled out as the driver (#181): 1 leak per spec, not per op. Re-run
+of the 247-op all-ops pass after the fix was inconclusive: killed at 2h02m with the machine
+23 GB into swap (other sessions running); RSS read 3.2 GB at the 1 h mark — lower than the 16 GB
+seen at the earlier crash, but not comparable under thrashing. Next: rerun on a quiet machine
+with `--trace-gc` for V8's own heap numbers. Prime suspect to measure first:
+`collector.expanded` — the `everythingUnder` expansion keeps one full path string per selection
+line (a million-line op is hundreds of MB of paths), held for all 247 ops in one `collect`;
+second: the `Writer` buffer (one array entry per write).
+
+**Refs:** #179 (the crash half), #174 (superseded narrowing — the sweep OOM was the pipe
+flood, not tree weight), #181 (the stack leak — real but ruled out as #180's driver),
+docs/DEFERRED.md #139 (granularity mode — the likely product-level relief for docusign-class
+specs), measurement scripts in the session scratchpad.
