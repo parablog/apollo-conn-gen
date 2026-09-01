@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 164 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 165 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -97,39 +97,6 @@ so its OOM was never the trace flood — see #180 for what remains.
 **Refs:** `tools/coverage-spec.mts` (`COV_WORKER_HEAP_MB`, the heavy-sweep token),
 `tests/resources/oas/docusign.json` (local vendor spec), `TEST_CORPUS.md` (DocuSign).
 
-## 176 [FEAT] [P1] · Lint check: every spec-declared response field is emitted or accounted for — ⬜ Open
-
-**Why:** no check compares the output against the SOURCE spec — counts, compose, and selection
-lint all validate the output against itself. A whole spec's responses degraded to a synthesized
-`{ success: Boolean }` and every gate stayed green; only a human looking at the web tree caught
-it. The same silent-loss shape shipped three times in one week (dropped response fields, dropped
-array fields, stubbed responses). One check closes the class.
-
-**OAS:** (docusign.json) the case that motivated this:
-```
-spec: 200 -> serviceInformation { buildVersion, linkedSites, … }    emitted: { success: Boolean }
-```
-
-**Shape:** a new check in `src/oas/lint/` — per selected operation, resolve the OAS
-success-response schema and walk it against the emitted response type:
-- every spec property appears as a field, or is ACCOUNTED FOR — a documented degrade leaves
-  tracks the check can read (a JSON scalar's reason note, a removed-for-a-loop comment, an
-  illegal enum's base scalar), because every degrade warns (standing rule).
-- a synthesized response is legitimate only when the spec declares no schema at all; a spec that
-  offered more is a diagnostic.
-- silent loss — a spec property with no field and no tracks — is the diagnostic this exists for.
-- the hard part is the accounted-for list, not the walk: merged unions, twin renames, map
-  entries, interface promotion all move fields on purpose. `docs/FIXED.md` is effectively the
-  spec of deliberate degrades; expect the first corpus run to drive its refinement.
-- runs where lint already runs (`tools/lint-corpus.mts` sweeps every corpus op today), so the
-  guard lands corpus-wide, not per-fixture.
-
-**Refs:** `src/oas/lint/` (`responseShape.ts` already resolves OAS response schemas), #175 (the
-motivating miss), #170/#172 (the same class), `tools/lint-corpus.mts`.
-
-**Refs:** `src/oas/log/trace.ts`, `tools/coverage-spec.mts` (`sweepSpecInWorker` — the piped
-worker stdout), #174 (the sweep OOM this explains), #180 (the independent slowness underneath).
-
 ## 180 [BUG] [P3] · All-ops mutations generation OOMs even with logging muted — real memory growth in the combined-selection walk — ⬜ Open
 
 **Symptom:** ONE `generateSchema` over all 247 docusign mutation selections, `trace()` muted,
@@ -182,3 +149,110 @@ the rest of the tree/Writer. Fix design is still open — not yet acted on.
 flood, not tree weight), #181 (the stack leak — real but ruled out as #180's driver),
 docs/DEFERRED.md #139 (granularity mode — the likely product-level relief for docusign-class
 specs), measurement scripts in the session scratchpad.
+
+## 182 [BUG] [P2] · The `>**` wildcard selection builder drops any property whose value is neither a plain leaf nor a whole-map-of-leaves — ⬜ Open
+
+**Symptom:** #176's `ResponseCoverageCheck`, run corpus-wide via `make lint-corpus`, reports
+~10,000 `RESPONSE_FIELD_NOT_READ` warnings and confirms the same root cause independently in six
+specs: a self-referential map (car_configurator_service, `map-recursive-value.yaml`), a map whose
+value is a real object (confluence's `_links`/`_expandable`), an empty placeholder object
+(adobe-commerce-swagger's `extension_attributes`, stripe's `destination_details.amazon_pay` and
+a dozen siblings), and an array of maps (docker-engine's `IPAM.Config`). In every case the field
+is missing from BOTH the generated type and the selection — no field, no `JSON` fallback, no
+comment — so nothing before #176 could tell this apart from a correctly-empty response.
+
+**OAS** (`map-recursive-value.yaml`, the smallest repro):
+```yaml
+Amount:
+  properties:
+    value: { type: number }
+    unit: { type: string }
+    alternatives:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/Amount'
+```
+generated: `type Amount { unit: String value: Float }` — `alternatives` is gone, nothing marks it.
+
+**Cause:** `TypesCollector.collectExpandedPaths` (`src/oas/generator/typesCollector.ts:369-428`)
+builds the `>**` selection by walking every node and whitelisting specific leaf shapes (plain
+scalar, list/list-of-list of scalars, list of enum values, a cut cycle, a whole map of scalar
+values — the `T.isWholeMapValue` branch #76 added). Anything that reaches the final `else` and
+isn't one of those shapes adds nothing to `newSelection` and recurses no further, so the property
+never gets a path at all:
+- a map whose value is itself composite (object, cyclic or not) — `mapUnderProp`/`mapAsResponse`/
+  `mapNested` all resolve, but `T.isWholeMapValue` is false for anything that isn't a scalar leaf
+- an object property with no properties of its own (`{ type: object }`, no `additionalProperties`)
+  — none of `mapUnderProp`/`mapAsResponse`/`mapNested` apply since it isn't a map at all, so `map`
+  stays `undefined` and the `if` never fires
+- a `PropArray` whose items are a map (docker-engine's `Config: { type: array, items: {
+  additionalProperties: { type: string } } }`) — `listOfValues`/`nestedListOfValues` both require
+  `Scalar` items, so this falls through too
+
+This is a `>**`-selection-builder gap specifically — a hand-written selection that names the
+field explicitly still generates fine (it just reads whatever the field resolves to).
+
+**Fix direction:** give the `else` branch (or a case before it) a rule for "the value has real
+structure but nothing under it is a scalar leaf": recurse into an object/composite value's own
+props the way the top-level walk already does, and for a genuinely un-expandable case (the
+cyclic map #76 already decided to drop) leave a trace — even a cheap one, like the
+`PropCircRef`/`RefCircRef` comment #10 already writes for plain object cycles — since that
+comment is exactly what lets #176's check excuse a field on purpose today.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`, the `else` branch at
+line 409), `src/oas/nodes/typeUtils.ts` (`isWholeMapValue`), #76 (the cyclic-map drop this
+generalizes), #171 (`mapNested`, the closest sibling gap), `tests/resources/oas/
+map-recursive-value.yaml` (already a clean minimal repro), `LINT-CORPUS.md` (full finding list,
+regenerate with `make lint-corpus`).
+
+## 183 [BUG] [P3] · `ResponseCoverageCheck` reports a false `RESPONSE_NOT_READ` when the spec's own `responses` was empty — ⬜ Open
+
+**Symptom:** #176's check, run on `malformed-response-schema-crashes.yaml`'s `get:/markers` (an
+op that documents no responses at all — `responses: {}`), reports `` `get:/markers` returns
+`success` but its selection reads none of them `` even though the generated selection is exactly
+`success: $(true)`, the intended, legitimate synthetic-response shape.
+
+**Cause:** `checkAndFixMalformedResponses` (`src/oas/oasGen.ts:42-55`, #148) runs before
+validation and, for any operation whose raw `responses` is `{}`, mutates the parsed document in
+place: `responses['200'] = SYN_SUCCESS_RESPONSE`. `ResponseCoverageCheck.declared()`
+(`src/oas/lint/checks/responseCoverage.ts`) reads `op.operation.schema.responses` — the same,
+now-patched document — so it can no longer tell "the spec truly declared nothing" apart from
+"this is #148's own placeholder," and treats the synthetic `{ success: Boolean }` shape as real
+spec content. Separately, `success: $(true)` is a value literal (`readsFrom.pathParts` is empty),
+so even the placeholder's own field is never credited as "read" by `readKey()`, which only looks
+at `pathParts[0]`, not the alias — the same shape as the `#176` plan's own deliberate `$(true)`
+skip in `run()`, just missed here because the field has an alias (`success:`) and so is not the
+bare-`$` case that skip is written for.
+
+**Fix direction:** either have `declared()` recognize `SYN_SUCCESS_RESPONSE`'s own marker
+(`format: '__apollo_synthetic'`, `APOLLO_SYNTHETIC_OBJ` in `src/oas/schemas/index.ts`) and treat
+it as "nothing declared" the same way an empty `responses` would answer, or have `checkAndFixMalformedResponses`
+leave a distinguishable trace instead of writing the literal synthetic response object into the
+parsed document. One corpus hit today; any spec with a genuinely empty `responses: {}` on some
+operation reproduces it.
+
+**Refs:** `src/oas/oasGen.ts` (`checkAndFixMalformedResponses`), `src/oas/lint/checks/
+responseCoverage.ts` (`declared`, `run`'s bare-passthrough skip), `src/oas/schemas/index.ts`
+(`SYN_SUCCESS_RESPONSE`), #148 (the fix that introduced the mutation), #176 (the check this
+affects), `tests/resources/oas/malformed-response-schema-crashes.yaml`.
+
+## 184 [BUG] [P4] · Two contradictory nullable-`oneOf` shapes vanish with no trace — ⬜ Open
+
+**Symptom:** #176's check flags `required-nullable-oneof.yaml`'s `doubleNull` and `constrained`
+fields as declared-but-unread. Both are already commented in the fixture as deliberately
+unhandled: `doubleNull: oneOf: [null, null]` ("two null choices cancel out... left alone") and
+`constrained: { type: string, oneOf: [string, null] }` ("`type: string` ANDs with it, so null is
+rejected... left alone"). Confirmed intentional — #57/#60 gave every other nullable-`oneOf` shape
+in the same fixture a real field or a documented `JSON` degrade; these two are the only ones with
+neither, and no comment marks them as cut.
+
+**Cause:** same family as #182 — a shape #60's nullable-`oneOf` handling recognizes as
+unbuildable is dropped silently rather than JSON-degraded (the way `nullOnly: oneOf: [null]`
+already is, one line above `doubleNull` in the same fixture) or commented (the way a cycle is).
+
+**Fix direction:** route these two through the same `JSON`-with-a-reason fallback `nullOnly`
+already gets, for consistency — a self-contradictory schema is exactly what that fallback exists
+for.
+
+**Refs:** `tests/resources/oas/required-nullable-oneof.yaml`, #57 (enum promotion), #60 (the
+nullable-`oneOf` fix this is the unhandled edge of), #176.

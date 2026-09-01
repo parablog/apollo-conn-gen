@@ -4,6 +4,8 @@ import { OasGen } from '../../src/index.js';
 import { lintSelections } from '../../src/oas/lint/index.js';
 import { SchemaReader } from '../../src/oas/lint/schemaReader.js';
 import { ResponseShape } from '../../src/oas/lint/responseShape.js';
+import { ResponseCoverageCheck } from '../../src/oas/lint/checks/responseCoverage.js';
+import { SelectionPath } from '../../src/oas/utils/selectionPath.js';
 import { oasBasePath } from '../../src/tests/runners.js';
 import './_setup.js';
 
@@ -425,4 +427,141 @@ test('test_R11_escaped_quoted_keys_resolve_to_their_json_key', async () => {
   const sdl = gen.generateSchema(['get:/things>**']);
   assert.ok(sdl.includes('backSlash: $."back\\\\slash"'), 'the escaped key is in the selection');
   assert.deepEqual(lintSelections(sdl, gen), []);
+});
+
+// --- #176: every spec-declared response field is read or accounted for --------------------
+// Unlike PATH_NOT_IN_RESPONSE above (selection -> spec: "is this a real key?"), this check goes
+// the other way, spec -> selection: "did the selection ask for everything the spec offered?" It
+// needs the raw SDL text (to read cycle-cut comments), so it is not one of the CHECKS lintSelections
+// runs on every keystroke -- it is called directly, the way tools/lint-corpus.mts calls it.
+
+test('test_176_a_stubbed_response_is_an_error', async () => {
+  // (unread-media-type.yaml) the spec's /reports response is a real object under application/xml,
+  // a media type the generator never reads (only a JSON type or */*) -- the exact #175 shape: the
+  // generator falls back to `success: $(true)` on a spec that actually described id/name.
+  const gen = await OasGen.fromFile(`${oasBasePath}/unread-media-type.yaml`, {
+    skipValidation: false,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/reports>**']);
+  assert.ok(sdl.includes('success: $(true)'), 'the generator produced the stub shape, not the test');
+
+  const parsed = SchemaReader.read(sdl);
+  const found = ResponseCoverageCheck.run(sdl, parsed, gen);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].code, 'RESPONSE_NOT_READ');
+  assert.equal(found[0].severity, 'error');
+  assert.ok(found[0].message.includes('id'), 'names the first field the spec declared');
+  assert.ok(found[0].message.includes('name'), 'names the second field the spec declared');
+  assert.ok(found[0].message.includes('get:/reports'), 'names the operation');
+});
+
+test('test_176_generated_petstore_reads_every_declared_field', async () => {
+  const { gen, sdl } = await petstoreSchema();
+  const parsed = SchemaReader.read(sdl);
+  assert.deepEqual(ResponseCoverageCheck.run(sdl, parsed, gen), []);
+});
+
+test('test_176_a_dropped_field_is_reported', async () => {
+  const { gen, sdl } = await petstoreSchema();
+  const broken = sdl.replace('      photoUrls\n', '');
+  assert.notEqual(broken, sdl, 'the test did not actually break anything');
+
+  const parsed = SchemaReader.read(broken);
+  const found = ResponseCoverageCheck.run(broken, parsed, gen);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].code, 'RESPONSE_FIELD_NOT_READ');
+  assert.ok(found[0].message.includes('photoUrls'));
+  assert.ok(found[0].message.includes('get:/pet/findByStatus'));
+});
+
+test('test_176_a_dropped_nested_field_is_reported', async () => {
+  const { gen, sdl } = await petstoreSchema();
+  // the first `name?` in the generated selection belongs to `category { id? name? }`; `tags` has
+  // an identical inner block further down, so dropping only the first one is what proves the walk
+  // is looking at category's own properties, not tags'.
+  const broken = sdl.replace('       name?\n', '');
+  assert.notEqual(broken, sdl, 'the test did not actually break anything');
+
+  const parsed = SchemaReader.read(broken);
+  const found = ResponseCoverageCheck.run(broken, parsed, gen);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].code, 'RESPONSE_FIELD_NOT_READ');
+  assert.ok(found[0].message.includes('name'));
+  assert.equal(broken.slice(found[0].from, found[0].to), 'category', 'anchored on the field that owns the block');
+});
+
+test('test_176_a_cycle_comment_excuses_only_its_own_key', async () => {
+  // (recursive-cycle.yaml) Node has two cycle cuts (parent, children) and two identical, non-cyclic
+  // fields (meta, extra) that both point at Shared { label }. The generated selection carries a
+  // cut comment for parent and for children; dropping a field from meta or extra must still be
+  // reported -- their sibling's comment must not excuse them too.
+  const gen = await OasGen.fromFile(`${oasBasePath}/recursive-cycle.yaml`, {
+    skipValidation: false,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/nodes>**']);
+  assert.deepEqual(ResponseCoverageCheck.run(sdl, SchemaReader.read(sdl), gen), [], 'the generated selection is clean');
+
+  const droppedMeta = sdl.replace('      meta? {\n       label?\n      }\n', '');
+  assert.notEqual(droppedMeta, sdl);
+  const foundMeta = ResponseCoverageCheck.run(droppedMeta, SchemaReader.read(droppedMeta), gen);
+  assert.equal(foundMeta.length, 1);
+  assert.equal(foundMeta[0].code, 'RESPONSE_FIELD_NOT_READ');
+  assert.ok(foundMeta[0].message.includes('meta'));
+
+  const droppedExtraLabel = sdl.replace('      extra? {\n       label?\n      }\n', '      extra? {\n      }\n');
+  assert.notEqual(droppedExtraLabel, sdl);
+  const foundExtra = ResponseCoverageCheck.run(droppedExtraLabel, SchemaReader.read(droppedExtraLabel), gen);
+  assert.equal(foundExtra.length, 1);
+  assert.ok(foundExtra[0].message.includes('label'));
+  assert.equal(droppedExtraLabel.slice(foundExtra[0].from, foundExtra[0].to), 'extra', 'not meta, whose comment sits at the top level');
+});
+
+test('test_176_documented_degrades_are_accounted_for', async () => {
+  // Every one of these is a field move this check was told, on purpose, not to have a rule for:
+  // map entries, a whole-response map root, an unknown scalar type, an undescribed body read as
+  // raw JSON, a shapeless object, a lone 201, a composed oneOf/allOf response (unjudged, silently),
+  // and twin field renames with and without --keep-field-names. None of them is a real loss.
+  const cases: [string, string, Record<string, unknown>?][] = [
+    ['cycle-cut-on-some-routes.yaml', 'get:/graph'],
+    ['map-key-aliasing.yaml', 'get:/coupons'],
+    ['map-response-root.yaml', 'get:/restrictions'],
+    ['map-response-root.yaml', 'get:/pages'],
+    ['map-response-root.yaml', 'get:/emoji'],
+    ['map-response-root.yaml', 'get:/languages'],
+    ['unknown-scalar-response.yaml', 'get:/avatar', { skipValidation: true }],
+    ['undescribed-2xx-response.yaml', 'get:/manuscripts/{id}'],
+    ['undescribed-2xx-response.yaml', 'del:/notebooks/{id}'],
+    ['undescribed-2xx-response.yaml', 'del:/labels/{id}'],
+    ['undescribed-2xx-response.yaml', 'get:/widgets/{id}'],
+    ['undescribed-2xx-response.yaml', 'post:/reports'],
+    ['empty-response-with-body.yaml', 'post:/goals/{goalId}/removeSupportingRelationship'],
+    ['response-201-only.yaml', 'post:/widgets'],
+    ['simple-oneOf-example.yaml', 'get:/item'],
+    ['simple-allOf-example.yaml', 'get:/user'],
+    ['keep-twin-fields.yaml', 'get:/widgets', { keepFieldNames: true }],
+    ['keep-twin-fields.yaml', 'get:/widgets', { keepFieldNames: false }],
+  ];
+
+  for (const [file, op, extra] of cases) {
+    const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
+      skipValidation: false,
+      showParentInSelections: false,
+      ...extra,
+    } as never);
+    await gen.visit();
+    const sdl = gen.generateSchema([SelectionPath.everythingUnder(op)]);
+    const parsed = SchemaReader.read(sdl);
+    // the guard against a quiet pass: "no complaints" has to mean "the selection was found and
+    // checked", not "there was nothing there to check"
+    assert.ok(parsed.selections.length > 0, `${file} ${op}: the selection should be found`);
+    assert.deepEqual(
+      ResponseCoverageCheck.run(sdl, parsed, gen),
+      [],
+      `${file} ${op}: a documented degrade must not be reported`,
+    );
+  }
 });

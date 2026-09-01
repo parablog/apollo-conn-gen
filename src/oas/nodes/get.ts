@@ -255,7 +255,9 @@ export class Get extends Type implements Op {
   // that sends a JSON body, else `default`, else a 2xx that describes no body at all. Nothing
   // found means we invent the answer instead.
   //   e.g. (github) post:/app-manifests/{code}/conversions documents only `201`   #85
-  private findSuccessResponseCode(context: OasContext, responses: ResponsesByCode): string | undefined {
+  // public: the response-coverage lint check (#176) reuses this same choice instead of picking
+  // its own response code, so it can never blame a selection for a representation we never read.
+  public findSuccessResponseCode(context: OasContext, responses: ResponsesByCode): string | undefined {
     if (responses['200']) {
       return '200';
     }

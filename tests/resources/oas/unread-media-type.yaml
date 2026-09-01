@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info:
+  title: A response published under a media type the generator does not read
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # the schema is real and has fields, but it sits under application/xml -- the generator only
+  # reads a JSON media type or the */* wildcard, so it finds nothing here and stubs the response
+  # to `{ success: Boolean }`, the same shape as a spec that declared no body at all. see #175/#176
+  /reports:
+    get:
+      operationId: getReports
+      responses:
+        '200':
+          description: A report.
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Report'
+components:
+  schemas:
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string

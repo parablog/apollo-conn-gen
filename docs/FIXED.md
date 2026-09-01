@@ -9630,3 +9630,62 @@ pass — it only delays it (12.2 min to OOM unmuted, 27.7 min muted, per #180's 
 `src/oas/oasGen.ts` (`IGenOptions`), `src/oas/lint/index.ts` (`lintSelections`),
 `src/json/walker/log/trace.ts` (the existing pattern this follows), `tools/coverage-spec.mts:27-29`
 (why the sweep worker was unaffected), #180 (separate, still open), #174 (superseded narrowing).
+
+## 176 [FEAT] [P1] · Lint check: every spec-declared response field is emitted or accounted for — ✅ Fixed
+
+**Symptom:** no check compared the output against the SOURCE spec — counts, compose, and
+selection lint all validated the output against itself. A whole spec's responses could degrade
+to a synthesized `{ success: Boolean }` and every gate stayed green; only a human looking at the
+web tree caught it (#175, docusign). The same silent-loss shape shipped three times in one week
+(dropped response fields, dropped array fields, stubbed responses).
+
+**OAS** (`unread-media-type.yaml`, the fixture written for this): a real object under
+`application/xml`, a media type the generator never reads (only a JSON type or `*/*`) — the
+exact #175 shape:
+```yaml
+/reports:
+  get:
+    responses:
+      '200':
+        content:
+          application/xml:
+            schema:
+              type: object
+              properties: { id: {type: string}, name: {type: string} }
+```
+generated: `success: $(true)` — the "nothing to select" stub, on a spec that actually described
+`id`/`name`.
+
+**Shape:** `ResponseCoverageCheck` (`src/oas/lint/checks/responseCoverage.ts`) reads the spec's
+own response document — via `Get.findSuccessResponseCode` (now `public`, so the check reuses the
+generator's own response-code choice) and `Media.findJsonMediaType`, the same media type the
+generator itself reads — and walks it against the selection's fields, recursing into nested
+blocks:
+- `RESPONSE_NOT_READ` (error): a top-level selection reads none of the spec's declared keys.
+- `RESPONSE_FIELD_NOT_READ` (warning): one individual declared key is missing, at any depth.
+- **Excused, not reported:** a field cut to break a reference cycle — read from the
+  `# key: circular reference omitted (...)` comment the generator already writes for it — and a
+  bare `$` passthrough (a plain scalar, an enum list, or a whole-response JSON degrade), which
+  reads the whole response as one value by design, not by loss.
+- **Left unjudged, on purpose:** `oneOf`/`anyOf`/`allOf` response shapes, map values (both real
+  gaps, now filed as their own entries — see below), and the v0.5 sweep (v0.5's `$->Type`
+  hand-off reads nothing by key at all, its own check to write, not this one).
+
+**Corpus result:** run via `tools/lint-corpus.mts` against the full corpus, ~10,000
+`RESPONSE_FIELD_NOT_READ` findings, dominated by one root cause — the `>**` wildcard selection
+builder silently dropping properties that are neither a plain leaf nor a whole-map-of-leaves.
+Filed as #182 (the dominant cause), #183 (a false positive on a pre-patched empty `responses:
+{}`), and #184 (two deliberately-unhandled nullable-`oneOf` shapes) rather than fixed here — this
+entry is the check itself, not the gaps it found.
+
+**Tests:** six tests in `tests/all/r11-lint.test.ts` — the stub-response error, a clean petstore
+sweep, a dropped top-level field, a dropped nested field, cycle-comment scoping (a sibling field
+must not be excused by another field's cut comment), and 18 fixture/op combinations of
+documented degrades that must stay silent. Revert-check: stubbing `ResponseCoverageCheck.run` to
+return `[]` fails the four negative tests on their own assertions; restored, all six pass. Full
+suite: 520 tests, 516 pass, 4 pre-existing todo, 0 fail. `npm run lint` clean.
+
+**Refs:** `src/oas/lint/checks/responseCoverage.ts`, `src/oas/nodes/get.ts`
+(`findSuccessResponseCode`, made `public`), `tools/lint-corpus.mts` (corpus wiring, v0.4 only),
+`tests/resources/oas/unread-media-type.yaml`, #175 (the motivating miss), #170/#172 (the same
+class), #182/#183/#184 (gaps the corpus sweep surfaced, filed not fixed here).
