@@ -230,6 +230,13 @@ export class Factory {
       warn(context, '[factory]', `items in array have types that declare no fields - returning JSON type`);
       return new Scalar(parent, 'JSON', resolved);
     }
+    // A list of maps becomes [JSON]: a map has no fields to select.
+    // e.g. (docker) IPAM.Config: { items: { additionalProperties: string } } -> [JSON]. see docs/FIXED.md #182
+    // A typed [ConfigEntry] would need a sub-selection inside ->map(...), which the router may not accept.
+    if (resolved && Schemas.isMap(resolved)) {
+      warn(context, '[factory]', `items in array are maps - returning JSON type`);
+      return new Scalar(parent, 'JSON', resolved);
+    }
     // a list holding one of several plain values is JSON too — a union of scalars has no fields to
     // select, so the whole field used to disappear. e.g. (confluence) post:/content/convert-ids-to-types
     //   contentIds: { type: array, items: { anyOf: [string, number] } }  ->  [JSON]      #86
@@ -414,7 +421,7 @@ export class Factory {
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
           prop = propComp;
         } else if (Schemas.isMap(schemaObj)) {
-          if (T.isParentAnInput(parent)) {
+          if (parent.kind === 'input') {
             // GraphQL input types can't take arbitrary keys, so a map in input position has no
             // typed shape to write — send it as JSON instead. #133
             const reason =
@@ -490,7 +497,7 @@ export class Factory {
       propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
       prop = propComp;
     } else if (Schemas.isMap(schemaObj)) {
-      if (T.isParentAnInput(parent)) {
+      if (parent.kind === 'input') {
         // same as the typed branch above, reached here because this schema has no `type` key. #133
         const reason =
           "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
@@ -517,10 +524,17 @@ export class Factory {
     // not the field name — different types reuse field names (e.g. Adobe `extension_attributes`). docs/FIXED.md #36
     const unionMembers = (schemaObj.oneOf ?? schemaObj.anyOf) as SchemaObject[] | undefined;
 
+    // A map whose values point back to a type we already passed through is removed like any other loop.
+    // e.g. (map-recursive-value.yaml) alternatives: { additionalProperties: $ref Amount } inside Amount itself.
+    // Only for a map under a property; an input-side map is already JSON. see docs/FIXED.md #182 #133
+    const mapValueRef =
+      prop instanceof PropMap ? (schemaObj.additionalProperties as ReferenceObject | undefined)?.$ref : undefined;
+
     // the union-set form of the same loop: PropComp builds its Union without createContainerType. #118
     const cyclic =
       this.cyclicAncestor(parent, schemaObj) ??
-      (unionMembers ? this.cyclicUnionAncestor(parent, unionMembers) : undefined);
+      (unionMembers ? this.cyclicUnionAncestor(parent, unionMembers) : undefined) ??
+      (mapValueRef ? this.cyclicAncestor(parent, context.resolvePointer(mapValueRef) as SchemaObject) : undefined);
     if (cyclic) {
       prop = new PropCircRef(parent, prop);
     }

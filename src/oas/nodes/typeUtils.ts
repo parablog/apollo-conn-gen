@@ -70,7 +70,7 @@ export class T {
 
   // A map value the selection reads whole (scalar, enum, or empty object degraded to JSON).
   // A cycle-cut ref is not one — its SDL type is a composite that would need a sub-selection.
-  // e.g. (ccs) alternatives: { additionalProperties: $ref Amount } inside Amount itself  #76
+  // e.g. (ccs) alternatives: { additionalProperties: $ref Amount } inside Amount itself  #76, #182
   public static isWholeMapValue(value: IType): boolean {
     return T.isLeaf(value) && !T.isCircular(value);
   }
@@ -132,12 +132,6 @@ export class T {
 
   static isScalar(type: IType): boolean {
     return type.id.startsWith('scalar:');
-  }
-
-  // True for anything under a request body — `input` is set on the body and inherited from there.
-  //   e.g. (docker-engine) post:/containers/create > body:b > comp:input:Input -> true    #84
-  public static isParentAnInput(parent: IType): boolean {
-    return parent.kind === 'input';
   }
 
   public static containers(node: IType) {

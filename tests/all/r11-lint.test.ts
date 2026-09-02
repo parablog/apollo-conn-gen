@@ -544,6 +544,8 @@ test('test_176_documented_degrades_are_accounted_for', async () => {
     ['simple-allOf-example.yaml', 'get:/user'],
     ['keep-twin-fields.yaml', 'get:/widgets', { keepFieldNames: true }],
     ['keep-twin-fields.yaml', 'get:/widgets', { keepFieldNames: false }],
+    ['map-recursive-value.yaml', 'get:/prices'],
+    ['wildcard-keeps-every-property.yaml', 'get:/networks'],
   ];
 
   for (const [file, op, extra] of cases) {

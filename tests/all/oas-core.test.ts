@@ -525,7 +525,8 @@ test('test_040_oas_test_025_AdobeCommerce_customer-paths', async () => {
     'get:/V1/customers/me/shippingAddress>**',
     'get:/V1/customers/search>**',
   ];
-  await runOasTest('adobe-commerce-swagger.json', paths, 586, 15);
+  // 19: #182 -- 4 more types: `*-extension-interface` objects with no properties now get a JSON field.
+  await runOasTest('adobe-commerce-swagger.json', paths, 586, 19);
 });
 
 test('test_041_oas_test_026_petstore-paths', async () => {
@@ -2602,8 +2603,20 @@ test('test_76_cycle_cut_map_value_drops_the_field', async () => {
   // plain values (#70) stay.
   const schema = await runOasTest('map-recursive-value.yaml', ['get:/prices>**'], 1, 3);
   assert.ok(schema !== undefined);
-  assert.ok(!/alternatives/.test(schema!), 'the cycle-cut map field is gone from SDL and selection');
-  assert.ok(/type Amount \{\n {2}unit: String\n {2}value: Float\n\}/.test(schema!), 'its owner keeps the plain fields');
+  assert.ok(
+    /# alternatives: \[AlternativesEntry\] - circular reference omitted/.test(schema!),
+    'the removed field is left as a comment in the SDL, not silently gone',
+  );
+  assert.ok(
+    /# alternatives: circular reference omitted \(re-visit schema and remove the reference\)/.test(schema!),
+    'and the same comment in the selection',
+  );
+  assert.ok(
+    /type Amount \{\n {2}# alternatives: \[AlternativesEntry\] - circular reference omitted\n {2}unit: String\n {2}value: Float\n\}/.test(
+      schema!,
+    ),
+    'its owner keeps the plain fields, with the removed field commented in place',
+  );
   assert.ok(/fuelPrices: \[FuelPricesEntry\]/.test(schema!), 'the scalar-valued map stays');
   assert.ok(/fuelPrices: fuelPrices\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!), 'read whole in the mapping');
 });
@@ -2966,7 +2979,8 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   // BankAccountAvailablePayoutMethods instead of the shared name Enum -- count unchanged.
   // 184: #177 resolves stripe's anyOf: [$ref, null] fields (address, cash_balance, invoice_settings,
   // tax, shipping and their nested members) to their real type instead of JSON -- 86 more types.
-  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 184);
+  // 186: #182 -- 2 more types: invoice_payment_method_options_konbini and _sepa_debit now get a JSON field.
+  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 186);
   assert.ok(customers !== undefined);
   assert.ok(/createV1Customers\(input: CreateV1CustomersInput!\)/.test(customers!), 'stripe takes its form body');
   assert.ok(
@@ -3144,8 +3158,9 @@ test(
     // paymentSettings.paymentMethodTypes -- four distinct enums where one shared Enum stood before.
     // 728: #177 resolves stripe's anyOf: [$ref, null] fields to their real type instead of JSON,
     // across the full curated selection -- 365 more types generated.
+    // 780: #182 -- 52 more types: stripe's empty payment_method_* objects (payment_method_amazon_pay, …) now get a JSON field.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
-    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 728, {
+    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 780, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.13',
@@ -3178,8 +3193,9 @@ test(
     // 337: #157 names each inline request body after its own operation instead of the placeholder
     // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
     // keep their own, ten more types generated.
+    // 340: #182 -- 3 more types: color, status and value now get a JSON field or a real map entry type.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/confluence-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('confluence-full.json', selections, 213, 337, {
+    const schema = await runOasTest('confluence-full.json', selections, 213, 340, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3206,8 +3222,9 @@ test(
     // a ":" -- it fails #24's legal-name guard and stays unselected, same as before #170.
     // 418: #171 gives a map-of-map its inner entries level; omni's selectionMap field gains its
     // own two new types, SelectionMapEntry and SelectionMapEntryEntry.
+    // 419: #182 -- 1 more type: filter, an object with no properties, now gets a JSON field.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('omni-full.json', selections, 163, 418, {
+    const schema = await runOasTest('omni-full.json', selections, 163, 419, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3232,8 +3249,10 @@ test(
     // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
     // keep their own, twelve more types generated.
     // 345: #177 resolves one anyOf: [$ref, null] field to its real type instead of JSON.
+    // 365: #182 -- 20 more types: objects with no properties now get a JSON field, which also
+    // makes AgentReference and other `*Reference` objects reachable as dependencies.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/pagerduty-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('pagerduty-full.json', selections, 95, 345, {
+    const schema = await runOasTest('pagerduty-full.json', selections, 95, 365, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3261,8 +3280,9 @@ test(
     // 448: #157 names each inline request body after its own operation instead of the placeholder
     // "Input" -- bodies that used to coincidentally share that name and converge onto one type now
     // keep their own, 21 more types generated.
+    // 450: #182 -- 2 more types: body and headers, objects with no properties, now get a JSON field.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/asana-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('asana.yaml', selections, 167, 448, {
+    const schema = await runOasTest('asana.yaml', selections, 167, 450, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3287,8 +3307,9 @@ test(
     // (owners are consolidated allOf members, so the split names carry their [inline:...] prefix:
     // InlineFileFullSharedLinkPermissionOptions, InlineFolderFullAllowedSharedLinkAccessLevels),
     // so one more type generated.
+    // 768: #182 -- 1 more type: additional_details, an object with no properties, now gets a JSON field.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/box-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('box.yaml', selections, 258, 767, {
+    const schema = await runOasTest('box.yaml', selections, 258, 768, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3311,8 +3332,9 @@ test(
     // has fourteen such fields, so thirteen more types generated (the shared Enum -> its first split).
     // 1354: #177 resolves digitalocean's anyOf: [$ref, null] fields to their real type instead of
     // JSON -- 42 more types generated.
+    // 1355: #182 -- 1 more type: labels, an object with no properties, now gets a JSON field.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/digitalocean-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1354, {
+    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1355, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3342,8 +3364,9 @@ test(
 
     // #132: the map's value now explains why it reads as JSON, not just the console log.
     // #152: SDL notes flatten a dash to "--" (rover crashes on a raw em-dash byte otherwise).
+    // the reason also names an object with no properties. see docs/FIXED.md #182
     const reason =
-      "a map's values are a choice of nothing but plain scalar or enum values, with no GraphQL union member to build -- sent as raw JSON instead.";
+      "a map's values are a choice of nothing but plain scalar or enum values, or an object with no properties, with no GraphQL union member to build -- sent as raw JSON instead.";
     assert.ok(
       new RegExp(
         `type ResultsEntry \\{\\n {2}key: String\\n {2}"""\\n {2}NEEDS ATTENTION: ${_.escapeRegExp(reason)}\\n {2}"""\\n {2}value: JSON\\n\\}`,
@@ -3560,9 +3583,10 @@ test('test_155_map_value_json_degrades_with_note', async (t) => {
   );
 
   // already covered before #155 (#108): a map value that is a choice of nothing but plain values.
+  // the reason also names an object with no properties. see docs/FIXED.md #182
   assert.ok(
     mapNote(
-      "a map's values are a choice of nothing but plain scalar or enum values, with no GraphQL union member to build — sent as raw JSON instead.",
+      "a map's values are a choice of nothing but plain scalar or enum values, or an object with no properties, with no GraphQL union member to build — sent as raw JSON instead.",
       'value: JSON',
     ),
     'plainChoiceValue carries its existing NEEDS ATTENTION note above value: JSON',
@@ -3727,5 +3751,29 @@ test('test_179_trace_is_silent_unless_verbose', async (t) => {
   assert.ok(
     logSpy.mock.calls.some((c) => c.arguments[1] === '-> [context::enter]'),
     'verbose: true turns trace output back on',
+  );
+});
+
+test('test_182_wildcard_keeps_every_property', async () => {
+  // Every property under a `>**` selection gets a field and a selection line, including the four
+  // shapes that used to vanish: see docs/FIXED.md #182
+  //   extensionAttributes: { type: object }  -- an object with no properties of its own
+  //   ipamConfig: { type: array, items: { additionalProperties: { type: string } } }  -- a list of maps
+  //   links: { additionalProperties: oneOf [ { type: object, additionalProperties: true }, string ] }
+  //     -- a map whose values are either a free-form object or a plain string
+  //   labels: { additionalProperties: { type: string } }  -- a plain map of strings, already working (#70)
+  const schema = await runOasTest('wildcard-keeps-every-property.yaml', ['get:/networks>**'], 1, 4);
+  assert.ok(schema !== undefined);
+  assert.ok(/extensionAttributes: JSON/.test(schema!), 'the object with no properties is kept as JSON');
+  assert.ok(/extensionAttributes\?\n/.test(schema!), 'and its selection reads it');
+  assert.ok(/ipamConfig: \[JSON\]/.test(schema!), 'the list of maps is kept as a list of JSON');
+  assert.ok(/ipamConfig\?\n/.test(schema!), 'and its selection reads it');
+  assert.ok(
+    /type LinksEntry \{\n {2}key: String\n {2}"""\n {2}NEEDS ATTENTION:.*\n {2}"""\n {2}value: JSON\n\}/.test(schema!),
+    'the mixed map value is JSON, with a NEEDS ATTENTION note on why',
+  );
+  assert.ok(
+    /links: links\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!),
+    'and its selection reads the map whole',
   );
 });

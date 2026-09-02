@@ -1,0 +1,43 @@
+openapi: 3.0.3
+info:
+  title: Wildcard keeps every property
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /networks:
+    get:
+      operationId: getNetwork
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Network'
+components:
+  schemas:
+    Network:
+      type: object
+      properties:
+        name:
+          type: string
+        extensionAttributes:
+          type: object
+        ipamConfig:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+        links:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: object
+                additionalProperties: true
+              - type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string

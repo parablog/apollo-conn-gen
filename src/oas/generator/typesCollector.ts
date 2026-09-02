@@ -409,11 +409,17 @@ class PathsCollector {
         } else {
           // the value type is only known once the node is expanded, so the map check comes after
           this.gen.expand(child);
+          // An object that declares no properties is selected whole; its field is written as JSON.
+          // e.g. (stripe) payment_method_amazon_pay: { type: object } -> amazonPay: JSON
+          // Response side only, the check below still owns the body side. see docs/FIXED.md #182
+          if (child instanceof PropObj && _.isEmpty(child.obj.props) && child.kind !== 'input') {
+            newSelection.add(child.path());
+          }
           // A map of plain values has nothing below it to select — the map itself is the leaf,
           // whether it hangs off a property (#70) or is the whole response (#92).
           //   e.g. (map-input-suffix.yaml) labels: { additionalProperties: { type: string } }  #70
           //   e.g. (github) get:/emojis: { additionalProperties: string }  #92
-          // (whole values only — a cycle-cut value would select bare against a composite SDL type  #76)
+          // (whole values only — a cycle-cut value would select bare against a composite SDL type  #76, #182)
           const mapUnderProp = child instanceof PropMap ? child.map : undefined;
           const mapAsResponse = child instanceof MapNode && child.parent instanceof Res ? child : undefined;
           // a map nested inside another map's value fits neither case above, so a map of maps of

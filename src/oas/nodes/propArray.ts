@@ -92,6 +92,9 @@ export class PropArray extends Prop {
     if (Schemas.isShapelessObject(inner.schema)) {
       return 'items in array have types that declare no fields - returning JSON type';
     }
+    if (Schemas.isMap(inner.schema)) {
+      return 'items in array are maps - returning JSON type';
+    }
     if (Schemas.holdsPlainValues(context, inner.schema)) {
       return 'items in array have mixed array types - returning JSON type';
     }

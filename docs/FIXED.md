@@ -9689,3 +9689,126 @@ suite: 520 tests, 516 pass, 4 pre-existing todo, 0 fail. `npm run lint` clean.
 (`findSuccessResponseCode`, made `public`), `tools/lint-corpus.mts` (corpus wiring, v0.4 only),
 `tests/resources/oas/unread-media-type.yaml`, #175 (the motivating miss), #170/#172 (the same
 class), #182/#183/#184 (gaps the corpus sweep surfaced, filed not fixed here).
+
+## 182 [BUG] [P2] · The `>**` wildcard selection builder drops any property whose value is neither a plain leaf nor a whole-map-of-leaves — ✅ Fixed
+
+**Symptom:** #176's `ResponseCoverageCheck`, run corpus-wide via `make lint-corpus`, reported
+~10,000 `RESPONSE_FIELD_NOT_READ` warnings, confirming the same root cause independently in six
+specs: a map whose values point back to itself (car_configurator_service,
+`map-recursive-value.yaml`), a map whose value is a choice of a real object and a plain value
+(confluence's `_links`), an object with no properties of its own (adobe-commerce-swagger's
+`extension_attributes`, stripe's dozens of `payment_method_*`/`payment_method_details_*`
+siblings), and an array of maps (docker-engine's `IPAM.Config`). In every case the field was
+missing from BOTH the generated type and the selection — no field, no `JSON` fallback, no comment
+— so nothing before #176 could tell this apart from a correctly-empty response.
+
+**OAS** (`map-recursive-value.yaml`, the smallest repro):
+```yaml
+Amount:
+  properties:
+    value: { type: number }
+    unit: { type: string }
+    alternatives:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/Amount'
+```
+
+**Example:**
+```graphql
+# before                                # after
+type Amount {                          type Amount {
+  unit: String                           # alternatives: [AlternativesEntry] - circular reference omitted
+  value: Float                           unit: String
+}                                         value: Float
+                                        }
+```
+
+**Cause:** `TypesCollector.collectExpandedPaths` (`src/oas/generator/typesCollector.ts:369-428`)
+builds the `>**` selection by walking every node and whitelisting specific leaf shapes (plain
+scalar, list/list-of-list of scalars, list of enum values, a reference removed to break a loop, a
+whole map of scalar values — the `T.isWholeMapValue` branch #76 added). Anything that reached the
+final `else` and wasn't one of those shapes added nothing and recursed no further, so four
+distinct property shapes never got a path at all — an object with no properties, a map whose
+values point back to a type already passed through, a list of maps, and a map whose values choose
+between an object with no properties and plain values.
+
+**Fix:** four targeted additions, one per shape, no shared abstraction added:
+- **An object with no properties of its own:** `typesCollector.ts`'s `else` branch gains one leaf
+  rule — a response-side object with no properties is selected whole, since `PropObj.getValue`
+  already writes it as `JSON` with a warning. Response side only; the existing #32/#51 check below
+  still owns the body side and the otherwise-empty-side case, untouched.
+- **A map whose values point back to a type already passed through:** `Factory.fromProp`
+  (`factory.ts`) gains one `??` clause on the existing loop check — a map whose
+  `additionalProperties` is a `$ref` is tested against `cyclicAncestor` the same way a direct
+  schema loop is, via `context.resolvePointer` (identity-safe, doesn't bump refCount). Only for a
+  map under a property; an input-side map is already `JSON`. The removed reference renders as a
+  `PropCircRef`, the same two comments #10 already writes for a plain object loop — which is also
+  what lets #176 excuse it.
+- **A list of maps:** `Factory.fromArrayItems` (`factory.ts`) writes a map-typed array item as
+  `[JSON]` with a warning, the same call #86/#131 already make for other unbuildable item shapes;
+  `PropArray.jsonReason` (`propArray.ts`) gets the matching branch so the field carries a NEEDS
+  ATTENTION note. A typed `[ConfigEntry]` would need a sub-selection inside `->map(...)`, which the
+  router may not accept — left as a follow-up, not done here.
+- **A map whose values choose between an object with no properties and plain values:**
+  `Map.visitAdditionalProperties` (`map.ts`) gains a local `holdsPlainValuesOrEmptyObject` check
+  (inline members only — a choice with a `$ref` member becomes a real union instead) alongside the
+  existing `Schemas.holdsPlainValues` check, so a `oneOf`/`anyOf` mixing an empty-object member
+  with scalar/enum members also becomes `JSON` instead of building a union nothing can reach. The
+  shared `Schemas.holdsPlainValues` helper itself is untouched, per review — this check lives only
+  in `map.ts`, and its reason string now also names an object with no properties.
+
+**AST:** shape change on all four — a property that previously vanished (no field, node not
+reachable) now emits: three as a `JSON`-typed leaf with a NEEDS ATTENTION note, one (the map
+whose values point back to a type already passed through) as a `PropCircRef` (two comments, no
+type emitted).
+
+**Tests:** `wildcard-keeps-every-property.yaml`, one fixture covering three of the four shapes
+plus a scalar sibling and a control map (#70), asserted by `test_182_wildcard_keeps_every_property`
+(`tests/all/oas-core.test.ts`). The map-loop shape is covered by flipping
+`test_76_cycle_cut_map_value_drops_the_field` (`map-recursive-value.yaml`) from "the field
+vanishes" to "the field is commented, not gone". Both new fixtures also added to
+`test_176_documented_degrades_are_accounted_for` (`tests/all/r11-lint.test.ts`) — confirms #176
+now excuses all four instead of flagging them. Landed red-first, one shape at a time (Codex
+round-1 feedback: interleave repro-then-fix, not implement-then-test).
+
+**Corpus footprint — 14 tests shifted, every delta a pure addition (0 removed anywhere),** spot-
+checked by diffing exact type-name sets against a 762875b baseline, not just counts:
+
+| Test | Old | New | Δ |
+|---|---|---|---|
+| `test_040_oas_test_025_AdobeCommerce_customer-paths` | 15 | 19 | +4 |
+| `test_83_stripe_writes_its_form_bodies` | 184 | 186 | +2 |
+| `test_73_curated_multi_op_stripe_selection_composes` | 728 | 780 | +52 |
+| `test_108_confluence_full_production_selection` | 337 | 340 | +3 |
+| `test_109_omni_full_production_selection` | 418 | 419 | +1 |
+| `test_110_pagerduty_full_production_selection` | 345 | 365 | +20 |
+| `test_122_asana_full_production_selection` | 448 | 450 | +2 |
+| `test_122_box_full_production_selection` | 767 | 768 | +1 |
+| `test_122_digitalocean_full_production_selection` | 1354 | 1355 | +1 |
+| `test_corpus_openai` | 4 | 6 | +2 |
+| `test_corpus_omni` | 10 | 13 | +3 |
+| `test_corpus_confluence` | 8 | 9 | +1 |
+| `test_corpus_gong` | 15 | 16 | +1 |
+| `test_corpus_fullstory_events` | 11 | 14 | +3 |
+
+Spot-check: stripe-curated's +52 is dozens of stripe's own empty `payment_method_*`/
+`payment_method_details_*` objects (the same shape as `payment_method_amazon_pay`, the OAS example
+above), e.g. `RefundDestinationDetails { amazonPay: JSON """NEEDS ATTENTION: this object declares
+no properties of its own..."""}`, selection line `amazonPay: amazon_pay?`. PagerDuty's +20 is a
+mix of the same object-with-no-properties shape (`ChangeEvents.customDetails: JSON`) and other
+`*Reference`/`Oncall*` objects that became reachable as dependencies of fields the four fixes now
+select. Every compose step ran and passed for all 14 (they previously failed before the count
+assertion, so compose never executed) — confirms the response-side-only scoping of the first fix
+holds; no #32/#51-style `INVALID_BODY` regression. Scoped `lint-corpus --spec` reruns: confluence
+went from 6+ distinct finding causes down to 2 (only `_expandable`/`uris` remain, a separate,
+unfiled shape — `_links`, `container`, `entity`, `extensions` all resolved), stripe-curated went
+to 0, a clean sweep.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`), `src/oas/nodes/factory.ts`
+(`fromProp`, `fromArrayItems`), `src/oas/nodes/propArray.ts` (`jsonReason`),
+`src/oas/nodes/map.ts` (`visitAdditionalProperties`, `holdsPlainValuesOrEmptyObject`),
+`src/oas/nodes/typeUtils.ts` (`isWholeMapValue`), #76 (the map-loop check this generalizes), #171
+(`mapNested`, the closest sibling gap), #86/#131 (the list-degrade precedent the list-of-maps fix
+follows), #108 (the reason string the fourth fix widens), #176 (the check that surfaced this),
+#183/#184 (gaps this corpus run also surfaced, left filed not fixed).

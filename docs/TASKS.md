@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 165 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 166 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -149,61 +149,6 @@ the rest of the tree/Writer. Fix design is still open — not yet acted on.
 flood, not tree weight), #181 (the stack leak — real but ruled out as #180's driver),
 docs/DEFERRED.md #139 (granularity mode — the likely product-level relief for docusign-class
 specs), measurement scripts in the session scratchpad.
-
-## 182 [BUG] [P2] · The `>**` wildcard selection builder drops any property whose value is neither a plain leaf nor a whole-map-of-leaves — ⬜ Open
-
-**Symptom:** #176's `ResponseCoverageCheck`, run corpus-wide via `make lint-corpus`, reports
-~10,000 `RESPONSE_FIELD_NOT_READ` warnings and confirms the same root cause independently in six
-specs: a self-referential map (car_configurator_service, `map-recursive-value.yaml`), a map whose
-value is a real object (confluence's `_links`/`_expandable`), an empty placeholder object
-(adobe-commerce-swagger's `extension_attributes`, stripe's `destination_details.amazon_pay` and
-a dozen siblings), and an array of maps (docker-engine's `IPAM.Config`). In every case the field
-is missing from BOTH the generated type and the selection — no field, no `JSON` fallback, no
-comment — so nothing before #176 could tell this apart from a correctly-empty response.
-
-**OAS** (`map-recursive-value.yaml`, the smallest repro):
-```yaml
-Amount:
-  properties:
-    value: { type: number }
-    unit: { type: string }
-    alternatives:
-      type: object
-      additionalProperties:
-        $ref: '#/components/schemas/Amount'
-```
-generated: `type Amount { unit: String value: Float }` — `alternatives` is gone, nothing marks it.
-
-**Cause:** `TypesCollector.collectExpandedPaths` (`src/oas/generator/typesCollector.ts:369-428`)
-builds the `>**` selection by walking every node and whitelisting specific leaf shapes (plain
-scalar, list/list-of-list of scalars, list of enum values, a cut cycle, a whole map of scalar
-values — the `T.isWholeMapValue` branch #76 added). Anything that reaches the final `else` and
-isn't one of those shapes adds nothing to `newSelection` and recurses no further, so the property
-never gets a path at all:
-- a map whose value is itself composite (object, cyclic or not) — `mapUnderProp`/`mapAsResponse`/
-  `mapNested` all resolve, but `T.isWholeMapValue` is false for anything that isn't a scalar leaf
-- an object property with no properties of its own (`{ type: object }`, no `additionalProperties`)
-  — none of `mapUnderProp`/`mapAsResponse`/`mapNested` apply since it isn't a map at all, so `map`
-  stays `undefined` and the `if` never fires
-- a `PropArray` whose items are a map (docker-engine's `Config: { type: array, items: {
-  additionalProperties: { type: string } } }`) — `listOfValues`/`nestedListOfValues` both require
-  `Scalar` items, so this falls through too
-
-This is a `>**`-selection-builder gap specifically — a hand-written selection that names the
-field explicitly still generates fine (it just reads whatever the field resolves to).
-
-**Fix direction:** give the `else` branch (or a case before it) a rule for "the value has real
-structure but nothing under it is a scalar leaf": recurse into an object/composite value's own
-props the way the top-level walk already does, and for a genuinely un-expandable case (the
-cyclic map #76 already decided to drop) leave a trace — even a cheap one, like the
-`PropCircRef`/`RefCircRef` comment #10 already writes for plain object cycles — since that
-comment is exactly what lets #176's check excuse a field on purpose today.
-
-**Refs:** `src/oas/generator/typesCollector.ts` (`collectExpandedPaths`, the `else` branch at
-line 409), `src/oas/nodes/typeUtils.ts` (`isWholeMapValue`), #76 (the cyclic-map drop this
-generalizes), #171 (`mapNested`, the closest sibling gap), `tests/resources/oas/
-map-recursive-value.yaml` (already a clean minimal repro), `LINT-CORPUS.md` (full finding list,
-regenerate with `make lint-corpus`).
 
 ## 183 [BUG] [P3] · `ResponseCoverageCheck` reports a false `RESPONSE_NOT_READ` when the spec's own `responses` was empty — ⬜ Open
 

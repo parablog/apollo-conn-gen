@@ -1,10 +1,11 @@
-import { Arr, Composed, Factory, Get, IType, Obj, Res, Type, T, Scalar } from './internal.js';
+import { Arr, Composed, Factory, Get, IType, Obj, Res, Type, T, Scalar, ReferenceObject } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
+import { GqlUtils } from '../utils/gql.js';
 
 export class Map extends Type {
   public valueType?: IType;
@@ -196,11 +197,12 @@ export class Map extends Type {
 
     trace(context, '-> [map::additionalProps]', 'processing additional properties');
 
-    // a choice of nothing but plain values builds an invalid scalar-only Union; read it as JSON.
-    // e.g. (confluence) additionalProperties: { anyOf: [enum-of-strings, plain-string] }  #108
-    if (Schemas.holdsPlainValues(context, additionalProps)) {
+    // A choice of nothing but plain values, or an object with no properties, has no real union
+    // member to build — read it as JSON instead.
+    // e.g. (confluence) additionalProperties: oneOf [{type: object, additionalProperties: true}, string]  #182
+    if (Schemas.holdsPlainValues(context, additionalProps) || Map.holdsPlainValuesOrEmptyObject(additionalProps)) {
       this.valueJsonReason =
-        "a map's values are a choice of nothing but plain scalar or enum values, with no GraphQL union member to build — sent as raw JSON instead.";
+        "a map's values are a choice of nothing but plain scalar or enum values, or an object with no properties, with no GraphQL union member to build — sent as raw JSON instead.";
       this.valueType = new Scalar(this, 'JSON', additionalProps);
       this.add(this.valueType);
       this.valueType.visit(context);
@@ -230,6 +232,23 @@ export class Map extends Type {
     }
 
     trace(context, '<- [map::additionalProps]', 'out value type: ' + this.valueType.name);
+  }
+
+  // A choice between an object with no properties and plain scalar/enum values has no real union member.
+  // e.g. (confluence) oneOf [{ type: object, additionalProperties: true }, string]
+  // Inline members only — a choice with a $ref member becomes a real union instead. see docs/FIXED.md #182
+  private static holdsPlainValuesOrEmptyObject(schema: SchemaObject): boolean {
+    const choice = (schema.oneOf ?? schema.anyOf) as (SchemaObject | ReferenceObject)[] | undefined;
+    if (!choice || choice.some((member) => '$ref' in member)) return false;
+
+    const members = (choice as SchemaObject[]).filter((member) => member.type !== 'null');
+    // same test as Schemas.holdsPlainValues' member check
+    const isPlainValue = (member: SchemaObject) =>
+      member.enum != null || (typeof member.type === 'string' && GqlUtils.gqlScalar(member.type) !== false);
+
+    const shapeless = members.filter((member) => Schemas.isShapelessObject(member));
+    const rest = members.filter((member) => !Schemas.isShapelessObject(member));
+    return shapeless.length > 0 && rest.length > 0 && rest.every(isPlainValue);
   }
 
   // Why a map's value gave up on a real type when that value is a list, or undefined if the list
