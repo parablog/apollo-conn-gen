@@ -60,7 +60,20 @@ export class GqlUtils {
   private static readonly INT32_MIN = -(2 ** 31);
   private static readonly INT32_MAX = 2 ** 31 - 1;
 
-  public static gqlScalarFor(schema: { type?: unknown; format?: unknown; minimum?: unknown; maximum?: unknown; exclusiveMinimum?: unknown; exclusiveMaximum?: unknown } | null | undefined, typeStr: string): string | false {
+  public static gqlScalarFor(
+    schema:
+      | {
+          type?: unknown;
+          format?: unknown;
+          minimum?: unknown;
+          maximum?: unknown;
+          exclusiveMinimum?: unknown;
+          exclusiveMaximum?: unknown;
+        }
+      | null
+      | undefined,
+    typeStr: string,
+  ): string | false {
     const base = GqlUtils.gqlScalar(typeStr);
     if (base !== 'Int' || !schema) {
       return base;
@@ -68,8 +81,9 @@ export class GqlUtils {
     if (schema.format === 'int64') {
       return 'String';
     }
-    const bounds = [schema.minimum, schema.maximum, schema.exclusiveMinimum, schema.exclusiveMaximum]
-      .filter((b): b is number => typeof b === 'number');
+    const bounds = [schema.minimum, schema.maximum, schema.exclusiveMinimum, schema.exclusiveMaximum].filter(
+      (b): b is number => typeof b === 'number',
+    );
     if (bounds.some((b) => b < GqlUtils.INT32_MIN || b > GqlUtils.INT32_MAX)) {
       return 'String';
     }

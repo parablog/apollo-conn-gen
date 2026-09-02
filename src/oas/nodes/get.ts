@@ -12,7 +12,6 @@ import { Params } from '../utils/params.js';
 import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 import _ from 'lodash';
 
-
 // statuses that, per the HTTP spec itself, never carry a body -- these are the only ones where
 // inventing a plain "it worked" answer is safe. any other 2xx with no described content might
 // still return real data the spec simply forgot to write down. #147

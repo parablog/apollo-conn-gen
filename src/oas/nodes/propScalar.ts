@@ -58,9 +58,7 @@ export class PropScalar extends Prop {
     let sanitised = this.fieldForSelect(context);
     if (this.stringifiedNumber && this.parent?.kind !== 'input') {
       // `field: field->jsonStringify` (or `alias: key->jsonStringify` when renamed)
-      sanitised = sanitised.includes(':')
-        ? `${sanitised}->jsonStringify`
-        : `${sanitised}: ${sanitised}->jsonStringify`;
+      sanitised = sanitised.includes(':') ? `${sanitised}->jsonStringify` : `${sanitised}: ${sanitised}->jsonStringify`;
     }
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 

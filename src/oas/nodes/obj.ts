@@ -191,13 +191,7 @@ export class Obj extends Type {
       (_match, param) => `{$this.${this.props.get(param)?.renamedTo ?? Naming.sanitiseField(param, keep)}}`,
     );
 
-    writer
-      .write('\n')
-      .write(i4)
-      .write('@connect(\n')
-      .write(i6)
-      .write(`source: "${resolver.source}"\n`)
-      .write(i6);
+    writer.write('\n').write(i4).write('@connect(\n').write(i6).write(`source: "${resolver.source}"\n`).write(i6);
 
     // The op this resolver was inferred from may carry per-@connect auth (a per-op-mode header,
     // or apiKey-in-query in any mode — @source has no queryParams). Without it the router-side

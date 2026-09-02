@@ -200,7 +200,10 @@ export class Map extends Type {
     // A choice of nothing but plain values, or an object with no properties, has no real union
     // member to build — read it as JSON instead.
     // e.g. (confluence) additionalProperties: oneOf [{type: object, additionalProperties: true}, string]  #182
-    if (Schemas.holdsPlainValues(context, additionalProps) || Map.holdsPlainValuesOrEmptyObject(context, additionalProps)) {
+    if (
+      Schemas.holdsPlainValues(context, additionalProps) ||
+      Map.holdsPlainValuesOrEmptyObject(context, additionalProps)
+    ) {
       this.valueJsonReason =
         "a map's values are a choice of nothing but plain scalar or enum values, or an object with no properties, with no GraphQL union member to build — sent as raw JSON instead.";
       this.valueType = new Scalar(this, 'JSON', additionalProps);
