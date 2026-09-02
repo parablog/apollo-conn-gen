@@ -71,6 +71,7 @@ export type GenerateOptions = {
   servicePrefix?: string; // prefix every type and root field with the service name
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  stripJsonDiagnostics?: boolean;
   skipAuth?: boolean;
   authValuePrefix?: string; // text written before an apiKey header value
   directives?: DirectivesConfig; // directives to apply

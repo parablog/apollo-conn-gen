@@ -102,6 +102,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     keepFieldNames: opts.keepFieldNames,
     docResponseFields: opts.docResponseFields,
     docPagination: opts.docPagination,
+    stripJsonDiagnostics: opts.stripJsonDiagnostics,
     servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
@@ -186,6 +187,10 @@ program
   .option(
     '--doc-pagination',
     'Note on every operation with pagination parameters that a full page is not necessarily the last page',
+  )
+  .option(
+    '--strip-json-diagnostics',
+    'Remove "NEEDS ATTENTION" author diagnostics from field descriptions; they remain as build-time warnings',
   )
   .option(
     '--service-prefix <name>',

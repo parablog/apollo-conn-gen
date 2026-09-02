@@ -96,6 +96,8 @@ interface IGenOptions {
   servicePrefix?: string;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  // #172: remove "NEEDS ATTENTION" author diagnostics from agent-facing field descriptions
+  stripJsonDiagnostics?: boolean;
   skipAuth?: boolean;
   authValuePrefix?: string;
   directives?: DirectivesConfig;
@@ -249,7 +251,15 @@ export class OasGen {
       // one entry out, not the 38,300 field paths that op's schema has. #118, #139
       this.selections = paths;
 
-      const schema = writer.flush();
+      let schema = writer.flush();
+      // #172: "NEEDS ATTENTION: ..." notes are addressed to the schema author ("worth checking
+      // the source OAS schema"), but embedding them in field descriptions puts them in front of
+      // every agent consuming the graph, where they dilute the description they ride on. The
+      // author already gets each one as a build-time warning at its point of origin, so the
+      // inline copies are removed when --strip-json-diagnostics asks.
+      if (this.options.stripJsonDiagnostics) {
+        schema = OasGen.stripInlineDiagnostics(schema);
+      }
       // The generator's own output must be valid GraphQL before anything downstream (Directives,
       // Namespace) tries to parse it — both do so unconditionally, and an uncaught GraphQLError
       // there crashes the whole process instead of naming the real problem. #111
@@ -282,6 +292,25 @@ export class OasGen {
   // GraphQLError carries line/column in `.locations`, not in `.message` — add it so a thrown parse
   // failure names where in the (often thousand-line) schema the problem is, not just what it is.
   //   e.g. "Syntax Error: Unterminated string." -> "Syntax Error: Unterminated string. (at 5:39)"
+  // #172: remove "NEEDS ATTENTION: ..." author-diagnostic lines from the finished SDL, then
+  // collapse any description block or blank run the removal emptied. The note is always written
+  // as its own line (or its own paragraph after a real description), so a line-level strip is
+  // exact; a description that contained only the note collapses to no description at all.
+  private static stripInlineDiagnostics(schema: string): string {
+    if (!schema.includes('NEEDS ATTENTION:')) return schema;
+    // argument form first: an inline `"NEEDS ATTENTION: ..." ` quoted description sitting
+    // directly before an argument name (param.ts) — remove just the quoted note, keep the arg
+    let out = schema.replace(/"NEEDS ATTENTION:[^"\n]*" /g, '');
+    // single-line-docstring form: the quoted note alone on its own line as a field's description
+    out = out.replace(/^[ \t]*"NEEDS ATTENTION:[^"\n]*"[ \t]*\n/gm, '');
+    // block/line form: the note on its own line inside (or as) a docstring
+    out = out.replace(/^[ \t]*NEEDS ATTENTION:[^\n]*\n/gm, '');
+    // a paragraph break left dangling before a closing quote, and docstrings emptied entirely
+    out = out.replace(/\n[ \t]*\n([ \t]*""")/g, '\n$1');
+    out = out.replace(/^[ \t]*"""[ \t]*\n[ \t]*"""[ \t]*\n/gm, '');
+    return out;
+  }
+
   private static describeParseError(e: unknown): string {
     const message = (e as Error).message;
     if (!(e instanceof GraphQLError) || !e.locations?.length) {

@@ -37,6 +37,7 @@ export async function runOasTest(
     federationVersion?: string;
     composeFederationVersion?: string;
     emitConnectorErrors?: boolean;
+    stripJsonDiagnostics?: boolean;
     skipAuth?: boolean;
     authValuePrefix?: string;
     directives?: DirectivesConfig;
@@ -68,6 +69,7 @@ export async function runOasTest(
     docPagination: opts.docPagination,
     inferEntityResolvers: opts.inferEntityResolvers,
     emitConnectorErrors: opts.emitConnectorErrors,
+    stripJsonDiagnostics: opts.stripJsonDiagnostics,
     skipAuth: opts.skipAuth,
     authValuePrefix: opts.authValuePrefix,
     connectorSpecVersion: opts.connectorSpecVersion,
