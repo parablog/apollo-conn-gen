@@ -102,6 +102,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     keepFieldNames: opts.keepFieldNames,
     docResponseFields: opts.docResponseFields,
     docPagination: opts.docPagination,
+    emitConnectorErrors: opts.emitConnectorErrors,
     servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
@@ -186,6 +187,10 @@ program
   .option(
     '--doc-pagination',
     'Note on every operation with pagination parameters that a full page is not necessarily the last page',
+  )
+  .option(
+    '--emit-connector-errors',
+    "Emit an errors block mapping the documented error body's message and the HTTP status on operations that document 4xx/5xx responses",
   )
   .option(
     '--service-prefix <name>',
