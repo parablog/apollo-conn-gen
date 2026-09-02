@@ -54,7 +54,7 @@ export class Schemas {
     }
 
     const members = choice
-      .map((member) => ('$ref' in member ? (context.lookupRef(member.$ref!) as SchemaObject) : member))
+      .map((member) => ('$ref' in member ? (context.resolvePointer(member.$ref!) as SchemaObject) : member))
       .filter((member) => member != null && !('$ref' in member) && member.type !== 'null');
 
     // a member is a plain value when it is an enum or a type GraphQL has a scalar for. `type` can
@@ -76,7 +76,7 @@ export class Schemas {
     }
 
     const members = choice
-      .map((member) => ('$ref' in member ? (context.lookupRef(member.$ref!) as SchemaObject) : member))
+      .map((member) => ('$ref' in member ? (context.resolvePointer(member.$ref!) as SchemaObject) : member))
       .filter((member) => member != null && !('$ref' in member) && member.type !== 'null');
 
     const isPlainValue = (member: SchemaObject) =>

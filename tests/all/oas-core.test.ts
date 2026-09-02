@@ -3777,3 +3777,17 @@ test('test_182_wildcard_keeps_every_property', async () => {
     'and its selection reads the map whole',
   );
 });
+
+test('test_185_map_value_ref_choice_reads_json', async () => {
+  // #185: the same map-value choice as #182, but one member is a $ref instead of inline. see docs/FIXED.md #185
+  const schema = await runOasTest('map-value-ref-choice.yaml', ['get:/networks>**'], 1, 2);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /type LinksEntry \{\n {2}key: String\n {2}"""\n {2}NEEDS ATTENTION:.*\n {2}"""\n {2}value: JSON\n\}/.test(schema!),
+    'the ref-choice map value is JSON, with a NEEDS ATTENTION note on why',
+  );
+  assert.ok(
+    /links: links\?->entries \{\n\s+key\n\s+value\n\s+\}/.test(schema!),
+    'and its selection reads the map whole',
+  );
+});

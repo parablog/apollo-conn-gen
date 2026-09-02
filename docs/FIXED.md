@@ -9812,3 +9812,74 @@ to 0, a clean sweep.
 (`mapNested`, the closest sibling gap), #86/#131 (the list-degrade precedent the list-of-maps fix
 follows), #108 (the reason string the fourth fix widens), #176 (the check that surfaced this),
 #183/#184 (gaps this corpus run also surfaced, left filed not fixed).
+
+## 185 [BUG] [P3] · A map value choosing between a `$ref`'d object with no properties and a plain value still built a union the wildcard walk never selected — ✅ Fixed
+
+**Symptom:** #182 taught `Map.holdsPlainValuesOrEmptyObject` to read a choice between an object
+with no properties and plain values as `JSON` — but only when every member was written inline.
+The moment one member was a `$ref`, the check returned early, so `Factory.fromSchema` still built
+a real union with a member that has no properties, and the `>**` wildcard walk never selected it: the
+whole field, and everything else on the same response, was missing from the generated schema.
+
+**OAS** (`map-value-ref-choice.yaml`):
+```yaml
+Network:
+  properties:
+    links:
+      type: object
+      additionalProperties:
+        oneOf:
+          - $ref: '#/components/schemas/Anything'
+          - type: string
+Anything:
+  type: object
+  additionalProperties: true
+```
+
+**Example:**
+```graphql
+# before                    # after
+(nothing — the whole op    type Network {
+ emitted no fields)           links: [LinksEntry]
+                            }
+                            type LinksEntry {
+                              key: String
+                              value: JSON
+                            }
+```
+
+**Cause:** `Map.holdsPlainValuesOrEmptyObject` (`src/oas/nodes/map.ts:237-252`) returned `false`
+as soon as `choice.some((member) => '$ref' in member)` was true, instead of resolving each `$ref`
+first the way its two siblings, `Schemas.holdsPlainValues` and
+`Schemas.holdsMixedPlainAndObjectValues` (`src/oas/utils/schemas.ts:50-87`), already do.
+
+**Fix:** one line — `holdsPlainValuesOrEmptyObject` now takes `context` and resolves each member
+through `context.resolvePointer` before checking its shape, the same `map`/`filter` its two
+siblings use. Nothing else in the function moves; the call site (`map.ts:203`) passes `context`.
+`resolvePointer`, not `lookupRef`: a schema peek must not count as a reference — `writer.ts:95-110`
+gates how many times a type is written by that count, and `union.ts:463` lowers it when a member's
+fields get merged elsewhere; an inflated count could let an already-merged-away type print again.
+The same fix landed at the three other places that only peek at a `$ref`'d schema without building
+a node from it: `Schemas.holdsPlainValues`, `Schemas.holdsMixedPlainAndObjectValues`
+(`schemas.ts:50-87`), and `Factory.unwrapRedundantArrayItems` (`factory.ts:295-315`) — the same
+idiom four other call sites already used (`get.ts`, `factory.ts`'s `fromArrayItems`, `param.ts`,
+`errorsWriter.ts`). Checked with a scratch experiment first (both `Schemas` predicates switched,
+all corpus/production-selection counts run): zero movement.
+
+**AST:** the map's value type changes from a `Union` the wildcard walk never selects to a
+`Scalar` (`JSON`), the same shape #182 already produces for the inline case — no new node kind.
+
+**Tests:** `map-value-ref-choice.yaml`, `test_185_map_value_ref_choice_reads_json`
+(`tests/all/oas-core.test.ts`) — same two assertions as `test_182` (a `NEEDS ATTENTION` note on
+`value: JSON`, the selection reading `->entries { key value }`). Added to
+`test_176_documented_degrades_are_accounted_for` (`tests/all/r11-lint.test.ts`). Revert-check:
+reverting the `$ref` resolution fails `test_185` at the type-count assertion (0 types instead of
+2 — the whole op emitted nothing pre-fix, not just the one field); restored, green. Corpus and
+production-selection counts checked directly (all 19 `test_corpus_*` and all 9
+`*_full_production_selection`/curated tests): unchanged.
+
+**Refs:** `src/oas/nodes/map.ts` (`holdsPlainValuesOrEmptyObject`), `src/oas/utils/schemas.ts`
+(`holdsPlainValues`, the pattern this now matches), `src/oas/nodes/factory.ts`
+(`unwrapRedundantArrayItems`), `src/oas/io/writer.ts` (the write-budget the count gates),
+`src/oas/nodes/union.ts` (`consolidateMembers`, which lowers it), #182 (the inline case this
+completes), #186 (the three-copies-of-this-check cleanup this surfaced).

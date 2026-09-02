@@ -16,7 +16,7 @@ theoretical.
 carries a `[P1]`-`[P5]` tag. Non-actionable entries (parked, noted, upstream-blocked, theoretical,
 or resolved without a dedicated code change) live in `docs/DEFERRED.md` instead — the fix-the-issues
 loop (`~/bin/issue-loop.sh`) only ever selects an `⬜`/`🔴` entry from *this* file, so anything not
-meant for it belongs there, not here. The 166 fixed/shipped ones live in `docs/FIXED.md`. Ids are
+meant for it belongs there, not here. The 167 fixed/shipped ones live in `docs/FIXED.md`. Ids are
 global across all three files, shared by bugs and features alike, and never reused:
 - open, loop-actionable — `// see docs/TASKS.md #N`
 - deferred, not in the work queue — `// see docs/DEFERRED.md #N`
@@ -201,3 +201,34 @@ for.
 
 **Refs:** `tests/resources/oas/required-nullable-oneof.yaml`, #57 (enum promotion), #60 (the
 nullable-`oneOf` fix this is the unhandled edge of), #176.
+
+## 186 [REFACTOR] [P4] · Three copies of the "choice of plain values" member test — ⬜ Open
+
+**Where:** `Schemas.holdsPlainValues` (`src/oas/utils/schemas.ts:50-67`),
+`Schemas.holdsMixedPlainAndObjectValues` (`schemas.ts:72-87`), `Map.holdsPlainValuesOrEmptyObject`
+(`src/oas/nodes/map.ts:237-252`).
+
+**What repeats:** reading `oneOf ?? anyOf`, resolving each `$ref` member through
+`context.resolvePointer`, dropping `type: 'null'` members, and the same `isPlainValue` check
+(`member.enum != null || GqlUtils.gqlScalar(member.type) !== false`) — copied three times.
+
+**What differs:** only which member shapes each one is asking about — a plain value
+(scalar/enum), an object with no properties (`Schemas.isShapelessObject`), or a real object
+(anything else).
+
+**Also the wrong home:** the third one is a schema-shape check living as a private static on
+`Map`, and pulled the `GqlUtils`/`ReferenceObject` imports into `map.ts` just for it. When it
+moves, name it like its siblings — `holds<what>Values`, e.g. `holdsPlainAndEmptyObjectValues`.
+
+**Same smell one level up:** the twin reason ladders `PropArray.jsonReason`
+(`propArray.ts:86-106`) and `Map.arrayValueJsonReason` (`map.ts:~257-275`) repeat the same
+pattern — their strings are the user-facing NEEDS ATTENTION text tests assert on, so they can
+only move together with the tests that pin them.
+
+**Acceptance:** one shared member check, every caller's output byte-identical (corpus counts
+unchanged), `map.ts` loses the helper and the two imports it only needed for it.
+
+**lookupRef vs resolvePointer:** settled in #185 — inspect-only code uses `resolvePointer`, so the
+shared version this entry plans doesn't bring the old bug back.
+
+**Refs:** #86, #131, #182, #185.

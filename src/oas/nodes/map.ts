@@ -200,7 +200,7 @@ export class Map extends Type {
     // A choice of nothing but plain values, or an object with no properties, has no real union
     // member to build — read it as JSON instead.
     // e.g. (confluence) additionalProperties: oneOf [{type: object, additionalProperties: true}, string]  #182
-    if (Schemas.holdsPlainValues(context, additionalProps) || Map.holdsPlainValuesOrEmptyObject(additionalProps)) {
+    if (Schemas.holdsPlainValues(context, additionalProps) || Map.holdsPlainValuesOrEmptyObject(context, additionalProps)) {
       this.valueJsonReason =
         "a map's values are a choice of nothing but plain scalar or enum values, or an object with no properties, with no GraphQL union member to build — sent as raw JSON instead.";
       this.valueType = new Scalar(this, 'JSON', additionalProps);
@@ -235,13 +235,14 @@ export class Map extends Type {
   }
 
   // A choice between an object with no properties and plain scalar/enum values has no real union member.
-  // e.g. (confluence) oneOf [{ type: object, additionalProperties: true }, string]
-  // Inline members only — a choice with a $ref member becomes a real union instead. see docs/FIXED.md #182
-  private static holdsPlainValuesOrEmptyObject(schema: SchemaObject): boolean {
+  // e.g. (confluence) oneOf [{ type: object, additionalProperties: true }, string]  see docs/FIXED.md #185
+  private static holdsPlainValuesOrEmptyObject(context: OasContext, schema: SchemaObject): boolean {
     const choice = (schema.oneOf ?? schema.anyOf) as (SchemaObject | ReferenceObject)[] | undefined;
-    if (!choice || choice.some((member) => '$ref' in member)) return false;
+    if (!choice) return false;
 
-    const members = (choice as SchemaObject[]).filter((member) => member.type !== 'null');
+    const members = choice
+      .map((member) => ('$ref' in member ? (context.resolvePointer(member.$ref!) as SchemaObject) : member))
+      .filter((member) => member != null && !('$ref' in member) && member.type !== 'null');
     // same test as Schemas.holdsPlainValues' member check
     const isPlainValue = (member: SchemaObject) =>
       member.enum != null || (typeof member.type === 'string' && GqlUtils.gqlScalar(member.type) !== false);

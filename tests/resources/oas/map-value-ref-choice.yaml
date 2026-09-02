@@ -1,0 +1,33 @@
+openapi: 3.0.3
+# a map value choosing between a $ref to an object with no properties and a plain string.
+# see docs/FIXED.md #185
+info:
+  title: Map value ref choice
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /networks:
+    get:
+      operationId: getNetwork
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Network'
+components:
+  schemas:
+    Network:
+      type: object
+      properties:
+        links:
+          type: object
+          additionalProperties:
+            oneOf:
+              - $ref: '#/components/schemas/Anything'
+              - type: string
+    Anything:
+      type: object
+      additionalProperties: true

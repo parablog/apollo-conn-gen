@@ -306,7 +306,7 @@ export class Factory {
       return isWrapper ? wrapped : items;
     }
 
-    const resolved = context.lookupRef(items.$ref as string);
+    const resolved = context.resolvePointer(items.$ref as string) as SchemaObject | undefined;
     const resolvedItems = resolved && (_.get(resolved, 'items') as ArraySchemaObject | undefined);
     if (resolvedItems && (resolved!.type === 'array' || resolved!.type == null)) {
       return resolvedItems;
