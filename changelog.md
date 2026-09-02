@@ -4,7 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.28.0]
+
+### Added
+
+- `-v`/`--verbose` prints the generator's trace log. Issue #179.
+- `--doc-pagination` adds a note to each paginated operation that a full page may not be the
+  last one. PR #11.
+
+### Fixed
+
+- A schema typed as a bare `null` (profound.yaml's `pagination` field) generates as `JSON`.
+  Issue #169.
+- motion.json's `SchedulesGetRequest` request body keeps its array-of-enum `include` property.
+  Issue #170.
+- A map whose values are themselves maps (motion.json's `customFields` field) selects every
+  nesting level. Issue #171.
+- box.yaml's webhook `triggers` field keeps enum values that are not GraphQL names as plain
+  strings. Issue #172.
+- Two array-of-enum fields on one type (digitalocean) each get their own enum, named after the
+  field. Issue #173.
+- A response published under a `*/*` media type (docusign.json) reads its real fields. Issue #175.
+- profound.yaml's `PromptUpdatePreview.tags`, and similar OAS 3.1 nullable-reference fields
+  (`anyOf: [$ref, null]`), keep their real type. Issue #177.
+- A property or map value that has no fields to select (stripe's `payment_method_amazon_pay`,
+  docker-engine's `IPAM.Config` list of maps) gets a field, typed `JSON`. Issues #182, #185.
+- An integer field declared `format: int64` or with bounds beyond 32 bits types as `String`, and
+  the response value is coerced from the JSON number. PR #10.
+- An operation inferred as an entity resolver authenticates with the same per-operation header or
+  apiKey-in-query auth as the operation it came from. PR #12.
 
 ## [0.27.0]
 
