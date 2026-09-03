@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.29.0]
+
+### Added
+
+- `--skip-degrade-reasons` removes the "NEEDS ATTENTION" note gen adds when it can't find a real
+  type for a field and falls back to plain `JSON`. The reason is still printed as a warning during
+  generation either way. Issue #188, PR #15 (supersedes PR #13).
+- `--emit-connector-errors` exposes the existing `emitConnectorErrors` option on the CLI. PR #14.
+
 ## [0.28.0]
 
 ### Added
