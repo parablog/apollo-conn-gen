@@ -1,0 +1,123 @@
+openapi: 3.0.3
+info:
+  title: Entity Param Alias Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /pet/{petId}:
+    get:
+      operationId: getPetById
+      summary: Get a pet by id — petId aliases to Pet.id
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single pet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+  /user/{username}:
+    get:
+      operationId: getUserByName
+      summary: Get a user by username — literal match, no aliasing needed
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+  /customer/{customerId}/account:
+    get:
+      operationId: getAccountForCustomer
+      summary: Get a customer's account — customerId does not alias to Account.id
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+  /store/order/{order_id}:
+    get:
+      operationId: getOrderById
+      summary: Get an order by id — order_id aliases to Order.id (separator-insensitive)
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /customer/{customerId}/account/{accountId}:
+    get:
+      operationId: getCustomerAccountById
+      summary: Two path params — accountId matches the alias rule by name, but must not qualify
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+    Order:
+      type: object
+      properties:
+        id:
+          type: string

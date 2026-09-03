@@ -1,4 +1,4 @@
-import { IType, Obj, Prop, PropEntityLink, Res, T } from './internal.js';
+import { IType, Obj, Param, Prop, PropEntityLink, Res, T } from './internal.js';
 import type { NameValue, SecurityPlan } from '../io/security.js';
 import { Naming } from '../utils/naming.js';
 import { OasContext } from '../oasContext.js';
@@ -58,6 +58,33 @@ function unwrapToObj(resultType: IType | undefined): Obj | null {
   return node instanceof Obj ? node : null;
 }
 
+// Case/separator-insensitive compare key: lowercases, strips `_`/`-`.
+function normaliseForCompare(name: string): string {
+  return name.toLowerCase().replace(/[_-]/g, '');
+}
+
+// `typeName` is `Obj.name` through `Naming.getRefName` (strips a `$ref`'s `#/components/…/`
+// prefix; raw already for a synthesized name), e.g. (entity-param-alias) "Pet" + "petId" -> true.
+function isIdAlias(typeName: string, paramName: string): boolean {
+  return `${normaliseForCompare(typeName)}id` === normaliseForCompare(paramName);
+}
+
+// Literal name match wins; failing that, a sole path param named `<TypeName>Id` aliases to `id`.
+// e.g. (entity-param-alias) `/pet/{petId}` -> `Pet.id`; two path params keeps neither aliased.
+function findKeyField(obj: Obj, param: Param, pathParams: Param[], selected: Prop[]): Prop | undefined {
+  const literal = obj.props.get(param.name);
+  if (literal !== undefined && T.isPropScalar(literal) && selected.includes(literal)) {
+    return literal;
+  }
+
+  if (pathParams.length !== 1 || !isIdAlias(Naming.getRefName(obj.name), param.name)) {
+    return undefined;
+  }
+
+  const aliased = obj.props.get('id');
+  return aliased !== undefined && T.isPropScalar(aliased) && selected.includes(aliased) ? aliased : undefined;
+}
+
 /**
  * Discover which GET-by-key operations in the selection are valid entity resolvers and
  * record them on the entity type they resolve, as type-level resolvers (`@connect`/`$this`
@@ -74,11 +101,8 @@ function unwrapToObj(resultType: IType | undefined): Obj | null {
  *  - verb is GET;
  *  - `resultType` unwraps (through `Res`) to a single `Obj` (not array/scalar/union);
  *  - it has >= 1 path param;
- *  - every path-param name exactly matches a scalar field on the resolved `Obj` that is
- *    also in `obj.selectedProps(selection)` (else the `@key`/`$this` field would dangle).
- *
- * Exact-name matching is deliberate: `/pet/{petId}` -> `Pet { id }` does NOT qualify
- * (`petId` != `id`). Alias mapping is a later enhancement to this flagged path.
+ *  - every path param resolves to a scalar field on the `Obj`, in `obj.selectedProps(selection)`
+ *    (else the `@key`/`$this` field would dangle) — see {@link findKeyField} for exact-name-vs-alias.
  */
 export function inferEntityResolvers(
   context: OasContext,
@@ -118,12 +142,8 @@ export function inferEntityResolvers(
     }
 
     const selected = obj.selectedProps(selection, keep);
-    const everyParamMatchesSelectedScalar = pathParams.every((p) => {
-      const prop = obj.props.get(p.name);
-      return prop !== undefined && T.isPropScalar(prop) && selected.includes(prop);
-    });
-
-    if (!everyParamMatchesSelectedScalar) {
+    const keyFields = pathParams.map((p) => findKeyField(obj, p, pathParams, selected));
+    if (!keyFields.every((field): field is Prop => field !== undefined)) {
       continue;
     }
 
@@ -141,11 +161,20 @@ export function inferEntityResolvers(
     // repeat for an op that is both selected and a resolver.
     const { header: headerAuth, query: queryAuth } = security?.forOp(op) ?? { header: null, query: null };
 
-    // Composite key for this resolver: path-param names in path order, single-space
-    // joined (e.g. "id" or "orgId id"). Each qualifying op is one type-level resolver.
+    // Composite key: the matched properties' own names, not the OAS path-param names (write
+    // sites look these up literally). Path tokens follow suit, e.g. (entity-param-alias)
+    // `{petId}` -> `{id}`, so `$this` substitution (obj.ts) stays a plain rename.
+    let path = op.operation.path;
+    pathParams.forEach((p, i) => {
+      const fieldName = keyFields[i].name;
+      if (fieldName !== p.name) {
+        path = path.replace(`{${p.name}}`, `{${fieldName}}`);
+      }
+    });
+
     target.entityResolvers.push({
-      keyFields: pathParams.map((p) => p.name).join(' '),
-      path: op.operation.path,
+      keyFields: keyFields.map((field) => field.name).join(' '),
+      path,
       verb: op.verb,
       source: 'api',
       headerAuth,

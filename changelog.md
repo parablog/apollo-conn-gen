@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- `--infer-entity-resolvers` now keys a type on a sole path param spelled `<TypeName>Id` (e.g.
+  `petId` -> `Pet.id`, `order_id` -> `Order.id`), not only on an exact field-name match. Issue #189.
+
 ## [0.29.0]
 
 ### Added

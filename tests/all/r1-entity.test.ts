@@ -137,3 +137,33 @@ test('test_168_twin_key_uses_numbered_field', async () => {
   assert.ok(schema!.includes('@key(fields: "takeId2")'), 'expected the @key to follow the key prop\'s own rename');
   assert.ok(schema!.includes('http: { GET: "/takes/{$this.takeId2}" }'), 'expected the $this resolver to follow the rename');
 });
+
+test('test_R1_petId_aliases_to_id_sole_path_param_only', async () => {
+  // A sole path param named `<TypeName>Id` aliases to the type's own `id`: `/pet/{petId}` ->
+  // `Pet.id` (camelCase), `/store/order/{order_id}` -> `Order.id` (separator-insensitive). A
+  // literal match still wins (`/user/{username}` -> `User.username`, not aliased to `id`), and
+  // two path params never alias even when one of them matches the rule by name (`accountId` on
+  // `/customer/{customerId}/account/{accountId}`) — `Account` gets no `@key` at all.
+  const paths = [
+    'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:id',
+    'get:/pet/{petId}>res:r>obj:type:#/c/s/Pet>prop:scalar:name',
+    'get:/user/{username}>res:r>obj:type:#/c/s/User>prop:scalar:id',
+    'get:/user/{username}>res:r>obj:type:#/c/s/User>prop:scalar:username',
+    'get:/customer/{customerId}/account>res:r>obj:type:#/c/s/Account>prop:scalar:id',
+    'get:/store/order/{order_id}>res:r>obj:type:#/c/s/Order>prop:scalar:id',
+    'get:/customer/{customerId}/account/{accountId}>res:r>obj:type:#/c/s/Account>prop:scalar:id',
+  ];
+
+  const schema = await runOasTest('entity-param-alias.yaml', paths, 5, 4, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type Pet @key(fields: "id")'), 'expected petId aliased to id on Pet');
+  assert.ok(schema!.includes('http: { GET: "/pet/{$this.id}" }'), 'expected the $this URL to use id, not petId');
+  assert.ok(schema!.includes('type Order @key(fields: "id")'), 'expected order_id aliased to id on Order');
+  assert.ok(schema!.includes('http: { GET: "/store/order/{$this.id}" }'), 'expected the $this URL to use id, not order_id');
+  assert.ok(schema!.includes('type User @key(fields: "username")'), 'expected literal match to still win on User');
+  assert.ok(schema!.includes('http: { GET: "/user/{$this.username}" }'), 'expected the $this URL to keep username');
+  assert.ok(!/type Account[^{]*@key/.test(schema!), 'expected no @key on Account from either candidate op');
+  assert.ok(!schema!.includes('{$this.petId}'), 'must not reference the raw petId param');
+  assert.ok(!schema!.includes('{$this.customerId}'), 'must not reference the raw customerId param');
+  assert.ok(!schema!.includes('{$this.accountId}'), 'must not reference the raw accountId param');
+});

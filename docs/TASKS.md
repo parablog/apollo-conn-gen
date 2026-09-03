@@ -232,3 +232,26 @@ unchanged), `map.ts` loses the helper and the two imports it only needed for it.
 shared version this entry plans doesn't bring the old bug back.
 
 **Refs:** #86, #131, #182, #185.
+
+## 190 [FEAT] [P4] · No entity link for a `<TypeName>Id`-aliased key — ⬜ Open
+
+**Where:** `inferEntityLinks` (`src/oas/nodes/entity.ts:200-214`, #161).
+
+**What's missing:** #189 lets a sole path param named `<TypeName>Id` (e.g. `petId`) key its type
+on `id` instead of requiring a literal name match. `inferEntityLinks` was deliberately left
+untouched, so it still looks a candidate op's resolver up by `r.keyFields === param.name`
+(`entity.ts:211`) — for an aliased key, `keyFields` holds `"id"`, not the param name (`"petId"`),
+so the lookup misses and no link field is generated. e.g. (entity-param-alias) `Order.petId: ID`
+never gains a key-only `pet: Pet` field the way an un-aliased `Order.id` reaching a `Pet` by literal
+name would.
+
+**Why not folded into #189:** the two features compose independently — #189 only changes which ops
+qualify as resolvers, #161's own matching (by `param.name`, not by the resolved property) needs its
+own decision about whether to match on the resolved key property instead, and by which of several
+possibly-aliased names a scalar on another type would need to carry to link.
+
+**Acceptance (once picked up):** an aliased-key type (e.g. `Pet` keyed via `petId`->`id`) is
+linkable from another type's same-named foreign key, same as an unaliased key is today; new
+fixture/test alongside `entity-link.yaml`/`entity-link.test.ts`.
+
+**Refs:** `docs/FIXED.md #189`, `docs/FIXED.md #161`, `src/oas/nodes/entity.ts`.

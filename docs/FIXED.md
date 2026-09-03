@@ -9933,3 +9933,75 @@ verbatim. `tests/all/oas-core.test.ts` green (222/222). `tsc --noEmit` clean, `e
 `src/cli/oas.ts`, `src/tests/runners.ts`, `src/oas/nodes/{factory,propObj,propArray,get,post,map,
 param,union,res}.ts`, `tests/resources/oas/degrade-reasons.yaml`, PR #13 (adamd-apollo): the
 motivating finding, fixture and first implementation.
+
+## 189 [BUG] [P3] · `--infer-entity-resolvers` misses the common `<TypeName>Id` path-param spelling — ✅ Fixed
+
+**Symptom:** a GET-by-id op only qualified for `@key` when its path param was byte-identical to the
+response type's own key field. Petstore's `Pet` and `Order` both carry `id: ID`, but their by-id
+params are named after the resource (`petId`, `orderId`), so neither ever got a `@key` — only
+`User` did, because `/user/{username}` happens to match `username` literally.
+
+**OAS** (petstore) — a GET-by-id op named after the resource, not the field:
+```yaml
+/pet/{petId}:
+  get:
+    parameters: [{ name: petId, in: path, required: true, schema: { type: string } }]
+    responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/Pet' } } } } }
+Pet:
+  properties: { id: { type: string }, name: { type: string } }
+```
+
+**Cause:** `inferEntityResolvers` (`entity.ts:132-133` before this fix) matched a path param to a
+property with `obj.props.get(p.name)` — a literal-name lookup, no alias. Three other sites
+(`obj.ts:108-113` `@key(fields:)`, `obj.ts:189-191` the `$this` URL rewrite, `Prop.isEntityKey`)
+all re-derive a property from that same token, so any fix has to keep `keyFields`/`path` holding
+real property names, not param names, for those sites to keep working.
+
+**Fix:** `entity.ts` — detection only, nothing else touched:
+- `isIdAlias(typeName, paramName)`: case/separator-insensitive compare of `typeName + "Id"`
+  against `paramName` (`normaliseForCompare` lowercases, strips `_`/`-`). `typeName` goes through
+  `Naming.getRefName` first — `Obj.name` is the raw `$ref` string (`#/components/schemas/Pet`) at
+  this point, not the bare `"Pet"`.
+- `findKeyField(obj, param, pathParams, selected)`: literal `obj.props.get(param.name)` wins if
+  it's a selected scalar; else, only when the op has a **sole** path param and `isIdAlias` holds,
+  falls back to the type's own selected scalar `id` property.
+- `inferEntityResolvers` maps each path param through `findKeyField` and gates on every one
+  resolving (the old all-or-nothing check, inlined — one caller, three lines).
+- The resolver's `keyFields` and `path` are now built from the **matched properties' own names**,
+  not the raw OAS param names — `path`'s `{petId}` token is rewritten to `{id}` before it reaches
+  `obj.ts`'s `$this` substitution, which does its own independent `{token}` extraction from `path`
+  and would otherwise still emit `{$this.petId}`.
+
+**Known limitation:** only the exact `<TypeName>Id` spelling aliases — a wider `*Id` rule was
+rejected because it would key `Account` on `customerId` for `/customer/{customerId}/account`. A
+type named for its response wrapper rather than the resource (`orderId` returning
+`OrderResponse`) still misses. `inferEntityLinks` (#161) is untouched, so the link half for a
+newly-aliased key (e.g. `Order.petId` -> `Pet`) is not inferred — tracked separately as
+`docs/TASKS.md #190`.
+
+**Example** (petstore, `--infer-entity-resolvers`):
+```graphql
+# before
+type Pet { id: ID  name: String }
+type Order { id: ID  ... }
+# after
+type Pet @key(fields: "id") @connect(... http: { GET: "/pet/{$this.id}" } ...) { id: ID  name: String }
+type Order @key(fields: "id") @connect(... http: { GET: "/store/order/{$this.id}" } ...) { id: ID  ... }
+```
+
+**Verified:** new fixture `tests/resources/oas/entity-param-alias.yaml` (5 ops: `petId`->`Pet.id`
+aliased; `username`->`User.username` literal still wins; `customerId`->`Account.id` name mismatch,
+no `@key`; `order_id`->`Order.id` separator-insensitive alias; two path params on
+`/customer/{customerId}/account/{accountId}` — `accountId` matches the alias rule by name but the
+sole-path-param gate still keeps `Account` unkeyed). New test
+`test_R1_petId_aliases_to_id_sole_path_param_only` in `tests/all/r1-entity.test.ts`, substring
+style, composes via `runOasTest`. Revert-check: removing just the alias branch in `findKeyField`
+fails the new test only, every other `r1-entity`/`entity-link`/`r6-batch` test stays green. Full
+suite: 525 tests, 521 pass, 0 fail, 4 todo (pre-existing). Petstore end-to-end
+(`--infer-entity-resolvers`) composed with the local composer: `Pet`/`Order` carry `key: "id"`,
+`User` keeps `key: "username"` in the resulting supergraph.
+
+**Refs:** `src/oas/nodes/entity.ts` (`isIdAlias`, `findKeyField`, `inferEntityResolvers`),
+`tests/resources/oas/entity-param-alias.yaml`,
+`tests/all/r1-entity.test.ts`, `docs/FIXED.md #65` (the sanitisation half this complements),
+`docs/FIXED.md #161`/`#168` (the link/twin-rename mechanics this leaves untouched).
