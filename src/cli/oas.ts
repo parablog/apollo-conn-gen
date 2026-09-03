@@ -103,6 +103,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     docResponseFields: opts.docResponseFields,
     docPagination: opts.docPagination,
     emitConnectorErrors: opts.emitConnectorErrors,
+    skipDegradeReasons: opts.skipDegradeReasons,
     servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
@@ -172,6 +173,11 @@ program
   .option(
     '--skip-arg-defaults',
     'Write a parameter\'s default, minimum, maximum, and allowed values as a "Params: ..." note on the operation instead of writing the default straight into the argument',
+    false,
+  )
+  .option(
+    '--skip-degrade-reasons',
+    'Leave out the NEEDS ATTENTION note gen adds to every description it defaulted to JSON. For agent-facing SDL; warnings are always logged.',
     false,
   )
   .option(

@@ -9883,3 +9883,53 @@ production-selection counts checked directly (all 19 `test_corpus_*` and all 9
 (`unwrapRedundantArrayItems`), `src/oas/io/writer.ts` (the write-budget the count gates),
 `src/oas/nodes/union.ts` (`consolidateMembers`, which lowers it), #182 (the inline case this
 completes), #186 (the three-copies-of-this-check cleanup this surfaced).
+## 188 [FEAT] · `--skip-degrade-reasons`: leave the "NEEDS ATTENTION" note out of agent-facing SDL — ✅ Fixed
+
+**Symptom:** the "NEEDS ATTENTION: ... defaulted to JSON" note gen writes into a field's own
+description is addressed to the schema author, but it rides straight into every consumer's copy of
+the SDL — an AppWorld agent benchmark found the note diluting the field's usage guidance right next
+to it. The author already gets the same reason as a build-time warning at its point of origin.
+
+**Example** (`degrade-reasons.yaml`):
+```yaml
+blob:
+  description: An opaque blob.
+  anyOf: [{ type: string }, { type: integer }, { type: number }]
+```
+- default (unchanged): `"""\n  An opaque blob.\n\n  NEEDS ATTENTION: ...\n  """\n  blob: JSON`
+- with the flag: `"An opaque blob."\n  blob: JSON` — no note, author text intact
+- a field whose own text already contains the literal words "NEEDS ATTENTION:" or an em-dash keeps
+  that text verbatim either way (dash-normalised to `--`, same as always) — only the *generated*
+  note is conditional.
+
+**Fix:** PR #13 (adamd-apollo, `fix/agent-facing-diagnostics`) first shipped this as
+`--strip-json-diagnostics`, a five-regex post-generation pass over the finished SDL text. Reworked
+to gate at the producer instead:
+- `Schemas.withJsonNote(context, schema, reason)` (`src/oas/utils/schemas.ts`) now reads
+  `context.generateOptions?.skipDegradeReasons === true` and skips appending the note; the author's
+  own description is still dash-normalised on both paths. No text pass, no regex.
+- `skipDegradeReasons?: boolean` threaded through `IGenOptions`/`GenerateOptions`/`runOasTest`
+  opts and `--skip-degrade-reasons` (next to the other `--skip-*` flags).
+- Replaces `stripJsonDiagnostics` end to end — one flag, not two.
+- The 16 existing `withJsonNote` call sites now pass `context`.
+- Five of them write the note text directly (`get.ts`, `post.ts`, `map.ts`, `param.ts`, `union.ts`'s
+  `writeMemberJsonNote`) and now check the *returned text* for presence, not the raw reason string,
+  so a note-only field opens no empty `"""\n  """` pair.
+- `context` threaded through `dedupedSelectedProps`, `hasSelectedProps`, `emptyMergeReason` and
+  `resultJsonReason` to reach `union.ts:278`'s incompatible-merged-field fallback.
+- PR #13's `stripInlineDiagnostics` (5 regexes) and its `--strip-json-diagnostics` flag deleted
+  outright — the producer gate replaces both halves of the old mechanism.
+- Not touched (separate issue): `factory.ts`'s two `warn(null, ...)` sites and `union.ts:277`'s
+  `warn(null, ...)` already have `context` in scope but don't use it, losing indentation in trace
+  output.
+
+**Verified:** `tests/all/degrade-reasons.test.ts` (renamed from PR #13's
+`strip-json-diagnostics.test.ts`) — two full-schema snapshot tests, not substrings: default output
+byte-identical to before the flag existed, and flag-on output has zero generated notes anywhere
+while the two fields whose own author text contains "NEEDS ATTENTION:"/an em-dash keep that text
+verbatim. `tests/all/oas-core.test.ts` green (222/222). `tsc --noEmit` clean, `eslint` clean.
+
+**Refs:** `src/oas/utils/schemas.ts` (`withJsonNote`), `src/oas/oasContext.ts`, `src/oas/oasGen.ts`,
+`src/cli/oas.ts`, `src/tests/runners.ts`, `src/oas/nodes/{factory,propObj,propArray,get,post,map,
+param,union,res}.ts`, `tests/resources/oas/degrade-reasons.yaml`, PR #13 (adamd-apollo): the
+motivating finding, fixture and first implementation.

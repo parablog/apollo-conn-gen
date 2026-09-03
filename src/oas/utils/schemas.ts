@@ -98,12 +98,15 @@ export class Schemas {
   }
 
   // Marks a schema about to fall back to JSON, so the reason lands in the SDL, not just the console
-  // log. e.g. (docker-engine) Labels: { additionalProperties: { type: string } } in a request body
-  // -> `labels: JSON` gets a "NEEDS ATTENTION: ..." docstring. see docs/FIXED.md #133, #152
-  public static withJsonNote(schema: SchemaObject, reason: string): SchemaObject {
+  // log, unless `skipDegradeReasons` asks for agent-facing SDL with no note. e.g. (docker-engine)
+  // Labels: { additionalProperties: { type: string } } -> `labels: JSON` gets the docstring.
+  public static withJsonNote(context: OasContext, schema: SchemaObject, reason: string): SchemaObject {
+    const description = schema.description && Schemas.asciiSafeDashes(schema.description);
+    if (context.generateOptions?.skipDegradeReasons === true) {
+      return description ? { ...schema, description } : schema;
+    }
     const note = Schemas.asciiSafeDashes(`NEEDS ATTENTION: ${reason}`);
-    const description = schema.description ? `${Schemas.asciiSafeDashes(schema.description)}\n\n${note}` : note;
-    return { ...schema, description };
+    return { ...schema, description: description ? `${description}\n\n${note}` : note };
   }
 
   // Writes one parameter's default, minimum, maximum, and allowed values as plain words for the

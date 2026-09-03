@@ -77,12 +77,13 @@ export class Get extends Type implements Op {
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
     const keep = context.generateOptions?.keepFieldNames === true;
-    const jsonReason = this.resultJsonReason(selection, keep);
+    const jsonReason = this.resultJsonReason(context, selection, keep);
+    const jsonNote = jsonReason ? Schemas.withJsonNote(context, {}, jsonReason).description : undefined;
     const paramsLine = this.paramsDocLine(context);
     const responseFieldsLine = this.responseFieldsDocLine(context, selection);
     const paginationLine = this.paginationDocLine(context);
 
-    if (description || summary || originalPath || jsonReason || paramsLine || responseFieldsLine || paginationLine) {
+    if (description || summary || originalPath || jsonNote || paramsLine || responseFieldsLine || paginationLine) {
       writer.write('  """\n').write('  ');
       if (description) {
         writer.write(description).write(' ');
@@ -93,8 +94,8 @@ export class Get extends Type implements Op {
       if (originalPath) {
         writer.write('(').write(originalPath).write(')');
       }
-      if (jsonReason) {
-        writer.write('\n\n  ').write(Schemas.withJsonNote({}, jsonReason).description!);
+      if (jsonNote) {
+        writer.write('\n\n  ').write(jsonNote);
       }
       if (paramsLine) {
         writer.write('\n\n  ').write(paramsLine);
@@ -130,9 +131,9 @@ export class Get extends Type implements Op {
   // always a Res wrapper (see res.ts); the real answer is one step in, at Res.response. #132
   //   e.g. (github) get:/watchers answers anyOf [array of user, array of watcher] — no shared
   //   fields, so getWatchers(): JSON gains a "NEEDS ATTENTION" note explaining why
-  protected resultJsonReason(selection: string[], keep: boolean): string | undefined {
+  protected resultJsonReason(context: OasContext, selection: string[], keep: boolean): string | undefined {
     const response = this.resultType instanceof Res ? this.resultType.response : this.resultType;
-    if (response instanceof Union) return response.emptyMergeReason(selection, keep);
+    if (response instanceof Union) return response.emptyMergeReason(context, selection, keep);
 
     if (response instanceof Scalar) return response.jsonReason;
 
@@ -335,7 +336,7 @@ export class Get extends Type implements Op {
       //   e.g. (world anvil) get:/manuscript 200: { description: ok }  — no `content` key   #147
       const reason = `the '${statusCode}' response declares no body — the real API may still return data this spec doesn't describe, so it's read as raw JSON instead of a fabricated empty result.`;
       warn(context, `  [${code}]`, reason);
-      const schema = Schemas.withJsonNote({}, reason);
+      const schema = Schemas.withJsonNote(context, {}, reason);
       // build the Res first so the Scalar below is parented to it from birth — building it the
       // other way round (Scalar as a constructor argument to `new Res(...)`) would parent it one
       // level too high, the same trap PropObj's own pre-built `obj` argument fell into.

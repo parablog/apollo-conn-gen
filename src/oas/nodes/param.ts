@@ -69,8 +69,8 @@ export class Param extends Type {
     // Arguments sit in one comma-separated list, so the note is a quoted string right before the
     // name: `"NEEDS ATTENTION: ..." filter: JSON`. Block-quote only if the text needs it.
     const reason = this.jsonReason();
-    if (reason) {
-      const note = Schemas.withJsonNote({}, reason).description!;
+    const note = reason ? Schemas.withJsonNote(context, {}, reason).description : undefined;
+    if (note) {
       if (note.includes('\n') || note.includes('\r') || note.includes('"') || note.includes('\\')) {
         writer.write('"""\n').write(note).write('\n""" ');
       } else {
