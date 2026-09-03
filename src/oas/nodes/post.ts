@@ -74,11 +74,12 @@ export class Post extends Get {
     const summary = this.operation.getSummary();
     const originalPath = this.operation.path;
     const keep = context.generateOptions?.keepFieldNames === true;
-    const jsonReason = this.resultJsonReason(selection, keep);
+    const jsonReason = this.resultJsonReason(context, selection, keep);
+    const jsonNote = jsonReason ? Schemas.withJsonNote(context, {}, jsonReason).description : undefined;
     const paramsLine = this.paramsDocLine(context);
     const responseFieldsLine = this.responseFieldsDocLine(context, selection);
 
-    if (summary || originalPath || jsonReason || paramsLine || responseFieldsLine) {
+    if (summary || originalPath || jsonNote || paramsLine || responseFieldsLine) {
       writer.write('  """\n').write('  ');
       if (summary) {
         writer.write(summary).write(' ');
@@ -86,8 +87,8 @@ export class Post extends Get {
       if (originalPath) {
         writer.write('(').write(originalPath).write(')');
       }
-      if (jsonReason) {
-        writer.write('\n\n  ').write(Schemas.withJsonNote({}, jsonReason).description!);
+      if (jsonNote) {
+        writer.write('\n\n  ').write(jsonNote);
       }
       if (paramsLine) {
         writer.write('\n\n  ').write(paramsLine);

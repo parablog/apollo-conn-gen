@@ -150,7 +150,7 @@ export class Union extends Type {
       }
     } else if (context.inContextOf(Res, this)) {
       // a merge with no fields is never written — the field answers JSON instead  #80
-      if (this.isFlat() && !this.hasSelectedProps(selection, keep)) {
+      if (this.isFlat() && !this.hasSelectedProps(context, selection, keep)) {
         writer.write('JSON');
       } else {
         // R2: when promoted to an interface, the field returns the base interface, not the union name.
@@ -165,7 +165,7 @@ export class Union extends Type {
 
       if (this.isFlat()) {
         // an empty merge writes no type — its field was written as JSON  #80
-        if (!this.hasSelectedProps(selection, keep)) {
+        if (!this.hasSelectedProps(context, selection, keep)) {
           trace(context, '   [union::generate]', `[union] no fields to merge, skipping: ${this.name}`);
         }
         // No real union here: an input-position oneOf (GraphQL has no input unions) or no
@@ -185,7 +185,7 @@ export class Union extends Type {
         // `http_rule_response` is written as `HttpRuleResponse`. see docs/FIXED.md #43
         const filtered = this.selectedMembers(selection);
 
-        this.writeMemberJsonNote(writer);
+        this.writeMemberJsonNote(context, writer);
         writer
           .write('union ')
           .write(name)
@@ -220,7 +220,7 @@ export class Union extends Type {
     // `this.kind` (not a hardcoded 'type ') picks the keyword: 'type' for a response, 'input' for a
     // request body (body.ts). e.g. (r2-input-union-consolidated.yaml) POST /create's `oneOf` body
     // merges to one object — hardcoding 'type ' here would emit it as an invalid mutation argument.
-    this.writeMemberJsonNote(writer);
+    this.writeMemberJsonNote(context, writer);
     writer
       .write(this.kind + ' ')
       .write(name)
@@ -229,7 +229,7 @@ export class Union extends Type {
       .write(name)
       .write('\n');
 
-    for (const prop of this.dedupedSelectedProps(selection, keep)) {
+    for (const prop of this.dedupedSelectedProps(context, selection, keep)) {
       trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
       prop.generate(context, writer, selection);
     }
@@ -246,7 +246,7 @@ export class Union extends Type {
   //   Individual: { status: { $ref: '#/…/IndividualStateType' } }   # enum
   //   PartyRole:  { status: { type: string } }
   // see docs/FIXED.md #39, #44
-  private dedupedSelectedProps(selection: string[], keep: boolean): Prop[] {
+  private dedupedSelectedProps(context: OasContext, selection: string[], keep: boolean): Prop[] {
     const kindOf = (prop: Prop) => prop.id.split(':')[1];
 
     const firstByName = new Map<string, Prop>();
@@ -274,7 +274,7 @@ export class Union extends Type {
         const reason =
           'different branches of a merged type declare this field differently, and no single GraphQL type fits both — sent as raw JSON.';
         warn(null, '[union]', reason);
-        return new PropScalar(prop.parent!, name, 'JSON', Schemas.withJsonNote({}, reason));
+        return new PropScalar(prop.parent!, name, 'JSON', Schemas.withJsonNote(context, {}, reason));
       }),
       keep,
     );
@@ -291,10 +291,11 @@ export class Union extends Type {
 
   // Writes a block-quoted note above the union/type line for every reason memberJsonReasons()
   // found; writes nothing when every member kept a real shape.
-  private writeMemberJsonNote(writer: Writer): void {
+  private writeMemberJsonNote(context: OasContext, writer: Writer): void {
     const reasons = this.memberJsonReasons();
     if (reasons.length === 0) return;
-    const note = Schemas.withJsonNote({}, reasons.join(' ')).description!;
+    const note = Schemas.withJsonNote(context, {}, reasons.join(' ')).description;
+    if (!note) return;
     writer.write('"""\n').write(note).write('\n"""\n');
   }
 
@@ -325,7 +326,7 @@ export class Union extends Type {
       // the writer emits — box collected enum WebLinkBaseType but wrote `type: FileBaseType!`. #57
       this.consolidateMembers(context, selection);
       const keep = context.generateOptions?.keepFieldNames === true;
-      return this.dedupedSelectedProps(selection, keep);
+      return this.dedupedSelectedProps(context, selection, keep);
     }
     // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
     // $ref base it extends — `Book: allOf [$ref Product, …]` -> Product (r2-interface-shared-base.yaml).
@@ -354,7 +355,7 @@ export class Union extends Type {
       return;
     }
 
-    for (const prop of this.dedupedSelectedProps(selection, keep)) {
+    for (const prop of this.dedupedSelectedProps(context, selection, keep)) {
       prop.select(context, writer, selection);
     }
 
@@ -526,19 +527,19 @@ export class Union extends Type {
   // False when merging finds no fields at all — such a union is written as JSON, not as an empty type.
   // Merged fields sit on this.props; the op line asks with no selection at hand, so read them first.
   // e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no fields  #80
-  public hasSelectedProps(selection: string[], keep: boolean): boolean {
+  public hasSelectedProps(context: OasContext, selection: string[], keep: boolean): boolean {
     if (this.consolidated) {
       return this.props.size > 0;
     }
-    return this.dedupedSelectedProps(selection, keep).length > 0;
+    return this.dedupedSelectedProps(context, selection, keep).length > 0;
   }
 
   // Why generate() above writes JSON instead of a real return type, or undefined if it doesn't.
   // The op's own docstring (get.ts/post.ts) reads this before this union writes anything. #132
   //   e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no
   //   fields to merge, so the operation answers JSON instead of an empty type
-  public emptyMergeReason(selection: string[], keep: boolean): string | undefined {
-    return this.isFlat() && !this.hasSelectedProps(selection, keep)
+  public emptyMergeReason(context: OasContext, selection: string[], keep: boolean): string | undefined {
+    return this.isFlat() && !this.hasSelectedProps(context, selection, keep)
       ? "this union merges every member's fields into one type, but none were selected — sent as raw JSON instead."
       : undefined;
   }

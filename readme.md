@@ -461,6 +461,7 @@ Note the `api_key` header: petstore declares an `apiKey` security scheme, which 
 - `--connector-spec-version <version>`: Connector spec version to use (default: `v0.4`, the only supported value).
 - `--skip-optional-args`: Skip optional arguments in queries (default: `false`).
 - `--skip-optional-markers`: Skip the `?` optional-field markers in selections (default: `false`).
+- `--skip-degrade-reasons`: Leave out the `NEEDS ATTENTION` note gen adds to every description it defaulted to `JSON` — for agent-facing SDL, where the note would dilute the description it rides on (default: `false`). The author still gets every note as a build-time warning at its point of origin.
 - `--base-url <url>`: Override the `@source` base URL (default: `servers[0]` from the spec).
 - `--overrides <file>`: Load per-operation request overrides from a JSON file, keyed by op id. See [Request overrides](#request-overrides).
 - `--batch <file>`: Load batch endpoints (op id -> `{ maxSize? }`) from a JSON file. See [Batch endpoints](#batch-endpoints).

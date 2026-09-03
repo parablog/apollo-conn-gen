@@ -96,6 +96,7 @@ interface IGenOptions {
   servicePrefix?: string;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  skipDegradeReasons?: boolean;
   skipAuth?: boolean;
   authValuePrefix?: string;
   directives?: DirectivesConfig;

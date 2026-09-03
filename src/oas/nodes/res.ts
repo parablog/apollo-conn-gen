@@ -69,7 +69,7 @@ export class Res extends Type {
         T.isScalar(response) ||
         response instanceof En ||
         (response instanceof Arr && response.itemsType instanceof Scalar) ||
-        (response instanceof Union && response.isFlat() && !response.hasSelectedProps(selection, keep))
+        (response instanceof Union && response.isFlat() && !response.hasSelectedProps(context, selection, keep))
       ) {
         // best attempt to just copy the value that comes out of the service. most likely the
         // value will have to be replaced by a GQL type. In fact, we could potentially use SYN_ here but
