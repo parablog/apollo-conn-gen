@@ -551,3 +551,66 @@ found in the same sweep, not investigated yet.
 Confluence's matching path-multiplicity precedent), `docs/DEFERRED.md #139` (selectable granularity
 mode — the likely real fix), `tools/coverage-spec.mts` (`BIG_SCHEMA_BYTES`, `COV_COMPOSE_TIMEOUT`),
 `COVERAGE.md` (docusign.json row).
+
+## 187 [FEAT] · Real unions for every output-position `oneOf`/`anyOf` — ⏸ Parked (blocked on an external gate)
+
+**Why:** gen floors connect at v0.4 for abstract-type selection, yet `isFlat()`
+(`src/oas/nodes/union.ts:135`) still merges any union without a discriminator (`docs/FIXED.md #25`)
+and any union nested below the operation's top-level response (`docs/FIXED.md #38`) into a merged
+object instead of a real GraphQL union. Real unions are wanted in both cases, not merged objects.
+The old `consolidateUnions` toggle is irrelevant to this gap: even off, it already merged
+discriminator-less unions.
+
+**Unpark gate:** stock Rover with released composition plugin 2.16.0 (PR #9990 in its changelog)
+composes two fixtures — a nested union under a field and a nested union as an array item — and the
+echo-chain head below, all with `problems: []`.
+
+**Local-composer trap:** `tools/local/apollo-federation-cli` (mtime 2026-06-11, predates the fix)
+composes nested unions that stock Rover rejects, so the corpus compose tests pass where a real
+release fails — this is why this work was parked once already. Rebuild the local composer from
+router `origin/dev` at or after `a09276e3d` once the release gate above is green, so both agree.
+
+**Shape, once unparked:**
+- Drop both `!this.discriminator` and `!this.isTopLevelResponse()` from `isFlat()`; keep
+  `kind === 'input'` and "no field-carrying member" (`docs/FIXED.md #80`). `forcedFlat` and
+  `resolveDivergentUnionForms` (`docs/FIXED.md #121`) become dead code once those two conditions
+  are gone: delete both.
+- No discriminator declared: infer the tag from a `prop.required` field (required and not
+  nullable, `obj.ts:337`) unique to one member; arms in declaration order; catch-all is the first
+  member without one, else the last; further indistinguishable members stay in the union line,
+  never selected, `warn()` names them.
+- Proven head (router 2.14 runtime, N=2 and N=3, `problems: []`; composed so far only with the
+  local composer above — the unpark gate covers stock Rover):
+  `$(author->echo("Book") ?? director->echo("Movie") ?? "Song")->match(["Book", ...], ["Movie", ...], [@, ...])`.
+  Arm body reused unchanged from `selectAbstract` (`union.ts:390-424`).
+- Why that form: a missing key is "no value," not null, so `field->match([null, ..])` nulls the
+  whole field and `?` doesn't help; `??` exists only inside `$( )`, the only way to hang a `->`
+  chain off it; a method on a missing path also yields no value, so `??` falls through.
+- Mandatory SDL comment at the union: no discriminator declared, the rule gen applied naming the
+  fields, and the fix is a `discriminator` on the `oneOf` in the OAS. Inline in `selectAbstract`,
+  same style as the `####` headline at `union.ts:175`; `warn()` too. **Added 2026-09-03:** the
+  comment must honour `skipDegradeReasons` once that flag lands — agent-facing SDL wants no
+  degrade notes, same producer gate as `withJsonNote`, not a separate toggle.
+- No override route exists: gen reads only the raw OAS `discriminator` (`factory.ts:199`, `:415`);
+  CUSTOM regions (`docs/FIXED.md #140`) are a closed "extra-*" set, not CLI-wired, and cannot
+  replace a selection.
+- Test refinements to reuse: fixtures and tests first, red before src; new
+  `oneof-synthetic-tag.yaml` with `/media`, `/partial`, `/nullable`; flip the seven existing
+  degrade assertions (`r2-abstract.test.ts` 137, 261, 316, 334, 352, 401; one in `oas-core`).
+- Revive `--consolidate-unions` (2026-09-02): restore the CLI flag and the `IGenOptions` boolean
+  removed in `b3b8cbd` (`rtk git show b3b8cbd` for the exact surface — option, flag, README line,
+  `oasContext` plumbing). Simplified semantics: `true` → every output-position union keeps today's
+  merged-object form (the escape hatch for released plugins); `false` (default) → real unions per
+  the rules above. No version derivation, `resolveConsolidateUnions` stays dead, v0.4 stays the
+  floor. The web app passes it through like any other option. Defaulting it `true` until 2.16.0
+  ships would let the top-level and inferred-tag work land now, behind the flag; that route was
+  not taken — the whole item is parked instead.
+- Smell noted along the way: the merged block opens `####` (`union.ts:224`) and closes `###`
+  (`union.ts:237`) — mismatched heading levels, worth a look whenever this reopens.
+
+**Refs:** `src/oas/nodes/union.ts` (`isFlat`, `selectAbstract`, `forcedFlat`,
+`resolveDivergentUnionForms`), `src/oas/nodes/factory.ts` (`:199`, `:415`), `src/oas/nodes/obj.ts:337`,
+`docs/FIXED.md #25`, `#38`, `#80`, `#121`, `#140`, router PR #9990 (`a09276e3d`, "fix(connectors):
+handle union/interface types in nested group selections"). Rust tool's matching gap: to be written
+in `graphos-service-factory/docs/DEFERRED.md`, or `docs/TASKS.md` if that repo has no
+`DEFERRED.md`.
