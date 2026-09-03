@@ -86,7 +86,9 @@ export class PropObj extends Prop {
   // e.g. (only-field-in-a-cycle) contributors gains a "NEEDS ATTENTION" note; createdDate doesn't.
   protected effectiveDescription(context: OasContext): string | undefined {
     const reason = this.jsonReason(context);
-    return reason ? Schemas.withJsonNote(context, this.schema, reason).description : super.effectiveDescription(context);
+    return reason
+      ? Schemas.withJsonNote(context, this.schema, reason).description
+      : super.effectiveDescription(context);
   }
 
   dependencies(context: OasContext): IType[] {

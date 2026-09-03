@@ -108,7 +108,9 @@ export class PropArray extends Prop {
   //   e.g. (slack) archivedChannels gains a "NEEDS ATTENTION" note; a normal list doesn't.
   protected override effectiveDescription(context: OasContext): string | undefined {
     const reason = this.jsonReason(context);
-    return reason ? Schemas.withJsonNote(context, this.schema, reason).description : super.effectiveDescription(context);
+    return reason
+      ? Schemas.withJsonNote(context, this.schema, reason).description
+      : super.effectiveDescription(context);
   }
 
   dependencies(): IType[] {
