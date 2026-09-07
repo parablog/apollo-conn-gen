@@ -10177,3 +10177,92 @@ recurs.
 (`collect`), `src/oas/io/writer.ts` (`writeSchema`), `src/oas/io/operationWriter.ts`
 (`writeConnector`, `writeSelection`), `tests/resources/oas/entity-link.yaml`, `docs/FIXED.md #161`,
 `docs/FIXED.md #189`, `docs/FIXED.md #191`.
+
+## 197 [FEAT] [P3] · `--use-operation-ids`: name fields from the OAS `operationId` — ✅ Fixed
+
+**Symptom:** every Query/Mutation field name is derived from the verb and path, with `By<Param>`
+tokens for required params. Spec authors usually pick better names than the derivation does, and
+clients built against the vendor's SDKs already know those names.
+
+**OAS** (petstore) — the spec already names the operation well; the derivation does not:
+```yaml
+/pet/{petId}:
+  post:
+    operationId: updatePetWithForm
+```
+Before this flag, `POST /pet/{petId}` was always `createPetByPetId`, never `updatePetWithForm`.
+
+**Fix:** `getGqlOpName()` (`get.ts`), the one place every verb's field name comes from, gains a
+second branch ahead of the existing path-derivation, gated on the new `useOperationIds` field:
+```ts
+public getGqlOpName(): string {
+  if (this.renamedTo) return this.renamedTo;
+  if (this.useOperationIds && this.operation.hasOperationId()) {
+    return Naming.genParamName(this.operation.getOperationId());
+  }
+  return this.derivedOpName();
+}
+```
+The old per-verb bodies (`'create' + upperFirst(...)`, etc.) move unchanged into a new
+`derivedOpName()` override in `post.ts`/`put.ts`/`patch.ts`/`delete.ts` — `getGqlOpName()` itself
+is no longer overridden anywhere. `Naming.genParamName` is the #88 precedent: it already turns an
+operationId into a GraphQL name for the empty-path fallback, handling dots, dashes, spaces and a
+leading digit.
+
+`useOperationIds` is a plain instance field on `Get`, defaulting to `false`, set once in
+`OasGen.buildPaths()` right after the existing `const op = type as Get` cast and before the first
+`getGqlOpName()` call in the same loop — the loop that also assigns `renamedTo` on a name clash
+(#116), so collision numbering already runs on whichever name won, source-agnostic. No
+constructor or `Factory` signature changed: four of `getGqlOpName()`'s callers (`comp.ts`,
+`obj.ts`, `map.ts`, `union.ts`, all `updateName()`) run from those types' constructors, before any
+`OasContext` exists to read a flag from, so the flag has to reach `Get` as a field, not a
+parameter.
+
+Because every consumer — the field itself, and any synthesized (non-`$ref`) response or
+request-body input type — reads the same overridden `getGqlOpName()`, they all rename together. A
+`$ref` component schema (`Pet`, `UserInput`, …) keeps its own name either way: `updateName()` only
+renames when the node has no name yet, and a `$ref`'d schema always arrives already named.
+
+**Example** (petstore, `--use-operation-ids`):
+```graphql
+# before
+type CreatePetByPetIdResponse { ... }
+createPetByPetId(petId: ID!, name: String, status: String): CreatePetByPetIdResponse
+# after
+type UpdatePetWithFormResponse { ... }
+updatePetWithForm(petId: ID!, name: String, status: String): UpdatePetWithFormResponse
+```
+`PUT /user/{username}`'s request body stays `UserInput` (a `$ref`) on and off; only its synthesized
+response wrapper moves, from `UpdateUserByUsernameResponse` to `UpdateUserResponse`.
+
+**Selection paths:** an inline (non-`$ref`) node's id embeds the op name (`obj:type:<opName>Response`,
+the synthesized input type), so a selection saved with the flag off and reloaded with it on can
+name a node that no longer exists. `SelectionPath.resolveSegment` (#72/#135) already covers this:
+exact id match first, else recovery through `T.innerChild(parent)` when the parent has exactly one
+child of that kind, else `undefined`, which surfaces as an explicit `Could not find type` error.
+Recover-to-the-same-node or fail loudly — never a silently different node. Nothing new here; the
+flag just exercises an existing path.
+
+**Verified:** new fixtures `tests/resources/oas/operation-ids.yaml` (an operationId with dots and
+dashes on both a GET and a PATCH, one op with no operationId falling back to the derived name, and
+three distinct raw operationIds — `listThings`, `list-things`, `list.things` — that all sanitise to
+the same name, proving `renamedTo` numbering still tells them apart) and
+`tests/resources/oas/operation-ids-duplicate.yaml` (two ops sharing one literal operationId,
+loaded with `skipValidation: true`). New `tests/all/use-operation-ids.test.ts` (8 tests): petstore
+flag on/off, the `PUT /user/{username}` `$ref`-type-is-unaffected proof, the dots/dashes/fallback
+and duplicate-operationId cases, and two saved-selection round trips (a renamed GET response, a
+renamed PATCH input) confirming `T.innerChild` recovery to the same leaf with a logged warning, not
+a throw. Revert-check: removing the `useOperationIds` branch from `getGqlOpName()` fails 7 of the 8
+new tests; the flag-off test still passes. Full suite: 541 tests, 537 pass, 0 fail, 4 todo
+(pre-existing) — up from 533/529/0/4 before this change. `npm run build` and `npm run lint` clean.
+Scratch runs: petstore and `operation-ids.yaml` diffed with the flag on vs off show only the
+renamed fields and their synthesized types changing, nothing else; `PUT /user/{username}`'s `User`
+response-body type (unrelated to this fix) and `UserInput` request type are byte-identical on and
+off.
+
+**Refs:** `src/oas/nodes/get.ts` (`getGqlOpName`, `derivedOpName`),
+`src/oas/nodes/{post,put,patch,delete}.ts`, `src/oas/oasGen.ts` (`buildPaths`),
+`src/oas/oasGen.ts`/`src/oas/oasContext.ts` (`useOperationIds` option), `src/cli/oas.ts`
+(`--use-operation-ids`), `tests/resources/oas/operation-ids.yaml`,
+`tests/resources/oas/operation-ids-duplicate.yaml`, `tests/all/use-operation-ids.test.ts`,
+`docs/FIXED.md #88`, `docs/FIXED.md #116`.

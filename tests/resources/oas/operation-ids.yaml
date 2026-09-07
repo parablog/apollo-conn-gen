@@ -1,0 +1,129 @@
+openapi: 3.0.3
+info:
+  title: Widgets Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # operationId has dots and dashes -- sanitises to widgetFetchOne. inline response object, no
+  # $ref, so its wrapper type is named from the op either way.
+  /widgets/{widgetId}:
+    get:
+      operationId: widget.fetch-one
+      summary: Get a widget by id
+      parameters:
+        - name: widgetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A widget
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  label:
+                    type: string
+    # operationId has dots and dashes -- sanitises to widgetPatchOne, derived patchWidgetsByWidgetId.
+    # inline request body, no $ref, so Body.visit() synthesizes an op-named input type.
+    patch:
+      operationId: widget.patch-one
+      summary: Update a widget's note
+      parameters:
+        - name: widgetId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        '200':
+          description: The updated widget
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  label:
+                    type: string
+  # no operationId -- falls back to the derived createWidgets.
+  /widgets:
+    post:
+      summary: Create a widget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+      responses:
+        '200':
+          description: The created widget
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  label:
+                    type: string
+  # three distinct raw operationIds that all sanitise to the same name, listThings -- proves
+  # renamedTo (collision numbering) wins over the operationId once set, not just for the first clash.
+  /gadgets:
+    get:
+      operationId: listThings
+      summary: List gadgets
+      responses:
+        '200':
+          description: Gadgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /gizmos:
+    get:
+      operationId: list-things
+      summary: List gizmos
+      responses:
+        '200':
+          description: Gizmos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /doohickeys:
+    get:
+      operationId: list.things
+      summary: List doohickeys
+      responses:
+        '200':
+          description: Doohickeys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string

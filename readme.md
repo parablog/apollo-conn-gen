@@ -228,6 +228,7 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 | `skipOptionalMarkers`    | `boolean`          | `false`                    | Omit the `?` optional-field markers from selections, so the output composes with composition older than 2.15.                                        |
 | `inferEntityResolvers`   | `boolean`          | `false`                    | Infer entity resolvers and emit `@key` / `entity: true`.                                                                                             |
 | `emitConnectorErrors`    | `boolean`          | `false`                    | Emit an `errors { message extensions { statusCode: $status } }` block for operations that document HTTP error responses (CLI: `--emit-connector-errors`). |
+| `useOperationIds`        | `boolean`          | `false`                    | Name Query/Mutation fields, and any synthesized (non-`$ref`) response or request-body input type, from the OAS `operationId` when present, falling back to the derived verb+path name otherwise. A `$ref` component schema keeps its own name either way (CLI: `--use-operation-ids`). A saved selection into a part of the tree this flag renames either recovers to the same field, when the rename left exactly one candidate the old segment could still mean, or generation fails with an explicit `Could not find type` error — it is never silently redirected to a different field. |
 | `skipAuth`               | `boolean`          | `false`                    | Omit all auth: no headers on `@source`, no auth on `@connect`.                                                                                       |
 | `authValuePrefix`        | `string`           | —                          | Text written before an API-key header value, e.g. `Token token=`. Only applies to an API key in a header.                                            |
 | `servicePrefix`          | `string`           | —                          | Prefix every type with `<Name>_` and every root field with `<name>_`, so separately generated connectors compose without colliding.                  |
@@ -467,6 +468,7 @@ Note the `api_key` header: petstore declares an `apiKey` security scheme, which 
 - `--batch <file>`: Load batch endpoints (op id -> `{ maxSize? }`) from a JSON file. See [Batch endpoints](#batch-endpoints).
 - `--directives <file>`: Load directives (`Type` or `Type.field` -> `["@…"]`) from a JSON file. See [Manual directives](#manual-directives).
 - `--infer-entity-resolvers`: Infer entity resolvers and emit `@key` / `entity: true` (default: `false`).
+- `--use-operation-ids`: Name Query/Mutation fields (and any synthesized response/input type) from the OAS `operationId` when present, falling back to the derived name otherwise (default: `false`). See the [`useOperationIds`](#oasgen-options) row for the `$ref` exception and saved-selection behaviour.
 - `--skip-auth`: Omit all auth — no headers on `@source`, no auth on `@connect` (default: `false`).
 - `--auth-value-prefix <prefix>`: Text to write before an API-key header value, e.g. `"Token token="` (default: none). Only applies when the scheme is an API key in a header.
 
@@ -558,6 +560,8 @@ The same flag also links to those entities: for each root GET whose path ends in
 ### Transform Rules
 
 The tool supports loading multiple transform rules from a JSON file to apply complex name transformations. This is useful when you need to apply multiple transformations in sequence or maintain a set of consistent naming rules.
+
+Transform rules run after [`useOperationIds`](#oasgen-options): a rule written against the derived name will not match once that flag has already renamed the field to its operationId.
 
 #### Transform Rules File Format
 

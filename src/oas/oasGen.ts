@@ -96,6 +96,7 @@ interface IGenOptions {
   servicePrefix?: string;
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  useOperationIds?: boolean;
   skipDegradeReasons?: boolean;
   skipAuth?: boolean;
   authValuePrefix?: string;
@@ -339,6 +340,7 @@ export class OasGen {
     for (const type of collected.values()) {
       const takenNames = T.isMutationType(type, context) ? mutationFieldNames : queryFieldNames;
       const op = type as Get;
+      op.useOperationIds = context.generateOptions.useOperationIds === true;
       const name = op.getGqlOpName();
       if (takenNames.has(name)) {
         op.renamedTo = Naming.numberedName(name, (n) => takenNames.has(n));

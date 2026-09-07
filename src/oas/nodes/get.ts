@@ -27,6 +27,9 @@ export class Get extends Type implements Op {
   //   e.g. GET /foo-bar + GET /foo.bar both clean to fooBar — the second becomes fooBar2
   public renamedTo?: string;
 
+  // set by OasGen.buildPaths from --use-operation-ids, before anything reads getGqlOpName()
+  public useOperationIds: boolean = false;
+
   public resultType?: IType;
   public params: Param[] = [];
   public summary?: string;
@@ -197,6 +200,13 @@ export class Get extends Type implements Op {
 
   public getGqlOpName(): string {
     if (this.renamedTo) return this.renamedTo;
+    if (this.useOperationIds && this.operation.hasOperationId()) {
+      return Naming.genParamName(this.operation.getOperationId());
+    }
+    return this.derivedOpName();
+  }
+
+  protected derivedOpName(): string {
     return Naming.genOperationName(this.operation.path, this.operation);
   }
 

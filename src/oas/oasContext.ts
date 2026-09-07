@@ -71,6 +71,7 @@ export type GenerateOptions = {
   servicePrefix?: string; // prefix every type and root field with the service name
   inferEntityResolvers?: boolean;
   emitConnectorErrors?: boolean;
+  useOperationIds?: boolean;
   // leave out the "NEEDS ATTENTION" note gen adds to every description it defaulted to JSON —
   // for agent-facing SDL. warnings are always logged regardless.
   skipDegradeReasons?: boolean;

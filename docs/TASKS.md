@@ -360,3 +360,35 @@ own rule.
 2026-09-04); no proposed direction yet.
 
 **Refs:** `src/oas/nodes/entity.ts`, `docs/FIXED.md #161`.
+
+## 198 [BUG] [P4] · `--transform-rules` renames a field but not its own response type — ⬜ Open
+
+**Where:** `writeOpName` (`src/oas/nodes/get.ts:206-214`).
+
+**Symptom:** `context.generateOptions.mapper.operationName(name)` runs on the SDL field text only,
+after `getGqlOpName()` already returned and named that op's synthesized (non-`$ref`) response
+type. A transform rule that renames `createPet` to `addPet` renames the field, but the response
+type stays `CreatePetResponse` — field and type drift apart.
+
+**Direction:** move the mapper call (or an equivalent one) inside `getGqlOpName()` itself, the way
+`docs/FIXED.md #197` does for `useOperationIds`, so every consumer of the name — the field and any
+synthesized response/input type — reads the same, already-mapped string.
+
+**Refs:** `src/oas/nodes/get.ts` (`getGqlOpName`, `writeOpName`), `src/oas/mapper/`,
+`docs/FIXED.md #197`.
+
+## 199 [DOCS] [P5] · Renaming flags don't document their effect on saved selections — ⬜ Open
+
+**Where:** `README.md`, the `servicePrefix` and `keepFieldNames` rows of `### OasGen options`.
+
+**Symptom:** `--service-prefix` and `--keep-field-names` both rename nodes that a saved selection
+can descend into, and both go through the same `SelectionPath.resolveSegment` recover-or-fail path
+(#72/#135) that `docs/FIXED.md #197` documents for `useOperationIds` — recover to the same node
+when the rename left exactly one candidate it could still mean, or an explicit `Could not find
+type` error otherwise. Neither option's README row says so.
+
+**Direction:** one shared paragraph describing the recover-or-fail behaviour, linked from every
+renaming flag's row, instead of restating it per flag.
+
+**Refs:** `README.md` (`### OasGen options`), `src/oas/utils/selectionPath.ts`,
+`docs/FIXED.md #197`.

@@ -38,6 +38,7 @@ export async function runOasTest(
     federationVersion?: string;
     composeFederationVersion?: string;
     emitConnectorErrors?: boolean;
+    useOperationIds?: boolean;
     skipDegradeReasons?: boolean;
     skipAuth?: boolean;
     authValuePrefix?: string;
@@ -70,6 +71,7 @@ export async function runOasTest(
     docPagination: opts.docPagination,
     inferEntityResolvers: opts.inferEntityResolvers,
     emitConnectorErrors: opts.emitConnectorErrors,
+    useOperationIds: opts.useOperationIds,
     skipDegradeReasons: opts.skipDegradeReasons,
     skipAuth: opts.skipAuth,
     authValuePrefix: opts.authValuePrefix,

@@ -54,8 +54,7 @@ export class Post extends Get {
     context.leave(this);
   }
 
-  public getGqlOpName(): string {
-    if (this.renamedTo) return this.renamedTo;
+  protected derivedOpName(): string {
     return 'create' + _.upperFirst(Naming.genOperationName(this.operation.path, this.operation));
   }
 

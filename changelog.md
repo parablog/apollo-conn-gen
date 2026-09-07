@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `--use-operation-ids` names Query/Mutation fields, and any synthesized (non-`$ref`) response or
+  request-body input type, from the OAS `operationId` when present, instead of deriving one from
+  the verb and path. A `$ref` component schema keeps its own name either way. A saved selection
+  into a part of the tree this renames either recovers to the same field or generation fails with
+  an explicit error — it is never silently redirected to a different field. Issue #197.
+
 ### Fixed
 
 - `--infer-entity-resolvers` now keys a type on a sole path param spelled `<TypeName>Id` (e.g.

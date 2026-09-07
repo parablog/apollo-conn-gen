@@ -103,6 +103,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     docResponseFields: opts.docResponseFields,
     docPagination: opts.docPagination,
     emitConnectorErrors: opts.emitConnectorErrors,
+    useOperationIds: opts.useOperationIds,
     skipDegradeReasons: opts.skipDegradeReasons,
     servicePrefix: opts.servicePrefix,
     inferEntityResolvers: opts.inferEntityResolvers,
@@ -198,6 +199,7 @@ program
     '--emit-connector-errors',
     "Emit an errors block mapping the documented error body's message and the HTTP status on operations that document 4xx/5xx responses",
   )
+  .option('--use-operation-ids', 'name Query/Mutation fields from the OAS operationId when present')
   .option(
     '--service-prefix <name>',
     'Prefix every type with "<Name>_" and every root field with "<name>_", so separately generated connectors compose without colliding',

@@ -1,0 +1,35 @@
+openapi: 3.0.3
+info:
+  title: Duplicate Operation Ids
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # vendor specs ship literal duplicate operationIds despite the spec forbidding it -- loaded with
+  # skipValidation: true. renamedTo must still number the second one.
+  /things:
+    get:
+      operationId: listThings
+      summary: List things
+      responses:
+        '200':
+          description: Things
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /stuff:
+    get:
+      operationId: listThings
+      summary: List stuff
+      responses:
+        '200':
+          description: Stuff
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
