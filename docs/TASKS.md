@@ -233,25 +233,130 @@ shared version this entry plans doesn't bring the old bug back.
 
 **Refs:** #86, #131, #182, #185.
 
-## 190 [FEAT] [P4] · No entity link for a `<TypeName>Id`-aliased key — ⬜ Open
+## 192 [FEAT] [P4] · R1: key entities returned inside a one-field envelope — ⬜ Open
 
-**Where:** `inferEntityLinks` (`src/oas/nodes/entity.ts:200-214`, #161).
+**Where:** `unwrapToObj` (`src/oas/nodes/entity.ts`).
 
-**What's missing:** #189 lets a sole path param named `<TypeName>Id` (e.g. `petId`) key its type
-on `id` instead of requiring a literal name match. `inferEntityLinks` was deliberately left
-untouched, so it still looks a candidate op's resolver up by `r.keyFields === param.name`
-(`entity.ts:211`) — for an aliased key, `keyFields` holds `"id"`, not the param name (`"petId"`),
-so the lookup misses and no link field is generated. e.g. (entity-param-alias) `Order.petId: ID`
-never gains a key-only `pet: Pet` field the way an un-aliased `Order.id` reaching a `Pet` by literal
-name would.
+**OAS** (digitalocean) — a by-id GET wrapping the resource in a single named field:
+```yaml
+/v2/droplets/{droplet_id}:
+  get:
+    parameters: [{ name: droplet_id, in: path, required: true, schema: { type: string } }]
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              properties:
+                droplet: { $ref: '#/components/schemas/Droplet' }
+Droplet:
+  properties: { id: { type: string }, name: { type: string } }
+```
+Generates a response type `v2DropletsByDropletIdResponse { droplet: Droplet }`. `Droplet` itself
+has `id`, but `unwrapToObj` peels only one `Res` layer and stops at the envelope object — it never
+looks at the envelope's own single field.
 
-**Why not folded into #189:** the two features compose independently — #189 only changes which ops
-qualify as resolvers, #161's own matching (by `param.name`, not by the resolved property) needs its
-own decision about whether to match on the resolved key property instead, and by which of several
-possibly-aliased names a scalar on another type would need to carry to link.
+**What's missing:** an entity reachable one level deeper, behind a single-field wrapper, never
+gets a `@key` at all, not even a wrong one — it's silently skipped.
 
-**Acceptance (once picked up):** an aliased-key type (e.g. `Pet` keyed via `petId`->`id`) is
-linkable from another type's same-named foreign key, same as an unaliased key is today; new
-fixture/test alongside `entity-link.yaml`/`entity-link.test.ts`.
+**Counts** (corpus sweep, `--infer-entity-resolvers` on, 2026-09-04): digitalocean 26/26 by-id
+GETs miss this way; asana 26/26 (`{ data: ... }` wrapper); sendgrid 6 of 43.
 
-**Refs:** `docs/FIXED.md #189`, `docs/FIXED.md #161`, `src/oas/nodes/entity.ts`.
+**Direction:** when the response unwraps to a plain `Obj` with exactly one field whose own type is
+itself a plain `Obj` (or a list of one), key the *inner* entity instead, with a type-level
+`@connect` whose selection starts at the envelope field (`droplet: { id }`, not a bare `{ id }`).
+
+**Note:** `--infer-entity-resolvers` is opt-in; nothing here changes default output.
+
+**Refs:** `src/oas/nodes/entity.ts` (`unwrapToObj`), `docs/FIXED.md #161`, `docs/FIXED.md #189`.
+
+## 193 [FEAT] [P4] · R1: key allOf-composed responses — ⬜ Open
+
+**Where:** `unwrapToObj` (`src/oas/nodes/entity.ts`).
+
+**OAS** (box) — an allOf-composed by-id response:
+```yaml
+/files/{file_id}:
+  get:
+    parameters: [{ name: file_id, in: path, required: true, schema: { type: string } }]
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/FileBase'
+                - $ref: '#/components/schemas/FileFullExtra'
+```
+Generates a `Composed` type (`File--Full`) merging both branches' properties, one of which is
+`id`. `unwrapToObj` rejects any `Composed` outright, before any id/alias check ever runs.
+
+**What's missing:** the entity-resolver check never looks at the composed type's own merged
+fields — a real `id` sitting in one of the `allOf` branches is never considered.
+
+**Counts** (corpus sweep, `--infer-entity-resolvers` on, 2026-09-04): box 16 of 34 by-id GETs,
+including its three headline resource types (File, Folder, User); sendgrid 11 of 43.
+
+**Direction:** run `findKeyField` over the composed type's own merged property set (the same set
+`Composed` already exposes for field generation), the way it runs over a plain `Obj`'s `props`.
+
+**Note:** `--infer-entity-resolvers` is opt-in; nothing here changes default output.
+
+**Refs:** `src/oas/nodes/entity.ts` (`unwrapToObj`), `src/oas/nodes/comp.ts` (`Composed`),
+`docs/FIXED.md #161`.
+
+## 194 [FEAT] [P4] · R1: widen the id alias beyond `<TypeName>Id` — ⬜ Open
+
+**Where:** `isIdAlias` / `findKeyField` (`src/oas/nodes/entity.ts`, from #189).
+
+**Cases** (corpus sweep, `--infer-entity-resolvers` on, 2026-09-04):
+- a synthesized response type name that no type-name rule can ever match, since the name is built
+  from the whole op path, not the resource: incidentio 39/39 by-id GETs (`IncidentsShowResultV2`
+  for `GET /v2/incidents/{id}`), mailchimp 20, omni 8, sendgrid's `AlertsByAlertIdResponse` for
+  `GET /alerts/{alert_id}`.
+- a real, named type whose name just isn't the param's stem: openai's `OpenAIFile` for
+  `GET /files/{file_id}`, box's `MetadataTemplate` for `GET /metadata_templates/{template_id}`.
+- asana's `task_gid` path param against a field literally named `gid`, not `id`.
+
+**Directions** (not yet chosen between):
+- match the path's own last static segment (singularized, the same way #161's link-field naming
+  already singularizes a segment) against `<segment>Id`, e.g. `/incidents/{id}` -> "incident" +
+  "Id".
+- a `<TypeName><keyField>` form, so a case like asana's `gid` isn't hardcoded to `id`.
+
+**Known rejection:** widening to accept any bare `*Id`-named param regardless of the type was
+already considered and rejected while building #189 — it produces false positives on sub-resource
+paths (e.g. `/customer/{customerId}/account` would key `Account` on `customerId`).
+
+**Note:** `--infer-entity-resolvers` is opt-in; nothing here changes default output.
+
+**Refs:** `src/oas/nodes/entity.ts` (`isIdAlias`, `findKeyField`), `docs/FIXED.md #189`.
+
+## 195 [FEAT] [P4] · Confluence-style shared result types: known no-key case, no direction yet — ⬜ Open
+
+**Where:** `inferEntityResolvers` (`src/oas/nodes/entity.ts`).
+
+**OAS** (confluence) — three unrelated by-id GETs answering the same shape:
+```yaml
+/wiki/rest/api/user/watch/content/{contentId}:
+  get: { parameters: [{ name: contentId, in: path, required: true, schema: { type: string } }],
+         responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/UserWatch' } } } } } }
+/wiki/rest/api/user/watch/label/{labelName}:
+  get: { parameters: [{ name: labelName, in: path, required: true, schema: { type: string } }],
+         responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/UserWatch' } } } } } }
+/wiki/rest/api/user/watch/space/{spaceKey}:
+  get: { parameters: [{ name: spaceKey, in: path, required: true, schema: { type: string } }],
+         responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/UserWatch' } } } } } }
+```
+All three by-id GETs resolve to the same `UserWatch` type, with three different, unrelated path
+param names (`contentId`, `labelName`, `spaceKey`), none of which name a real key on `UserWatch`
+itself — it's a boolean-ish "am I watching this" answer, not an identified resource.
+
+**Symptom:** none of the three qualifies for `@key` today, correctly — but it isn't obvious
+whether that's simply correct (this type genuinely isn't a keyable entity) or a shape worth its
+own rule.
+
+**Status:** recorded as a known no-key case from the corpus sweep (`--infer-entity-resolvers` on,
+2026-09-04); no proposed direction yet.
+
+**Refs:** `src/oas/nodes/entity.ts`, `docs/FIXED.md #161`.

@@ -49,7 +49,10 @@ export class PropEntityLink extends Prop {
     const base = context.indent + context.stack.length;
     const name = this.renamedTo ?? Naming.sanitiseField(this.name, keep);
     // the key must match the target's @key, which now honors a twin rename too. see docs/FIXED.md #168
-    const sourceRef = Naming.sanitiseFieldForSelect(this.sourceProp.name, false, this.targetKeyProp.renamedTo, keep);
+    // #191: written name falls back to the target key's own sanitised name (Thing.id has no
+    // rename), not the source's -- Shelf.thingId -> Thing.id must read `thing: { id: thingId }`.
+    const keyName = this.targetKeyProp.renamedTo ?? Naming.sanitiseField(this.targetKeyProp.name, keep);
+    const sourceRef = Naming.sanitiseFieldForSelect(this.sourceProp.name, false, keyName, keep);
 
     writer
       .write(' '.repeat(base))

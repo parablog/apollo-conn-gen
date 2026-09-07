@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - `--infer-entity-resolvers` now keys a type on a sole path param spelled `<TypeName>Id` (e.g.
   `petId` -> `Pet.id`, `order_id` -> `Order.id`), not only on an exact field-name match. Issue #189.
+- `--infer-entity-resolvers` no longer adds a reference field to a type that isn't itself keyed on
+  `id` (or a `<TypeName>Id` alias), and never adds one to an input type — it used to match any
+  same-named scalar field, including a request body mirroring the key, which broke composition.
+  Issues #191, #190.
+- `--infer-entity-resolvers` now writes the reference field's connector mapping on every operation
+  that returns the linked type, not only the first one selected — a second GET or a PATCH/PUT on
+  the same resource used to emit the field with no mapping, which broke composition whenever that
+  type had no key of its own. Issue #196.
 
 ## [0.29.0]
 

@@ -6,7 +6,7 @@ import './_setup.js';
 // --- #161: entity-link inference (inferEntityLinks) -- the reference half of R1: a key-only
 // field on any other selected type that carries the by-id op's own path-param name. ---
 
-const PATHS_SIZE = 14; // total GET ops declared in entity-link.yaml, regardless of selection
+const PATHS_SIZE = 24; // total ops declared in entity-link.yaml, regardless of selection
 
 test('test_161_happy_path_song_links_to_album', async () => {
   // Song.album_id (required) matches Album's own by-id key -> Song gains a key-only
@@ -206,4 +206,99 @@ test('test_161_flag_off_byte_identical', async () => {
   assert.ok(!schema!.includes('$this'), 'flag off must not emit a $this resolver');
   assert.ok(!schema!.includes('album: Album'), 'flag off must not emit a link field either');
   assert.ok(!/album:\s*\{/.test(schema!), 'flag off must not emit a link selection stub');
+});
+
+test('test_191_input_type_host_never_links', async () => {
+  // Album's own schema reused as a POST body -- AlbumInput must never gain an album link even
+  // though it mirrors Album's own key.
+  const paths = ['post:/albums>**', 'get:/albums/{album_id}>**'];
+
+  const schema = await runOasTest('entity-link.yaml', paths, PATHS_SIZE, 2, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  assert.ok(!/album:\s*Album/.test(schema!), 'no link field expected inside an input type');
+  assert.ok(schema!.includes('input AlbumInput'), 'sanity: AlbumInput must actually exist in this schema');
+});
+
+test('test_190_alias_keyed_target_still_links', async () => {
+  // Thing is keyed by alias (its own key property is "id", the path param is "thingId") --
+  // Shelf's thingId field must still resolve the link the same way a literal-named key would.
+  const paths = ['get:/things/{thingId}>**', 'get:/shelves/{shelfId}>**'];
+
+  const schema = await runOasTest('entity-link.yaml', paths, PATHS_SIZE, 2, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('thing: Thing!'), 'expected a required thing link on Shelf');
+  assert.ok(
+    /thing:\s*\{\s*id:\s*thingId\s*\}/.test(schema!),
+    'expected a key-only selection stub mapping id to thingId',
+  );
+});
+
+test('test_191_bare_id_field_does_not_link', async () => {
+  // Item is keyed on a literal "id" -- Crate's own "id" field names itself, not a foreign key to
+  // Item, however literally the names line up.
+  const paths = ['get:/items/{id}>**', 'get:/crates/{crate_id}>**'];
+
+  const schema = await runOasTest('entity-link.yaml', paths, PATHS_SIZE, 2, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('item: Item'), 'no link field expected -- a bare id is not a foreign key');
+  assert.ok(!/item:\s*\{/.test(schema!), 'no key-only selection stub expected');
+});
+
+test('test_191_non_id_keyed_target_never_a_candidate', async () => {
+  // Member is keyed on username, not id -- it must never become a link candidate, however
+  // alias-shaped Post's memberId field looks.
+  const paths = ['get:/members/{username}>**', 'get:/posts/{post_id}>**'];
+
+  const schema = await runOasTest('entity-link.yaml', paths, PATHS_SIZE, 2, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('member: Member'), 'no link field expected -- Member is not id-keyed');
+  assert.ok(!/member:\s*\{/.test(schema!), 'no key-only selection stub expected');
+});
+
+test('test_191_petstore_user_input_never_links', async () => {
+  // The original #191 repro: User is keyed on username, not id -- UserInput mirrors User's own
+  // username field, but must never gain a `user: User` field (an object type inside an input
+  // type fails composition outright).
+  const paths = ['post:/user>**', 'get:/user/{username}>**'];
+
+  const schema = await runOasTest('petstore.yaml', paths, 19, 2, { inferEntityResolvers: true, skipValidation: true });
+  assert.ok(schema !== undefined);
+  assert.ok(!/user:\s*User/.test(schema!), 'no link field expected inside an input type');
+  assert.ok(schema!.includes('input UserInput'), 'sanity: UserInput must actually exist in this schema');
+});
+
+// #196: Card stays unkeyed (its own path param, card_ref, matches neither "id" nor "CardId") and
+// is returned by more than one op -- each op builds its own copy of Card, so the link stub has to
+// reach every copy, not just whichever op the collector visits first.
+
+test('test_196_get_then_patch_both_write_the_stub', async () => {
+  const paths = ['get:/cards/{card_ref}>**', 'patch:/cards/{card_ref}>**', 'get:/things/{thingId}>**'];
+
+  const schema = await runOasTest('entity-link.yaml', paths, PATHS_SIZE, 3, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  const stubCount = (schema!.match(/thing: \{\s*\n\s*id: thingId/g) ?? []).length;
+  assert.strictEqual(stubCount, 2, `expected both the GET and the PATCH connector to carry the stub, got ${stubCount}`);
+});
+
+test('test_196_patch_then_get_both_write_the_stub', async () => {
+  // same pair, PATCH listed first -- #196 was selection-order-dependent, so this is the case that
+  // caught it: the PATCH used to become the copy inferEntityLinks attaches the link to, leaving
+  // the GET's own copy silently unlinked.
+  const paths = ['patch:/cards/{card_ref}>**', 'get:/cards/{card_ref}>**', 'get:/things/{thingId}>**'];
+
+  const schema = await runOasTest('entity-link.yaml', paths, PATHS_SIZE, 3, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  const stubCount = (schema!.match(/thing: \{\s*\n\s*id: thingId/g) ?? []).length;
+  assert.strictEqual(stubCount, 2, `expected both the PATCH and the GET connector to carry the stub, got ${stubCount}`);
+});
+
+test('test_196_two_gets_both_write_the_stub', async () => {
+  // two unrelated GETs returning the same Card schema, no PATCH involved -- #196 is not
+  // mutation-specific, any second op sharing a response type hits it.
+  const paths = ['get:/cards/{card_ref}>**', 'get:/decks/{deck_ref}/card>**', 'get:/things/{thingId}>**'];
+
+  const schema = await runOasTest('entity-link.yaml', paths, PATHS_SIZE, 2, { inferEntityResolvers: true });
+  assert.ok(schema !== undefined);
+  const stubCount = (schema!.match(/thing: \{\s*\n\s*id: thingId/g) ?? []).length;
+  assert.strictEqual(stubCount, 2, `expected both GETs' connectors to carry the stub, got ${stubCount}`);
 });

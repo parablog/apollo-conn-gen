@@ -69,6 +69,12 @@ function isIdAlias(typeName: string, paramName: string): boolean {
   return `${normaliseForCompare(typeName)}id` === normaliseForCompare(paramName);
 }
 
+// #191: an entity is only a link target when its own key literally names itself "id" or aliases
+// to it via isIdAlias -- a type keyed on something else (e.g. User on username) never is.
+function isIdKey(refName: string, keyField: Prop): boolean {
+  return keyField.name === 'id' || isIdAlias(refName, keyField.name);
+}
+
 // Literal name match wins; failing that, a sole path param named `<TypeName>Id` aliases to `id`.
 // e.g. (entity-param-alias) `/pet/{petId}` -> `Pet.id`; two path params keeps neither aliased.
 function findKeyField(obj: Obj, param: Param, pathParams: Param[], selected: Prop[]): Prop | undefined {
@@ -184,7 +190,7 @@ export function inferEntityResolvers(
 }
 
 // A candidate link source: a root GET-by-id op ending in its one path param, resolving to an
-// R1-resolved type. e.g. (entity-link) GET /albums/{album_id} -> Album. #161
+// id-keyed R1-resolved type (its own key is "id" or a "<TypeName>Id" alias). #191
 interface EntityLinkCandidate {
   opId: string;
   target: Obj;
@@ -192,9 +198,9 @@ interface EntityLinkCandidate {
   fieldName: string;
 }
 
-// #161: key-only reference fields. A root GET ending in one path param, resolving to an
-// R1-resolved type, seeds a field on any other selected type carrying that same scalar name.
-// e.g. (entity-link) Song.album_id -> Song.album: Album, coupled to --infer-entity-resolvers.
+// #191: key-only reference fields, id-keyed entities only. A selected output type carrying a
+// scalar field named "<TypeName>Id" (or "id") gets a key-only reference to that entity, e.g.
+// (entity-link) Song.album_id -> Song.album: Album. Input types never host a link.
 export function inferEntityLinks(
   context: OasContext,
   gen: OasGen,
@@ -237,11 +243,13 @@ export function inferEntityLinks(
       continue;
     }
 
-    const resolver = target.entityResolvers.find((r) => r.keyFields === param.name);
-    const targetKeyProp = resolver && target.props.get(param.name);
-    if (!targetKeyProp) {
+    const refName = Naming.getRefName(target.name);
+    const keyField = findKeyField(target, param, pathParams, target.selectedProps(selection, keep));
+    const resolver = keyField && target.entityResolvers.find((r) => r.keyFields === keyField.name);
+    if (!resolver || !keyField || !isIdKey(refName, keyField)) {
       continue;
     }
+    const targetKeyProp = keyField;
 
     const staticSegments = op.operation.path.split('/').filter((s) => s && s !== `{${param.name}}`);
     const lastStaticSegment = staticSegments[staticSegments.length - 1];
@@ -255,13 +263,20 @@ export function inferEntityLinks(
   candidates.sort((a, b) => a.opId.localeCompare(b.opId));
 
   for (const { target, targetKeyProp, fieldName } of candidates) {
+    const refName = Naming.getRefName(target.name);
+
     for (const host of types.values()) {
-      if (!(host instanceof Obj) || host === target) {
+      if (!(host instanceof Obj) || host === target || host.kind === 'input') {
         continue;
       }
 
-      const sourceProp = host.props.get(targetKeyProp.name);
-      if (!sourceProp || !T.isPropScalar(sourceProp) || !host.selectedProps(selection, keep).includes(sourceProp)) {
+      // #168 twin case: Loop carries both beat_Id (optional) and beat_id (required) -- both name
+      // Beat, so prefer the one spelled exactly like the target's own key, Loop.beat_id.
+      const idAliases = host
+        .selectedProps(selection, keep)
+        .filter((prop) => T.isPropScalar(prop) && isIdAlias(refName, prop.name));
+      const sourceProp = idAliases.find((prop) => prop.name === targetKeyProp.name) ?? idAliases[0];
+      if (!sourceProp) {
         continue;
       }
 
@@ -273,26 +288,52 @@ export function inferEntityLinks(
       host.entityLinkProps.push(new PropEntityLink(host, fieldName, target, targetKeyProp, sourceProp));
     }
   }
+
+  // Each op builds its own copy of a response type and only the copy in `types` got the links
+  // above. Share the list with every other copy, so each op's selection writes the same stub,
+  // e.g. (entity-link) GET and PATCH /cards/{card_ref} both write `thing: { id: thingId }`. #196
+  const linkedHosts = new Map<string, Obj>();
+  for (const type of types.values()) {
+    if (type instanceof Obj && type.entityLinkProps.length > 0) {
+      linkedHosts.set(type.id, type);
+    }
+  }
+  if (linkedHosts.size === 0) {
+    return;
+  }
+  for (const op of gen.paths.values()) {
+    if (!T.isOp(op) || !selectionRoots.has(op.id) || !op.resultType) {
+      continue;
+    }
+    for (const node of descendants(context, selection, op.resultType)) {
+      const host = linkedHosts.get(node.id);
+      if (host && node !== host && node instanceof Obj) {
+        node.entityLinkProps = host.entityLinkProps;
+      }
+    }
+  }
 }
 
-// Whether `from` can already reach `to` via dependencies(), the same idiom
-// typesCollector.collectReachable uses -- blocks a link that would close a cycle. #161
-// e.g. (entity-link) albums<->songs: the second direction is skipped once the first links.
-function reaches(context: OasContext, selection: string[], from: IType, to: IType): boolean {
+// Every node reachable from `from` via dependencies(), the same idiom
+// typesCollector.collectReachable uses. e.g. (entity-link) from Album, reaches Song via Song.album. #161
+function descendants(context: OasContext, selection: string[], from: IType): Set<IType> {
   const visited = new Set<IType>();
   const queue: IType[] = [from];
   while (queue.length > 0) {
     const node = queue.pop()!;
-    if (node === to) {
-      return true;
-    }
     if (visited.has(node)) {
       continue;
     }
     visited.add(node);
     queue.push(...node.dependencies(context, selection));
   }
-  return false;
+  return visited;
+}
+
+// Whether `from` can already reach `to` -- blocks a link that would close a cycle.
+// e.g. (entity-link) albums<->songs: the second direction is skipped once the first links.
+function reaches(context: OasContext, selection: string[], from: IType, to: IType): boolean {
+  return descendants(context, selection, from).has(to);
 }
 
 // A plain regex plural-to-singular pass (irregular plurals unhandled) for turning a path's last

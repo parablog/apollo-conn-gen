@@ -9002,6 +9002,9 @@ stashing `propEntityLink.ts`/`entity.ts`/`obj.ts`/`writer.ts`/`internal.ts` fail
 link-present tests, restoring passes all 8. Full suite green (485 tests, 481 pass, 0 fail, 4
 pre-existing todo).
 
+**Host rule replaced (2026-09-04):** the same-named-scalar host match above was replaced by an
+id-alias-based rule that also excludes input types — `docs/FIXED.md #191`.
+
 **Refs:** `src/oas/nodes/propEntityLink.ts`, `src/oas/nodes/entity.ts` (`inferEntityLinks`),
 `src/oas/nodes/obj.ts` (`entityLinkProps`), `src/oas/io/writer.ts`,
 `tests/resources/oas/entity-link.yaml`, `~/.claude-personal/plans/issue-161.md`, Adam's benchmark
@@ -9975,9 +9978,9 @@ real property names, not param names, for those sites to keep working.
 **Known limitation:** only the exact `<TypeName>Id` spelling aliases — a wider `*Id` rule was
 rejected because it would key `Account` on `customerId` for `/customer/{customerId}/account`. A
 type named for its response wrapper rather than the resource (`orderId` returning
-`OrderResponse`) still misses. `inferEntityLinks` (#161) is untouched, so the link half for a
-newly-aliased key (e.g. `Order.petId` -> `Pet`) is not inferred — tracked separately as
-`docs/TASKS.md #190`.
+`OrderResponse`) still misses. `inferEntityLinks` (#161) was left untouched here, so the link half
+for a newly-aliased key (e.g. `Order.petId` -> `Pet`) wasn't inferred yet — fixed in
+`docs/FIXED.md #191`.
 
 **Example** (petstore, `--infer-entity-resolvers`):
 ```graphql
@@ -10005,3 +10008,172 @@ suite: 525 tests, 521 pass, 0 fail, 4 todo (pre-existing). Petstore end-to-end
 `tests/resources/oas/entity-param-alias.yaml`,
 `tests/all/r1-entity.test.ts`, `docs/FIXED.md #65` (the sanitisation half this complements),
 `docs/FIXED.md #161`/`#168` (the link/twin-rename mechanics this leaves untouched).
+
+## 191 [BUG] [P2] · Entity link inference adds an object-typed reference field inside an input type (closes #190) — ✅ Fixed
+
+**Repro:** selection `["post:/user>**", "get:/user/{username}>**"]` against
+`tests/resources/oas/petstore.yaml`, `--infer-entity-resolvers` on.
+
+**OAS** (petstore) — `User` is keyed on `username`, not `id`, and its own request body mirrors it:
+```yaml
+/user:
+  post:
+    requestBody:
+      content:
+        application/json: { schema: { $ref: '#/components/schemas/User' } }
+/user/{username}:
+  get:
+    parameters: [{ name: username, in: path, required: true, schema: { type: string } }]
+    responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } } }
+User:
+  properties: { id: { type: integer }, username: { type: string }, ... }
+```
+
+**Symptom:** the old host rule (`host.props.get(targetKeyProp.name)`, a literal name lookup)
+matched any other selected type carrying a scalar field spelled exactly like the entity's own key
+— including `UserInput`, User's own request body, which naturally mirrors every one of User's
+properties, `username` included. The pass emitted `input UserInput { ... user: User }`; composition
+rejects it outright, an input field cannot be an object type.
+
+**Cause:** two independent gaps in `inferEntityLinks` (`src/oas/nodes/entity.ts`), both from #161:
+- The candidate loop matched a target's resolver by `r.keyFields === param.name`, literal only, no
+  alias. Since #189, `keyFields` can hold an aliased property name (`id`) different from the path
+  param (`petId`), so an aliased entity like `Order.petId -> Pet` never qualified as a link source
+  (`docs/TASKS.md #190`).
+- The host loop matched by literal same-named scalar field, with no check that the host is an
+  output type at all. Any type mirroring the key's bare name — an unrelated type, or the entity's
+  own generated request-body input — qualified.
+
+**Fix:** the rule is now: only id-keyed entities (`id`, or a `<TypeName>Id` alias via #189's own
+`isIdAlias`) are link sources, and only output types carrying a scalar field named `<TypeName>Id`
+are hosts.
+- Candidate loop: resolve the target's key via `findKeyField`, the same lookup
+  `inferEntityResolvers` already uses, instead of a literal `param.name` compare — this is the
+  #190 fix. New predicate `isIdKey(refName, keyField)` gates a target to `id`-or-alias-keyed
+  entities only.
+- Host loop: skip `host.kind === 'input'` outright; match a host's scalar field by
+  `isIdAlias(refName, prop.name)` instead of an exact-name lookup.
+- Twin tiebreak: a host can carry two fields that both alias the entity — the #168 case, `Loop`
+  has `beat_Id` (optional, declared first) and `beat_id` (required). Prefer the one spelled
+  exactly like the target's own key, else the first.
+- Stub mapping (`PropEntityLink.select()`, `propEntityLink.ts`): the written key name now falls
+  back to the target key's own sanitised name, not the source field's —
+  `renamedTo ?? Naming.sanitiseField(targetKeyProp.name, keep)`. The old fallback derived the
+  written name from the source field, which only matched by coincidence when host and target
+  used the identical spelling (true of every pre-#191 fixture); it produced a broken stub
+  (`thing: { thingId }`, not a field of `Thing`) as soon as a genuinely aliased host
+  (`Shelf.thingId`) differed from the target's own key name (`Thing.id`).
+
+With petstore: `User` is keyed on `username`, not `id` or `userId`, so it's no longer link-eligible
+at all — zero entity links are emitted, which is correct.
+
+**Known limitation:** same as #189's — only the exact `<TypeName>Id` spelling aliases; a type named
+for its response wrapper rather than the resource still misses, unchanged by this fix.
+
+**Tests:** `entity-link.yaml` gains 4 fixtures (`POST /albums` mirroring `Album`'s own body;
+`Thing`/`Shelf` alias case; `Item`/`Crate` bare-id case; `Member`/`Post` non-id-key case) and 5 new
+tests in `entity-link.test.ts` (input-type host, alias-keyed target, bare-id host, non-id-keyed
+target, and the original petstore repro run directly). `PATHS_SIZE` in `entity-link.test.ts` and
+the equivalent literal in `r1-entity.test.ts`'s `test_168_twin_key_uses_numbered_field` both bump
+14 -> 21 for the new ops. Six revert-checks, each restored before the next: dropping the
+input-kind host skip fails the input-host test alone; the literal host-name match back fails the
+bare-id and alias-keyed tests; the pre-#190 resolver lookup back fails the alias-keyed test;
+bypassing `isIdKey` fails the non-id-keyed test; the bare host-match `.find()` (no twin tiebreak)
+back fails the #168 `Loop`/`Beat` twin test; `targetKeyProp.renamedTo` as the written name back
+fails the alias-keyed test with the composer's own "no field thingId" error. Full suite: 530
+tests, 526 pass, 0 fail, 4 pre-existing todo.
+
+**Refs:** `src/oas/nodes/entity.ts` (`inferEntityLinks`, `isIdKey`),
+`src/oas/nodes/propEntityLink.ts` (`select`), `tests/resources/oas/entity-link.yaml`,
+`tests/resources/oas/petstore.yaml`, `docs/FIXED.md #161` (the rule this replaces),
+`docs/FIXED.md #168` (the twin case the tiebreak preserves), `docs/FIXED.md #189` (the alias
+mechanism this reuses), `docs/TASKS.md #190` (closed by this fix).
+
+## 196 [BUG] [P2] · Only the first op returning a type writes its entity link stub — ✅ Fixed
+
+**Repro** (github) — `Project` keyed on `id`; `ProjectCard` carries `projectId`, aliasing to
+`Project`, so it gains a `project: Project` link field. Two ops return `ProjectCard`:
+```yaml
+/projects/columns/cards/{card_id}:
+  get: { responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/ProjectCard' } } } } } }
+  patch: { responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/ProjectCard' } } } } } }
+/projects/{project_id}:
+  get: { responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } } } }
+```
+The GET's connector selection carries `project: { id: projectId }`; the PATCH on the identical
+path doesn't — same type, same field, one selection has the stub and the other doesn't. Same
+shape, smaller, in `entity-link.yaml`: `Card { id, thingId, label }`, its own path param
+(`card_ref`) matching neither `id` nor `CardId` so `Card` stays unkeyed, returned by
+`GET /cards/{card_ref}`, `PATCH /cards/{card_ref}`, and a second, unrelated
+`GET /decks/{deck_ref}/card`.
+
+**Symptom:** composition fails wherever the missing stub matters —
+```
+SATISFIABILITY_ERROR: ... cannot move to subgraph "test_spec", which has field
+"ProjectCard.project", because type "ProjectCard" has no @key defined in subgraph "test_spec".
+```
+Not specific to mutations: a scratch repro with two plain GETs returning the same unkeyed type
+hit the identical error on the second GET. Keying the host papers over it (the router can then
+complete the field through the host's own type-level resolver instead of the missing inline
+stub) without touching the actual bug.
+
+**Cause**, confirmed by comparing object identities on a scratch repro:
+1. Each op builds its own copy of its response types — `Factory.createContainerType`
+   (`factory.ts:216`) does `new Obj(...)` on every call, no dedup by `$ref`.
+2. `TypesCollector.collect` keeps the first-seen copy per id (`typesCollector.ts:91-95`). That map
+   is what `inferEntityLinks` iterates, so `entityLinkProps` land on the first copy only
+   (`entity.ts:288`).
+3. Type declarations and `@key` are written once from that same map (`writer.ts:85-112`), so they
+   are always correct. Each op's own connector selection, though, is written from *that op's own*
+   copy (`writeConnector` -> `writeSelection` -> `Res.select` -> `response.select`), so every copy
+   after the first has an empty `entityLinkProps`.
+4. Which copy is first is pure selection order — the same spec passes or fails depending on how
+   the selection is listed.
+
+**Why not the alternatives:** reading `entityLinkProps` from the canonical copy inside
+`Obj.selectedProps` needs the canonical map, which exists only as a parameter chain
+(`generateWith` -> `writeSchema` -> the infer passes) — `context.types` is a name registry, not
+that map, so this would need a new context field plus a `context` parameter on `selectedProps`
+and every caller. Selecting on the canonical copy for every op is unsafe: regular props are
+filtered by `prop.path()`, which is rooted at the copy's own op (`type.ts:162-170`), and
+`numberTwinFields` mutates per call.
+
+**Fix:** `inferEntityLinks` (`src/oas/nodes/entity.ts`) — after the host loop attaches links to
+the canonical hosts, share each host's link list with every other copy of that host reachable from
+a selected op's result type:
+- lifted the BFS out of `reaches` into `descendants(context, selection, from)`; `reaches` is now
+  `descendants(...).has(to)` — one walk, two readers, no behaviour change.
+- new tail on `inferEntityLinks`: collect every canonical host with a non-empty
+  `entityLinkProps` into a map keyed by id, then for every selected op, walk
+  `descendants(context, selection, op.resultType)` and, for any node matching a linked host's id
+  that isn't the canonical instance itself, point its `entityLinkProps` at the same array. The
+  copies share the array, not clones — `PropEntityLink` renders from `sourceProp.name` and the
+  canonical target's key, neither of which depends on which copy it sits on.
+- `entityResolvers`/`@key` needed no equivalent change — already written once from the canonical
+  map (point 3 above).
+
+**Tests:** `entity-link.yaml` gains `Card` (unkeyed, reusing `Thing` as the link target) returned
+by `GET`/`PATCH /cards/{card_ref}` and a second `GET /decks/{deck_ref}/card`. Three new
+`entity-link.test.ts` cases, all asserting the stub appears exactly twice
+(`schema.split('thing: {').length - 1 === 2`) and the schema composes: GET-then-PATCH, PATCH-then-
+GET (the order-dependence case — PATCH used to become the copy that got the link, leaving the
+GET's own copy unlinked), and GET-then-GET (not mutation-specific). All three fail with
+`SATISFIABILITY_ERROR` on the unfixed code. Revert-check: removing the sharing tail (keeping
+`descendants`) fails all three; restoring passes them. Full suite: 533 tests, 529 pass, 0 fail, 4
+pre-existing todo.
+
+**Pre-existing, newly reachable:** the mechanism (`PropEntityLink`, the shared `writeSelection`
+path) dates to #161; it's newly *reachable* on real specs now that #189 aliases more by-id GETs
+into entity resolvers and #191 lets a genuinely unkeyed type still host a link into a keyed one.
+Found by the flag-on corpus sweep on github's real selection.
+
+**Separate item, not part of this fix:** the same sweep found other fixtures (googlebooks, box,
+openai, sendgrid, omni, confluence, sanity-projects, motion, fullstory-users) where the flag
+changes output; a dedicated corpus suite covering those is worth doing later if this class of bug
+recurs.
+
+**Refs:** `src/oas/nodes/entity.ts` (`inferEntityLinks`, `descendants`, `reaches`),
+`src/oas/nodes/factory.ts` (`createContainerType`), `src/oas/generator/typesCollector.ts`
+(`collect`), `src/oas/io/writer.ts` (`writeSchema`), `src/oas/io/operationWriter.ts`
+(`writeConnector`, `writeSelection`), `tests/resources/oas/entity-link.yaml`, `docs/FIXED.md #161`,
+`docs/FIXED.md #189`, `docs/FIXED.md #191`.

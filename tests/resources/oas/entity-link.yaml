@@ -253,6 +253,193 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Loop'
+  # Album's own schema reused as a POST body -- AlbumInput must never gain an album link even
+  # though it mirrors Album's own key. #191
+  /albums:
+    post:
+      operationId: createAlbum
+      summary: Create an album
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Album'
+      responses:
+        '201':
+          description: The created album
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+  # #190: Thing is keyed by alias (its own key property is "id", the path param is "thingId") --
+  # the candidate loop must resolve the key the same way findKeyField does, not by a literal
+  # param-name match against entityResolvers.keyFields.
+  /things/{thingId}:
+    get:
+      operationId: getThing
+      summary: Get a thing by id
+      parameters:
+        - name: thingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+  /shelves/{shelfId}:
+    get:
+      operationId: getShelf
+      summary: Get a shelf by id
+      parameters:
+        - name: shelfId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A shelf
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shelf'
+  # a bare "id" field must never become a cross-type link -- Crate's own "id" names itself, not a
+  # foreign key to Item, however literally the names line up. #191
+  /items/{id}:
+    get:
+      operationId: getItem
+      summary: Get an item by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: An item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+  /crates/{crate_id}:
+    get:
+      operationId: getCrate
+      summary: Get a crate by id
+      parameters:
+        - name: crate_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A crate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crate'
+  # Member is keyed on username, not id -- must never become a link candidate, however
+  # alias-shaped a host's field name looks. #191
+  /members/{username}:
+    get:
+      operationId: getMember
+      summary: Get a member by username
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+  /posts/{post_id}:
+    get:
+      operationId: getPost
+      summary: Get a post by id
+      parameters:
+        - name: post_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A post
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+  # Card stays unkeyed (card_ref matches neither "id" nor "CardId") and is returned by two
+  # different ops -- the GET and PATCH below share one response schema. #196
+  /cards/{card_ref}:
+    get:
+      operationId: getCard
+      summary: Get a card by ref
+      parameters:
+        - name: card_ref
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+    patch:
+      operationId: patchCard
+      summary: Update a card
+      parameters:
+        - name: card_ref
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Card'
+      responses:
+        '200':
+          description: The updated card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+  # a second, unrelated GET returning the same Card schema -- the two-GETs sharing case. #196
+  /decks/{deck_ref}/card:
+    get:
+      operationId: getDeckCard
+      summary: Get a deck's card
+      parameters:
+        - name: deck_ref
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The deck's card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
 components:
   schemas:
     Album:
@@ -388,4 +575,70 @@ components:
         name:
           type: string
         disc_id:
+          type: string
+    Thing:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    Shelf:
+      type: object
+      required: [id, thingId]
+      properties:
+        id:
+          type: string
+        thingId:
+          type: string
+        label:
+          type: string
+    Item:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    # carries both its own literal id and its own key -- the bare "id" must not be mistaken for a
+    # foreign key just because another type is also id-keyed. #191
+    Crate:
+      type: object
+      required: [crate_id]
+      properties:
+        crate_id:
+          type: string
+        id:
+          type: string
+        label:
+          type: string
+    Member:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+    Post:
+      type: object
+      required: [post_id]
+      properties:
+        post_id:
+          type: string
+        memberId:
+          type: string
+        title:
+          type: string
+    Card:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        thingId:
+          type: string
+        label:
           type: string

@@ -131,7 +131,7 @@ test('test_168_twin_key_uses_numbered_field', async () => {
     'get:/takes/{take_id}>res:r>obj:type:#/c/s/Take>prop:scalar:name',
   ];
 
-  const schema = await runOasTest('entity-link.yaml', paths, 14, 1, { inferEntityResolvers: true });
+  const schema = await runOasTest('entity-link.yaml', paths, 24, 1, { inferEntityResolvers: true });
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('takeId2: String!'), 'expected the key twin to take a numbered name on Take');
   assert.ok(schema!.includes('@key(fields: "takeId2")'), 'expected the @key to follow the key prop\'s own rename');
