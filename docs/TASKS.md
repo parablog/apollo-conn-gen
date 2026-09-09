@@ -145,10 +145,24 @@ selections at once, so (unlike this sequential per-op measurement, which dispose
 calls) that one array would hold something close to the full 4.38 GB simultaneously, on top of
 the rest of the tree/Writer. Fix design is still open — not yet acted on.
 
+**2026-09-08:** Built and parked, not merged — branch `issue-180-shared-input-shapes` at
+`e4105af`. One `InputShape` per schema identity now stands in for a fresh subtree per position,
+for a wildcard (`>**`) body selection. What it achieved: the gate op
+(`post:/v2.1/.../envelopes`) went from 24 MB SDL / 62 s to 1.1 MB / 5 s; the first 62 of the 247
+mutations, combined in one `generateSchema` call, went from 80 MB / 217 s to 3 MB / 1 s. What
+stopped it: one digitalocean response type (`Alerts`, from `/v2/monitoring/alerts`) prints as
+four separate names instead of one shared name in a combined multi-op build, cause not found;
+an explicit (non-`>**`) body field selection never moved onto the shared path, still builds
+per-position; and the full 247-mutation run still peaks at 5.2 GB against the 2 GiB bar this
+entry set — a heap snapshot at the heaviest quarter placed the remaining cost on the response
+side (`Scalar`/`PropScalar` nodes, 99.98%+ `kind: 'type'`), which this fix never touched, since
+it only shares request-body input types. The next attempt needs a fresh design, not a cleanup of
+this branch.
+
 **Refs:** #179 (the crash half), #174 (superseded narrowing — the sweep OOM was the pipe
 flood, not tree weight), #181 (the stack leak — real but ruled out as #180's driver),
 docs/DEFERRED.md #139 (granularity mode — the likely product-level relief for docusign-class
-specs), measurement scripts in the session scratchpad.
+specs), measurement scripts in the session scratchpad, branch `issue-180-shared-input-shapes`.
 
 ## 183 [BUG] [P3] · `ResponseCoverageCheck` reports a false `RESPONSE_NOT_READ` when the spec's own `responses` was empty — ⬜ Open
 
@@ -392,3 +406,73 @@ renaming flag's row, instead of restating it per flag.
 
 **Refs:** `README.md` (`### OasGen options`), `src/oas/utils/selectionPath.ts`,
 `docs/FIXED.md #197`.
+
+## 201 [BUG] [P3] · docusign's `put:.../documents/{documentId}` references a response type it never declares — ⬜ Open
+
+**Symptom:** the generated SDL for docusign's
+`put:/v2.1/accounts/{accountId}/templates/{templateId}/documents/{documentId}` composes with
+`INVALID_GRAPHQL: cannot find type 'DocGenFormFieldRowValue' in this document` — a response field
+is typed `[DocGenFormFieldRowValue]` but no `type DocGenFormFieldRowValue { ... }` is ever printed.
+Confirmed with the local composer against the unchanged (pre-#180) tree's own output.
+
+**OAS** (docusign) — the `rowValues` field on the tab-row schema: `type: array, items: $ref
+DocGenFormFieldRowValue`, reached through a cycle back to its own owning schema on the response
+side.
+
+**Cause:** not yet root-caused on the response side — response representation is untouched by
+#180. The same shape has an input-side twin, `DocGenFormFieldRowValueInput`, which #180 *does*
+fix: `InputShape.build` (`src/oas/nodes/inputShape.ts:78`) treats a shape that ends up with zero
+fields (every one dropped to a cycle) as unbuildable, and the field referencing it degrades to
+`JSON` instead of pointing at a type that's never declared (the same three call sites,
+`inputShape.ts:108,125,143`). The response side has no equivalent rule yet — whatever positional
+path builds `DocGenFormFieldRowValue`'s type reference does not check whether the type it points
+at ended up with any fields to declare.
+
+**Refs:** `src/oas/nodes/inputShape.ts` (`InputShape.build`, `buildField`), scratchpad baseline
+`baseline-document-put.graphql:26635` (`rowValues: [DocGenFormFieldRowValue]`, undeclared), #180
+(in progress — the input-side fix), `docs/FIXED.md #101` (`Obj.generate`'s `T.everyFieldRemoved`
+check — the response-side analogue this bug's fix likely mirrors).
+
+## 202 [FEAT] [P3] · Explicit body field selections through the shared input type — ⬜ Open
+
+**Why:** #180 only builds a shared input type for a wildcard (`>**`) body selection — the one
+place that triggers it is the body branch of the wildcard-selection walk. An explicit field
+selection on a body (naming fields instead of `>**`) still builds a fresh type per position, so
+the same schema selected both ways, once wildcard and once explicit, never shares, and if it's
+the same schema identity the two paths can print the type twice under the same name.
+
+**OAS:** two operations sharing one `$ref`'d body schema, one selected `op1>body:b>**`, the other
+`op2>body:b>fieldName`.
+
+**Shape:** the double-declaration case to test first — pick a fixture with two ops on one shared
+body schema, select one op with `>**` and the other by explicit field name, and check the
+generated SDL declares the input type once. This is the same failure mode #180 hit and fixed for
+pagerduty's `ServiceCustomFieldsFieldOptionUpdateModel` (one schema reached once through the
+shared path, once through the old per-position walk), just triggered by an explicit selection
+instead of an old-walk Composed/Union member.
+
+**Refs:** `src/oas/nodes/inputShape.ts`, `src/oas/generator/typesCollector.ts`
+(`collectExpandedPaths`), `src/oas/io/writer.ts` (the shared `generatedSet` dedup) — all on branch
+`issue-180-shared-input-shapes`, #180.
+
+## 203 [FEAT] [P3] · Response-side type sharing, for the docusign memory bar — ⬜ Open
+
+**Why:** #180 shares only request-body input types; response types still build a fresh subtree
+per position. Measured on all 247 docusign mutations combined in one `generateSchema` call: peak
+5.2 GB RSS at an 8 GiB cap, still over the 2 GiB bar #180 was measured against. A heap snapshot at
+the heaviest quarter (62 of the 247 ops) found the two dominant node types are `Scalar`
+(1,003,176 instances) and `PropScalar` (745,171 instances), 99.98%+ of them read `kind: 'type'`
+(response), not `kind: 'input'` — the shape objects #180 built held only 176 instances,
+negligible next to those. #180's fix does not touch this.
+
+**OAS:** any schema reused across many operations' responses — docusign has hundreds of
+mutations returning overlapping shapes.
+
+**Shape:** the design #180 built for request bodies (one representative node per schema
+identity, memoised once, walking only the real selection instead of every position) is the
+starting point, not something to reuse outright — a response has no `>**`-or-explicit split the
+way a body does, and #180's fix only ever looked at `kind: 'input'` nodes.
+
+**Refs:** `src/oas/nodes/inputShape.ts` (branch `issue-180-shared-input-shapes`), `docs/TASKS.md
+#180` (the parked branch and its measured numbers), `docs/FIXED.md #47`, `docs/FIXED.md #120`
+(existing response-side leaf rules a fix here would need to keep).
