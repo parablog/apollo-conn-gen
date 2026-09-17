@@ -1,0 +1,56 @@
+openapi: 3.0.3
+info:
+  title: R227 a wrapper two operations share
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widget.info:
+    post:
+      operationId: widgetInfo
+      responses:
+        '200':
+          description: A single widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetResponse'
+  /widget.info2:
+    post:
+      operationId: widgetInfo2
+      responses:
+        '200':
+          description: A single widget, the same wrapper as widget.info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetResponse'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+    ErrorDetail:
+      type: object
+      properties:
+        message: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+    WidgetSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/Widget'
+    WidgetResponse:
+      oneOf:
+        - $ref: '#/components/schemas/WidgetSuccessResponse'
+        - $ref: '#/components/schemas/ErrorResponse'

@@ -20,6 +20,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   read; Ashby's file had 87. `{ "$match": [{ "pattern": "^post:/.*\\.list$", "root": "query" }] }`
   moves every `.list` operation to `Query` in one line. Issue #225.
 
+### Fixed
+
+- A schema with `"payload"` configured now composes even when an operation's error body shares a
+  type with other operations. Before, once every operation returning that type switched to its
+  payload field, the shared type (Ashby's `ErrorDetail`, reached only through the `errors` field
+  every op used to return) stayed in the schema with nothing left returning it, and rover refused
+  to compose, `CONNECTORS_UNRESOLVED_FIELD: No connector resolves field ErrorDetail.message`.
+  Issue #227.
+
 ## [0.30.0]
 
 ### Added

@@ -11280,3 +11280,51 @@ Query and 110 Mutation fields, unchanged.
 
 **Refs:** `src/oas/io/errorsWriter.ts`, `src/oas/oasContext.ts`, `src/oas/utils/gql.ts`,
 `src/oas/io/schemaWriter.ts`, #226, #225.
+
+## 227 [BUG] [P4] · A shared error type can outlive every wrapper that reached it — ✅ Fixed
+
+**Symptom:** #226 drops a response wrapper once every op that used to return it returns a payload
+field instead. The reachability walk still started at the wrapper, so a type reached only through
+the wrapper's other branch — Ashby's one `ErrorDetail`, shared by every op — stayed in the schema
+with nothing left pointing at it. Rover then refused to compose:
+```
+CONNECTORS_UNRESOLVED_FIELD: No connector resolves field `ErrorDetail.message`.
+```
+This blocked the exact config the readme tells people to use: Ashby's full `$source` block
+(`isSuccess`, `errors`, `payload`) failed to compose.
+
+**OAS:** (overrides-errors.yaml) `widget.info` answers `oneOf [ { success, results: Widget },
+{ success, errors: [ErrorDetail] } ]` — with `payload: "results"` configured, `widget.info`
+returns `Widget` and nothing in the written schema selects `errors` any more, so `ErrorDetail`
+had nothing left reaching it.
+
+**Fix.** `typesCollector.ts`'s reachability walk (`collectReachable`) now starts from what each
+operation actually writes, not its whole result: a new `writtenRoots(expanded)` uses the
+configured payload field (`findPayload`) when one resolves, the same wrapper as before otherwise.
+The old `dropUnreturnedWrappers` pass — which deleted a dropped wrapper without re-checking what
+only the wrapper had reached — is gone; the existing settle loop already keeps exactly the types
+the written schema still points at, so fed the right starting points it drops the wrapper and the
+orphan together, in one pass, and still keeps a wrapper that another selected operation returns
+whole. The other three walks (`resolveDivergentUnionForms`, `walkKeptAndRemoved` and through it
+`removeFieldsNeverSelected`, `warnMismatchedSelections`) read the selection paths themselves, which
+still run through the wrapper, so they keep the old, unchanged root list.
+
+**Tests.** `tests/resources/oas/overrides-errors.yaml`'s existing two ops, `$source` with `payload:
+"results"` plus the #228 `customFields.fetch` entry: `widget.info` unwraps, `ErrorDetail` is gone
+from the schema, and the schema composes on stock rover 2.15.1 — the exact failing config.
+`tests/resources/oas/shared-wrapper.yaml` (new): two operations, `widget.info` and `widget.info2`,
+both answering the same `oneOf [ { success, results: Widget }, { success, errors: [ErrorDetail] }
+]` component; only `widget.info` gets `payload: "results"`. `widget.info` still returns `Widget`,
+while `widget.info2` keeps the whole wrapper and its `ErrorDetail` — pinning the one thing the
+deleted pass did on purpose. Two existing fixtures' hardcoded type counts, `widget.count`/
+`widget.tags` and the real Ashby `application.list`, both drop by one: the one type each was
+carrying without anything left to reach it.
+
+**Ashby result.** Generated the whole spec with `-n --infer-entity-resolvers --overrides`: the same
+594 declarations, 87 Query and 110 Mutation fields, as before — nothing observable changes, since
+three operations that don't unwrap (`assessment.list`, `customFields.fetch`,
+`approvalDefinition.update`) still select their own `errors` branch, keeping `ErrorDetail`
+legitimately reachable there. The gap only shows on a narrower selection, where nothing else keeps
+the shared type alive.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`writtenRoots`, `collectReachable`), #226, #228.

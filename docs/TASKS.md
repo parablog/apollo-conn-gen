@@ -816,19 +816,3 @@ prove it.
 `src/oas/nodes/obj.ts` (`visitProperties`), `src/oas/generator/typesCollector.ts`
 (`collectLeafPaths`), #219, #220.
 
-## 227 [BUG] [P4] · A shared error type can outlive every wrapper that reached it — ⬜ Open
-
-**Symptom:** `docs/FIXED.md` #226 drops a response wrapper type once every op that used to return
-it returns a different field's type instead. A type reached only through that wrapper's own error
-field (e.g. one `ErrorDetail` shared by many ops) is not re-checked, so once every op sharing it
-unwraps, it stays in the schema with nothing left pointing at it.
-
-**OAS** (source-envelope-union.yaml, `widget.count`/`widget.tags` only selected): both ops' own
-`oneOf [ { success, results }, { success, errors: [ErrorDetail] } ]` wrappers get dropped; the
-shared `ErrorDetail` type is not, since nothing walked that far to check.
-
-**Shape:** after dropping a wrapper in `typesCollector.ts`'s new pass, re-run reachability (or
-re-derive it the same way the existing settle loop above it does) so a type left with no remaining
-reference is dropped too, not just the wrapper itself.
-
-**Refs:** `src/oas/generator/typesCollector.ts` (`dropUnreturnedWrappers`), `docs/FIXED.md` #226.

@@ -119,7 +119,8 @@ test('source-envelope union: a no-match payload warns once with the op and the f
 });
 
 test('source-envelope union: two scalar-list widget.count/widget.tags selections both write $.results alone', async () => {
-  const schema = await runOasTest('source-envelope-union.yaml', ['post:/widget.count>**', 'post:/widget.tags>**'], 5, 1, {
+  // typesSize 0: ErrorDetail, reached only through the two dropped wrappers, goes with them
+  const schema = await runOasTest('source-envelope-union.yaml', ['post:/widget.count>**', 'post:/widget.tags>**'], 5, 0, {
     useOperationIds: true,
     overrides: ASHBY_SOURCE,
   });
@@ -502,6 +503,34 @@ test("source-envelope runtime: an operation's own errors mapping leaves every ot
   assert.strictEqual(error.message, 'widget not found', 'widgetInfo still answers through the untouched $source mapping');
 });
 
+// --- a type reached only through a dropped wrapper is dropped too (see docs/FIXED.md #227) ---
+
+test('source-envelope: a type reached only through dropped wrappers goes with them', async () => {
+  const overrides: OverridesConfig = {
+    $source: { ...ERRORS_SOURCE, payload: 'results' },
+    'post:/customFields.fetch': { errors: { message: '$.errorInfo.message', extensions: 'code: $.errorInfo.code' } },
+  };
+  const schema = await runOasTest('overrides-errors.yaml', OVERRIDES_ERRORS_ALL, 2, 6, {
+    useOperationIds: true,
+    overrides,
+    forceRover: true,
+  });
+
+  assert.ok(!schema!.includes('type ErrorDetail'), 'ErrorDetail, reached only through the dropped widgetInfo wrapper, is gone too');
+});
+
+test("source-envelope: a wrapper another op still returns whole stays, with its error type", async () => {
+  const overrides: OverridesConfig = { 'post:/widget.info': { payload: 'results' } };
+  const schema = await runOasTest('shared-wrapper.yaml', ['post:/widget.info>**', 'post:/widget.info2>**'], 2, 3, {
+    useOperationIds: true,
+    overrides,
+  });
+
+  assert.ok(schema!.includes('widgetInfo: Widget'), 'widgetInfo unwraps to the payload type');
+  assert.ok(schema!.includes('type WidgetResponse'), 'widgetInfo2 still returns the whole wrapper, unaffected');
+  assert.ok(schema!.includes('type ErrorDetail'), "ErrorDetail stays reachable through widgetInfo2's own selection");
+});
+
 // --- the real Ashby spec with the config; the corpus tests keep the unconfigured baseline ---
 
 // docs/FIXED.md #225: a "$match" pattern entry's fields (including "payload") merge under an
@@ -549,7 +578,8 @@ test('source-envelope ashby: the real spec unwraps application.list under the co
       payload: 'results',
     },
   };
-  const schema = await runOasTest('ashby.json', ['post:/application.list>**'], 197, 29, { overrides });
+  // typesSize 28: ErrorDetail, reached only through the dropped wrapper, goes with it
+  const schema = await runOasTest('ashby.json', ['post:/application.list>**'], 197, 28, { overrides });
 
   assert.ok(schema!.includes('isSuccess: "$.success"'));
   assert.ok(schema!.includes("errors: { message: \"$($.errors?->first?.message ?? 'Ashby request failed')\""));

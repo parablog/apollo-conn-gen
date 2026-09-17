@@ -162,39 +162,8 @@ export class TypesCollector {
     // #207: on the final, settled set only, so this fires exactly once per collect() call.
     this.warnMismatchedSelections(pendingTypes, expanded);
 
-    this.dropUnreturnedWrappers(pendingTypes, expanded);
-
     this.types = pendingTypes;
     this.expanded = expanded;
-  }
-
-  // Drops a response type once every selected op that returned it returns a payload field instead.
-  //   e.g. Ashby: oneOf [{ success: true, results: Job }, ...] with payload "results": the wrapper goes, Job stays
-  private dropUnreturnedWrappers(pendingTypes: Map<string, IType>, expanded: string[]): void {
-    const context = this.gen.context!;
-    const opIds = new Set(expanded.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
-    const wrappers = new Set<IType>();
-    const stillReturned = new Set<IType>();
-
-    for (const op of this.gen.paths.values()) {
-      if (!T.isOp(op) || !opIds.has(op.id)) {
-        continue;
-      }
-      const wrapper = op.resultType instanceof Res ? op.resultType.response : undefined;
-      if (!wrapper) {
-        continue;
-      }
-      wrappers.add(wrapper);
-      if (!findPayload(context, op)) {
-        stillReturned.add(wrapper);
-      }
-    }
-
-    for (const wrapper of wrappers) {
-      if (!stillReturned.has(wrapper)) {
-        pendingTypes.delete(wrapper.id);
-      }
-    }
   }
 
   // The selected operations' result and body nodes — where the read-only walks start. #26 #89
@@ -204,6 +173,24 @@ export class TypesCollector {
     for (const op of this.gen.paths.values()) {
       if (opIds.has(op.id)) {
         const candidates = [_.get(op, 'resultType'), _.get(op, 'body')] as Array<IType | undefined>;
+        roots.push(...candidates.filter((n): n is IType => !!n));
+      }
+    }
+    return roots;
+  }
+
+  // The selected operations' written result and body — where the reachability walk starts. An op
+  // configured to return a payload field reaches only that field's type, not the rest of the wrapper.
+  //   e.g. (ashby) oneOf [{ success, results: Job }, { success, errors: [ErrorDetail] }] with
+  //   payload "results" reaches Job, not the wrapper or ErrorDetail.
+  private writtenRoots(expanded: string[]): IType[] {
+    const context = this.gen.context!;
+    const opIds = new Set(expanded.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
+    const roots: IType[] = [];
+    for (const op of this.gen.paths.values()) {
+      if (opIds.has(op.id)) {
+        const payload = T.isOp(op) ? findPayload(context, op) : undefined;
+        const candidates = [payload ?? _.get(op, 'resultType'), _.get(op, 'body')] as Array<IType | undefined>;
         roots.push(...candidates.filter((n): n is IType => !!n));
       }
     }
@@ -237,7 +224,7 @@ export class TypesCollector {
   // reaches { User, Address }. see #26
   private collectReachable(expanded: string[]): Set<IType> {
     const context = this.gen.context!;
-    const queue = this.selectedRoots(expanded);
+    const queue = this.writtenRoots(expanded);
     const visited = new Set<IType>();
     while (queue.length > 0) {
       const node = queue.pop()!;
