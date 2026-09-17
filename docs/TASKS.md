@@ -816,32 +816,6 @@ prove it.
 `src/oas/nodes/obj.ts` (`visitProperties`), `src/oas/generator/typesCollector.ts`
 (`collectLeafPaths`), #219, #220.
 
-## 225 [FEAT] [P3] · Classifying reads on an all-POST API needs a per-spec override file today — ⬜ Open
-
-**Symptom:** Ashby's 197 operations are all POST, so every read landed under `Mutation` until
-`tests/resources/oas/ashby-overrides.json` (87 entries, all `{"root": "query"}`) moved them by hand.
-
-**OAS:** the same 197-operation, all-POST shape as #224 — nothing in the HTTP method distinguishes
-a read from a write here.
-
-**Cause:** the override file had to be derived by reading every operation's path verb —
-`.list`/`.info`/`.search` plus a dozen other read-shaped names (`fetch`, `listHistory`,
-`interviewerSettings`, and the like) — one entry per operation, by hand.
-
-**Shape:** a flag such as `--reads <pattern>` (a regex tested against the operation id or path) that
-sets `root: query` for every matching POST operation, with the override file remaining for the
-exceptions a pattern can't express. The existing verb-based default (GET under Query, everything
-else under Mutation) stays unchanged when the flag isn't given.
-
-**Refs:** `src/cli/oas.ts` (`--overrides`), `docs/FIXED.md` #150,
-`tests/resources/oas/ashby-overrides.json`.
-
-`docs/FIXED.md` #224 closed the other half of the same read/write split: a `root: query`
-operation now also qualifies as a type-level entity resolver, keyed through its body, not just a
-root field — so this override file already covers the whole read side of an RPC API, root
-placement and entity resolvers both; what's still missing is only that it has to be hand-derived.
-This file also now carries the `$source` error/payload mapping (`docs/FIXED.md` #226).
-
 ## 227 [BUG] [P4] · A shared error type can outlive every wrapper that reached it — ⬜ Open
 
 **Symptom:** `docs/FIXED.md` #226 drops a response wrapper type once every op that used to return

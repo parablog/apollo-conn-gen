@@ -109,6 +109,7 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     inferEntityResolvers: opts.inferEntityResolvers,
     skipAuth: opts.skipAuth,
     sparseFieldsetsParam: opts.sparseFieldsetsParam,
+    readsPattern: opts.reads,
   });
 
   await gen.visit();
@@ -166,6 +167,10 @@ program
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .option('--base-url <url>', 'Override the @source base URL (default: servers[0] from the spec)')
+  .option(
+    '--reads <pattern>',
+    'Regex tested against a POST operation\'s OAS operation id or path — a match writes it under Query instead of Mutation; the overrides file\'s root still wins for any operation it names',
+  )
   .option('--overrides <file>', 'Load per-operation path/queryParams overrides from a JSON file')
   .option('--batch <file>', 'Load batch endpoints (op id -> { maxSize? }) from a JSON file')
   .option('--directives <file>', 'Load directives (Type or Type.field -> ["@…"]) from a JSON file')

@@ -11078,6 +11078,41 @@ type copies — unrelated to this change's own type-instance accumulation), the 
 
 **Refs:** #206, #208, #209, #212, #223; `src/oas/nodes/factory.ts` (`fromProp`, `fromArrayItems`, `hasNamedRefMember`); `src/oas/utils/schemas.ts` (`isObjectMember`); `src/oas/utils/jsonReasons.ts`; `src/oas/nodes/propArray.ts` (`jsonReason`); `src/oas/nodes/map.ts`.
 
+## 225 [FEAT] [P3] · `--reads <pattern>` moves matching POST operations into Query — ✅ Fixed
+
+**Symptom:** Ashby's 197 operations are all POST, so every read landed under `Mutation` until
+`tests/resources/oas/ashby-overrides.json` (87 entries, all `{"root": "query"}`) moved them by
+hand, one entry per operation.
+
+**OAS:** the same 197-operation, all-POST shape as #224 — nothing in the HTTP method tells a read
+apart from a write here.
+
+**Fix.** `--reads <pattern>` (`src/cli/oas.ts`) takes a regex and threads it through as
+`readsPattern` (`oasContext.ts`, `oasGen.ts`, `src/tests/runners.ts`) to `typeUtils.ts`'s
+`matchesReadsPattern`, tested against a POST operation's OAS operation id or its path — e.g. a
+pattern of `\.list$|\.info$` matches Ashby's `POST /application.list`. `isMutationType` and
+`isQueryType` check this right after an explicit `root` override and before the existing verb
+default, so an operation named in the overrides file still wins over a pattern match, and GET
+operations are never touched. With no `--reads` given, every POST still defaults to `Mutation`
+exactly as before. The check only ever applies to POST — a future PUT/PATCH/DELETE API needing the
+same trick is a one-line extension of the same guard, not added speculatively.
+
+**Tests.** `tests/resources/oas/reads-pattern.yaml` (5 ops: a baseline GET, a POST whose path
+matches the pattern, a POST matching neither id nor path, a POST whose path matches but is pinned
+to `Mutation` by an overrides entry, and a POST whose operation id matches but whose path does
+not). `tests/all/r15-graphql-root.test.ts` gained four tests: the pattern moving matching POSTs to
+Query while an override still wins; the flag omitted leaving today's default unchanged; the same
+pattern extending #224's POST entity-resolver wiring (reusing `entity-rpc-post-key.yaml`); and a
+CLI-level test (`spawnSync` against `src/cli/oas.ts`) pinning the `--reads` Commander option and
+its `opts.reads -> readsPattern` wiring, which the other three tests bypass by calling `OasGen`
+directly.
+
+**Refs:** `src/oas/nodes/typeUtils.ts` (`T.matchesReadsPattern`), `src/oas/oasContext.ts`,
+`src/oas/oasGen.ts`, `src/cli/oas.ts`, `src/tests/runners.ts`, `docs/FIXED.md` #150 (the `root`
+override this extends), #224 (the POST entity-resolver wiring this also reaches).
+
+PR: pending (branch loop/run-20260917-092324-issue225)
+
 ## 226 [FEAT] [P2] · Source error mapping and the payload field from the overrides file — ✅ Fixed
 
 **Symptom:** some APIs answer every request with HTTP 200 whether it worked or not, and put

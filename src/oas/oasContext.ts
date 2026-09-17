@@ -54,6 +54,11 @@ export type GenerateOptions = {
   // #151: name of a query param (e.g. "fields") that a read op should default to every field its
   // selection maps, so an omitted argument still asks the REST API for everything it needs.
   sparseFieldsetsParam?: string;
+  // #225: regex tested against a POST operation's OAS id or path — a match writes that operation
+  // under "type Query" instead of "type Mutation", for an API where every operation is POST and
+  // the HTTP method alone can't say which ones only read data.
+  //   e.g. (ashby-shaped API) "\.list$|\.info$" matches POST /application.list -> written as Query
+  readsPattern?: string;
   showParentInSelections: boolean;
   federationVersion?: string;
   connectorSpecVersion?: string;

@@ -114,6 +114,9 @@ export class T {
     if (root) {
       return root === 'mutation';
     }
+    if (type.id.startsWith('post:') && T.matchesReadsPattern(type, context)) {
+      return false;
+    }
     return (
       type.id.startsWith('post:') ||
       type.id.startsWith('put:') ||
@@ -129,7 +132,26 @@ export class T {
     if (root) {
       return root === 'query';
     }
+    if (type.id.startsWith('post:') && T.matchesReadsPattern(type, context)) {
+      return true;
+    }
     return type.id.startsWith('get:');
+  }
+
+  // #225: an all-POST API (every operation the same HTTP method) gives no way to tell a read from
+  // a write by verb alone. `--reads <pattern>` names a regex tested against the operation's OAS id
+  // or its path; a match moves that one POST operation into "type Query" the same way an explicit
+  // `root: 'query'` override would, without writing an overrides entry for every read.
+  //   e.g. (ashby-shaped API) POST /application.list — the path ends in ".list", so a pattern of
+  //   "\.list$|\.info$" matches it and it is written under Query instead of Mutation.
+  private static matchesReadsPattern(type: IType, context: OasContext): boolean {
+    const pattern = context.generateOptions.readsPattern;
+    if (!pattern || !T.isOp(type)) {
+      return false;
+    }
+    const regex = new RegExp(pattern, 'i');
+    const { operation } = type;
+    return (operation.hasOperationId() && regex.test(operation.getOperationId())) || regex.test(operation.path);
   }
 
   static isScalar(type: IType): boolean {

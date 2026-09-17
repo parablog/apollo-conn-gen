@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
+import { spawnSync } from 'child_process';
 import { OasGen } from '../../src/index.js';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { captureWarnings } from './_setup.js';
@@ -107,4 +108,102 @@ test('test_150_every_selected_op_forced_to_mutation', async () => {
   for (const field of ['itemsById', 'createItemsSearch', 'legacyPurge']) {
     assert.ok(mutationBlock.includes(field), `${field} is under Mutation`);
   }
+});
+
+// docs/FIXED.md #225: an API where every operation is POST (Ashby is the motivating case) gives no
+// way to tell a read from a write by HTTP method alone. `--reads <pattern>` is a regex tested
+// against a POST operation's OAS operation id or its path; a match moves that one operation into
+// "type Query" the same way an explicit `root: 'query'` override does (docs/FIXED.md #150), without
+// an overrides entry for every read. An override still wins when it names the same operation.
+// Fixture ops: get:/widgets/{id} (baseline GET, untouched), post:/widgets.list (its path ends in
+// ".list", matches), post:/widgets.create (matches nothing, stays a write), post:/widgets.purgeAll
+// (its path also matches, but an override pins it to Mutation on purpose), post:/widgets/export
+// (its path does not match, but its operation id "widgetsFetch" does).
+
+const READS_PATTERN_PATHS = [
+  'get:/widgets/{id}>**',
+  'post:/widgets.list>**',
+  'post:/widgets.create>**',
+  'post:/widgets.purgeAll>**',
+  'post:/widgets/export>**',
+];
+const READS_PATTERN = '\\.list$|purge|fetch';
+
+test('test_225_reads_pattern_moves_matching_posts_to_query', async () => {
+  const schema = await runOasTest('reads-pattern.yaml', READS_PATTERN_PATHS, 5, 4, {
+    skipValidation: true,
+    readsPattern: READS_PATTERN,
+    overrides: { 'post:/widgets.purgeAll': { root: 'mutation' } },
+  });
+  const queryBlock = rootBlock(schema!, 'Query');
+  const mutationBlock = rootBlock(schema!, 'Mutation');
+
+  assert.ok(queryBlock.includes('widgetsById'), 'the untouched GET stays under Query');
+  assert.ok(queryBlock.includes('createWidgetsList'), 'a POST whose path matches the pattern moves to Query');
+  assert.ok(
+    queryBlock.includes('createWidgetsExport'),
+    'a POST whose operation id matches the pattern moves to Query, even though its path does not',
+  );
+
+  assert.ok(mutationBlock.includes('createWidgetsCreate'), 'a POST matching neither id nor path stays under Mutation');
+  assert.ok(
+    mutationBlock.includes('createWidgetsPurgeAll'),
+    'a POST whose path matches the pattern, but is named in the overrides file, stays under Mutation',
+  );
+  assert.ok(!queryBlock.includes('createWidgetsPurgeAll'), 'the overrides file wins over a pattern match');
+});
+
+test('test_225_reads_pattern_omitted_keeps_the_default_unchanged', async () => {
+  const schema = await runOasTest('reads-pattern.yaml', READS_PATTERN_PATHS, 5, 4, {
+    skipValidation: true,
+  });
+  assert.ok(
+    rootBlock(schema!, 'Mutation').includes('createWidgetsList'),
+    'with no --reads pattern given, a POST that would otherwise match stays under Mutation exactly as it does today',
+  );
+});
+
+// docs/FIXED.md #224 already turns a read POST (one marked `root: 'query'`, by override) into a
+// type-level entity resolver keyed through its request body, not just a root field. Since a
+// --reads pattern match sets the same "this POST is a read" flag as that override, the same
+// entity-resolver wiring should fire for a pattern match too, with no separate code path to keep
+// in sync — this reuses the entity-rpc-post-key.yaml fixture, asking only about post:/widget.info,
+// to confirm the two features actually compose the way the issue describes.
+test('test_225_reads_pattern_extends_224_post_entity_resolvers', async () => {
+  const schema = await runOasTest('entity-rpc-post-key.yaml', ['post:/widget.info>**'], 11, 5, {
+    inferEntityResolvers: true,
+    readsPattern: '\\.info$',
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type Widget @key(fields: "id")'), 'expected @key on Widget, same as the override form');
+  assert.ok(
+    schema!.includes('POST: "/widget.info"\n        body: "$({ id: $this.id })"'),
+    'expected the POST body key on Widget, same as the override form',
+  );
+});
+
+test('test_225_cli_flag_reaches_generator', () => {
+  // spawnSync, not runOasTest: pins the Commander option declaration and the opts.reads ->
+  // readsPattern mapping in src/cli/oas.ts, which runOasTest bypasses by calling OasGen directly
+  const cli = spawnSync(
+    'node',
+    [
+      '--import',
+      'tsx/esm',
+      'src/cli/oas.ts',
+      'tests/resources/oas/reads-pattern.yaml',
+      '-i',
+      '-n',
+      '--reads',
+      '\\.list$',
+    ],
+    { encoding: 'utf-8' },
+  );
+  assert.strictEqual(cli.status, 0, cli.stderr);
+  // post:/widgets.list matches the pattern -> createWidgetsList moves to Query
+  assert.ok(rootBlock(cli.stdout, 'Query').includes('createWidgetsList'), 'the matched POST reaches Query through the CLI');
+  assert.ok(!rootBlock(cli.stdout, 'Mutation').includes('createWidgetsList'), 'and is not also left under Mutation');
+  // post:/widgets.create does not match -> createWidgetsCreate stays exactly where it is today
+  assert.ok(rootBlock(cli.stdout, 'Mutation').includes('createWidgetsCreate'), 'an unmatched POST is unaffected by the flag');
+  assert.ok(!rootBlock(cli.stdout, 'Query').includes('createWidgetsCreate'), 'and never moves to Query');
 });

@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: R225 reads pattern
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # untouched baseline: a plain GET stays under "type Query" whether or not --reads is given
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+  # a POST that only reads data, named the way Ashby names its list endpoints (a ".list" path) ->
+  # with no override, this is written under "type Mutation" today; a --reads pattern matching
+  # "\.list$" moves it to "type Query" instead, without a per-operation overrides entry
+  /widgets.list:
+    post:
+      operationId: listWidgets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cursor:
+                  type: string
+      responses:
+        '200':
+          description: A page of widgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Widget'
+  # a POST that actually writes something -> neither its path nor its operation id matches a
+  # read-shaped pattern, so it stays under "type Mutation" whether or not --reads is given
+  /widgets.create:
+    post:
+      operationId: createWidget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Widget'
+      responses:
+        '200':
+          description: The created widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+  # a POST whose path also matches a read pattern (its path ends in a read-shaped word, just like
+  # widgets.list above), but which the overrides file explicitly pins to root: 'mutation' -> the
+  # override wins, proving a pattern match never overrules a named exception
+  /widgets.purgeAll:
+    post:
+      operationId: purgeAllWidgets
+      responses:
+        '200':
+          description: Confirmation that every widget was removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeResult'
+  # a POST whose path does not match the read pattern, but whose operation id does -> proves the
+  # pattern is tested against the operation id as well as the path, not the path alone
+  /widgets/export:
+    post:
+      operationId: widgetsFetch
+      responses:
+        '200':
+          description: Every widget, as a file download reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    PurgeResult:
+      type: object
+      properties:
+        purgedCount:
+          type: integer

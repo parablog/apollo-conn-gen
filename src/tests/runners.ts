@@ -34,6 +34,7 @@ export async function runOasTest(
     overrides?: OverridesConfig;
     batch?: BatchConfig;
     sparseFieldsetsParam?: string;
+    readsPattern?: string;
     connectorSpecVersion?: string;
     federationVersion?: string;
     composeFederationVersion?: string;
@@ -60,6 +61,7 @@ export async function runOasTest(
     overrides: opts.overrides,
     batch: opts.batch,
     sparseFieldsetsParam: opts.sparseFieldsetsParam,
+    readsPattern: opts.readsPattern,
     directives: opts.directives,
     showParentInSelections: false,
     mapper: opts.mapper,
