@@ -13,6 +13,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the verb and path. A `$ref` component schema keeps its own name either way. A saved selection
   into a part of the tree this renames either recovers to the same field or generation fails with
   an explicit error — it is never silently redirected to a different field. Issue #197.
+- The overrides file can now say how an API reports errors and where the real result sits. Some
+  APIs answer every call with HTTP 200 and put `success: false` and an error message in the body;
+  before, those came through as ordinary data. Add a `"$source"` entry with `isSuccess` and
+  `errors`, and a failed call becomes a GraphQL error. Add `payload` (for Ashby, `results`) and
+  every root field returns that field's type instead of the wrapper around it. Issue #226.
+- `--infer-entity-resolvers` works for APIs that fetch one record with a POST, such as Ashby's
+  `POST /job.info` with `{ id }`. Before, only `GET /jobs/{id}` counted, so those APIs got no
+  `@key` and no type-level connector at all. Issue #224.
+- A `oneOf` that mixes plain values with objects (a custom field whose value is a number, a
+  string, a list or an object) keeps every branch. Before, only the object branches survived and
+  the plain ones were dropped without a warning. Issue #208.
+- `anyOf` on a field or list item is handled the same way `oneOf` is. Before, it always fell back
+  to `JSON`. An `anyOf` whose object branches are named schemas still falls back to `JSON` for now,
+  with the reason in the docstring. Issue #220.
 
 ### Fixed
 
@@ -28,6 +42,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   type had no key of its own. Issue #196.
 - A list or map whose item type lost every field to a reference cycle now reads as `JSON` instead
   of naming a type that is never written. Issue #201.
+- A tuple array (`prefixItems`) no longer stops the whole generation; the field becomes `JSON`
+  with the reason in its docstring. Issue #204.
+- When two operations select different fields of the same type, the generator now says so and
+  names the fields. Before, the only sign was an internal error from the composer. Issue #207.
+- A wide integer read as a string (`chunk_size?->jsonStringify`) is spelled so the selection reader
+  accepts it. Before, the `?` came after the call and every field after it was reported unread.
+  Issue #213.
+- A field whose enum is merged across `oneOf` branches stays required when every branch requires
+  it. Before, the merge always made it nullable. Issue #208.
+
 
 ## [0.29.0]
 
