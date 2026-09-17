@@ -3705,6 +3705,44 @@ test('test_92_map_of_plain_values_at_the_response_root_expands', async () => {
   assert.ok(/type LanguagesEntry \{\n {2}key: String\n {2}value: Int\n\}/.test(numbers!), 'and an integer value');
 });
 
+test('test_229_empty_additional_properties_adds_no_field', async () => {
+  // #229: `additionalProperties: {}` beside declared properties means "extra keys allowed", the
+  // same as `true`, so it used to add a needless `keyString: JSON` catch-all field and selection.
+  const schema = await runOasTest(
+    'open-object.yaml',
+    ['get:/widgets/{id}>**', 'post:/widgets>**'],
+    4,
+    3,
+  );
+  assert.ok(schema !== undefined);
+  assert.ok(/type WidgetsByIdResponse \{\n {2}id: ID\n {2}name: String\n\}/.test(schema!), 'only the declared fields');
+  assert.ok(!/keyString/.test(schema!), 'no catch-all field is added');
+  assert.ok(!/\[key: string\]/.test(schema!), 'no catch-all selection is added');
+  assert.ok(/body: """\n\s*\$args\.input \{\n\s*id\n\s*name\n\s*\}/.test(schema!), 'the POST body selects id and name only');
+});
+
+test('test_229_typed_additional_properties_keeps_the_catch_all', async () => {
+  // a typed additionalProperties beside declared properties is a real shape -- unlike `{}`, it
+  // says what the extra values are, so the catch-all field stays. Pins that only the empty schema changed.
+  const schema = await runOasTest('open-object.yaml', ['get:/widgets/{id}/attrs>**'], 4, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/keyString: String/.test(schema!), 'the catch-all field is still typed');
+  assert.ok(/keyString: \$\."\[key: string\]"\?/.test(schema!), 'and its selection still reads the extra keys');
+});
+
+test('test_229_pure_map_entries_unchanged', async () => {
+  // A pure map -- no declared properties, only additionalProperties: {} -- never reaches the
+  // check above: Schemas.isMap routes it to the Map node before Obj.visitProperties runs. Control.
+  const schema = await runOasTest('open-object.yaml', ['get:/widgets/{id}/labels>**'], 4, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/widgetsByIdLabels\(id: ID!\): \[WidgetsByIdLabelsEntry\]/.test(schema!), 'still a list of entries');
+  assert.ok(
+    /type WidgetsByIdLabelsEntry \{\n {2}key: String\n[\s\S]*?\n {2}value: JSON\n\}/.test(schema!),
+    'entry type is unchanged',
+  );
+  assert.ok(/\$->entries \{\n\s*key\n\s*value\n\s*\}/.test(schema!), 'selection reads entries with a bare value');
+});
+
 test('test_94_union_body_with_an_array_member_keeps_its_input_type', async () => {
   // #94: a request body that is a oneOf of an object and an array of the same $ref referenced
   // `RestrictionArrayInput!` and never defined it — rover answered INVALID_BODY on confluence's

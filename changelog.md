@@ -22,6 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- An object with declared properties and `additionalProperties: {}` now types only its declared
+  fields. Before, it also got a `keyString: JSON` catch-all field and a `"[key: string]": keyString`
+  selection, even though `{}` says nothing about the extra keys — the same as
+  `additionalProperties: true` or leaving it out, neither of which added a field. On Ashby this
+  removed 37 needless fields and 25 selections the router had nothing to fill, e.g. (ashby)
+  `fieldSubmissions.items: { properties: { path, value }, additionalProperties: {} }`. Issue #229.
 - A schema with `"payload"` configured now composes even when an operation's error body shares a
   type with other operations. Before, once every operation returning that type switched to its
   payload field, the shared type (Ashby's `ErrorDetail`, reached only through the `errors` field

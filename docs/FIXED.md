@@ -11328,3 +11328,39 @@ legitimately reachable there. The gap only shows on a narrower selection, where 
 the shared type alive.
 
 **Refs:** `src/oas/generator/typesCollector.ts` (`writtenRoots`, `collectReachable`), #226, #228.
+
+## 229 [BUG] [P4] · `additionalProperties: {}` beside declared properties added a needless catch-all field — ✅ Fixed
+
+**Symptom:** an object that declares its properties and also says `additionalProperties: {}` got an
+extra `keyString: JSON` field and a `"[key: string]": keyString` selection, even though `{}` says
+nothing about the extra keys — the same as `additionalProperties: true` or leaving it out
+entirely, both of which already added nothing. On Ashby this was 37 of the schema's 96 JSON fields
+and 25 selections the router has nothing to fill.
+
+**OAS:** (ashby) `fieldSubmissions.items: { properties: { path, value }, additionalProperties: {} }`.
+
+**Cause:** `Obj.visitProperties`'s `hasAdditionalProperties` check only asked "is
+`additionalProperties` an object", which `{}` also is. It never asked whether that object said
+anything about the shape of the extra keys.
+
+**Fix.** The check now also requires `!Schemas.isEmpty(this.schema.additionalProperties)` —
+`Schemas.isEmpty` already answers "this schema says nothing about its shape". A pure map (no
+declared properties, only `additionalProperties`) is unaffected: `Schemas.isMap` already routes it
+to the `Map` node before `visitProperties` ever runs, and `Map.visitAdditionalProperties` keeps
+turning an empty value schema into a `JSON` value type on a `key`/`value` entry — untouched by this
+fix.
+
+**Tests.** `tests/resources/oas/open-object.yaml`: a `get`/`post` pair with declared properties plus
+`additionalProperties: {}` (no catch-all field, POST body selects the declared fields only), a `get`
+with declared properties plus a typed `additionalProperties` (keeps its catch-all field), and a
+`get` that is a pure map (`additionalProperties: {}` alone — unchanged list-of-entries shape, a
+control that pins this fix never runs for it).
+
+**Ashby result.** Generated the whole spec with `-n --infer-entity-resolvers --overrides`:
+`keyString` fields drop from 37 to 0, `"[key: string]"` selections from 25 to 0, JSON fields from 96
+to 59, and 87 Query / 110 Mutation fields are unchanged — every other line is identical. The result
+composes on rover 2.15.1. The same spec shape on Omni: 77 lines removed, all `keyString` fields and
+`"[key: string]"` selections, nothing else.
+
+**Refs:** `src/oas/nodes/obj.ts` (`visitProperties`), `src/oas/utils/schemas.ts` (`Schemas.isEmpty`),
+`src/oas/nodes/map.ts` (the pure-map case that stays unchanged).

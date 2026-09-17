@@ -5,6 +5,7 @@ import { OasContext } from '../oasContext.js';
 import type { EntityResolver } from './entity.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { Schemas } from '../utils/schemas.js';
 
 import _ from 'lodash';
 
@@ -287,8 +288,13 @@ export class Obj extends Type {
 
   private visitProperties(context: OasContext): void {
     const hasProperties = this.schema.properties && Object.keys(this.schema.properties).length > 0;
+    // `additionalProperties: {}` beside declared properties means "extra keys allowed", same as
+    // `true`, so it adds no field; e.g. (ashby) `fieldSubmissions.items: { properties: { path,
+    // value }, additionalProperties: {} }`.
     const hasAdditionalProperties =
-      this.schema.additionalProperties && typeof this.schema.additionalProperties === 'object';
+      this.schema.additionalProperties &&
+      typeof this.schema.additionalProperties === 'object' &&
+      !Schemas.isEmpty(this.schema.additionalProperties as SchemaObject);
 
     if (!hasProperties && !hasAdditionalProperties) {
       return;

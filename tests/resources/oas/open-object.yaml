@@ -1,0 +1,95 @@
+openapi: 3.0.3
+info:
+  title: An object that allows extra keys beside its declared properties
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # `additionalProperties: {}` beside declared properties says "extra keys allowed", nothing more
+  # -- the same as `true` or leaving it out. #229
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                additionalProperties: {}
+  /widgets:
+    post:
+      operationId: createWidget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+              additionalProperties: {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+  # a typed additionalProperties beside properties is a real shape and keeps its catch-all field
+  /widgets/{id}/attrs:
+    get:
+      operationId: getWidgetAttrs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                additionalProperties:
+                  type: string
+  # no declared properties: a pure map, routed to the Map node before this fix's check ever runs
+  /widgets/{id}/labels:
+    get:
+      operationId: getWidgetLabels
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
