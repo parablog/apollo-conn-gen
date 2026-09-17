@@ -499,7 +499,20 @@ node ./dist/cli/oas -h
 
 An operation is normally written under `type Query` when its HTTP method is GET, and under `type Mutation` otherwise. `root: "query"` or `root: "mutation"` moves one operation to the named side instead, regardless of its HTTP method — for example, a `POST /items/search` endpoint that only reads data (the body carries search filters) can be written under `type Query` with `{ "post:/items/search": { "root": "query" } }`. The HTTP request itself is unaffected: `@connect` still uses the operation's real method.
 
-An override key that matches no operation is ignored with a warning — except `"$source"`, a reserved top-level key that never names an operation (see below). A `root` value other than `"query"`/`"mutation"` stops the run.
+A `"$match"` entry applies one override to every operation whose key matches a pattern, instead of naming operations one at a time — useful for an API that names every read `.list`/`.info`/`.search` and the like, the way Ashby does. `"$match"` is a list; each item is an ordinary override entry plus a `"pattern"` regex tested against the operation's key (`verb:path`, e.g. `post:/application.list`). The first item whose pattern matches an operation applies to it; an exact entry for that same operation is then laid over it and wins field by field:
+
+```json
+{
+  "$match": [
+    { "pattern": "^post:/.*\\.(list\\w*|info|search\\w*|fetch)$", "root": "query" }
+  ],
+  "post:/report.generate": { "root": "query" }
+}
+```
+
+Every field an exact entry can carry (`path`, `queryParams`, `headers`, `body`, `root`, `payload`) works the same way on a pattern entry. The verb is already part of the key, so a pattern moves a GET that writes just as easily as a POST that reads.
+
+An override key that matches no operation is ignored with a warning — except `"$source"` and `"$match"`, reserved top-level keys that never name an operation (see above and below). A `root` value other than `"query"`/`"mutation"` stops the run, on an exact entry or on a `"$match"` pattern; a pattern that is not a valid regex stops the run as soon as the file is loaded, naming the pattern.
 
 #### Source error mapping and the payload field
 

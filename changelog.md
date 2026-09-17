@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- The overrides file can now cover many operations with one entry instead of one per operation.
+  Add a `"$match"` entry with a regex, and every operation whose key matches it gets that entry's
+  settings — before, an API that names every read `.list`/`.info`/`.search` needed one entry per
+  read; Ashby's file had 87. `{ "$match": [{ "pattern": "^post:/.*\\.list$", "root": "query" }] }`
+  moves every `.list` operation to `Query` in one line. Issue #225.
+
 ## [0.30.0]
 
 ### Added

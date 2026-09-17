@@ -23,6 +23,7 @@ import {
 } from './internal.js';
 import _ from 'lodash';
 import { Naming } from '../utils/naming.js';
+import { findOverride } from '../utils/overrides.js';
 import type { OasContext } from '../oasContext.js';
 import type { SchemaObject } from 'oas/types';
 
@@ -110,7 +111,7 @@ export class T {
   // Written as "type Mutation" unless an override says otherwise — e.g. "POST /items/search"
   // only reads data, so an override with root: 'query' keeps it out of Mutation. see docs/FIXED.md #150
   static isMutationType(type: IType, context: OasContext): boolean {
-    const root = context.generateOptions.overrides?.[type.id]?.root;
+    const root = findOverride(type.id, context.generateOptions.overrides)?.root;
     if (root) {
       return root === 'mutation';
     }
@@ -125,7 +126,7 @@ export class T {
   // Written as "type Query" unless an override says otherwise — e.g. "GET /legacy/purge" deletes
   // something, so an override with root: 'mutation' keeps it out of Query. see docs/FIXED.md #150
   static isQueryType(type: IType, context: OasContext): boolean {
-    const root = context.generateOptions.overrides?.[type.id]?.root;
+    const root = findOverride(type.id, context.generateOptions.overrides)?.root;
     if (root) {
       return root === 'query';
     }

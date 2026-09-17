@@ -397,6 +397,39 @@ test('source-envelope flag runtime: a failing body becomes a mapped GraphQL erro
 
 // --- the real Ashby spec with the config; the corpus tests keep the unconfigured baseline ---
 
+// docs/FIXED.md #225: a "$match" pattern entry's fields (including "payload") merge under an
+// exact entry for the same op the same way an exact "root" does — field by field, exact wins.
+
+test('source-envelope union: a pattern payload is inherited, and an exact payload:null keeps the pattern root', async () => {
+  const overrides: OverridesConfig = {
+    $match: [{ pattern: '^post:/widget\\.(info|list)$', root: 'query', payload: 'results' }],
+    'post:/widget.info': { payload: null },
+  };
+  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 5, 9, { useOperationIds: true, overrides });
+
+  // widget.list matches the pattern only: unwraps to [Widget], proving the pattern's own
+  // "payload" is read, not just its "root"
+  assert.ok(schema!.includes('widgetList(input: WidgetListInput!): [Widget]'), 'the pattern payload unwraps widget.list');
+
+  // widget.info matches the pattern (root: query) and gets an exact payload:null: stays under
+  // Query (the pattern's root survives) but keeps its wrapper (the exact payload wins)
+  assert.ok(
+    schema!.includes('widgetInfo(input: WidgetInfoInput!): WidgetInfoResponse'),
+    'the exact payload:null overrides the pattern payload but keeps the pattern root',
+  );
+  assert.ok(schema!.includes('type WidgetInfoResponse'), 'the wrapper type is still emitted');
+});
+
+test('source-envelope union: a pattern with no payload falls back to the $source default', async () => {
+  const overrides: OverridesConfig = {
+    $source: ASHBY_SOURCE.$source,
+    $match: [{ pattern: '^post:/widget\\.count$', root: 'query' }],
+  };
+  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 5, 6, { useOperationIds: true, overrides });
+
+  assert.ok(schema!.includes('widgetCount: Int'), 'widget.count still unwraps through $source.payload with no payload on the pattern itself');
+});
+
 test('source-envelope ashby: the real spec unwraps application.list under the configured payload', async () => {
   const overrides: OverridesConfig = {
     'post:/application.list': { root: 'query' },

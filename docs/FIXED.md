@@ -11152,3 +11152,64 @@ unreferenced through it. See docs/TASKS.md #227.
 `src/oas/io/operationWriter.ts`, `src/oas/generator/typesCollector.ts`, `src/oas/nodes/res.ts`
 (`Res.select`, the same plain-value test), router `apollo-federation/src/connectors/spec/source.rs:285`
 (PR #7894, the `isSuccess`/`errors` mapping this writes onto `@source`).
+
+## 225 [FEAT] [P3] · Pattern entries in the overrides file — ✅ Fixed
+
+**Symptom:** Ashby's 197 operations are all POST, so a read only lands under `Query` when the
+overrides file names it with `root: "query"`. That file carried 87 such entries — one per read,
+each found and typed in by hand.
+
+**OAS:** the same all-POST shape as #224 — nothing in the HTTP method tells a read apart from a
+write.
+
+**Config:** one new key in the overrides file, `"$match"`: a list of pattern entries, each an
+ordinary override entry plus a `"pattern"` regex tested against an operation's key (`verb:path`,
+e.g. `post:/application.list`):
+```json
+{
+  "$source": { "isSuccess": "$.success", "errors": { "…" }, "payload": "results" },
+  "$match": [
+    { "pattern": "^post:/.*\\.(list\\w*|info|search\\w*|fetch)$", "root": "query" }
+  ],
+  "post:/report.generate": { "root": "query" }
+}
+```
+- The first `"$match"` item whose pattern matches an operation's key applies to it. An exact entry
+  for that same operation is then laid over it and wins field by field —
+  `{ "post:/x": { "payload": null } }` keeps whatever `root` a pattern already gave `post:/x` and
+  only changes the payload.
+- Every field an exact entry can carry (`path`, `queryParams`, `headers`, `body`, `root`,
+  `payload`) works the same way on a pattern entry. `"$source"` is unaffected.
+- The verb is already part of the key, so a pattern needs no separate verb check — it moves a GET
+  that writes just as easily as a POST that reads.
+
+**Fix.** `findOverride()`, in the new `src/oas/utils/overrides.ts`, is now the one place every
+reader resolves an operation's override: the first matching `"$match"` pattern, with the exact
+entry's fields laid over it so an exact field wins. `typeUtils.ts`
+(`isMutationType`/`isQueryType`), `operationWriter.ts` (`requestMethod`), and `payload.ts`
+(`payloadField`) all read through it instead of indexing the overrides object directly.
+`oasContext.ts`'s `OverridesConfig` picks up `"$match"` alongside `"$source"`.
+`oasGen.ts`'s typo guard gets a second loop for `"$match"`: a `root` other than
+`"query"`/`"mutation"` throws, and a pattern matching no operation in the file warns instead of
+doing nothing silently — the same two checks the exact-key loop already makes for a plain entry.
+A pattern that is not a valid regex stops the run as soon as the overrides are loaded (`OasGen`
+constructor), before any operation is classified with it.
+
+**Tests.** `tests/resources/oas/overrides-match.yaml`: five ops — a plain GET, a POST that reads
+by name (`.list`), a POST that writes, a POST that also reads by name but is pinned back to
+`mutation` by an exact entry, and a GET that writes (it triggers an export job).
+`tests/all/r15-graphql-root.test.ts`: a pattern moves a matching op; an exact entry wins over a
+pattern field by field; a pattern moves a GET as easily as a POST; no `"$match"` at all leaves the
+old default; the first of two overlapping patterns wins; a bad pattern throws, naming it; a
+pattern matching nothing warns. `tests/all/source-envelope.test.ts` (reusing
+`source-envelope-union.yaml`): a pattern's own `payload` is inherited the same way its `root` is;
+an exact `payload: null` keeps the pattern's `root` but restores the wrapper; a pattern with no
+`payload` still falls through to `"$source".payload`. `tests/all/r1-entity.test.ts`: a read that
+comes from a pattern instead of a named override still qualifies for the #224 entity resolver.
+
+**Ashby result.** `tests/resources/oas/ashby-overrides.json`'s 87 `root: "query"` entries become
+one `"$match"` item. Generated with `-n --infer-entity-resolvers --overrides`, the schema is
+byte-identical to the old 87-entry file: 87 Query and 110 Mutation fields.
+
+**Refs:** `src/oas/utils/overrides.ts` (`findOverride`), `src/oas/nodes/typeUtils.ts`,
+`src/oas/io/operationWriter.ts`, `src/oas/utils/payload.ts`, `src/oas/oasGen.ts`, #150, #224, #226.

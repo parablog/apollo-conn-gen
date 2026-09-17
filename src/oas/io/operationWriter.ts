@@ -4,6 +4,7 @@ import { OasContext, OverrideEntry } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Body, IType, Map as MapNode, Op, Param, Prop, T } from '../nodes/internal.js';
 import { findPayload, payloadField } from '../utils/payload.js';
+import { findOverride } from '../utils/overrides.js';
 import { Naming } from '../utils/naming.js';
 import { warn } from '../log/trace.js';
 import { Params } from '../utils/params.js';
@@ -98,7 +99,7 @@ export class OperationWriter {
   }
 
   private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], _indent: number): void {
-    const override = context.generateOptions.overrides?.[op.id];
+    const override = findOverride(op.id, context.generateOptions.overrides);
 
     // R5: this op's resolved auth, split by placement. A header lives on @connect only in per-op
     // mode (uniform mode puts it on @source); query auth always lives here (@source has no

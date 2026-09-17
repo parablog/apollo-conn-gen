@@ -1,0 +1,107 @@
+openapi: 3.0.3
+info:
+  title: R225 pattern overrides
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  # untouched baseline: a plain GET stays under "type Query" whatever the overrides file says
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+  # a POST that only reads data, named the way Ashby names its list endpoints (a ".list" path) ->
+  # with no override this is written under "type Mutation"; a "$match" pattern moves it to "type
+  # Query" without a per-operation overrides entry
+  /widgets.list:
+    post:
+      operationId: listWidgets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cursor:
+                  type: string
+      responses:
+        '200':
+          description: A page of widgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Widget'
+  # a POST that actually writes something -> no pattern in these tests matches its path, so it
+  # stays under "type Mutation"
+  /widgets.create:
+    post:
+      operationId: createWidget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Widget'
+      responses:
+        '200':
+          description: The created widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+  # a POST whose path matches a read-shaped pattern too, but which an exact override entry can pin
+  # back to root: 'mutation' -> the exact entry wins over the pattern
+  /widgets.purgeAll:
+    post:
+      operationId: purgeAllWidgets
+      responses:
+        '200':
+          description: Confirmation that every widget was removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeResult'
+  # a GET that writes: it triggers an export job rather than reading anything -> a "$match" pattern
+  # can still move it to root: 'mutation', proving pattern matching is not POST-only
+  /widgets.export:
+    get:
+      operationId: exportWidgets
+      responses:
+        '200':
+          description: The export job that was started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    PurgeResult:
+      type: object
+      properties:
+        purgedCount:
+          type: integer
+    ExportJob:
+      type: object
+      properties:
+        jobId:
+          type: string

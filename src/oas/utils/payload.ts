@@ -1,11 +1,12 @@
 import { IType, Obj, Op, Prop, Res, Union } from '../nodes/internal.js';
 import { OasContext, OverridesConfig } from '../oasContext.js';
+import { findOverride } from './overrides.js';
 
 // The field an op's root field returns instead of the whole response, from the overrides file:
 // the op's own entry first, then the "$source" default. `payload: null` on an op keeps the response.
 //   e.g. { "$source": { "payload": "results" }, "post:/job.info": { "payload": null } }
 export function payloadField(opId: string, overrides: OverridesConfig | undefined): string | undefined {
-  const entry = overrides?.[opId];
+  const entry = findOverride(opId, overrides);
   return entry && 'payload' in entry ? (entry.payload ?? undefined) : overrides?.$source?.payload;
 }
 

@@ -816,32 +816,6 @@ prove it.
 `src/oas/nodes/obj.ts` (`visitProperties`), `src/oas/generator/typesCollector.ts`
 (`collectLeafPaths`), #219, #220.
 
-## 225 [FEAT] [P3] · Classifying reads on an all-POST API needs a per-spec override file today — ⬜ Open
-
-**Symptom:** Ashby's 197 operations are all POST, so every read landed under `Mutation` until
-`tests/resources/oas/ashby-overrides.json` (87 entries, all `{"root": "query"}`) moved them by hand.
-
-**OAS:** the same 197-operation, all-POST shape as #224 — nothing in the HTTP method distinguishes
-a read from a write here.
-
-**Cause:** the override file had to be derived by reading every operation's path verb —
-`.list`/`.info`/`.search` plus a dozen other read-shaped names (`fetch`, `listHistory`,
-`interviewerSettings`, and the like) — one entry per operation, by hand.
-
-**Shape:** a flag such as `--reads <pattern>` (a regex tested against the operation id or path) that
-sets `root: query` for every matching POST operation, with the override file remaining for the
-exceptions a pattern can't express. The existing verb-based default (GET under Query, everything
-else under Mutation) stays unchanged when the flag isn't given.
-
-**Refs:** `src/cli/oas.ts` (`--overrides`), `docs/FIXED.md` #150,
-`tests/resources/oas/ashby-overrides.json`.
-
-`docs/FIXED.md` #224 closed the other half of the same read/write split: a `root: query`
-operation now also qualifies as a type-level entity resolver, keyed through its body, not just a
-root field — so this override file already covers the whole read side of an RPC API, root
-placement and entity resolvers both; what's still missing is only that it has to be hand-derived.
-This file also now carries the `$source` error/payload mapping (`docs/FIXED.md` #226).
-
 ## 227 [BUG] [P4] · A shared error type can outlive every wrapper that reached it — ⬜ Open
 
 **Symptom:** `docs/FIXED.md` #226 drops a response wrapper type once every op that used to return
@@ -858,3 +832,21 @@ re-derive it the same way the existing settle loop above it does) so a type left
 reference is dropped too, not just the wrapper itself.
 
 **Refs:** `src/oas/generator/typesCollector.ts` (`dropUnreturnedWrappers`), `docs/FIXED.md` #226.
+
+## 228 [FEAT] [P3] · One operation's error shape differs from the source's and the overrides file cannot say so — ⬜ Open
+
+**Symptom:** `$source.errors` in the overrides file maps every operation's error the same way.
+Ashby's `customFields.fetch` answers `{ success: false, errors: ["invalid_input"], errorInfo: { message } }`,
+where `errors` is a list of codes and the text lives in `errorInfo.message`, so the source-wide
+`$.errors?->first?.message` finds nothing and the client only ever sees the fallback text.
+
+**OAS** (ashby.json, `post:/customFields.fetch`): `oneOf [ { fields }, OverlayErrorResponse ]`, with
+`OverlayErrorResponse.errors: [string]` and `OverlayErrorResponse.errorInfo: { code, message, requestId }`.
+
+**Shape:** accept `errors` on a per-operation override entry
+(`"assessmentPartnerCustomFieldsFetch": { "errors": { "message": "$.errorInfo.message" } }`) and write
+it as `errors: { message: ... }` on that operation's `@connect`, which the router already lets override
+the `@source` mapping. Same `message`/`extensions` keys as `$source.errors`, nothing new to learn.
+
+**Refs:** `src/oas/oasContext.ts` (`OverrideEntry`), `src/oas/io/schemaWriter.ts`
+(`writeSourceErrorMapping`), `src/oas/io/operationWriter.ts`, `docs/FIXED.md` #226.

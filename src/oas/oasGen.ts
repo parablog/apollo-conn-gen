@@ -7,7 +7,7 @@ import { OpenAPI } from 'openapi-types';
 
 import fs from 'fs';
 import { DEFAULT_VERSIONS, validateVersionOptions } from '../versions.js';
-import { BatchConfig, GenerateOptions, OasContext, OverridesConfig } from './oasContext.js';
+import { BatchConfig, GenerateOptions, OasContext, OverrideEntry, OverridesConfig } from './oasContext.js';
 import { Factory, Get, IType, T } from './nodes/internal.js';
 import { Writer } from './io/writer.js';
 import { trace } from './log/trace.js';
@@ -74,6 +74,12 @@ function checkAndFixMalformedResponses(doc: Record<string, unknown>): void {
       }
     }
   }
+}
+
+// A "root" naming neither "query" nor "mutation" (e.g. "Mutation", capitalized) — shared by the
+// exact-key and "$match" typo guards in generateSchema below.
+function hasInvalidRoot(entry: OverrideEntry): boolean {
+  return 'root' in entry && entry.root !== undefined && entry.root !== 'query' && entry.root !== 'mutation';
 }
 
 interface IGenOptions {
@@ -203,6 +209,17 @@ export class OasGen {
   constructor(parser: Oas, options: GenerateOptions) {
     this.parser = parser;
     this.options = options;
+
+    // A "$match" pattern that is not a valid regex stops the run before any operation is
+    // classified with it, e.g. "(unterminated".
+    for (const match of options.overrides?.$match ?? []) {
+      try {
+        new RegExp(match.pattern);
+      } catch (error) {
+        throw new Error(`[overrides] "$match" pattern "${match.pattern}" does not compile: ${(error as Error).message}`);
+      }
+    }
+
     this.collector = new TypesCollector(this);
   }
 
@@ -232,23 +249,30 @@ export class OasGen {
     return this.isolatedRun(() => {
       // typo guard: an override key that matches no operation would silently do nothing. A root
       // value other than "query"/"mutation" (e.g. "Mutation", capitalized) is caught here too.
-      // "$source" is the one key that names no operation. see docs/FIXED.md #226
+      // "$source" and "$match" are the two keys that name no operation. see docs/FIXED.md #226 #225
       for (const [key, entry] of Object.entries(this.options.overrides ?? {})) {
-        if (key === '$source') {
+        if (key === '$source' || key === '$match') {
           continue;
         }
+        const override = entry as OverrideEntry | undefined;
         if (!this.paths.has(key)) {
           console.warn(`[overrides] no operation matches "${key}" — override ignored.`);
-        } else if (
-          entry &&
-          'root' in entry &&
-          entry.root !== undefined &&
-          entry.root !== 'query' &&
-          entry.root !== 'mutation'
-        ) {
+        } else if (override && hasInvalidRoot(override)) {
+          throw new Error(`[overrides] "${key}".root must be "query" or "mutation", got ${JSON.stringify(override.root)}.`);
+        }
+      }
+
+      // same typo guard for "$match" entries: a bad root throws, a pattern matching no operation
+      // key warns. see docs/FIXED.md #225
+      for (const match of this.options.overrides?.$match ?? []) {
+        const pattern = new RegExp(match.pattern);
+        if (hasInvalidRoot(match)) {
           throw new Error(
-            `[overrides] "${key}".root must be "query" or "mutation", got ${JSON.stringify(entry.root)}.`,
+            `[overrides] "$match" pattern "${match.pattern}".root must be "query" or "mutation", got ${JSON.stringify(match.root)}.`,
           );
+        }
+        if (![...this.paths.keys()].some((key) => pattern.test(key))) {
+          console.warn(`[overrides] no operation matches pattern "${match.pattern}" — override ignored.`);
         }
       }
 

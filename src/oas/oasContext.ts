@@ -37,8 +37,19 @@ export type SourceOverride = {
   payload?: string;
 };
 
-// request overrides, keyed by op id. e.g. { "get:/pets/{id}": { path: "/v2/pets/{id}" } }
-export type OverridesConfig = Record<string, OverrideEntry> & { $source?: SourceOverride };
+// A "$match" entry: an ordinary OverrideEntry plus the regex tested against an operation's key
+// (`verb:path`, e.g. "post:/application.list"). see docs/FIXED.md #225
+//   e.g. { "pattern": "^post:/.*\\.list$", "root": "query" } applies to post:/widgets.list
+export type MatchOverride = OverrideEntry & { pattern: string };
+
+// request overrides, keyed by op id, plus "$source" (source-wide defaults, above) and "$match"
+// (pattern entries applied before the exact key — see findOverride in utils/overrides.ts).
+//   e.g. { "get:/pets/{id}": { path: "/v2/pets/{id}" }, "$match": [{ "pattern": "^get:/pets", "root": "query" }] }
+export type OverridesConfig = {
+  [key: string]: OverrideEntry | SourceOverride | MatchOverride[] | undefined;
+  $source?: SourceOverride;
+  $match?: MatchOverride[];
+};
 
 // R6: per-batch-endpoint settings. The only knob is the size cap; everything else
 // (entity, key, request, selection) is inferred. `{}`/`null` = defaults.

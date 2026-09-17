@@ -298,6 +298,22 @@ test('test_R1_post_entity_resolver_flag_off_is_byte_identical', async () => {
   assert.ok(!schema!.includes('$this'), 'flag off must not emit a $this resolver');
 });
 
+test('test_225_pattern_read_gets_the_entity_resolver', async () => {
+  // same fixture, but the read comes from a "$match" pattern instead of RPC_POST_READS naming
+  // widget.info directly -- proves a pattern-derived root: query still reaches the #224 path.
+  const schema = await runOasTest('entity-rpc-post-key.yaml', ['post:/widget.info>**'], 11, 5, {
+    inferEntityResolvers: true,
+    overrides: { $match: [{ pattern: '\\.info$', root: 'query' }] },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('type Widget @key(fields: "id")'), 'expected @key on Widget');
+  assert.ok(
+    schema!.includes('POST: "/widget.info"\n        body: "$({ id: $this.id })"'),
+    'expected the POST body key on Widget',
+  );
+  assert.ok(schema!.includes('$.results {'), 'expected the selection wrapped under the envelope field');
+});
+
 // A type-level connector, addressed as "TypeName[0]", answers test-connectors like a root
 // field does -- confirmed against Widget's GET resolver before writing this case.
 test('entity-rpc-post-key runtime: widget-info', async (t) => {

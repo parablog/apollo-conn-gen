@@ -108,3 +108,107 @@ test('test_150_every_selected_op_forced_to_mutation', async () => {
     assert.ok(mutationBlock.includes(field), `${field} is under Mutation`);
   }
 });
+
+// docs/FIXED.md #225: a "$match" entry in the overrides file applies to every operation whose key matches its pattern;
+// an exact entry for the same operation wins field by field. Fixture ops are described in overrides-match.yaml.
+
+const MATCH_PATHS = [
+  'get:/widgets/{id}>**',
+  'post:/widgets.list>**',
+  'post:/widgets.create>**',
+  'post:/widgets.purgeAll>**',
+  'get:/widgets.export>**',
+];
+
+test('test_225_match_entry_moves_matching_operations', async () => {
+  const schema = await runOasTest('overrides-match.yaml', MATCH_PATHS, 5, 5, {
+    skipValidation: true,
+    overrides: {
+      $match: [{ pattern: '^post:/widgets\\.(list|purgeAll)$', root: 'query' }],
+      'post:/widgets.purgeAll': { root: 'mutation' },
+    },
+  });
+  const queryBlock = rootBlock(schema!, 'Query');
+  const mutationBlock = rootBlock(schema!, 'Mutation');
+  assert.ok(queryBlock.includes('createWidgetsList'), 'the pattern moves widgets.list to Query');
+  assert.ok(
+    mutationBlock.includes('createWidgetsCreate'),
+    'widgets.create is untouched by the pattern, stays Mutation',
+  );
+  assert.ok(
+    mutationBlock.includes('createWidgetsPurgeAll'),
+    'the exact entry wins over the pattern for widgets.purgeAll',
+  );
+  assert.ok(queryBlock.includes('widgetsById'), 'the plain GET is unaffected');
+});
+
+test('test_225_match_entry_sends_a_get_to_mutation', async () => {
+  const schema = await runOasTest('overrides-match.yaml', MATCH_PATHS, 5, 5, {
+    skipValidation: true,
+    overrides: { $match: [{ pattern: '^get:/widgets\\.export$', root: 'mutation' }] },
+  });
+  assert.ok(rootBlock(schema!, 'Mutation').includes('widgetsExport'), 'a GET can be moved to Mutation by a pattern');
+  assert.ok(!rootBlock(schema!, 'Query').includes('widgetsExport'), 'widgetsExport is not also under Query');
+});
+
+test('test_225_exact_entry_merges_field_by_field', async () => {
+  const schema = await runOasTest('overrides-match.yaml', MATCH_PATHS, 5, 5, {
+    skipValidation: true,
+    overrides: {
+      $match: [{ pattern: '^post:/widgets\\.list$', root: 'query' }],
+      'post:/widgets.list': { path: '/v2/widgets.list' },
+    },
+  });
+  assert.ok(rootBlock(schema!, 'Query').includes('createWidgetsList'), 'the pattern root still applies');
+  assert.ok(
+    schema!.includes('POST: "/v2/widgets.list"'),
+    'the exact entry changes only the path, on top of the pattern',
+  );
+});
+
+test('test_225_no_match_entries_leaves_the_default', async () => {
+  const schema = await runOasTest('overrides-match.yaml', MATCH_PATHS, 5, 5, { skipValidation: true, overrides: {} });
+  assert.ok(
+    rootBlock(schema!, 'Mutation').includes('createWidgetsList'),
+    'with no overrides, widgets.list stays Mutation',
+  );
+});
+
+test('test_225_first_match_wins_between_overlapping_patterns', async () => {
+  const schema = await runOasTest('overrides-match.yaml', MATCH_PATHS, 5, 5, {
+    skipValidation: true,
+    overrides: {
+      $match: [
+        { pattern: '^post:/widgets\\.(list|purgeAll)$', root: 'query' },
+        { pattern: '^post:/widgets\\.list$', root: 'mutation' },
+      ],
+    },
+  });
+  assert.ok(rootBlock(schema!, 'Query').includes('createWidgetsList'), 'the first pattern to match wins, not the last');
+});
+
+test('test_225_bad_pattern_stops_the_run', async () => {
+  await assert.rejects(
+    OasGen.fromFile(`${oasBasePath}/overrides-match.yaml`, {
+      skipValidation: true,
+      showParentInSelections: false,
+      overrides: { $match: [{ pattern: '(unterminated', root: 'query' }] },
+    }),
+    /"\$match" pattern "\(unterminated" does not compile/,
+  );
+});
+
+test('test_225_unmatched_pattern_warns', async () => {
+  let schema: string | undefined;
+  const warnings = await captureWarnings(async () => {
+    schema = await runOasTest('overrides-match.yaml', MATCH_PATHS, 5, 5, {
+      skipValidation: true,
+      overrides: { $match: [{ pattern: '^post:/nope$', root: 'query' }] },
+    });
+  });
+  assert.ok(schema !== undefined, 'generation still succeeds');
+  assert.ok(
+    warnings.some((w) => /no operation matches pattern "\^post:\/nope\$"/.test(w)),
+    `expected an "override ignored" warning, got: ${warnings.join(' | ')}`,
+  );
+});
