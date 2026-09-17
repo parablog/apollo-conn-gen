@@ -1,0 +1,41 @@
+openapi: 3.0.0
+info:
+  title: anyOf of only real objects, property position, next to its oneOf twin
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /thing:
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  anyValue:
+                    anyOf:
+                      - $ref: '#/components/schemas/DetailA'
+                      - $ref: '#/components/schemas/DetailB'
+                  oneValue:
+                    oneOf:
+                      - $ref: '#/components/schemas/DetailA'
+                      - $ref: '#/components/schemas/DetailB'
+components:
+  schemas:
+    DetailA:
+      type: object
+      properties:
+        code:
+          type: string
+      required: [code]
+    DetailB:
+      type: object
+      properties:
+        code:
+          type: string

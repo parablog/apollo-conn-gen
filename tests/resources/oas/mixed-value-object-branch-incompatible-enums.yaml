@@ -1,0 +1,40 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf whose object members disagree on an enum field's values
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+components:
+  schemas:
+    StatusA:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    StatusB:
+      type: string
+      enum: [OPEN, CLOSED]
+paths:
+  /entry.get:
+    get:
+      operationId: getEntry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: RecordA
+                        properties:
+                          status:
+                            $ref: '#/components/schemas/StatusA'
+                      - type: object
+                        title: RecordB
+                        properties:
+                          status:
+                            $ref: '#/components/schemas/StatusB'

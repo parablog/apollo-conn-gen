@@ -220,7 +220,7 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 | `baseURL`                | `string`           | `servers[0]` from the spec | Override the `@source` base URL.                                                                                                                     |
 | `federationVersion`      | `string`           | `v2.14`                    | Federation version for the `@link` URL (`>= v2.13`).                                                                                                 |
 | `connectorSpecVersion`   | `string`           | `v0.4`                     | Connector spec version (only `v0.4` is supported).                                                                                                   |
-| `overrides`              | `OverridesConfig`  | —                          | Per-operation request rewiring, keyed by op id. Also carries `root`, to move an operation to `Query`/`Mutation` regardless of its HTTP method. See [Request overrides](#request-overrides). |
+| `overrides`              | `OverridesConfig`  | —                          | Per-operation request rewiring, keyed by op id. Also carries `root` (move to `Query`/`Mutation`) and `payload` (the field a result should return). A top-level `"$source"` entry maps `isSuccess`/`errors` onto `@source`. See [Request overrides](#request-overrides). |
 | `batch`                  | `BatchConfig`      | —                          | Batch endpoints, keyed by op id. See [Batch endpoints](#batch-endpoints).                                                                            |
 | `directives`             | `DirectivesConfig` | —                          | Directives declared by hand, keyed by the type or field they belong on. See [Manual directives](#manual-directives).                                 |
 | `mapper`                 | `Mapper`           | —                          | Operation name mapper. See [Transform Rules](#transform-rules).                                                                                      |
@@ -499,7 +499,24 @@ node ./dist/cli/oas -h
 
 An operation is normally written under `type Query` when its HTTP method is GET, and under `type Mutation` otherwise. `root: "query"` or `root: "mutation"` moves one operation to the named side instead, regardless of its HTTP method — for example, a `POST /items/search` endpoint that only reads data (the body carries search filters) can be written under `type Query` with `{ "post:/items/search": { "root": "query" } }`. The HTTP request itself is unaffected: `@connect` still uses the operation's real method.
 
-An override key that matches no operation is ignored with a warning. A `root` value other than `"query"`/`"mutation"` stops the run.
+An override key that matches no operation is ignored with a warning — except `"$source"`, a reserved top-level key that never names an operation (see below). A `root` value other than `"query"`/`"mutation"` stops the run.
+
+#### Source error mapping and the payload field
+
+Some APIs answer every request with HTTP 200 whether it worked or not, and put success or failure in the body — Ashby answers `oneOf [ { success: true, results: <payload> }, { success: false, errors: [{ message }] } ]`; Slack answers `{ ok: boolean, error?: string, ...payload fields }` on one flat schema. The top-level `"$source"` key configures both:
+
+```json
+{
+  "$source": {
+    "isSuccess": "$.success",
+    "errors": { "message": "$($.errors?->first?.message ?? 'Ashby request failed')",
+                "extensions": "httpStatus: $status" },
+    "payload": "results"
+  }
+}
+```
+
+`isSuccess` and `errors` are written onto `@source` as given, so the router turns a failed body into a GraphQL error instead of leaving the flag/error fields as plain data. `payload` names the field every op's result should return instead of the whole response object — its own type becomes the root field's return type, and its own selection replaces the wrapper's. A per-op entry's own `"payload": "<field>"` overrides the default for that op; `"payload": null` keeps that one op's current shape even though a default is set. An op whose response has no property by that name is left unchanged, with a warning.
 
 ### Request bodies
 

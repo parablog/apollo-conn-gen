@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "list-of-strings.connector",
+      "connector": "Query.partyGet",
+      "variables": {},
+      "apiResponseBody": "{\"party\": {\"tags\": [\"a\", \"b\"]}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/party.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"party\": {\"tags\": [\"a\", \"b\"]}}"
+      }
+    }
+  ]
+}

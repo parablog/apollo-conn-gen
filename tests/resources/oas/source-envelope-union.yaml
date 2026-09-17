@@ -1,0 +1,144 @@
+openapi: 3.0.3
+info:
+  title: RPC-style service, Ashby's success/error envelope in miniature
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widget.info:
+    post:
+      operationId: widgetInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: A single widget
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.list:
+    post:
+      operationId: widgetList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cursor: { type: string }
+      responses:
+        '200':
+          description: A page of widgets
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetListSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.count:
+    post:
+      operationId: widgetCount
+      responses:
+        '200':
+          description: How many widgets there are
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetCountSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.tags:
+    post:
+      operationId: widgetTags
+      responses:
+        '200':
+          description: The distinct tags across every widget
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetTagsSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.noPayload:
+    post:
+      operationId: widgetNoPayload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: Archives a widget -- the success branch carries no payload
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetNoPayloadSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+    ErrorDetail:
+      type: object
+      properties:
+        message: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+    WidgetInfoSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/Widget'
+    WidgetListSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Widget'
+        moreDataAvailable: { type: boolean }
+        nextCursor: { type: string }
+    WidgetCountSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results: { type: integer }
+    WidgetTagsSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          type: array
+          items: { type: string }
+    WidgetNoPayloadSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }

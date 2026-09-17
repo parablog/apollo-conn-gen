@@ -1,0 +1,32 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf whose object members disagree on a scalar field's GraphQL type
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /entry.get:
+    get:
+      operationId: getEntry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: TextData
+                        properties:
+                          data:
+                            type: string
+                      - type: object
+                        title: NumberData
+                        properties:
+                          data:
+                            type: integer

@@ -1,11 +1,12 @@
 import { Arr, Composed, Factory, Get, IType, Obj, Res, Type, T, Scalar, ReferenceObject } from './internal.js';
 import { SchemaObject } from 'oas/types';
-import { trace } from '../log/trace.js';
+import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import { GqlUtils } from '../utils/gql.js';
+import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 
 export class Map extends Type {
   public valueType?: IType;
@@ -88,9 +89,12 @@ export class Map extends Type {
 
     // #132: same NEEDS ATTENTION note the rest of the schema gets when a field gives up on a real
     // type — here it sits above `value:` since a map's value has no field of its own to carry it.
-    const valueNote = this.valueJsonReason
-      ? Schemas.withJsonNote(context, {}, this.valueJsonReason).description
-      : undefined;
+    const cutValue = this.everyFieldRemovedValue(context);
+    const valueReason = cutValue ? JsonDegradeReasons.everyFieldRemoved(cutValue) : this.valueJsonReason;
+    if (cutValue) {
+      warn(context, '[map]', valueReason!);
+    }
+    const valueNote = valueReason ? Schemas.withJsonNote(context, {}, valueReason).description : undefined;
     if (valueNote) {
       writer.write('  """\n  ').write(valueNote).write('\n  """\n');
     }
@@ -101,13 +105,13 @@ export class Map extends Type {
       if (this.valueType instanceof Arr) {
         // For arrays, generate [ItemType] format (let the array type handle its own nullability)
         if (this.valueType.itemsType && this.valueType.itemsType.name) {
-          writer.write('[' + this.valueTypeName(this.valueType.itemsType) + ']');
+          writer.write('[' + this.valueTypeName(context, this.valueType.itemsType) + ']');
         } else {
           writer.write('[JSON]');
         }
       } else {
         // For other types, use the type name directly without hardcoded !
-        writer.write(this.valueTypeName(this.valueType));
+        writer.write(this.valueTypeName(context, this.valueType));
       }
     } else {
       writer.write('JSON');
@@ -120,14 +124,26 @@ export class Map extends Type {
 
   // Returns the type name of the value, with a suffix if there's a ref to a container (i.e. for inputs):
   // e.g. github manifests: { additionalProperties: $ref manifest } -> value: ManifestInput  #68
-  private valueTypeName(value: IType): string {
+  private valueTypeName(context: OasContext, value: IType): string {
     // A value that would emit an empty type is never written (#19) — its value is free-form JSON.
     // Obj and Composed emit from their props; a Map always has key/value and a Union its members,
     // so neither degrades. e.g. (docker /commit) ExposedPorts: { additionalProperties: { type: object } } -> value: JSON  #70
     if ((value instanceof Obj || value instanceof Composed) && value.props.size === 0) {
       return 'JSON';
     }
+    // a value whose every field was removed to break a cycle names no type. see docs/FIXED.md #201
+    if (value instanceof Obj && T.everyFieldRemoved(value, context)) {
+      return 'JSON';
+    }
     return Naming.genTypeName(value.name) + (T.isContainer(value) ? (value as Type).nameSuffix() : '');
+  }
+
+  // The Obj whose fields were all cut by a reference cycle, when the map's value (or an array
+  // value's item) names one — undefined otherwise. see docs/FIXED.md #201
+  //   e.g. (only-field-in-a-cycle) contributorsByKey: { additionalProperties: $ref Contributors }
+  private everyFieldRemovedValue(context: OasContext): Obj | undefined {
+    const value = this.valueType instanceof Arr ? this.valueType.itemsType : this.valueType;
+    return value instanceof Obj && T.everyFieldRemoved(value, context) ? value : undefined;
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
@@ -151,6 +167,14 @@ export class Map extends Type {
     writer.write(' '.repeat(context.indent + context.stack.length)).write('key\n');
     writer.write(' '.repeat(context.indent + context.stack.length)).write('value');
 
+    // When the value type reads itself through an expression (mixed value), write `value: value<expr>`
+    // instead of a bare `value`.
+    //   e.g. (ashby) `value: value->echo({ raw: @ })`
+    const suffix = this.valueType?.selectionSuffix(context);
+    if (suffix) {
+      writer.write(': value').write(suffix);
+    }
+
     if (this.valueType instanceof Map) {
       // a map value that is itself a map opens its own entries wrapper, matching the nested
       // entry type the SDL already writes. see docs/FIXED.md #171
@@ -158,7 +182,7 @@ export class Map extends Type {
       //   -> customFields->entries { key value: value->entries { key value {…} } }
       writer.write(': value');
       this.valueType.selectEntries(context, writer, selection);
-    } else if (this.needsValueSelection()) {
+    } else if (this.needsValueSelection(context)) {
       writer.write(' {').write('\n');
       context.enter(this);
       this.valueType!.select(context, writer, selection);
@@ -172,7 +196,11 @@ export class Map extends Type {
   }
 
   // a value with fields opens a `value { … }` block; a plain value is read whole. #70
-  private needsValueSelection(): boolean {
+  //   e.g. (only-field-in-a-cycle) contributorsByKey's cut value: `value`, not `value { … }`  #201
+  private needsValueSelection(context: OasContext): boolean {
+    if (this.valueType instanceof Obj && T.everyFieldRemoved(this.valueType, context)) {
+      return false;
+    }
     return Boolean(this.valueType && !T.isLeaf(this.valueType));
   }
 
@@ -188,8 +216,7 @@ export class Map extends Type {
     if (Object.keys(additionalProps).length === 0) {
       // e.g. `labels: { additionalProperties: {} }` — the API author explicitly said "a value here
       // can be anything", so the note reads softer than a forced degrade. see docs/FIXED.md #155
-      this.valueJsonReason =
-        "this map's values are declared as `additionalProperties: {}` — the API explicitly allows any JSON value here, so there's no fixed shape to model as a GraphQL type.";
+      this.valueJsonReason = JsonDegradeReasons.mapValuesAnyJson();
       trace(context, '-> [map::additionalProps]', 'empty additionalProperties schema, using JSON');
       this.valueType = new Scalar(this, 'JSON', { type: 'object' } as SchemaObject);
       this.add(this.valueType);
@@ -207,8 +234,7 @@ export class Map extends Type {
       Schemas.holdsPlainValues(context, additionalProps) ||
       Map.holdsPlainValuesOrEmptyObject(context, additionalProps)
     ) {
-      this.valueJsonReason =
-        "a map's values are a choice of nothing but plain scalar or enum values, or an object with no properties, with no GraphQL union member to build — sent as raw JSON instead.";
+      this.valueJsonReason = JsonDegradeReasons.mapValuesPlainChoice();
       this.valueType = new Scalar(this, 'JSON', additionalProps);
       this.add(this.valueType);
       this.valueType.visit(context);
@@ -224,7 +250,7 @@ export class Map extends Type {
     // it degrades to JSON, same as valueTypeName() below still does for this same check.
     // e.g. (docker /commit) ExposedPorts: { additionalProperties: { type: object } } -> value: JSON
     if ((this.valueType instanceof Obj || this.valueType instanceof Composed) && this.valueType.props.size === 0) {
-      this.valueJsonReason = "this map's values declare no fields of their own — sent as raw JSON instead.";
+      this.valueJsonReason = JsonDegradeReasons.mapValuesNoFields();
     }
     // the value schema already degraded to a JSON scalar with its own reason attached (e.g. a map
     // whose values are `{ type: 'url' }`, #155's defect 2) — carry that same reason up to the map.
@@ -280,7 +306,11 @@ export class Map extends Type {
     return undefined;
   }
 
-  dependencies(): IType[] {
+  dependencies(context: OasContext): IType[] {
+    // a value written as JSON points at no type, so it keeps nothing reachable (#26). #201
+    if (this.valueType instanceof Obj && T.everyFieldRemoved(this.valueType, context)) {
+      return [];
+    }
     return this.valueType ? [this.valueType] : [];
   }
 

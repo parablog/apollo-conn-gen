@@ -90,4 +90,27 @@ export abstract class Prop extends Type {
       context.generateOptions?.keepFieldNames === true,
     );
   }
+
+  // The selection head every prop writer starts with: indent, sanitised name, a self-alias when
+  // `suffix`/`alwaysAlias` needs one and the name carried none of its own, `?`, then `suffix`.
+  //   e.g. (ashby) `value: value?->echo({ raw: @ })` (PropComp, suffix set)
+  protected writeFieldHead(
+    context: OasContext,
+    writer: Writer,
+    options: { suffix?: string; alwaysAlias?: boolean; optional?: boolean } = {},
+  ): void {
+    const sanitised = this.fieldForSelect(context);
+    const optional = options.optional ?? this.isOptionalInSelection(context);
+
+    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
+    if ((options.suffix || options.alwaysAlias) && sanitised === this.name) {
+      writer.write(': ').write(sanitised);
+    }
+    if (optional) {
+      writer.write('?');
+    }
+    if (options.suffix) {
+      writer.write(options.suffix);
+    }
+  }
 }

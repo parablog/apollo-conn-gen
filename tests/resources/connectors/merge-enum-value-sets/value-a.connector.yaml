@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "value-a.connector",
+      "connector": "Query.entryGet",
+      "variables": {},
+      "apiResponseBody": "{\"inlineAFirst\": {\"status\": \"A\"}, \"inlineBFirst\": {\"status\": \"A\"}, \"refAFirst\": {\"status\": \"A\"}, \"refBFirst\": {\"status\": \"A\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/entry.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"inlineAFirst\": {\"object\": {\"status\": \"A\"}, \"raw\": {\"status\": \"A\"}}, \"inlineBFirst\": {\"object\": {\"status\": \"A\"}, \"raw\": {\"status\": \"A\"}}, \"refAFirst\": {\"object\": {\"status\": \"A\"}, \"raw\": {\"status\": \"A\"}}, \"refBFirst\": {\"object\": {\"status\": \"A\"}, \"raw\": {\"status\": \"A\"}}}"
+      }
+    }
+  ]
+}

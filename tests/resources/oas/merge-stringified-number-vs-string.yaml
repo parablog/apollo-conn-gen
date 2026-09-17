@@ -1,0 +1,48 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf whose object members disagree on a field read as a stringified number vs. a plain string
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /entry.get:
+    get:
+      operationId: getEntry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  intFirst:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: WideNumberFirst
+                        properties:
+                          data:
+                            type: integer
+                            format: int64
+                      - type: object
+                        title: PlainStringSecond
+                        properties:
+                          data:
+                            type: string
+                  stringFirst:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: PlainStringFirst
+                        properties:
+                          data:
+                            type: string
+                      - type: object
+                        title: WideNumberSecond
+                        properties:
+                          data:
+                            type: integer
+                            format: int64

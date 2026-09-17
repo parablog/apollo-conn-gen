@@ -1,9 +1,10 @@
-import { Arr, En, IType, Prop, Scalar, T, Type } from './internal.js';
-import { trace } from '../log/trace.js';
+import { Arr, En, IType, Obj, Prop, Scalar, T, Type } from './internal.js';
+import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
+import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 
 export class PropArray extends Prop {
   public items?: IType;
@@ -56,14 +57,22 @@ export class PropArray extends Prop {
   //   e.g. (box) name_conflicts -> `[[NameConflictsItem]]`, not `[name_conflicts]`      #59
   public override getValue(context: OasContext): string {
     const inner = T.findLastArrayItemIn(this.items)!;
-    // a list of enum values points at the enum's emitted name — an inline one is literally named
-    // "enum", written out as "Enum". see docs/FIXED.md #170
-    //   e.g. (motion) include: { type: array, items: { enum: [workHours] } } -> include: [Enum]
-    const name = T.isContainer(inner)
-      ? Naming.genTypeName(inner.name) + (inner as Type).nameSuffix()
-      : inner instanceof En
-        ? Naming.genTypeName(inner.name)
-        : inner.name;
+    let name: string;
+    // items whose every field was removed to break a cycle name no type — sent as JSON. #201
+    //   e.g. (docusign) rowValues: [DocGenFormFieldRowValue] -> rowValues: [JSON]
+    if (inner instanceof Obj && T.everyFieldRemoved(inner, context)) {
+      warn(context, '[prop-array]', JsonDegradeReasons.everyFieldRemoved(inner));
+      name = 'JSON';
+    } else {
+      // a list of enum values points at the enum's emitted name — an inline one is literally named
+      // "enum", written out as "Enum". see docs/FIXED.md #170
+      //   e.g. (motion) include: { type: array, items: { enum: [workHours] } } -> include: [Enum]
+      name = T.isContainer(inner)
+        ? Naming.genTypeName(inner.name) + (inner as Type).nameSuffix()
+        : inner instanceof En
+          ? Naming.genTypeName(inner.name)
+          : inner.name;
+    }
 
     // one pair of brackets per list on the way down
     let value = `[${name}]`;
@@ -86,8 +95,14 @@ export class PropArray extends Prop {
   //   e.g. (slack) archivedChannels: { items: { type: object } } -> archivedChannels: [JSON]
   private jsonReason(context: OasContext): string | undefined {
     const inner = T.findLastArrayItemIn(this.items);
+    if (inner instanceof Obj && T.everyFieldRemoved(inner, context)) {
+      return JsonDegradeReasons.everyFieldRemoved(inner);
+    }
     if (!(inner instanceof Scalar) || inner.name !== 'JSON') {
       return undefined;
+    }
+    if (inner.jsonReason) {
+      return inner.jsonReason;
     }
     if (Schemas.isShapelessObject(inner.schema)) {
       return 'items in array have types that declare no fields - returning JSON type';
@@ -113,33 +128,47 @@ export class PropArray extends Prop {
       : super.effectiveDescription(context);
   }
 
-  dependencies(): IType[] {
+  dependencies(context: OasContext): IType[] {
+    // items written as JSON point at no type, so they keep nothing reachable (#26). #201
+    const inner = T.findLastArrayItemIn(this.items);
+    if (inner instanceof Obj && T.everyFieldRemoved(inner, context)) {
+      return [];
+    }
     return this.items ? [this.items] : [];
   }
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [prop-array:select]', 'in: ' + this.name);
 
-    const sanitised = this.fieldForSelect(context);
-    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
-
+    // When the item type reads itself through an expression (mixed value), wrap the list in
+    // `->map(@<expr>)` instead of walking each item plain.
+    //   e.g. (ashby) `values?->map(@->echo({ raw: @ }))`
+    const itemSuffix = this.items?.selectionSuffix(context);
     // #16/#165: items with a default only cover a missing key when it's actually written, e.g.
     // (r7r8-selection) `emails: emails ?? $("")` — below the gate it writes nothing, so `?` stays
     const itemsHaveDefault = this.items instanceof Scalar && this.items.coalescesDefault(context);
-    if (!itemsHaveDefault && this.isOptionalInSelection(context)) {
-      writer.write('?');
-    }
+    this.writeFieldHead(context, writer, {
+      suffix: itemSuffix ? `->map(@${itemSuffix})` : undefined,
+      optional: !itemsHaveDefault && this.isOptionalInSelection(context),
+    });
 
-    if (this.needsBrackets(this.items!)) {
+    // items whose every field was removed to break a cycle are read whole, no block opens. #201
+    //   e.g. (docusign) `rowValues` alone, not `rowValues { # … circular reference omitted }`
+    const inner = T.findLastArrayItemIn(this.items);
+    const wholeValue = inner instanceof Obj && T.everyFieldRemoved(inner, context);
+    const brackets = this.needsBrackets(this.items!) && !wholeValue;
+    if (brackets) {
       writer.write(' {');
       writer.write('\n');
       context.enter(this);
     }
 
-    // now allow the items type to select its properties
-    this.items!.select(context, writer, selection);
+    if (!wholeValue) {
+      // now allow the items type to select its properties
+      this.items!.select(context, writer, selection);
+    }
 
-    if (this.needsBrackets(this.items!)) {
+    if (brackets) {
       context.leave(this);
       writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
     }

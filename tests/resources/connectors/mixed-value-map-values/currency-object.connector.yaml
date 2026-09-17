@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "currency-object.connector",
+      "connector": "Query.byKeyGet",
+      "variables": {},
+      "apiResponseBody": "{\"byKey\": {\"a\": {\"value\": 1000, \"currencyCode\": \"USD\"}}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/byKey.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"byKey\": [{\"key\": \"a\", \"value\": {\"object\": {\"currencyCode\": \"USD\", \"value\": 1000}, \"raw\": {\"value\": 1000, \"currencyCode\": \"USD\"}}}]}"
+      }
+    }
+  ]
+}

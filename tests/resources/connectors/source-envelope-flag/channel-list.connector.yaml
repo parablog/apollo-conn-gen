@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "channel-list.connector",
+      "connector": "Query.channelList",
+      "variables": {},
+      "apiResponseBody": "{\"ok\": true, \"channels\": [{\"id\": \"c1\", \"name\": \"general\"}]}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/channel.list",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"ok\": true, \"channels\": [{\"id\": \"c1\", \"name\": \"general\"}]}"
+      }
+    }
+  ]
+}

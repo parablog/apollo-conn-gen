@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "object-currency.connector",
+      "connector": "Query.customFieldList",
+      "variables": {},
+      "apiResponseBody": "{\"value\": {\"value\": 1000, \"currencyCode\": \"USD\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/customField.list",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"value\": {\"object\": {\"currencyCode\": \"USD\", \"value\": 1000}, \"raw\": {\"value\": 1000, \"currencyCode\": \"USD\"}}}"
+      }
+    }
+  ]
+}

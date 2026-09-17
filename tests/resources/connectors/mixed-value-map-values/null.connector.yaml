@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "null.connector",
+      "connector": "Query.byKeyGet",
+      "variables": {},
+      "apiResponseBody": "{\"byKey\": {\"a\": null}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/byKey.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"byKey\": [{\"key\": \"a\", \"value\": {\"raw\": null}}]}"
+      }
+    }
+  ]
+}

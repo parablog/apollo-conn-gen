@@ -1,0 +1,36 @@
+openapi: 3.1.0
+info:
+  title: Customer and card with expandable references
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /customers:
+    get:
+      responses:
+        '200':
+          description: Customers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+components:
+  schemas:
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+        default_source:
+          anyOf:
+            - type: string
+            - $ref: '#/components/schemas/Card'
+    Card:
+      type: object
+      properties:
+        id:
+          type: string
+        customer:
+          anyOf:
+            - type: string
+            - $ref: '#/components/schemas/Customer'

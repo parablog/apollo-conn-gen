@@ -1,0 +1,109 @@
+openapi: 3.1.0
+info:
+  title: anyOf scalars+objects, property position (Ashby CustomField.value, as written)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /customField.list:
+    get:
+      operationId: listCustomFields
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  value:
+                    $ref: '#/components/schemas/CustomFieldValue'
+  /customField.set:
+    post:
+      operationId: setCustomField
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fieldValue:
+                  $ref: '#/components/schemas/CustomFieldValue'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+components:
+  schemas:
+    CustomFieldValue:
+      description: The value of the custom field
+      anyOf:
+        - type: boolean
+        - type: number
+        - type: string
+        - type: array
+          items:
+            type: string
+        - type: object
+          properties:
+            value:
+              type: number
+              description: The currency amount
+            currencyCode:
+              type: string
+              description: The currency code
+          required: [value, currencyCode]
+          additionalProperties: {}
+        - type: object
+          properties:
+            type:
+              type: string
+              description: The range type
+            minValue:
+              type: number
+              description: The minimum value
+            maxValue:
+              type: number
+              description: The maximum value
+          required: [type, minValue, maxValue]
+          additionalProperties: {}
+        - type: object
+          properties:
+            type:
+              type: string
+              description: The compensation range type
+            minValue:
+              type: number
+              description: The minimum compensation value
+            maxValue:
+              type: number
+              description: The maximum compensation value
+            currencyCode:
+              type: string
+              description: The currency code
+            interval:
+              type: string
+              description: The compensation interval
+          required: [type, minValue, maxValue, currencyCode, interval]
+          additionalProperties: {}
+        - type: object
+          properties:
+            country:
+              type: string
+              description: The country of the location
+            region:
+              type: string
+              description: The region of the location
+            city:
+              type: string
+              description: The city of the location
+          additionalProperties: {}
+        - type: 'null'

@@ -1,0 +1,36 @@
+openapi: 3.0.0
+info:
+  title: a mixed value's synthetic <Union>Object type collides with a real component name
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+components:
+  schemas:
+    valueUnionObject:
+      type: object
+      properties:
+        note:
+          type: string
+paths:
+  /entry.get:
+    get:
+      operationId: getEntry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  other:
+                    $ref: '#/components/schemas/valueUnionObject'
+                  value:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: Detail
+                        properties:
+                          amount:
+                            type: number

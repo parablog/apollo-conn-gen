@@ -7,6 +7,7 @@ import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
+import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 
 export class PropObj extends Prop {
   constructor(
@@ -60,13 +61,13 @@ export class PropObj extends Prop {
     // then it's a free-form JSON payload. not sure if the right one, but it will
     // compose for now. e.g. History.emptyBox: { type: object, properties: {} } -> emptyBox: JSON
     if (_.isEmpty(this.obj?.props)) {
-      return 'this object declares no properties of its own — sent as raw JSON instead.';
+      return JsonDegradeReasons.shapelessObject();
     }
 
     // every field of the target was removed: no type is written for it, so the field is free-form
     // JSON. e.g. (confluence) ContentHistory's contributors: { $ref: Contributors } -> JSON  #101
     if (T.everyFieldRemoved(this.obj, context)) {
-      return `every field of ${Naming.getRefName(this.obj!.name!)} was removed to break a reference cycle, leaving no type to write — sent as raw JSON instead.`;
+      return JsonDegradeReasons.everyFieldRemoved(this.obj!);
     }
 
     return undefined;
@@ -99,12 +100,7 @@ export class PropObj extends Prop {
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [prop-obj:select]', 'in ' + this.name + ', obj: ' + this.obj.name);
 
-    const sanitised = this.fieldForSelect(context);
-
-    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
-    if (this.isOptionalInSelection(context)) {
-      writer.write('?');
-    }
+    this.writeFieldHead(context, writer, { suffix: this.obj.selectionSuffix(context) });
 
     // a target with every field removed is JSON: the value is taken whole, no block opens. #101
     //   e.g. (confluence) `contributors?` alone, not `contributors? { # publishers … omitted }`

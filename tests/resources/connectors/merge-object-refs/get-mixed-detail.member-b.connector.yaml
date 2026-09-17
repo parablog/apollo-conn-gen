@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "get-mixed-detail.member-b",
+      "connector": "Query.getMixedDetail",
+      "variables": {},
+      "apiResponseBody": "{\"item\": {\"detail\": {\"kind\": \"b1\"}}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/get-mixed-detail",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"item\": {\"detail\": {\"kind\": \"b1\"}}}"
+      }
+    }
+  ]
+}

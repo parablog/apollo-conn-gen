@@ -31,9 +31,46 @@ export class SchemaWriter {
       .write('  )\n');
 
     if (authHeader) {
-      writer.write(`  @source(name: "api", http: { baseURL: "${host}", headers: [${authHeader}] })\n\n`);
+      writer.write(`  @source(name: "api", http: { baseURL: "${host}", headers: [${authHeader}] }`);
     } else {
-      writer.write('  @source(name: "api", http: { baseURL: "').write(host).write('" })\n\n');
+      writer.write('  @source(name: "api", http: { baseURL: "').write(host).write('" }');
     }
+
+    this.writeSourceErrorMapping(writer);
+    writer.write(')\n\n');
+  }
+
+  // Writes isSuccess and errors onto @source from the "$source" settings, so the router turns a
+  // failed body into a GraphQL error. Writes nothing when neither is set.
+  //   e.g. Ashby: { success: false, errors: [{ message: "Not found" }] } -> isSuccess: "$.success"
+  private writeSourceErrorMapping(writer: Writer): void {
+    const source = this.gen.options.overrides?.['$source'];
+    if (!source?.isSuccess && !source?.errors) {
+      return;
+    }
+
+    if (source.isSuccess) {
+      writer.write(`\n    isSuccess: ${SchemaWriter.quotedString(source.isSuccess)}`);
+    }
+    if (source.errors?.message || source.errors?.extensions) {
+      writer.write('\n    errors: {');
+      if (source.errors.message) {
+        writer.write(` message: ${SchemaWriter.quotedString(source.errors.message)}`);
+      }
+      if (source.errors.extensions) {
+        writer.write(` extensions: ${SchemaWriter.quotedOrBlockString(source.errors.extensions)}`);
+      }
+      writer.write(' }');
+    }
+  }
+
+  // Wraps a value in double quotes, escaping any backslash or double quote inside it.
+  private static quotedString(value: string): string {
+    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  }
+
+  // A """block string""" when the value spans lines, e.g. two extensions keys, else quoted.
+  private static quotedOrBlockString(value: string): string {
+    return value.includes('\n') ? `"""\n${value}\n"""` : SchemaWriter.quotedString(value);
   }
 }

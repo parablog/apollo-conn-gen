@@ -49,6 +49,14 @@ components:
           $ref: '#/components/schemas/Contributors'
         createdDate:
           type: string
+        # a list (or map) of a type whose every field was cut still named the uncut type -> a
+        # dangling SDL reference, composition failed with "cannot find type"  #201
+        contributorGroups:
+          type: array
+          items: { $ref: '#/components/schemas/Contributors' }
+        contributorsByKey:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/Contributors' }
     # the only field re-enters History, so it is removed to break the loop and nothing real is
     # left — as in confluence's ContentHistory.contributors -> Contributors { publishers }
     Contributors:

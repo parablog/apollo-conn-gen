@@ -1,0 +1,31 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf with a wide-integer member as a list item (excluded)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /values.list:
+    get:
+      operationId: listValues
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  values:
+                    type: array
+                    items:
+                      oneOf:
+                        - type: integer
+                          format: int64
+                        - type: object
+                          title: Currency
+                          properties:
+                            value:
+                              type: number
+                            currencyCode:
+                              type: string

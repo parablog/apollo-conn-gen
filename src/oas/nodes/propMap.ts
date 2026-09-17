@@ -58,19 +58,9 @@ export class PropMap extends Prop {
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '-> [prop-map:select]', 'in ' + this.name + ', map: ' + this.map.name);
 
-    const fieldName = this.name;
-    const sanitised = this.fieldForSelect(context);
-
-    // sanitised is already "alias: \"original\"" when the JSON key needs one — write it once. When
-    // it doesn't (sanitised === fieldName), keep a self-alias (name: name); some composers need it
-    // to credit fields through ->entries, and it's harmless either way.
-    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
-    if (sanitised === fieldName) {
-      writer.write(': ').write(sanitised);
-    }
-    if (this.isOptionalInSelection(context)) {
-      writer.write('?');
-    }
+    // alwaysAlias: the local pre-release composer only accepts `->entries` behind `name: name`,
+    // never a bare `name`; a field that already carries a real alias is unaffected. see docs/FIXED.md #42
+    this.writeFieldHead(context, writer, { alwaysAlias: true });
     this.map.selectEntries(context, writer, selection);
 
     if (context.generateOptions.showParentInSelections) {

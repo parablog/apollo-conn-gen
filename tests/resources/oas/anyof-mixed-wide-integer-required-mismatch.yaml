@@ -1,0 +1,50 @@
+openapi: 3.0.0
+info:
+  title: a mixed anyOf analyzeMixedValue can't build (#212), next to its oneOf twin
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /thing:
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  anyValue:
+                    anyOf:
+                      - type: integer
+                        format: int64
+                      - type: object
+                        title: AnyRequired
+                        properties:
+                          code:
+                            type: string
+                        required: [code]
+                      - type: object
+                        title: AnyOptional
+                        properties:
+                          code:
+                            type: string
+                  oneValue:
+                    oneOf:
+                      - type: integer
+                        format: int64
+                      - type: object
+                        title: OneRequired
+                        properties:
+                          code:
+                            type: string
+                        required: [code]
+                      - type: object
+                        title: OneOptional
+                        properties:
+                          code:
+                            type: string

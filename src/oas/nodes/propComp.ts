@@ -58,12 +58,7 @@ export class PropComp extends Prop {
     const comp = this.comp!;
     trace(context, '-> [prop-comp:select]', 'in ' + this.name + ', obj: ' + comp.name);
 
-    const sanitised = this.fieldForSelect(context);
-
-    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
-    if (this.isOptionalInSelection(context)) {
-      writer.write('?');
-    }
+    this.writeFieldHead(context, writer, { suffix: comp.selectionSuffix(context) });
 
     if (this.needsBrackets(comp)) {
       writer.write(' {').write('\n');

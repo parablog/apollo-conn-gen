@@ -1,0 +1,86 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf whose object members give the same field two enums with different values
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+components:
+  schemas:
+    StatusA:
+      type: string
+      enum: [A]
+    StatusB:
+      type: string
+      enum: [B]
+paths:
+  /entry.get:
+    get:
+      operationId: getEntry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inlineAFirst:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: RecordA
+                        properties:
+                          status:
+                            type: string
+                            enum: [A]
+                      - type: object
+                        title: RecordB
+                        properties:
+                          status:
+                            type: string
+                            enum: [B]
+                  inlineBFirst:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: RecordB2
+                        properties:
+                          status:
+                            type: string
+                            enum: [B]
+                      - type: object
+                        title: RecordA2
+                        properties:
+                          status:
+                            type: string
+                            enum: [A]
+                  refAFirst:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: RecordC
+                        properties:
+                          status:
+                            $ref: '#/components/schemas/StatusA'
+                      - type: object
+                        title: RecordD
+                        properties:
+                          status:
+                            $ref: '#/components/schemas/StatusB'
+                  refBFirst:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: RecordD2
+                        properties:
+                          status:
+                            $ref: '#/components/schemas/StatusB'
+                      - type: object
+                        title: RecordC2
+                        properties:
+                          status:
+                            $ref: '#/components/schemas/StatusA'

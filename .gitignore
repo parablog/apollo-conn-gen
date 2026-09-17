@@ -1,6 +1,7 @@
 .claude
 .cymbal.db
 /tmp
+/output/
 /out-tsc
 
 /node_modules
@@ -77,5 +78,6 @@ LINT-CORPUS.md
 /tests/resources/oas/mailchimp.json
 /tests/resources/oas/fullstory-events.json
 /tests/resources/oas/fullstory-users.json
+/tests/resources/oas/ashby.json
 
 .issue-loop

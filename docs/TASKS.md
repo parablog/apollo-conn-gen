@@ -407,32 +407,6 @@ renaming flag's row, instead of restating it per flag.
 **Refs:** `README.md` (`### OasGen options`), `src/oas/utils/selectionPath.ts`,
 `docs/FIXED.md #197`.
 
-## 201 [BUG] [P3] · docusign's `put:.../documents/{documentId}` references a response type it never declares — ⬜ Open
-
-**Symptom:** the generated SDL for docusign's
-`put:/v2.1/accounts/{accountId}/templates/{templateId}/documents/{documentId}` composes with
-`INVALID_GRAPHQL: cannot find type 'DocGenFormFieldRowValue' in this document` — a response field
-is typed `[DocGenFormFieldRowValue]` but no `type DocGenFormFieldRowValue { ... }` is ever printed.
-Confirmed with the local composer against the unchanged (pre-#180) tree's own output.
-
-**OAS** (docusign) — the `rowValues` field on the tab-row schema: `type: array, items: $ref
-DocGenFormFieldRowValue`, reached through a cycle back to its own owning schema on the response
-side.
-
-**Cause:** not yet root-caused on the response side — response representation is untouched by
-#180. The same shape has an input-side twin, `DocGenFormFieldRowValueInput`, which #180 *does*
-fix: `InputShape.build` (`src/oas/nodes/inputShape.ts:78`) treats a shape that ends up with zero
-fields (every one dropped to a cycle) as unbuildable, and the field referencing it degrades to
-`JSON` instead of pointing at a type that's never declared (the same three call sites,
-`inputShape.ts:108,125,143`). The response side has no equivalent rule yet — whatever positional
-path builds `DocGenFormFieldRowValue`'s type reference does not check whether the type it points
-at ended up with any fields to declare.
-
-**Refs:** `src/oas/nodes/inputShape.ts` (`InputShape.build`, `buildField`), scratchpad baseline
-`baseline-document-put.graphql:26635` (`rowValues: [DocGenFormFieldRowValue]`, undeclared), #180
-(in progress — the input-side fix), `docs/FIXED.md #101` (`Obj.generate`'s `T.everyFieldRemoved`
-check — the response-side analogue this bug's fix likely mirrors).
-
 ## 202 [FEAT] [P3] · Explicit body field selections through the shared input type — ⬜ Open
 
 **Why:** #180 only builds a shared input type for a wildcard (`>**`) body selection — the one
@@ -476,3 +450,411 @@ way a body does, and #180's fix only ever looked at `kind: 'input'` nodes.
 **Refs:** `src/oas/nodes/inputShape.ts` (branch `issue-180-shared-input-shapes`), `docs/TASKS.md
 #180` (the parked branch and its measured numbers), `docs/FIXED.md #47`, `docs/FIXED.md #120`
 (existing response-side leaf rules a fix here would need to keep).
+
+## 205 [FEAT] [P3] · All-POST RPC-style specs get no Query root — ⬜ Open
+
+**Why:** every Ashby op is POST — 197 ops, 0 GET. `writeOpName`'s method check
+(`src/oas/nodes/get.ts`) puts every field under `Mutation`, including read ops like
+`application.list` and `application.info`. A connector with no `Query` root at all is unusable for
+plain reads.
+
+**OAS:** ashby.json paths `/application.list`, `/application.info`, `/application.listHistory`, …
+— all `post`, none `get`.
+
+**Shape:** undecided, needs a measurement pass first. Two directions: a name-pattern heuristic on
+POST op names (`.list`, `.info`, `.search`, `.get` → Query) or an explicit per-op override, the way
+`root` already forces an op to the other side regardless of its HTTP verb
+(`tests/all/r15-graphql-root.test.ts`, `docs/FIXED.md #150`) — that override just isn't driven by
+any RPC-style naming convention yet. `--use-operation-ids` (`docs/FIXED.md #197`) is the nearest
+existing per-op naming machinery.
+
+**Refs:** `tests/all/corpus.test.ts` `test_corpus_ashby`, `tests/all/r15-graphql-root.test.ts`,
+`docs/FIXED.md #150`, `docs/FIXED.md #197`.
+
+## 206 [BUG] [P4] · Mixed `anyOf` routing — closed by #220 for property and list-item positions.
+
+---
+
+## 209 [FEAT] [P3] · Remaining JSON-fallback mapping slices, after the mixed-`oneOf` wrapper — ⬜ Open
+
+**Where:** follows `docs/FIXED.md #208` (the property-position wrapper for a mixed `oneOf`). Four
+slices, in this order — each depends on groundwork the previous one lays down.
+
+**1. Safe merging for the remaining `anyOf` cases (#212).**
+Example: `anyOf: [integer(int64), object required {code}, object optional {code}]` must not produce `code: String!`.
+#220 handles buildable mixed output properties and list items.
+Object-only and unbuildable mixed `anyOf` still keep JSON until #212 makes the ordinary field merge safe.
+Non-null is valid only when every represented branch supplies a non-null value.
+Existing fixtures are `anyof-objects-only-refs.yaml` and `anyof-mixed-wide-integer-required-mismatch.yaml`.
+The remaining expandable-reference case needs bounded traversal before Stripe's broad selections can complete.
+A named-schema `anyOf` member, at either the property or list-item position, waits for #223.
+
+**2. Scalar-only choices, list items, and map values.** `mapValuesPlainChoice`
+(`Map.visitAdditionalProperties`, `map.ts:223`) returns `Scalar('JSON')` before a map value ever
+reaches the factory — it needs its own guard update, not just removal, and it also covers a
+propertyless-object alternative, not only plain scalars. List items (`Factory.fromArrayItems`,
+`factory.ts:230`) have no response-only boundary yet — an input list item going through the same
+routing this slice adds could reintroduce #208's silent branch loss on the input side. Do this
+after #208's wrapper is settled, since both reuse its node shapes at a different position.
+Constraint: output routing changes must not change input behaviour by accident — an unsupported
+input choice keeps its complete payload as JSON with a reason, not a silent drop; this applies to
+map values here too, not only to map inputs below.
+
+**3. Map inputs, with an explicit omission/null/empty contract.** `mapAsInput`'s reconstruction
+expression needs five distinguished cases specified and tested, not silently collapsed to one:
+missing map, null map, empty map, an entry missing its `value`, and an entry with `value: null`.
+A missing `metadata` property and an entry with no `value` both collapse to `{}` today (the
+missing-entry case also emits malformed-JSON mapping problems), which is not the same as an
+explicit `null`. Guard the expression before
+building JSON text; do not paper over the five cases by converting all of them to `{}`. Add
+escaped keys, duplicate keys, and nested transformed values to the body test expectations.
+No fixture cut yet for this one — write it from the five distinguished cases above when this slice
+starts. Constraint: guard the expression before building JSON text — the five cases (missing map,
+null map, empty map, entry missing value, entry with null value) must not collapse to one.
+
+**4. Tuples (`prefixItems`), through the full schema factory.** #204 sends every tuple to JSON;
+a real mapping needs each position typed through the complete factory (not just `type`, which
+misses `$ref`, enum-only, composed, nested-object, and nested-list/tuple positions), recognized
+*before* the homogeneous-array dispatch that currently examines `items` first (`factory.ts:91` and
+the property route at `factory.ts:381` both need the fix, not only the two JSON-fallback sites),
+and `minItems`/`maxItems`/`items: false`/a schema-valued tail preserved or explicitly retained as
+JSON rather than silently truncated to a fixed two-field pair. A tuple with no positional schema
+at all can stay `[JSON]`. Test bodies at the root and under a property. Fixture already cut:
+`prefix-items.yaml`. Constraint: recognise positional schemas before the homogeneous-array dispatch
+runs, not only at the two JSON-fallback sites — a position with a tail `items` schema still needs
+its own type.
+
+**Also open, not yet slotted:** `incompatibleMergedField` (`union.ts`, the "different branches
+declare this field differently" JSON fallback) is exactly the unsafe-merge case slice 1 above
+needs to fix before widening routing — a scratch-only prototype fixture exists from this work's
+own research (not yet in the repo); cut it into `tests/resources/oas/` once that work starts.
+
+**Also open: no Union-level "read as JSON".** A wide-integer member blocks `analyzeMixedValue()`
+(`schemas.ts`) outright, so today that union always falls back to the lossy flat merge instead of
+a clean `JSON` scalar for the whole field — there's no way for a `Union` to say "give up entirely
+and read as JSON," only per-field JSON fallbacks. `mixed-value-list-items-wide-integer-gap.yaml`
+asserts today's (unchanged) merge behaviour for this reason, not because a better answer exists yet.
+
+**No claim that any other JSON-degrade reason is unmappable.** The full corpus sweep behind this
+task (ashby, stripe, and ~35 other vendor specs) is context for sizing these slices, not a
+separate open item — see `docs/FIXED.md #208`'s corpus-count note for the one shape it already
+touched (PagerDuty's `priority` input field).
+
+**Refs:** `docs/FIXED.md #208`, `docs/FIXED.md #220`, `docs/TASKS.md #212`.
+
+---
+
+## 210 [FEAT] [P3] · User rules for how a field is read (`selectionSuffix` overrides) — ⬜ Open
+
+**Why:** `IType.selectionSuffix()` (`iType.ts`, the hook `PropComp`/`PropObj`/`PropArray`'s
+`select()` and `Map.selectEntries()` all consult, via `Prop.writeFieldHead()` as of
+`docs/FIXED.md #208`) is answered today only by the mixed-value `Union` from `docs/FIXED.md #208`.
+The same seam can carry a user-supplied rule, per type or per type+field, the way
+`--transform-rules` already renames ops and fields through `src/oas/mapper` — a schema author knows
+a field's real read shape better than any inference the generator could do, and every writer
+consulting the hook means such a rule reaches a field, a list item, or a map value alike.
+
+**OAS:** any field on any type — e.g. a corpus field the generator reads as a bare scalar today,
+where the user wants `->jsonParse` or a custom `->echo(...)` wrapper applied on read instead.
+
+**Shape:** the mapper (`src/oas/mapper`) gains a `selectionSuffix(typeName, fieldName)` lookup from
+the rules file, alongside its existing rename rules. `Prop.writeFieldHead()` asks the mapper first,
+then falls back to the node's own `selectionSuffix()`. A rule's expression goes through
+`lintSelections` (`src/oas/lint`) before it's written — a bad expression composes fine but fails at
+runtime, so catching it at generation time matters. The runtime harness (`src/tests/connectors.ts`) proves one
+rule end to end, composing and running a real sample body through it.
+
+**Refs:** `src/oas/nodes/propComp.ts`, `propObj.ts`, `propArray.ts` (`select()`), `map.ts`
+(`selectEntries()`), `src/oas/mapper`, `docs/FIXED.md #208`, `tests/all/json-fallback-runtime.test.ts`.
+
+## 211 [FEAT] [P4] · Merge two same-named objects' fields into a superset type, not just the first one — ⬜ Open
+
+**Why:** `Union.declaresEveryKeptField` (`docs/FIXED.md #208`) keeps the first object typed when the
+other object declares every field it has, but any field only the *other* object declares is simply
+dropped — the flat union merge one level up already unions every member's own fields into one type,
+so a field's own object-vs-object merge dropping the second side's extra fields is the one place
+this codebase still discards a real, typed field instead of keeping it (nullable).
+
+**OAS:** `detail: $ref Basic { summary }` next to `detail: $ref Rich { summary, deep }` — today
+`detail: Basic { summary }`, `deep` gone entirely; a superset merge would keep `detail: Merged
+{ summary, deep }`, `deep` nullable since not every branch has it.
+
+**Shape:** `declaresEveryKeptField`'s field-by-field walk already visits every field both sides
+declare; a superset merge would also collect each side's *un*matched fields into the merged type's
+own field set, cloning them the way `MixedValue.buildObjectType` (`docs/FIXED.md #208`) already
+clones an object member's fields, `required` flipped to `false`. Name collisions with the flat
+union's own top-level dedupe need the same field-name-clash treatment this entry's own
+`declaresEveryKeptField` machinery already applies.
+
+**Refs:** `src/oas/nodes/union.ts` (`declaresEveryKeptField`, `dedupeByName`), `docs/FIXED.md #208`,
+`tests/resources/oas/merge-object-refs.yaml` (`/compatible`, where `deep` is dropped today).
+
+## 212 [BUG] [P3] · A merged non-object field keeps a required marker the optional branch doesn't have — ⬜ Open
+
+**Symptom:** `dedupeByName` (`union.ts`) only calls `declaresEveryKeptField` — which checks
+required-ness before keeping a field typed — for a group where every prop is an object. A group of
+scalars, arrays, or enums instead falls straight to a bare `shapeOf` equality check, with no
+required-ness comparison at all: `code: String!` on one member next to `code: String` on another,
+same written shape, keeps the `!` from whichever member was visited first.
+
+**OAS:** member A: `code: string`, required; member B: `code: string`, not required. Merged field
+today: `code: String!`. A body matching member B's own shape (`code` omitted) fails GraphQL
+execution on that non-null field — the same class of bug `declaresEveryKeptField`'s own
+required-ness check exists to catch, just unreached here.
+
+**Cause:** `dedupeByName`'s branch on "every prop in the group is an object" only reaches
+`declaresEveryKeptField` for the object case; the non-object `shapeOf`-equality branch (`union.ts`,
+the group compatibility check) never runs any required-ness comparison.
+
+**Shape:** apply the same required-ness check `declaresEveryKeptField` already runs on an object
+pair to every group in `dedupeByName`, not only object groups — measure the corpus type counts it
+moves before landing it, the same way `docs/FIXED.md #208`'s own changes were measured.
+
+`objectOnlyAnyOf` and `unbuildableMixedAnyOf` keep these `anyOf` fields as JSON until this fix; an unbuildable mixed `oneOf` retains its existing merge-with-warning behavior until both keywords are covered.
+
+**Refs:** `src/oas/nodes/union.ts` (`dedupeByName`, `declaresEveryKeptField`), `docs/FIXED.md #208`.
+
+## 214 [BUG] [P3] · A single-member allOf wrapping a scalar-only oneOf drops the field silently, no warning — ⬜ Open
+
+**Symptom:** Ashby `post:/assessment.start`'s `value` property vanishes from both the type and
+the selection, with no warning.
+
+**OAS:** `value: { allOf: [{ $ref: AssessmentValue }] }`, `AssessmentValue: oneOf: [string,
+number, boolean]` (the real schema also carries a second allOf member, `{ example: 10 }`; the
+field drops the same way with or without it). Smallest reproduction: `value: { allOf: [{ $ref:
+MixedValue }] }`, `MixedValue: oneOf: [string, number, boolean]`.
+
+**Cause:** a scalar-only `oneOf` is meant to land as `JSON` with a warning
+(`JsonDegradeReasons.scalarOnlyOneOf()`, reached from `fromProp` in `factory.ts`), but the allOf
+wrapper never reaches that check. `Factory.findAllOfSchema` (`factory.ts`) refuses to collapse a
+single-member allOf whose resolved target has a `oneOf` — it counts that as object-like — so the
+property takes the generic `PropComp` + `Composed` path instead of `fromProp`'s scalar-only check.
+`Composed.consolidate()` (`comp.ts`) then folds each non-`Prop` member's `props` map into its own;
+a `Union` member's `props` map is still empty at that point (a union only fills it inside its own
+`generate()`/`select()`), so the property folds away as if it declared no fields at all. Nothing
+warns.
+
+**Shape:** either route a collapsed allOf whose only real member is a scalar-only `oneOf` through
+the same `scalarOnlyOneOf` path (`JSON` plus a warning, same as a bare scalar-only `oneOf` today —
+#209's mapping slice can pick it up from there later), or have `Composed.consolidate()` refuse to
+fold in a `Union` member whose `props` map is still empty instead of silently treating it as
+contributing nothing.
+
+**Refs:** `src/oas/nodes/factory.ts` (`findAllOfSchema`, `fromProp`), `src/oas/nodes/comp.ts`
+(`consolidate`), `src/oas/nodes/union.ts` (`consolidateMembers`). See `docs/FIXED.md #208` (the
+scalar-only-oneOf JSON-plus-warning path this should reuse) and `docs/TASKS.md #209` (the mapping
+slice, not this silent drop).
+
+Pinned by fixture `allof-wrapping-scalar-oneof.yaml` and test `test_gap_214_allof_wrapping_scalar_oneof_vanishes`
+(`tests/all/lint-known-gaps.test.ts`).
+
+## 215 [BUG] [P3] · A oneOf mixing a plain scalar with a shapeless object vanishes, and so does a container whose only property is one — ⬜ Open
+
+**Symptom:** a property whose `oneOf` mixes a plain scalar with a shapeless object (`{}`, or
+`{ type: object, additionalProperties: true }` with no declared `properties`) vanishes from both
+the type and the selection — no `JSON`, no warning. When that property is the *only* declared
+property of a container — a list item's own type, or a plain nested object — the whole container
+vanishes the same way, not just the one property.
+
+**OAS** (github) `Deployment.payload`: `oneOf: [{ type: object, additionalProperties: true },
+{ type: string }]`. Same shape at a list item (confluence) `Message.args` items: `oneOf: [{ type:
+string }, { type: object, additionalProperties: true }]`; at a plain property (motion)
+`DataItem.value`: `oneOf: [{}, { type: number }]`; and the whole-container drop on a list item
+whose only property is this shape (motion) `charts/query`'s `data` array, and on a plain nested
+object (confluence) `WebResourceDependencies._expandable`, whose own sole declared property is a
+`uris: oneOf [string, shapeless object]` child — distinct from the real `uris` data field #216
+below.
+
+**Cause, traced:** `Schemas.analyzeMixedValue`'s real-object check and
+`Schemas.holdsMixedPlainAndObjectValues` (`schemas.ts:93`, `:110`) both exclude a shapeless object
+on purpose (`Schemas.isShapelessObject`, `schemas.ts:33`), and no plain-values helper accepts one
+either — a shapeless object is neither a usable object member nor a plain value, so the property
+matches nothing and folds away. The same mechanism, one level up, drops a container once every one
+of its own properties has folded away this way, on two different kinds of container: a list
+item's type losing its only property, and a plain nested object losing its only property.
+
+**Shape:** give `analyzeMixedValue`/`holdsMixedPlainAndObjectValues` a branch for "plain scalar
+plus shapeless object" that lands on `JSON` with a warning, the same fallback a scalar-only
+`oneOf` already gets, instead of matching nothing.
+
+**Refs:** `src/oas/utils/schemas.ts` (`analyzeMixedValue`, `holdsMixedPlainAndObjectValues`,
+`isShapelessObject`). Pinned by fixture `oneof-plain-and-shapeless-object.yaml` and test
+`test_gap_215_plain_or_shapeless_object_vanishes` (`tests/all/lint-known-gaps.test.ts`).
+
+## 216 [BUG] [P3] · A container whose every property individually vanishes by its own oneOf drops whole — ⬜ Open
+
+**Symptom:** a container object whose *every* property is, on its own, a `oneOf` mixing an array
+with a plain scalar or an object (a different combination than #215's) disappears whole from its
+parent — no field, no JSON, no warning. A sibling field of the container itself, one level up, is
+unaffected.
+
+**OAS** (docker-engine) `ContainerConfig.Cmd`/`.Entrypoint`: `oneOf: [array, string]`. Same shape
+on every child of one container (confluence) `WebResourceDependencies.uris`/`SuperBatchWebResources.uris`:
+`{ all, css, js }`, each `oneOf: [array, string]`; (slack) `profile.fields`: `oneOf: [object,
+array]`.
+
+**Cause:** observed in generated SDL — the container itself is missing from the type once every
+one of its own properties has individually folded away by its own `oneOf` (not #215's shapeless-
+object mechanism). The line that drops a zero-property container was not traced for the plain-
+object case specifically; it plausibly shares the "a zero-property type is not written" behaviour
+#215's list-item case hits, but that is not traced here. Sibling properties one level up from
+the container survive through the ordinary property-read path and need no separate explanation.
+
+**Shape:** find and fix whatever drops a zero-property object type without a warning — likely the
+same code #215's container case will end up touching, so worth looking at together.
+
+**Refs:** `src/oas/utils/schemas.ts`. Pinned by fixture `container-whose-fields-all-vanish-drops.yaml`
+and test `test_gap_216_container_whose_fields_all_vanish_drops` (`tests/all/lint-known-gaps.test.ts`).
+
+## 217 [BUG] [P4] · A property named the empty string is read fine but still reported unread — ⬜ Open
+
+**Symptom:** not a generator gap — a property literally named `""` sanitises to `_` and is
+correctly selected (`_: $.""?`). `ResponseCoverageCheck` still reports it `RESPONSE_FIELD_NOT_READ`,
+a checker false positive, not a data loss. A future reader should look for this in the checker,
+not the generator.
+
+**OAS** (sendgrid) `status[]` and `contact_response.custom_fields` both declare a property named
+`""` alongside normally-named siblings.
+
+**Cause, traced:** `ResponseCoverageCheck.walk()`'s "what got read" map is built with `if (key) {
+read.set(key, field); }` (`responseCoverage.ts:108`). An empty string is falsy in JS, so a field
+that legitimately reads the `""` key is never recorded as read, and `""` shows up in `missing`
+even though the selection asked for it.
+
+**Shape:** change the guard to check presence, not truthiness (`if (key != null)`).
+
+**Refs:** `src/oas/lint/checks/responseCoverage.ts` (`walk`, line 108). Pinned by fixture
+`empty-string-property-name.yaml` and test `test_gap_217_empty_string_property_name_is_a_checker_false_positive`
+(`tests/all/lint-known-gaps.test.ts`).
+
+## 218 [BUG] [P3] · An allOf of two plain scalar members vanishes — ⬜ Open
+
+**Symptom:** an `allOf` of two plain scalar members (a `$ref` to a string plus an inline nullable
+string) vanishes from both the type and the selection, with no warning.
+
+**OAS** (digitalocean) `region_slug`: `allOf: [{ $ref: <a plain string schema> }, { type: string,
+nullable: true }]`.
+
+**Cause:** same entry point as #214 — `Factory.findAllOfSchema` (`factory.ts`) returns nothing
+unless the `allOf` has exactly one non-empty member, and this one has two, so the property takes
+the generic `PropComp` + `Composed` path. Downstream of that entry point was not traced here —
+both members are plain scalars, not a `Union`, so #214's specific "empty `Union.props`" mechanism
+may not be the same one.
+
+**Shape:** trace `Composed.consolidate()` on a two-scalar-member allOf directly before assuming
+it is #214's mechanism repeated.
+
+**Refs:** `src/oas/nodes/factory.ts` (`findAllOfSchema`). See `docs/TASKS.md #214` (the sibling
+entry point; whether the downstream mechanism is the same was not traced). Pinned by fixture
+`allof-two-plain-members.yaml` and test `test_gap_218_allof_two_plain_members_vanishes`
+(`tests/all/lint-known-gaps.test.ts`).
+
+## 219 [PERF] [P3] · Type.ancestors() rebuilds the whole parent chain on every call, no memoisation — ⬜ Open
+
+**Symptom:** on a large, deep request body (around 4000 schema nodes) a CPU profile of one
+generation run shows a third of the time inside three functions: `Type.ancestors()` 16%,
+`TypesCollector.collect()` 12%, `Type.path()` 9%.
+
+**Cause:** `ancestors()` (`type.ts`) is `return this.parent ? [...this.parent.ancestors(), this] :
+[this]` — unmemoised, it rebuilds the whole parent chain from scratch on every call. `path()`
+(`type.ts`) calls `this.ancestors()` three separate times internally, so building one path costs
+three full chain walks instead of one.
+
+**Shape:** build the path from a single walk instead of `path()`'s three separate `ancestors()`
+calls, or memoise the chain while a node's parent is fixed.
+
+**Refs:** `src/oas/nodes/type.ts` (`ancestors`, `path`), `src/oas/generator/typesCollector.ts`
+(`collect`).
+
+## 221 [BUG] [P3] · Nested choice members miss the plain and object classifiers — ⬜ Open
+
+**OAS:** Ashby `valueLabel: anyOf [anyOf [string, [string]], null]`.
+**Symptom:** a member that is itself a `oneOf` or `anyOf` is not recognised as a plain value or an object.
+The property keeps JSON with `unknownShape`.
+The current source has 16 nested-choice `valueLabel` declarations, including variants whose list items also allow null.
+The per-operation census contains 139 `valueLabel` JSON occurrences across 14 distinct emitted type-and-field names, before and after #220.
+**Shape:** flatten nested choices before classifying their members, preserving nullability and each member's constraints.
+**Refs:** `src/oas/utils/schemas.ts` (`holdsPlainValues`, `isObjectMember`, `mixesObjectAndPlainMembers`), `src/oas/nodes/factory.ts` (`fromProp`), #220.
+
+## 222 [BUG] [P4] · Synthetic `keyString` fields carry the wrong JSON reason — ⬜ Open
+
+**OAS:** Ashby `PostalAddress: { properties: { city: string }, additionalProperties: {} }`.
+**Symptom:** `Obj.visitProperties` adds a synthetic `[key: string]` property beside explicit fields and sends its empty schema through `Factory.fromProp`.
+The emitted `keyString: JSON` field carries `unknownShape`, although the schema explicitly permits arbitrary JSON values.
+JSON is appropriate for that synthetic value; its reason should describe `additionalProperties: {}`.
+Ashby's per-operation census contains 106 such fallback occurrences before #220 and 189 after, across 25 and 29 distinct emitted type-and-field names respectively.
+The increase comes from the newly emitted custom-field object members, all four of which declare `additionalProperties: {}`.
+**Shape:** give the synthetic field an additional-properties reason without changing its type or mapping.
+**Refs:** `src/oas/nodes/obj.ts` (`visitProperties`), `src/oas/utils/jsonReasons.ts`, #220.
+
+## 223 [PERF] [P2] · Named anyOf/oneOf members rebuild their shared schema on every branch — ⬜ Open
+
+**Symptom:** Stripe's `Customer.default_source: anyOf [string, Card]` and `Card.customer: anyOf
+[string, Customer]` rebuild `Card`/`Customer` from scratch on every branch instead of reusing the
+shared schema — an isolated two-schema repro (`file` 1416 copies, `address` 1411, `links` 1416,
+`Type.ancestors()` called 40 million times) takes 45 seconds without finishing. The same referenced
+types recur through the array position too: `customer.sources.data` and `account.external_accounts.data`.
+
+**Cause:** every `$ref` occurrence builds a fresh `Obj` — there is no run-scoped registry of
+already-built types, so a schema reachable from many branches or many array positions is rebuilt
+once per occurrence instead of once per run.
+
+**Shape:** a run-scoped registry of built types by `$ref`, reused instead of rebuilt, with the
+existing per-branch cycle cut kept. Once rebuilding is cheap, lift #220's `namedMembersAnyOf` guard
+at both call sites (`fromProp` and `fromArrayItems`) and revisit the `items.anyOf`-only restriction
+on the list-item guard at the same time — a named-ref `oneOf` list item would presumably get the
+same typed treatment once the rebuild cost is gone.
+
+One more gap the same fix should close: `map.ts`'s `arrayValueJsonReason()` re-derives a list
+item's JSON reason the same stale way `propArray.ts` did before #220 — a map whose value is a list
+of a named-ref `anyOf` shows the wrong docstring text today. Needs a fixture and the same
+`inner.jsonReason`-first fix `propArray.ts` got, not folded into #220 for lack of a failing test to
+prove it.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromSchema`, `fromProp`, `fromArrayItems`),
+`src/oas/nodes/propArray.ts` (`jsonReason`), `src/oas/nodes/map.ts` (`arrayValueJsonReason`),
+`src/oas/nodes/obj.ts` (`visitProperties`), `src/oas/generator/typesCollector.ts`
+(`collectLeafPaths`), #219, #220.
+
+## 225 [FEAT] [P3] · Classifying reads on an all-POST API needs a per-spec override file today — ⬜ Open
+
+**Symptom:** Ashby's 197 operations are all POST, so every read landed under `Mutation` until
+`tests/resources/oas/ashby-overrides.json` (87 entries, all `{"root": "query"}`) moved them by hand.
+
+**OAS:** the same 197-operation, all-POST shape as #224 — nothing in the HTTP method distinguishes
+a read from a write here.
+
+**Cause:** the override file had to be derived by reading every operation's path verb —
+`.list`/`.info`/`.search` plus a dozen other read-shaped names (`fetch`, `listHistory`,
+`interviewerSettings`, and the like) — one entry per operation, by hand.
+
+**Shape:** a flag such as `--reads <pattern>` (a regex tested against the operation id or path) that
+sets `root: query` for every matching POST operation, with the override file remaining for the
+exceptions a pattern can't express. The existing verb-based default (GET under Query, everything
+else under Mutation) stays unchanged when the flag isn't given.
+
+**Refs:** `src/cli/oas.ts` (`--overrides`), `docs/FIXED.md` #150,
+`tests/resources/oas/ashby-overrides.json`.
+
+`docs/FIXED.md` #224 closed the other half of the same read/write split: a `root: query`
+operation now also qualifies as a type-level entity resolver, keyed through its body, not just a
+root field — so this override file already covers the whole read side of an RPC API, root
+placement and entity resolvers both; what's still missing is only that it has to be hand-derived.
+This file also now carries the `$source` error/payload mapping (`docs/FIXED.md` #226).
+
+## 227 [BUG] [P4] · A shared error type can outlive every wrapper that reached it — ⬜ Open
+
+**Symptom:** `docs/FIXED.md` #226 drops a response wrapper type once every op that used to return
+it returns a different field's type instead. A type reached only through that wrapper's own error
+field (e.g. one `ErrorDetail` shared by many ops) is not re-checked, so once every op sharing it
+unwraps, it stays in the schema with nothing left pointing at it.
+
+**OAS** (source-envelope-union.yaml, `widget.count`/`widget.tags` only selected): both ops' own
+`oneOf [ { success, results }, { success, errors: [ErrorDetail] } ]` wrappers get dropped; the
+shared `ErrorDetail` type is not, since nothing walked that far to check.
+
+**Shape:** after dropping a wrapper in `typesCollector.ts`'s new pass, re-run reachability (or
+re-derive it the same way the existing settle loop above it does) so a type left with no remaining
+reference is dropped too, not just the wrapper itself.
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`dropUnreturnedWrappers`), `docs/FIXED.md` #226.

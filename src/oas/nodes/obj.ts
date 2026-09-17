@@ -168,13 +168,9 @@ export class Obj extends Type {
     trace(context, '<- [obj::select]', `-> out: ${this.name}`);
   }
 
-  /**
-   * Emit a type-level `@connect` entity resolver (R1). The resolver fetches this entity by
-   * its key via the discovered GET-by-key endpoint, using `$this.<key>` (the entity's own
-   * key fields) instead of the `$args.<name>` a Query-field connector would use. The
-   * selection re-uses this object's own field selection, exactly like the response mapping
-   * of the equivalent Query connector.
-   */
+  // Emits a type-level @connect entity resolver (R1): fetches this entity by its key via the
+  // discovered GET- or POST-by-key endpoint, using $this instead of a Query connector's $args.
+  //   e.g. (ashby) POST /job.info, body { id: $this.id } -> selection wrapped as $.results { ... }
   private writeEntityConnector(
     context: OasContext,
     writer: Writer,
@@ -183,23 +179,23 @@ export class Obj extends Type {
   ): void {
     const i4 = ' '.repeat(4);
     const i6 = ' '.repeat(6);
+    const i8 = ' '.repeat(8);
 
     // Rewrite each {param} to {$this.param} (vs {$args.param} for Query-field connectors).
     const keep = context.generateOptions?.keepFieldNames === true;
-    const path = resolver.path.replace(
-      /\{([a-zA-Z0-9_]+)\}/g,
-      (_match, param) => `{$this.${this.props.get(param)?.renamedTo ?? Naming.sanitiseField(param, keep)}}`,
-    );
+    const thisField = (name: string) => this.props.get(name)?.renamedTo ?? Naming.sanitiseField(name, keep);
+    const path = resolver.path.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, param) => `{$this.${thisField(param)}}`);
+    const body = resolver.bodyProp ? `$({ ${resolver.bodyProp}: $this.${thisField(resolver.keyFields)} })` : undefined;
 
     writer.write('\n').write(i4).write('@connect(\n').write(i6).write(`source: "${resolver.source}"\n`).write(i6);
 
-    // The op this resolver was inferred from may carry per-@connect auth (a per-op-mode header,
-    // or apiKey-in-query in any mode — @source has no queryParams). Without it the router-side
-    // entity fetch hits the protected endpoint unauthenticated. Same emission shape as an op
-    // connector's requestMethod; uniform-mode header auth stays on @source and is not repeated.
-    if (resolver.headerAuth || resolver.queryAuth) {
-      const i8 = ' '.repeat(8);
+    // A per-op header or apiKey-in-query auth (any mode) travels with this resolver too --
+    // uniform-mode @source auth alone already covers the fetch, so it is not repeated here.
+    if (resolver.headerAuth || resolver.queryAuth || body) {
       writer.write('http: {\n').write(i8).write(`${resolver.verb}: "${path}"\n`);
+      if (body) {
+        writer.write(i8).write(`body: "${body}"\n`);
+      }
       if (resolver.queryAuth) {
         writer
           .write(i8)
@@ -224,12 +220,18 @@ export class Obj extends Type {
     }
 
     writer.write(i6).write('selection: """\n');
+    if (resolver.envelopeField) {
+      writer.write(i6).write(`$.${resolver.envelopeField} {\n`);
+    }
 
-    // Base the selection at 6 spaces like a Query connector. `select` adds
-    // `context.stack.length` (this object is mid-generation on the stack), so subtract it.
-    context.indent = 6 - context.stack.length;
+    // Base the selection at 6 spaces like a Query connector, 8 when wrapped in an envelope
+    // field. `select` adds `context.stack.length` (this object is mid-generation), subtracted.
+    context.indent = (resolver.envelopeField ? 8 : 6) - context.stack.length;
     this.select(context, writer, selection);
 
+    if (resolver.envelopeField) {
+      writer.write(i6).write('}\n');
+    }
     writer.write(i6).write('"""\n').write(i4).write(')');
   }
 

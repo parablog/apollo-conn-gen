@@ -1,0 +1,79 @@
+openapi: 3.0.0
+info:
+  title: a named-ref anyOf list item rebuilds its shared schema, next to its oneOf and inline twins
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /invoices.list:
+    get:
+      operationId: listInvoices
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  namedRefs:
+                    type: array
+                    items:
+                      anyOf:
+                        - type: string
+                        - $ref: '#/components/schemas/Discount'
+                        - $ref: '#/components/schemas/DeletedDiscount'
+                  namedRefsOneof:
+                    type: array
+                    items:
+                      oneOf:
+                        - type: string
+                        - $ref: '#/components/schemas/OneofDiscount'
+                        - $ref: '#/components/schemas/OneofDeletedDiscount'
+                  inlineRefs:
+                    type: array
+                    items:
+                      anyOf:
+                        - type: string
+                        - type: object
+                          title: InlineDiscount
+                          properties:
+                            id:
+                              type: string
+                        - type: object
+                          title: InlineDeletedDiscount
+                          properties:
+                            id:
+                              type: string
+                            deleted:
+                              type: boolean
+components:
+  schemas:
+    Discount:
+      type: object
+      title: Discount
+      properties:
+        id:
+          type: string
+    DeletedDiscount:
+      type: object
+      title: DeletedDiscount
+      properties:
+        id:
+          type: string
+        deleted:
+          type: boolean
+    OneofDiscount:
+      type: object
+      title: OneofDiscount
+      properties:
+        id:
+          type: string
+    OneofDeletedDiscount:
+      type: object
+      title: OneofDeletedDiscount
+      properties:
+        id:
+          type: string
+        deleted:
+          type: boolean

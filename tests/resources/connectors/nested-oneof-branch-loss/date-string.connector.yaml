@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "date-string.connector",
+      "connector": "Query.overlayList",
+      "variables": {},
+      "apiResponseBody": "{\"value\": \"2024-01-01T00:00:00Z\"}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/overlay.list",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"value\": {\"text\": \"2024-01-01T00:00:00Z\", \"raw\": \"2024-01-01T00:00:00Z\"}}"
+      }
+    }
+  ]
+}

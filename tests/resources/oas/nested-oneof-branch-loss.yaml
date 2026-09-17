@@ -1,0 +1,67 @@
+openapi: 3.0.0
+info:
+  title: nested oneOf mixing object and non-object members (Ashby OverlayCustomField.value shape)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /overlay.list:
+    get:
+      operationId: listOverlays
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: boolean
+                        title: Boolean
+                      - type: object
+                        title: Currency
+                        properties:
+                          value:
+                            type: number
+                          currencyCode:
+                            type: string
+                      - type: string
+                        title: Date
+                        format: date-time
+  /overlay.create:
+    post:
+      operationId: createOverlay
+      # same mixed oneOf, reused as a request body — the input guard (factory.ts) sends this as
+      # JSON with a warn, since GraphQL has no input unions and the wrapper is output-only. #208
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  oneOf:
+                    - type: boolean
+                      title: Boolean
+                    - type: object
+                      title: Currency
+                      properties:
+                        value:
+                          type: number
+                        currencyCode:
+                          type: string
+                    - type: string
+                      title: Date
+                      format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean

@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "null.connector",
+      "connector": "Query.overlayList",
+      "variables": {},
+      "apiResponseBody": "{\"value\": null}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/overlay.list",
+          "method": "GET"
+        },
+        "connectorResponse": "{}"
+      }
+    }
+  ]
+}

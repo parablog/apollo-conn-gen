@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "same-type.a",
+      "connector": "Query.sameType",
+      "variables": {},
+      "apiResponseBody": "{\"item\": {\"detail\": {\"summary\": \"first\"}}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/same-type",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"item\": {\"detail\": {\"summary\": \"first\"}}}"
+      }
+    }
+  ]
+}

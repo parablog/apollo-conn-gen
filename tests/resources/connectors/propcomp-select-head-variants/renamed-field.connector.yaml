@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "renamed-field.connector",
+      "connector": "Query.thingGet",
+      "variables": {},
+      "apiResponseBody": "{\"value\": true, \"requiredValue\": {\"label\": \"req\"}, \"custom-value\": {\"label\": \"custom\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/thing.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"value\": {\"boolean\": true, \"raw\": true}, \"requiredValue\": {\"object\": {\"label\": \"req\"}, \"raw\": {\"label\": \"req\"}}, \"customValue\": {\"object\": {\"label\": \"custom\"}, \"raw\": {\"label\": \"custom\"}}}"
+      }
+    }
+  ]
+}

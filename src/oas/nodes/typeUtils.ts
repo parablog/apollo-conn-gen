@@ -93,15 +93,17 @@ export class T {
     return type instanceof Get;
   }
 
-  public static traverse(node: IType, callback: (node: IType) => void): void {
-    const traverseNode = (n: IType): void => {
-      callback(n);
-
-      for (const c of n.children) {
-        traverseNode(c);
-      }
+  // Visits each node once, with an optional callback after its children are complete.
+  // e.g. two fields sharing an expanded Address visit that Address once.
+  public static traverse(node: IType, callback: (node: IType) => void, after?: (node: IType) => void): void {
+    const visited = new Set<IType>();
+    const traverseNode = (current: IType): void => {
+      if (visited.has(current)) return;
+      visited.add(current);
+      callback(current);
+      for (const child of current.children) traverseNode(child);
+      after?.(current);
     };
-
     traverseNode(node);
   }
 
@@ -487,7 +489,7 @@ export class T {
   // happens to share the name. see #18 e.g.:
   //   { url: {type: string} } vs { url: {type: string} }                -> same
   //   { url: {type: string} } vs { url: {type: string}, vanity: {…} }  -> different
-  private static sameSchemaAs(node: IType, occupant: IType): boolean {
+  public static sameSchemaAs(node: IType, occupant: IType): boolean {
     // a union carries no single raw schema — its member list and tag are its shape. see #73
     // e.g. (stripe) ten ops reach subscription_item.discounts: one anyOf, ten identical twins
     if (node instanceof Union && occupant instanceof Union) {

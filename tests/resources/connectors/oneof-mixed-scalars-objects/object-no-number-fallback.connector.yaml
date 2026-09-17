@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "object-no-number-fallback.connector",
+      "connector": "Query.customFieldList",
+      "variables": {},
+      "apiResponseBody": "{\"value\": {\"value\": 1000, \"currencyCode\": \"USD\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/customField.list",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"value\": {\"raw\": {\"value\": 1000, \"currencyCode\": \"USD\"}}}"
+      }
+    }
+  ]
+}

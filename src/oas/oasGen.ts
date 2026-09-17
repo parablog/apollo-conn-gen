@@ -232,10 +232,14 @@ export class OasGen {
     return this.isolatedRun(() => {
       // typo guard: an override key that matches no operation would silently do nothing. A root
       // value other than "query"/"mutation" (e.g. "Mutation", capitalized) is caught here too.
+      // "$source" is the one key that names no operation. see docs/FIXED.md #226
       for (const [key, entry] of Object.entries(this.options.overrides ?? {})) {
+        if (key === '$source') {
+          continue;
+        }
         if (!this.paths.has(key)) {
           console.warn(`[overrides] no operation matches "${key}" — override ignored.`);
-        } else if (entry?.root !== undefined && entry.root !== 'query' && entry.root !== 'mutation') {
+        } else if (entry && 'root' in entry && entry.root !== undefined && entry.root !== 'query' && entry.root !== 'mutation') {
           throw new Error(
             `[overrides] "${key}".root must be "query" or "mutation", got ${JSON.stringify(entry.root)}.`,
           );

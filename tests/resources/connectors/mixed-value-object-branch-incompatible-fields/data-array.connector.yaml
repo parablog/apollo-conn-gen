@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "data-array.connector",
+      "connector": "Query.entryGet",
+      "variables": {},
+      "apiResponseBody": "{\"value\": {\"data\": [\"a\", \"b\"]}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/entry.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"value\": {\"object\": {\"data\": [\"a\", \"b\"]}, \"raw\": {\"data\": [\"a\", \"b\"]}}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf with a number and an object member, no plain-text member
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /entry.get:
+    get:
+      operationId: getEntry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: number
+                      - type: object
+                        title: Detail
+                        properties:
+                          amount:
+                            type: number
+                      - {}

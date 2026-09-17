@@ -623,6 +623,9 @@ test('test_047_oas_test_030_post-body-allOf', async () => {
 test('test_048_oas_test_031_post-body-oneOf', async () => {
   // post:/event's 200 has no `content` key either -- same #147 change as test_047 above, one
   // fewer type since the wrapper object it used to synthesize is gone.
+  // 1, not 2: LoginEvent/LogoutEvent's shared `eventType` enum has a different value in each
+  // branch; dedupeByName catches the value clash and degrades the merged field to JSON.
+  // 2, not 1: LoginEvent's and LogoutEvent's `eventType` values merge into one enum instead.
   const paths = ['post:/event>**'];
 
   await runOasTest(`post-sample.yaml`, paths, 3, 2);
@@ -653,11 +656,17 @@ test('test_052_oas_test_035_adobe-commerce-delete-address', async () => {
 });
 
 test('test_053_oas_test_036_time-series', async () => {
+  // 14, not 15: the three dataPoint branches (normal/optimized/highcharts) give `dataPoints`
+  // different shapes; dedupeByName catches it and degrades the merged field to JSON.
   const paths = ['post:/market-data-services/time-series/search>**'];
-  await runOasTest('time-series-1.0.28.yaml', paths, 1, 15);
+  await runOasTest('time-series-1.0.28.yaml', paths, 1, 14);
 });
 
 test('test_054_oas_test-better-naming', async () => {
+  // 2, not 3: agency is an allOf-wrapped $ref (Composed) on all three merged members, not yet
+  // consolidated at merge time, so it's not established and falls to JSON — AgencyMini is unreachable.
+  // 3, not 2: agency's wrapper is the same $ref on every branch, so it's typed again regardless
+  // of whether it's consolidated yet.
   const paths = [
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:scalar:count',
     'get:/2.3.0/astronauts/>res:r>obj:type:#/c/s/PaginatedPolymorphicAstronautEndpointList>prop:array:#results>union:type:#/c/s/PolymorphicAstronautEndpoint>obj:type:#/c/s/AstronautDetailed>prop:comp:agency>comp:type:#/c/s/AgencyMini>obj:type:#/c/s/AgencyMini>prop:scalar:name',
@@ -747,6 +756,9 @@ test('test_inline_allof_property_gets_valid_name_and_composes', async () => {
   assert.ok(/\bmeta: Meta\b/.test(schema!), 'field references the derived type');
   // total stays nullable: the `required` lived only in the skipped contentless member (pre-existing)
   assert.ok(/total: Int\b(?!!)/.test(schema!), 'total emitted nullable (required was on the skipped member)');
+  // Composed has no selectionSuffix() override, so the optional PropComp selection head stays
+  // exactly what it was before #208's selectionSuffix()/echo landed — a bare optional field with brackets.
+  assert.ok(schema!.includes('meta? {'), 'no selectionSuffix on a Composed child: selection head unchanged');
 });
 
 test('test_schema_ref_into_paths_gets_clean_type_name', async () => {
@@ -1024,15 +1036,24 @@ test('test_57_same_field_names_its_enum_the_same_in_both_selection_styles', asyn
 
 test('test_57_merged_union_defines_the_enum_it_references', async () => {
   // box's item choice (file | folder | web_link, no discriminator) is merged into one object. It
-  // folded its members only at write time, after the reachability walk — the walk collected the
-  // web_link member's `type` enum while the writer emitted the file member's: `type: FileBaseType!`
-  // with no `enum FileBaseType`, INVALID_GRAPHQL on compose. see #57
-  // typesSize 37, not 36: fixing #124 also caught Collaboration.created_by ($ref User--Collaborations)
-  // and File.created_by ($ref User--Mini) silently sharing the unqualified name "CreatedBy" despite
-  // different shapes — Composed now gets the same collision check Obj already had. see #124
+  // used to fold its members only at write time, after the reachability walk — the walk collected
+  // the web_link member's `type` enum while the writer emitted the file member's: `type:
+  // FileBaseType!` with no `enum FileBaseType`, INVALID_GRAPHQL on compose. see #57
+  // typesSize 37, not 36 (pre-#208): fixing #124 also caught Collaboration.created_by ($ref
+  // User--Collaborations) and File.created_by ($ref User--Mini) silently sharing the unqualified
+  // name "CreatedBy" despite different shapes — Composed now gets the same collision check Obj
+  // already had. see #124
+  // 36, not 37: `type` is a real enum per branch (file/folder/web_link), each with its own single
+  // value, so dedupeByName sends `type` to JSON instead of #57's own `FileBaseType` fix.
+  // 37, not 36: file/folder/web_link's three single-value enums merge into one enum holding all
+  // three instead of degrading to JSON — `type` is typed again.
   const schema = await runOasTest('box.yaml', ['get:/collaborations>**'], 258, 37);
   assert.ok(schema !== undefined);
-  assert.ok(/enum FileBaseType \{/.test(schema!), 'the emitted field type has a definition');
+  assert.ok(/\btype: EntriesUnionType\b/.test(schema!), 'the merged field is typed, not JSON');
+  assert.ok(
+    /enum EntriesUnionType \{\n file,\n folder,\n web_link\n\}/.test(schema!),
+    'the merged enum holds every branch value',
+  );
 });
 
 test('test_required_and_nullable_emits_a_nullable_field', async () => {
@@ -1098,10 +1119,18 @@ test('test_61_sanitised_at_type_must_not_collide', async () => {
   // (`Customer360PromotionVOInput`). #113's twin-field numbering (typeUtils.ts numberTwinFields)
   // already keeps them apart: the plain `type` field, then `type2` for the sanitised `@type`.
   // see docs/FIXED.md #61
+  // 111, not 113: dedupeByName now compares the written shape across this large spec's other
+  // merged unions too, so a couple of same-kind-different-shape clashes elsewhere degrade to
+  // JSON; unrelated to this test's own type/type2 fields, both unaffected.
+  // 109, not 111: partyRoleSpecification is an allOf-wrapped $ref (Composed) on every merged party
+  // role, not yet consolidated at merge time, so it's not established and falls to JSON —
+  // PartyRoleSpecificationRef is unreachable, both response and input side.
+  // 111, not 109: partyRoleSpecification's wrapper is the same $ref on every merged role, so it's
+  // typed again regardless of whether it's consolidated yet, both sides.
   const schema = await runOasTest(
     'TMF717_Customer360-v5.0.0.oas.yaml',
     ['get:/customer360>**', 'post:/listener/customer360CreateEvent>**'],
-    8, 113,
+    8, 111,
     { skipValidation: true },
   );
   assert.ok(schema !== undefined);
@@ -1195,18 +1224,19 @@ test('test_typeless_object_items_degrade_to_json', async () => {
   );
 });
 
-test('test_array_items_mixed_plain_and_object_degrade_to_json', async () => {
-  // #132: an array whose items mix a plain value with a real object (stripe/pagerduty's
-  // "unexpanded id vs. expanded object" pattern, #131) has no single GraphQL shape to select, so
-  // it reads as JSON, same as the two array-item cases above — and now carries the same reason.
-  const schema = await runOasTest('mixed-plain-object-array-item.yaml', ['get:/charges>**'], 1, 1);
+test('test_array_items_mixed_plain_and_object_becomes_mixed_value', async () => {
+  // #131/#132's stripe/pagerduty "unexpanded id vs. expanded object" pattern is a plain `oneOf`
+  // eligible for #208's mixed value at the list-item position — it no longer degrades to [JSON].
+  const schema = await runOasTest('mixed-plain-object-array-item.yaml', ['get:/charges>**'], 1, 3);
   assert.ok(schema !== undefined);
-  assert.ok(/owners: \[JSON\]/.test(schema!), 'a mixed plain/object array item degrades to [JSON]');
-
-  const reason = 'items in array have both plain and object values - returning JSON type';
+  assert.ok(schema!.includes('owners: [OwnersUnion]'), 'a mixed plain/object array item keeps every branch');
   assert.ok(
-    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(reason)}"\\n\\s+owners: \\[JSON\\]`).test(schema!),
-    'owners carries a NEEDS ATTENTION note immediately above the field',
+    schema!.includes('type OwnersUnion {\n  text: String\n  object: OwnersUnionObject\n  raw: JSON\n}'),
+    'mixed-value fields for the string and object members, no boolean/number',
+  );
+  assert.ok(
+    schema!.includes('owners: owners?->map(@->echo({ raw: @ })) {'),
+    'list-item selection head reads the whole item',
   );
 });
 
@@ -1360,7 +1390,11 @@ test('test_118_recursive_oneof_clique_terminates', () => {
 test('test_118_recursive_oneof_clique_cut_output', async () => {
   // #118, output side: the no-discriminator union degrades to one merged object, and every
   // branch's re-entry of the same 7-way member set is cut — commented in BOTH SDL and selection,
-  // like #10's instance cuts. The shared tag field itself survives the merge.
+  // like #10's instance cuts.
+  // 2, not 3: the shared tag field is a real enum with a different single value per branch
+  // (OrBranch's is "or", AndBranch's is "and", …) — dedupeByName sends it to JSON.
+  // 3, not 2: the seven branches' single-value enums merge into one enum holding all seven values
+  // instead of degrading to JSON.
   const schema = await runOasTest('recursive-oneof-array-branches.yaml', ['get:/lists/{id}>**'], 1, 3);
   assert.ok(schema !== undefined);
   assert.ok(schema!.includes('type FilterBranchUnion'), 'merged union object emitted');
@@ -1374,7 +1408,13 @@ test('test_118_recursive_oneof_clique_cut_output', async () => {
       `${branch}Branches cut commented in selection`,
     );
   }
-  assert.ok(/\bfilterBranchType: OrBranchFilterBranchType\b/.test(schema!), 'tag field kept on the merge');
+  assert.ok(/\bfilterBranchType: FilterBranchUnionFilterBranchType\b/.test(schema!), 'the tag field is typed again');
+  assert.ok(
+    /enum FilterBranchUnionFilterBranchType \{\n OR,\n AND,\n NOT_ALL,\n NOT_ANY,\n RESTRICTED,\n UNIFIED_EVENTS,\n ASSOCIATION\n\}/.test(
+      schema!,
+    ),
+    'the merged enum holds every branch value, in order',
+  );
 });
 
 test('test_118_prefix_set', async () => {
@@ -1426,7 +1466,8 @@ test('test_153_whole_op_wildcard_selection_stays_compact', async () => {
       `${branch}Branches still cut in SDL`,
     );
   }
-  assert.ok(/\bfilterBranchType: OrBranchFilterBranchType\b/.test(schema), 'tag field still kept on the merge');
+  // Same merged enum as test_118_recursive_oneof_clique_cut_output.
+  assert.ok(/\bfilterBranchType: FilterBranchUnionFilterBranchType\b/.test(schema), 'tag field still typed on the merge');
 
   // round trip: what --load-selections does with a saved file. Feeding the compacted list straight
   // back in must regenerate the exact same schema as the first run.
@@ -1800,8 +1841,8 @@ test('test_147_undescribed_2xx_response_degrades_to_json_not_boolean', async (t)
   assert.ok(/deleteLabelsById\(id: ID!\): DeleteLabelsByIdResponse\b/.test(schema!), '$ref-under-204 still returns a wrapper type');
   assert.ok(/deleteLabelsById[\s\S]{0,300}selection: """\s*\n\s*success: \$\(true\)/.test(schema!), 'and synthesizes success: true too');
 
-  // the same shared response reused under 200 instead: now degrades to JSON (supersedes the "200"
-  // sub-case of docs/FIXED.md #33's DigitalOcean example, which has no live corpus coverage today)
+  // the same shared response reused under 200 instead degrades to JSON (the "200" sub-case of
+  // docs/FIXED.md #33's DigitalOcean example, which has no live corpus coverage today)
   assert.ok(/widgetsById\(id: ID!\): JSON\b/.test(schema!), '$ref-under-200 now answers JSON instead of Boolean');
 
   // a lone 201 with no 200 or default present: previously fell through findSuccessResponseCode's
@@ -1942,10 +1983,14 @@ test('test_101_type_with_every_field_removed_becomes_json', async (t) => {
   // not parse — confluence post:…/{id}/version and put:…/child/attachment/{attachmentId}. The field
   // is now free-form JSON, the selection takes it whole, and the definition is never written.
   const errSpy = t.mock.method(console, 'error');
-  const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/history>**', 'post:/history>**'], 3, 2);
+  // 3: #201, 2026-09-09 -- History grows contributorGroups/contributorsByKey, adding
+  // ContributorsByKeyEntry to the same selection
+  const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/history>**', 'post:/history>**'], 3, 3);
   assert.ok(schema !== undefined);
   assert.ok(/\bcontributors: JSON\b/.test(schema!), 'the field reads as free-form JSON');
-  assert.ok(!/^type Contributors/m.test(schema!), 'no comment-only type is written');
+  // ContributorsByKeyEntry also starts with "type Contributors" -- \b keeps this a bare-Contributors
+  // check, not a false positive against it. see #201
+  assert.ok(!/^type Contributors\b/m.test(schema!), 'no comment-only type is written');
   assert.ok(!/^input ContributorsInput/m.test(schema!), 'no comment-only input is written');
   assert.ok(!/contributors\?? \{/.test(schema!), 'the selection opens no group for it');
   assert.ok(/^\s+contributors\??$/m.test(schema!), 'and still takes the field');
@@ -1963,6 +2008,125 @@ test('test_101_type_with_every_field_removed_becomes_json', async (t) => {
   assert.ok(
     errSpy.mock.calls.some((c) => c.arguments[1] === '[prop-obj]' && c.arguments[2] === cycleReason),
     'warn() fires with the [prop-obj] tag and the exact reason text',
+  );
+});
+
+test('test_201_list_and_map_of_type_with_every_field_removed_become_json', async (t) => {
+  // #201: a list item or map value of a type whose every field was cut still named the uncut
+  // type, a dangling SDL reference — docusign's rowValues: [DocGenFormFieldRowValue], never
+  // declared. PropArray and Map now ask the same everyFieldRemoved question PropObj (#101) does.
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/history>**', 'post:/history>**'], 3, 3);
+  assert.ok(schema !== undefined);
+
+  assert.ok(/\bcontributorGroups: \[JSON\]/.test(schema!), 'array items read as free-form JSON');
+  assert.ok(/^\s+contributorGroups\??$/m.test(schema!), 'and the selection takes it bare, no block');
+
+  assert.ok(
+    /type ContributorsByKeyEntry \{\s*key: String\s*(?:"""[\s\S]*?"""\s*)?value: JSON\s*\}/.test(schema!),
+    'map value reads as free-form JSON',
+  );
+  assert.ok(
+    /contributorsByKey.*->entries \{\s*key\s*value\s*\}/.test(schema!),
+    'the selection takes the map value whole, no block',
+  );
+
+  assert.ok(!/^type Contributors\b/m.test(schema!), 'no comment-only Contributors type is written');
+  assert.ok(!/^input ContributorsInput\b/m.test(schema!), 'no comment-only ContributorsInput is written');
+
+  const cycleReason =
+    'every field of Contributors was removed to break a reference cycle, leaving no type to write — sent as raw JSON instead.';
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[prop-array]' && c.arguments[2] === cycleReason),
+    'warn() fires with the [prop-array] tag and the exact reason text',
+  );
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[map]' && c.arguments[2] === cycleReason),
+    'warn() fires with the [map] tag and the exact reason text',
+  );
+});
+
+test('test_204_prefix_items_tuple_array_becomes_json', async (t) => {
+  // #204: a JSON Schema tuple (`prefixItems`, no `items`) used to throw instead of degrading —
+  // ashby's AuditLogFieldChange (`[before, after]`) killed a whole-spec run. Two routes reach it:
+  // a map value (byField, through additionalProperties) and a plain property (latest).
+  const errSpy = t.mock.method(console, 'error');
+  const schema = await runOasTest('prefix-items.yaml', ['get:/changes>**'], 1, 2);
+  assert.ok(schema !== undefined);
+
+  const tupleReason =
+    'this array fixes what goes in each position (a tuple), and a GraphQL list has one item type — sent as raw JSON instead.';
+  const tupleReasonInSdl = tupleReason.replace('—', '--');
+
+  // map route: the map field itself stays typed, only its value degrades
+  assert.ok(/\bbyField: \[ByFieldEntry\]/.test(schema!), 'the map field is still typed, not JSON');
+  assert.ok(
+    new RegExp(
+      `type ByFieldEntry \\{\\s*key: String\\s*"""\\s*NEEDS ATTENTION: ${_.escapeRegExp(tupleReasonInSdl)}\\s*"""\\s*value: JSON\\s*\\}`,
+    ).test(schema!),
+    'the map value carries the tuple reason above value: JSON',
+  );
+
+  // field route: the property itself becomes JSON
+  assert.ok(
+    new RegExp(`"NEEDS ATTENTION: ${_.escapeRegExp(tupleReasonInSdl)}"\\n {2}latest: JSON`).test(schema!),
+    'latest carries a NEEDS ATTENTION note immediately above the field',
+  );
+
+  // presence only, not a call count: latest's PropScalar.visit() re-derives via Factory.fromSchema
+  // and lands back on createScalarType's array branch a second time, warning twice for one field.
+  assert.ok(
+    errSpy.mock.calls.some((c) => c.arguments[1] === '[factory]' && c.arguments[2] === tupleReason),
+    'warn() fires with the [factory] tag and the exact reason text',
+  );
+});
+
+test('test_207_mismatched_selections_warn_once', async (t) => {
+  // #207: two ops share Item but select different fields of it — createItem takes id only,
+  // copyItem also takes createdAt. The type declares only the winner's fields; this only warns,
+  // it doesn't fix the mismatch (the selections are the person's to fix). Drives OasGen directly,
+  // not runOasTest: composing this SDL is not the claim under test, and runOasTest's own
+  // getTypes()+generateSchema() sequence would collect() twice, double-counting the warning.
+  const errSpy = t.mock.method(console, 'error');
+  const gen = await OasGen.fromFile(`${oasBasePath}/shared-type-selection.yaml`, {
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const paths = [
+    'post:/items/create>res:r>obj:type:createItemsCreateResponse>prop:obj:results>obj:type:#/components/schemas/Item>prop:scalar:id',
+    'post:/items/copy>res:r>obj:type:createItemsCopyResponse>prop:obj:results>obj:type:#/components/schemas/Item>prop:scalar:id',
+    'post:/items/copy>res:r>obj:type:createItemsCopyResponse>prop:obj:results>obj:type:#/components/schemas/Item>prop:scalar:createdAt',
+  ];
+  const schema = gen.generateSchema(paths);
+  assert.ok(schema !== undefined);
+
+  assert.ok(/type Item \{\s*id: ID\s*\}/.test(schema), 'Item declares id only, not createdAt or name');
+
+  assert.strictEqual(
+    errSpy.mock.calls.filter(
+      (c) => c.arguments[1] === '[collector]' && String(c.arguments[2]).includes('Item') && String(c.arguments[2]).includes('createdAt'),
+    ).length,
+    1,
+    'warn() fires exactly once naming Item and createdAt',
+  );
+});
+
+test('test_207_matching_selections_no_warning', async (t) => {
+  // #207: both ops select the same fields of Item — no mismatch, no warning, and (unlike the
+  // mismatch case above) this SDL actually composes, so runOasTest's compose check is worth it here.
+  const errSpy = t.mock.method(console, 'error');
+  const paths = [
+    'post:/items/create>res:r>obj:type:createItemsCreateResponse>prop:obj:results>obj:type:#/components/schemas/Item>prop:scalar:id',
+    'post:/items/create>res:r>obj:type:createItemsCreateResponse>prop:obj:results>obj:type:#/components/schemas/Item>prop:scalar:createdAt',
+    'post:/items/copy>res:r>obj:type:createItemsCopyResponse>prop:obj:results>obj:type:#/components/schemas/Item>prop:scalar:id',
+    'post:/items/copy>res:r>obj:type:createItemsCopyResponse>prop:obj:results>obj:type:#/components/schemas/Item>prop:scalar:createdAt',
+  ];
+  const schema = await runOasTest('shared-type-selection.yaml', paths, 2, 3);
+  assert.ok(schema !== undefined);
+  assert.strictEqual(
+    errSpy.mock.calls.filter((c) => c.arguments[1] === '[collector]' && String(c.arguments[2]).includes('Item')).length,
+    0,
+    'no mismatch warning when both ops select the same fields',
   );
 });
 
@@ -2028,11 +2192,18 @@ test('test_97_object_stamped_on_a_list_reads_the_items', async () => {
   // #97: slack's reactions.get answers `{ type: object, items: { anyOf: […] } }` — an object with
   // no fields of its own and an `items` beside it. The op generated nothing and was dropped; the
   // items schema is the real shape (the example next to it is one object), read in its place.
+  // 3, not 4: the two `[inline:reactionResponse]` members both declare a `type` field with a
+  // different enum value; dedupeByName sends `type` to JSON. message/ok/file are unaffected (below).
+  // 4, not 3: the two members' single-value `type` enums merge into one enum instead of JSON.
   const schema = await runOasTest('object-stamped-on-a-list.yaml', ['get:/reaction>**'], 1, 4);
   assert.ok(schema !== undefined);
   assert.ok(/reaction: ReactionResponse/.test(schema!), 'the op answers the merged choice');
   assert.ok(/\bok: Boolean!/.test(schema!) && /message: Message/.test(schema!) && /file: File/.test(schema!),
     'the members\' fields are merged');
+  assert.ok(
+    /enum ReactionResponseType \{\n message,\n file\n\}/.test(schema!),
+    'the type field is a merged enum, not JSON',
+  );
 });
 
 test('test_114_nested_object_stamped_on_a_list_reads_the_items', async () => {
@@ -2980,7 +3151,11 @@ test('test_83_stripe_writes_its_form_bodies', async () => {
   // 184: #177 resolves stripe's anyOf: [$ref, null] fields (address, cash_balance, invoice_settings,
   // tax, shipping and their nested members) to their real type instead of JSON -- 86 more types.
   // 186: #182 -- 2 more types: invoice_payment_method_options_konbini and _sepa_debit now get a JSON field.
-  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 186);
+  // 182: dedupeByName compares the written shape, not just the prop kind, catching four
+  // same-kind-different-shape clashes among stripe's merged unions here.
+  // 184: two of those four clashes merge back into typed enums (the other two are genuine shape
+  // clashes, not enum-versus-enum, and stay JSON).
+  const customers = await runOasTest('stripe.json', ['post:/v1/customers>**'], 589, 184);
   assert.ok(customers !== undefined);
   assert.ok(/createV1Customers\(input: CreateV1CustomersInput!\)/.test(customers!), 'stripe takes its form body');
   assert.ok(
@@ -3159,8 +3334,11 @@ test(
     // 728: #177 resolves stripe's anyOf: [$ref, null] fields to their real type instead of JSON,
     // across the full curated selection -- 365 more types generated.
     // 780: #182 -- 52 more types: stripe's empty payment_method_* objects (payment_method_amazon_pay, …) now get a JSON field.
+    // 776: dedupeByName compares the written shape, catching four same-kind-different-shape
+    // clashes among stripe's merged unions across the full curated selection.
+    // 779: three of those clashes merge back into typed enums.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/stripe-curated-selection.json`, 'utf-8'));
-    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 780, {
+    const schema = await runOasTest('stripe-curated.yaml', selections, 587, 779, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.13',
@@ -3223,8 +3401,14 @@ test(
     // 418: #171 gives a map-of-map its inner entries level; omni's selectionMap field gains its
     // own two new types, SelectionMapEntry and SelectionMapEntryEntry.
     // 419: #182 -- 1 more type: filter, an object with no properties, now gets a JSON field.
+    // 405: dedupeByName compares the written shape, not just the prop kind, across omni's own
+    // merged unions, catching several same-kind-different-shape clashes.
+    // 416: the enum-versus-enum clashes among those merge back into typed fields; the rest are
+    // genuine shape clashes and stay JSON.
+    // 417: owner now declares the same fields on every merged branch (only its written name
+    // differed before), so it stays kept and typed instead of falling to JSON — OwnerInternal.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('omni-full.json', selections, 163, 419, {
+    const schema = await runOasTest('omni-full.json', selections, 163, 417, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3251,6 +3435,21 @@ test(
     // 345: #177 resolves one anyOf: [$ref, null] field to its real type instead of JSON.
     // 365: #182 -- 20 more types: objects with no properties now get a JSON field, which also
     // makes AgentReference and other `*Reference` objects reachable as dependencies.
+    // 363: #208 -- incident update's `priority: oneOf [{id,name,type}, string]` request-body field
+    // used to silently drop the string branch as a full Union+enum; now it's one JSON field with a
+    // warn, so `union:input:priorityUnion` and its nested enum are gone -- two fewer types.
+    // 364: two enums under one field name merge into one enum holding both value sets --
+    // pagerduty's many acknowledger/assignee-style `type` discriminators (values "user"/"service")
+    // were silently dropping one branch's value; now typed, one more type.
+    // 365: the merged enum is now owned by the union doing the merge, not the first branch's own
+    // parent -- acknowledger's and last_status_change_by's merged enums used to coincidentally
+    // share one name and converge onto the same stored type; now each is named after its own
+    // union (AcknowledgerUnionType, LastStatusChangeByUnionType) and no longer converges, one more type.
+    // 364: value (a nested oneOf) is a union-backed PropComp on two merged custom-field-value
+    // branches, not yet consolidated at merge time, so it's not established and falls to JSON --
+    // the nested valueUnion type is unreachable.
+    // 365: the two branches' value unions are byte-identical schemas (same members, same
+    // discriminator), so it's established regardless of whether it's consolidated yet -- typed again.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/pagerduty-full-selection.json`, 'utf-8'));
     const schema = await runOasTest('pagerduty-full.json', selections, 95, 365, {
       skipValidation: true,
@@ -3308,8 +3507,17 @@ test(
     // InlineFileFullSharedLinkPermissionOptions, InlineFolderFullAllowedSharedLinkAccessLevels),
     // so one more type generated.
     // 768: #182 -- 1 more type: additional_details, an object with no properties, now gets a JSON field.
+    // 753: dedupeByName compares the written shape, not just the prop kind, across box's own
+    // merged unions, catching several same-kind-different-shape clashes (including the
+    // file/folder/web_link `type` discriminator, see test_57).
+    // 758: the enum-versus-enum clashes among those merge back into typed fields (including
+    // `type`, see test_57); the rest are genuine shape clashes and stay JSON.
+    // 760: skill_card_title is inline on every skill-card variant with the same code/message
+    // fields but a different generated name per variant; now recognised as declaring the same
+    // fields, so it stays kept and typed instead of JSON -- one more type each on the request-body
+    // and response side.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/box-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('box.yaml', selections, 258, 768, {
+    const schema = await runOasTest('box.yaml', selections, 258, 760, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3333,8 +3541,20 @@ test(
     // 1354: #177 resolves digitalocean's anyOf: [$ref, null] fields to their real type instead of
     // JSON -- 42 more types generated.
     // 1355: #182 -- 1 more type: labels, an object with no properties, now gets a JSON field.
+    // 1320: dedupeByName compares the written shape, not just the prop kind, across digitalocean's
+    // own merged unions, catching several same-kind-different-shape clashes.
+    // 1337: the enum-versus-enum clashes among those merge back into typed fields; the rest are
+    // genuine shape clashes and stay JSON.
+    // 1339: firewall is inline on two load-balancer create/update request variants with the same
+    // fields but a different generated name per variant; now recognised as declaring the same
+    // fields, so each stays kept and typed instead of JSON -- two more types.
+    // 1347: health_check and sticky_sessions are the same two-variant pattern as firewall, but each
+    // has its own nested enum (protocol, type) whose per-variant generated name fails the
+    // field-by-field walk even though its values agree; the two objects are byte-identical, so
+    // both stay typed before the walk reaches that enum -- eight more types (two fields, two
+    // variants, one enum each).
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/digitalocean-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1355, {
+    const schema = await runOasTest('digitalocean.yaml', selections, 290, 1347, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',
@@ -3424,13 +3644,10 @@ test('test_136_bare_op_selection_visits_the_full_mutation_body', async () => {
 });
 
 test(
-  'test_array_of_string_or_object_loses_the_string_case',
+  'test_array_of_string_or_named_objects_stays_json',
   async () => {
-    // Real, currently failing bug -- not a todo. Array items typed as anyOf[string, object,
-    // object] merge into an object-only type, so the selection assumes every item is an object.
-    // Breaks on real API responses that send a plain string (e.g. Stripe discounts when not
-    // using expand[]). See graphos-service-factory's PagerDuty/Stripe connector-unit test run,
-    // 2026-08-19.
+    // Array items typed as anyOf[string, $ref, $ref]: the named members wait for #223, so the
+    // list stays JSON instead of the mixed-value union an inline-object anyOf would get.
     // Example: an API field that is normally just an ID string, but becomes a full object when
     // you ask for it to be "expanded". A response can look like either:
     //   "owners": ["own_1", "own_2"]              <- normal
@@ -3442,7 +3659,11 @@ test(
       1,
     );
     assert.ok(schema !== undefined);
-    assert.ok(/owners: \[JSON\]/.test(schema!), 'a mixed string/object choice degrades to JSON, not a merged object');
+    assert.ok(/owners: \[JSON\]/.test(schema!), 'a named-ref anyOf list item stays JSON');
+    assert.ok(
+      schema!.includes('an anyOf whose object members are named schemas is sent as raw JSON for now'),
+      'the docstring carries the namedMembersAnyOf reason',
+    );
   },
 );
 

@@ -1,0 +1,38 @@
+openapi: 3.1.0
+info:
+  title: Prefix items tuple array
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /changes:
+    get:
+      operationId: getChanges
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  # the real route: a map value reached through additionalProperties, see #204
+                  byField:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/FieldChange'
+                  # the field route: the tuple sits directly on a property, no map in between
+                  latest:
+                    type: array
+                    prefixItems:
+                      - description: value before the change
+                      - description: value after the change
+components:
+  schemas:
+    # trimmed from Ashby's AuditLogFieldChange: a [before, after] pair written the JSON Schema
+    # way (prefixItems, no items) -- see docs/FIXED.md #204
+    FieldChange:
+      type: array
+      prefixItems:
+        - description: value before the change
+        - description: value after the change

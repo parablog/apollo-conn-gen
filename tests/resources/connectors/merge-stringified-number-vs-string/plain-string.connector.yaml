@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "plain-string.connector",
+      "connector": "Query.entryGet",
+      "variables": {},
+      "apiResponseBody": "{\"intFirst\": {\"data\": \"abc\"}, \"stringFirst\": {\"data\": \"abc\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/entry.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"intFirst\": {\"object\": {\"data\": \"abc\"}, \"raw\": {\"data\": \"abc\"}}, \"stringFirst\": {\"object\": {\"data\": \"abc\"}, \"raw\": {\"data\": \"abc\"}}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "boolean.connector",
+      "connector": "Query.valuesList",
+      "variables": {},
+      "apiResponseBody": "{\"values\": [true]}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/values.list",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"values\": [{\"boolean\": true, \"raw\": true}]}"
+      }
+    }
+  ]
+}

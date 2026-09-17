@@ -1,0 +1,42 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf as a request body's additionalProperties (excluded — input, no round-trip)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /byKey.create:
+    post:
+      operationId: createByKey
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                byKey:
+                  type: object
+                  additionalProperties:
+                    oneOf:
+                      - type: boolean
+                        title: Boolean
+                      - type: object
+                        title: Currency
+                        properties:
+                          value:
+                            type: number
+                          currencyCode:
+                            type: string
+                      - type: string
+                        title: Date
+                        format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean

@@ -183,6 +183,22 @@ test('test_R11_16_optional_markers_read_clean', async () => {
   assert.deepEqual(codes(sdl), [], 'a fully marked generated schema lints clean');
 });
 
+test('test_R11_int64_widening_marker_reads_clean', async () => {
+  // the wide-integer coercion is `?` then `->jsonStringify`, e.g. (box) `chunk_size?->jsonStringify`,
+  // never `->jsonStringify?` -- the reader only takes `?` right after a path.
+  const gen = await OasGen.fromFile(`${oasBasePath}/int64-widening.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/cards>**']);
+  assert.match(sdl, /card_number\?->jsonStringify/, 'the marker sits before ->jsonStringify, not after');
+  assert.deepEqual(codes(sdl), [], 'a fully marked generated schema lints clean');
+
+  const parsed = SchemaReader.read(sdl);
+  assert.deepEqual(ResponseCoverageCheck.run(sdl, parsed, gen), [], 'card_number is read, not stubbed as blind');
+});
+
 test('test_R11_unknown_nested_path_is_reported', async () => {
   const { gen, sdl } = await petstoreSchema();
   const broken = sdl.replace('category? {', 'category: catgory? {');

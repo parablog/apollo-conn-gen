@@ -1,6 +1,7 @@
-import { IType, T } from '../nodes/internal.js';
+import { IType, T, Union } from '../nodes/internal.js';
 import { Naming } from './naming.js';
 import { warn } from '../log/trace.js';
+import type { OasContext } from '../oasContext.js';
 
 export class SelectionPath {
   // The selection that takes an operation's whole subtree. e.g. everythingUnder('get:/graph') -> 'get:/graph>**'
@@ -14,7 +15,12 @@ export class SelectionPath {
   //    └─ obj:type:ActiveDeployment                                  <- a fresh run
   //    └─ obj:type:inlinev2AppsDeploymentsResponseActiveDeployment   <- minted while browsing, after
   //                                                                     /v2/apps claimed the name. #72
-  public static resolveSegment(parent: IType | undefined, collection: IType[], part: string): IType | undefined {
+  public static resolveSegment(
+    context: OasContext,
+    parent: IType | undefined,
+    collection: IType[],
+    part: string,
+  ): IType | undefined {
     // the segment as written, among the parent's children:
     //   res:r                                        part: comp:type:v2AppsDeploymentsResponse
     //    └─ comp:type:v2AppsDeploymentsResponse  <-  match
@@ -32,6 +38,18 @@ export class SelectionPath {
     if (target && SelectionPath.sameIdClass(target.id, part)) {
       warn(null, '[selection]', `segment ${part} not found; using ${target.id} (the only ${part.split(':')[0]} here)`);
       return target;
+    }
+
+    // A saved path can still name a field that was directly on the union before it became a mixed
+    // value; it resolves to the union, whose fields are all written anyway.
+    //   e.g. (ashby) old `...>union:type:valueUnion>prop:scalar:currencyCode` resolves to the union.
+    if (parent instanceof Union && parent.isFlat() && parent.analyzeMixedValue(context, true)) {
+      warn(
+        null,
+        '[selection]',
+        `${part} is no longer a direct field of ${parent.id}: the union now has one field per kind, and all of them are selected`,
+      );
+      return parent;
     }
 
     // An allOf wrapper's members are direct children, so T.innerChild above can't pick just one:

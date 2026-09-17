@@ -1,0 +1,27 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf with a wide-integer member — the wrapper's open gap (#208)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /entry.list:
+    get:
+      operationId: listEntries
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: integer
+                        format: int64
+                      - type: object
+                        title: Note
+                        properties:
+                          text:
+                            type: string

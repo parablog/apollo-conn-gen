@@ -104,7 +104,7 @@ export class Post extends Get {
 
     if (this.resultType) {
       writer.write(': ');
-      this.resultType.generate(context, writer, selection);
+      this.writeReturnType(context, writer, selection);
     }
 
     writer.write('\n');

@@ -1,0 +1,401 @@
+openapi: 3.0.0
+info:
+  title: a flat merge whose two objects both declare a "detail" field pointing at another object
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /compatible:
+    get:
+      operationId: getCompatible
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/Basic'
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/Rich'
+  /nested-clash:
+    get:
+      operationId: getNestedClash
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/NestedClashA'
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/NestedClashB'
+  /missing-field:
+    get:
+      operationId: getMissingField
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/MissingFieldA'
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/MissingFieldB'
+  /required-mismatch:
+    get:
+      operationId: getRequiredMismatch
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/RequiredMismatchA'
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/RequiredMismatchB'
+  /outer-required-mismatch:
+    get:
+      operationId: getOuterRequiredMismatch
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        required:
+                          - detail
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/DetailBasic'
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/DetailRich'
+  /nested-union-member:
+    get:
+      operationId: getNestedUnionMember
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/NestedUnionA'
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/NestedUnionB'
+  /same-type:
+    get:
+      operationId: getSameType
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/Shared'
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/Shared'
+  /same-type-required-mismatch:
+    get:
+      operationId: getSameTypeRequiredMismatch
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        required:
+                          - detail
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/Shared'
+                      - type: object
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/Shared'
+  /colliding-name-required-mismatch:
+    get:
+      operationId: getCollidingNameRequiredMismatch
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        required:
+                          - detail
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/Detail-A'
+                      - type: object
+                        required:
+                          - detail
+                        properties:
+                          detail:
+                            $ref: '#/components/schemas/Detail_A'
+  /create-detail:
+    post:
+      operationId: postCreateDetail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                detail:
+                  oneOf:
+                    - type: object
+                      properties:
+                        note:
+                          type: string
+                    - type: object
+                      properties:
+                        count:
+                          type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+  /get-mixed-detail:
+    get:
+      operationId: getGetMixedDetail
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    oneOf:
+                      - type: object
+                        required:
+                          - detail
+                        properties:
+                          detail:
+                            oneOf:
+                              - type: object
+                                required:
+                                  - kind
+                                  - code
+                                properties:
+                                  kind:
+                                    type: string
+                                    enum:
+                                      - a1
+                                  code:
+                                    type: string
+                              - type: object
+                                required:
+                                  - kind
+                                  - code
+                                properties:
+                                  kind:
+                                    type: string
+                                    enum:
+                                      - a2
+                                  code:
+                                    type: string
+                      - type: object
+                        required:
+                          - detail
+                        properties:
+                          detail:
+                            oneOf:
+                              - type: object
+                                required:
+                                  - kind
+                                properties:
+                                  kind:
+                                    type: string
+                                    enum:
+                                      - b1
+                                  code:
+                                    type: string
+                              - type: object
+                                required:
+                                  - kind
+                                properties:
+                                  kind:
+                                    type: string
+                                    enum:
+                                      - b2
+                                  code:
+                                    type: string
+components:
+  schemas:
+    Basic:
+      type: object
+      properties:
+        summary:
+          type: string
+    Rich:
+      type: object
+      properties:
+        summary:
+          type: string
+        deep:
+          type: object
+          properties:
+            note:
+              type: string
+    NestedClashA:
+      type: object
+      properties:
+        field:
+          type: string
+    NestedClashB:
+      type: object
+      properties:
+        field:
+          type: array
+          items:
+            type: string
+    MissingFieldA:
+      type: object
+      properties:
+        code:
+          type: string
+    MissingFieldB:
+      type: object
+      additionalProperties: true
+      properties:
+        other:
+          type: string
+    RequiredMismatchA:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+    RequiredMismatchB:
+      type: object
+      properties:
+        code:
+          type: string
+    DetailBasic:
+      type: object
+      properties:
+        summary:
+          type: string
+    DetailRich:
+      type: object
+      properties:
+        summary:
+          type: string
+    NestedUnionA:
+      type: object
+      properties:
+        code:
+          type: string
+    NestedUnionB:
+      type: object
+      properties:
+        code:
+          oneOf:
+            - type: object
+              properties:
+                x:
+                  type: string
+            - type: object
+              properties:
+                y:
+                  type: string
+    Shared:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/SharedContent'
+    SharedContent:
+      type: object
+      properties:
+        summary:
+          type: string
+    Detail-A:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+    Detail_A:
+      type: object
+      properties:
+        code:
+          type: string

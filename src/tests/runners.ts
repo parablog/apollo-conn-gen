@@ -235,7 +235,7 @@ function localComposer(): string | undefined {
   return fs.existsSync(cli) ? cli : undefined;
 }
 
-function compose(
+export function compose(
   schemaPath: string,
   samplePath?: string,
   federationVersion: string = '2.15.1',

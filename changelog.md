@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   that returns the linked type, not only the first one selected — a second GET or a PATCH/PUT on
   the same resource used to emit the field with no mapping, which broke composition whenever that
   type had no key of its own. Issue #196.
+- A list or map whose item type lost every field to a reference cycle now reads as `JSON` instead
+  of naming a type that is never written. Issue #201.
 
 ## [0.29.0]
 

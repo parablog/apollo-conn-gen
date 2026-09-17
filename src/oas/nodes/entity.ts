@@ -1,4 +1,4 @@
-import { IType, Obj, Param, Prop, PropEntityLink, Res, T } from './internal.js';
+import { Body, IType, Obj, Op, Param, Prop, PropArray, PropEntityLink, PropObj, Res, Scalar, T, Union } from './internal.js';
 import type { NameValue, SecurityPlan } from '../io/security.js';
 import { Naming } from '../utils/naming.js';
 import { OasContext } from '../oasContext.js';
@@ -18,8 +18,12 @@ export interface EntityResolver {
   keyFields: string;
   /** REST path template of the qualifying op, e.g. "/widgets/{id}". */
   path: string;
-  /** HTTP verb of the qualifying op (GET for this slice). */
+  // HTTP verb of the qualifying op, GET or POST.
   verb: string;
+  // POST only: the request body property that carries the key, e.g. "departmentId".
+  bodyProp?: string;
+  // POST only: the response property the keyed object sits under, e.g. "results".
+  envelopeField?: string;
   /** The `@source` name the connector references. */
   source: string;
   /** R6: set on a batch resolver — same @key/selection, but $batch instead of $this. */
@@ -91,25 +95,147 @@ function findKeyField(obj: Obj, param: Param, pathParams: Param[], selected: Pro
   return aliased !== undefined && T.isPropScalar(aliased) && selected.includes(aliased) ? aliased : undefined;
 }
 
-/**
- * Discover which GET-by-key operations in the selection are valid entity resolvers and
- * record them on the entity type they resolve, as type-level resolvers (`@connect`/`$this`
- * on the type — the modern Connectors form, preferred over Query-field `entity: true`).
- *
- * The resolvers are attached to the canonical, generated `Obj` instance found via the
- * collected `types` map (keyed by type id), so multiple qualifying ops on the same type
- * (multi-key) accumulate onto the single type the writer emits. The pass first clears any
- * prior resolvers so repeated generations don't leak, then — only when
- * `context.generateOptions.inferEntityResolvers` is on — populates them. With the flag off
- * it just resets, and the output stays byte-identical to the literal conversion.
- *
- * A GET op qualifies iff ALL hold:
- *  - verb is GET;
- *  - `resultType` unwraps (through `Res`) to a single `Obj` (not array/scalar/union);
- *  - it has >= 1 path param;
- *  - every path param resolves to a scalar field on the `Obj`, in `obj.selectedProps(selection)`
- *    (else the `@key`/`$this` field would dangle) — see {@link findKeyField} for exact-name-vs-alias.
- */
+// A stand-in for a path param carrying only the name findKeyField reads.
+function paramFor(name: string): Param {
+  return { name } as unknown as Param;
+}
+
+// Whether an op is even worth testing as a POST resolver: a read op (per the overrides file),
+// with a plain JSON body and nothing else required to fill in.
+//   e.g. (ashby) POST /job.info, body { id }, no other required param -> worth testing
+function isPostCandidateOp(op: IType & Op, context: OasContext): boolean {
+  if (!T.isQueryType(op, context) || !op.body || op.body.mediaType.toLowerCase() !== 'application/json') {
+    return false;
+  }
+  return op.params.every((param) => !param.required);
+}
+
+// A node's own single object-typed property, when every other property is a scalar or a list of
+// scalars -- the shape an id-keyed response sits inside.
+//   e.g. (ashby) JobInfoSuccessResponse { success: bool, results: Job } -> { obj: Job, envelopeField: "results" }
+function envelopeCandidate(node: IType): { obj: Obj; envelopeField: string } | undefined {
+  if (!(node instanceof Obj)) {
+    return undefined;
+  }
+  const objectProps = Array.from(node.props.values()).filter(
+    (prop): prop is PropObj => prop instanceof PropObj && prop.obj instanceof Obj,
+  );
+  const rest = Array.from(node.props.values()).filter((prop) => !objectProps.includes(prop as PropObj));
+  const wrapped = rest.every((prop) => T.isPropScalar(prop) || (prop instanceof PropArray && prop.items instanceof Scalar));
+  return objectProps.length === 1 && wrapped ? { obj: objectProps[0].obj as Obj, envelopeField: objectProps[0].name } : undefined;
+}
+
+// A POST op's response after one Res layer: the object itself, one wrapped property, or a union
+// where exactly one member resolves as a wrapped object.
+//   e.g. (ashby) oneOf [JobInfoSuccessResponse, ErrorResponse] -> only the success branch wraps one object
+function unwrapPostResult(resultType: IType | undefined): { obj: Obj; envelopeField?: string } | undefined {
+  let node: IType | undefined = resultType;
+  if (node instanceof Res) {
+    node = node.response;
+  }
+  if (node instanceof Union) {
+    const candidates = node.children.map((member) => envelopeCandidate(member)).filter((candidate) => candidate !== undefined);
+    return candidates.length === 1 ? candidates[0] : undefined;
+  }
+  if (!node) {
+    return undefined;
+  }
+  return envelopeCandidate(node) ?? (node instanceof Obj ? { obj: node } : undefined);
+}
+
+// The one body property resolving against the response object's key, tried one at a time so
+// findKeyField's alias branch stays reachable; any other property left over must be optional.
+//   e.g. (ashby) job.info's required id resolves, optional expand/includeUnpublishedJobPostingsIds don't
+function findBodyKeyField(obj: Obj, body: Body, selected: Prop[]): { field: Prop; bodyProp: string } | undefined {
+  if (!(body.payload instanceof Obj)) {
+    return undefined;
+  }
+  const matches: { field: Prop; bodyProp: string }[] = [];
+  const unresolved: Prop[] = [];
+  for (const prop of body.payload.props.values()) {
+    const param = paramFor(prop.name);
+    const field = findKeyField(obj, param, [param], selected);
+    if (field) {
+      matches.push({ field, bodyProp: prop.name });
+    } else {
+      unresolved.push(prop);
+    }
+  }
+  return matches.length === 1 && !unresolved.some((prop) => prop.required) ? matches[0] : undefined;
+}
+
+// What a qualifying op needs recorded before it becomes an EntityResolver.
+interface ResolverCandidate {
+  obj: Obj;
+  keyFields: Prop[];
+  path: string;
+  bodyProp?: string;
+  envelopeField?: string;
+}
+
+// Today's GET-by-key rule, unchanged: every path param resolves to a selected scalar field.
+//   e.g. (entity-resolver) GET /widgets/{id} -> Widget @key(fields: "id")
+function getResolverCandidate(op: IType & Op, selection: string[], keep: boolean): ResolverCandidate | undefined {
+  const obj = unwrapToObj(op.resultType);
+  if (!obj) {
+    return undefined;
+  }
+
+  const pathParams = op.params.filter((p) => p.parameter.in && p.parameter.in.toLowerCase() === 'path');
+  if (pathParams.length === 0) {
+    return undefined;
+  }
+
+  const selected = obj.selectedProps(selection, keep);
+  const keyFields = pathParams.map((p) => findKeyField(obj, p, pathParams, selected));
+  if (!keyFields.every((field): field is Prop => field !== undefined)) {
+    return undefined;
+  }
+
+  // Composite key: the matched properties' own names, not the OAS path-param names (write
+  // sites look these up literally). Path tokens follow suit, e.g. (entity-param-alias)
+  // `{petId}` -> `{id}`, so `$this` substitution (obj.ts) stays a plain rename.
+  let path = op.operation.path;
+  pathParams.forEach((p, i) => {
+    const fieldName = keyFields[i].name;
+    if (fieldName !== p.name) {
+      path = path.replace(`{${p.name}}`, `{${fieldName}}`);
+    }
+  });
+
+  return { obj, keyFields, path };
+}
+
+// Rule 1/2/3 for a POST candidate: a read op sending one JSON-body key that resolves against a
+// response that is (or is wrapped one level around) the keyed object.
+//   e.g. (ashby) POST /job.info, body { id } -> Job, wrapped under "results"
+function postResolverCandidate(
+  op: IType & Op,
+  context: OasContext,
+  selection: string[],
+  keep: boolean,
+): ResolverCandidate | undefined {
+  if (!isPostCandidateOp(op, context)) {
+    return undefined;
+  }
+
+  const unwrapped = unwrapPostResult(op.resultType);
+  if (!unwrapped) {
+    return undefined;
+  }
+
+  const selected = unwrapped.obj.selectedProps(selection, keep);
+  const match = findBodyKeyField(unwrapped.obj, op.body!, selected);
+  if (!match) {
+    return undefined;
+  }
+
+  return { obj: unwrapped.obj, keyFields: [match.field], path: op.operation.path, bodyProp: match.bodyProp, envelopeField: unwrapped.envelopeField };
+}
+
+// Discovers GET-by-key and read-only POST-by-key (#224) operations and records them as
+// type-level entity resolvers (@connect/$this on the type), replacing prior resolvers each run.
+//   e.g. (ashby) POST /job.info, body { id } -> type Job @key(fields: "id") @connect(...)
 export function inferEntityResolvers(
   context: OasContext,
   gen: OasGen,
@@ -133,55 +259,36 @@ export function inferEntityResolvers(
   const selectionRoots = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
   for (const op of gen.paths.values()) {
-    if (!T.isOp(op) || op.verb !== 'GET' || !selectionRoots.has(op.id)) {
+    if (!T.isOp(op) || !selectionRoots.has(op.id)) {
       continue;
     }
 
-    const obj = unwrapToObj(op.resultType);
-    if (!obj) {
+    const candidate =
+      op.verb === 'GET'
+        ? getResolverCandidate(op, selection, keep)
+        : op.verb === 'POST'
+          ? postResolverCandidate(op, context, selection, keep)
+          : undefined;
+    if (!candidate) {
       continue;
     }
 
-    const pathParams = op.params.filter((p) => p.parameter.in && p.parameter.in.toLowerCase() === 'path');
-    if (pathParams.length === 0) {
-      continue;
-    }
-
-    const selected = obj.selectedProps(selection, keep);
-    const keyFields = pathParams.map((p) => findKeyField(obj, p, pathParams, selected));
-    if (!keyFields.every((field): field is Prop => field !== undefined)) {
-      continue;
-    }
-
-    // Attach to the single canonical type instance the writer will generate (same id).
-    const target = types.get(obj.id);
+    // Attach to the one generated type instance the writer will emit (same id).
+    const target = types.get(candidate.obj.id);
     if (!(target instanceof Obj)) {
       continue;
     }
 
-    // The resolver must authenticate exactly like the op it was inferred from: in uniform
-    // mode the @source header already covers it, but a per-op header or an apiKey-in-query
-    // credential lives on each @connect — without it, every router-side entity fetch to a
-    // protected endpoint fails. Resolved here because the plan lives with the writer; the
-    // writer resolves the same op again for its Query field, so dropped-scheme warnings can
-    // repeat for an op that is both selected and a resolver.
+    // Auth must match the op this was inferred from: a per-op header or apiKey-in-query, when
+    // set, travels with the resolver too -- uniform-mode @source auth alone covers the rest.
     const { header: headerAuth, query: queryAuth } = security?.forOp(op) ?? { header: null, query: null };
 
-    // Composite key: the matched properties' own names, not the OAS path-param names (write
-    // sites look these up literally). Path tokens follow suit, e.g. (entity-param-alias)
-    // `{petId}` -> `{id}`, so `$this` substitution (obj.ts) stays a plain rename.
-    let path = op.operation.path;
-    pathParams.forEach((p, i) => {
-      const fieldName = keyFields[i].name;
-      if (fieldName !== p.name) {
-        path = path.replace(`{${p.name}}`, `{${fieldName}}`);
-      }
-    });
-
     target.entityResolvers.push({
-      keyFields: keyFields.map((field) => field.name).join(' '),
-      path,
+      keyFields: candidate.keyFields.map((field) => field.name).join(' '),
+      path: candidate.path,
       verb: op.verb,
+      bodyProp: candidate.bodyProp,
+      envelopeField: candidate.envelopeField,
       source: 'api',
       headerAuth,
       queryAuth,

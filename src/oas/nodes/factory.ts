@@ -38,6 +38,7 @@ import { GqlUtils } from '../utils/gql.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import { Nullability } from '../utils/nullability.js';
+import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 import ArraySchemaObject = OpenAPIV3.ArraySchemaObject;
 
 export class Factory {
@@ -57,7 +58,7 @@ export class Factory {
       // a $ref that points nowhere is read as free-form JSON instead of stopping the run.
       //   e.g. (common-room) del:/user/{email} 200: { $ref: '#../' }  see docs/FIXED.md #99
       if (!schema) {
-        const reason = `the reference '${ref}' doesn't point to anything in this API description — sent as raw JSON instead.`;
+        const reason = JsonDegradeReasons.danglingRef(ref!);
         warn(null, '[factory]', reason);
         return new Scalar(parent, 'JSON', Schemas.withJsonNote(context, inputSchema as SchemaObject, reason), reason);
       }
@@ -115,7 +116,7 @@ export class Factory {
     else if (Schemas.isShapelessObject(schemaObj)) {
       // e.g. a map value's `additionalProperties: { additionalProperties: false }` becomes JSON —
       // map.ts reads this reason back to note its own `value:` line. see docs/FIXED.md #155
-      const reason = 'this object declares no properties of its own — sent as raw JSON instead.';
+      const reason = JsonDegradeReasons.shapelessObject();
       result = new Scalar(parent, 'JSON', Schemas.withJsonNote(context, schemaObj, reason), reason);
     }
     // scalar
@@ -135,7 +136,12 @@ export class Factory {
     const typeStr = schema?.type;
     if (typeStr != null) {
       if (typeStr === 'array') {
-        throw new Error(`Should have been handled already? ${typeStr}, schema: ${JSON.stringify(schema)}`);
+        // a tuple (`prefixItems`, no `items`) reaches here because fromSchema's `items` check only
+        // looks for `items`. see docs/FIXED.md #204
+        //   e.g. (ashby) AuditLogFieldChange: { type: array, prefixItems: [before, after] }
+        const reason = JsonDegradeReasons.tupleArray();
+        warn(context, '[factory]', reason);
+        return new Scalar(parent, 'JSON', Schemas.withJsonNote(context, schema!, reason), reason);
       } else if (schema?.enum != null) {
         if (!GqlUtils.isGqlEnum(schema)) {
           // enum values with no legal GraphQL name form degrade to the base scalar, so the field
@@ -145,7 +151,7 @@ export class Factory {
         }
         // a bare (non-property) enum keeps its component name, same as Obj/Union/Composed above —
         // otherwise every such enum collides on the generic name 'enum'. see docs/FIXED.md #120
-        return new En(parent, ref ?? 'enum', schema, schema.enum! as string[]);
+        return new En(parent, ref, schema, schema.enum! as string[]);
       }
       // scalar case — gqlScalar knows `date`/`date-time` mean String, like fromProp's branch below
       const scalarType = GqlUtils.gqlScalarFor(schema, typeStr as string);
@@ -157,14 +163,14 @@ export class Factory {
       warn(null, '[factory]', `unknown scalar type '${typeStr}' becomes JSON in: ${parent.pathToRoot()}`);
       // when this is a whole response body (e.g. a get's 200 is `{ type: 'url' }` directly), the
       // reason above now also reaches the op's own docstring, not just the build log. see docs/FIXED.md #155
-      const reason = `this schema's type '${typeStr}' has no GraphQL scalar equivalent — sent as raw JSON instead.`;
+      const reason = JsonDegradeReasons.noScalarEquivalent(String(typeStr));
       return new Scalar(parent, 'JSON', Schemas.withJsonNote(context, schema!, reason), reason);
     } else if (schema?.enum != null) {
       if (!GqlUtils.isGqlEnum(schema)) {
         // same degrade as the site above; with no `type` at all, enum values read as strings. see docs/FIXED.md #172
         return new Scalar(parent, 'String', schema);
       }
-      return new En(parent, ref ?? 'enum', schema, _.get(schema, 'enum') as string[]);
+      return new En(parent, ref, schema, _.get(schema, 'enum') as string[]);
     }
     // or we have no idea how to handle this
     else {
@@ -172,6 +178,9 @@ export class Factory {
     }
   }
 
+  // The node type for a container schema, decided by shape: allOf -> Composed, oneOf/anyOf ->
+  // Union, additionalProperties-only -> Map, otherwise Obj. Schemas.analyzeMixedValue mirrors this order.
+  //   e.g. (ashby) oneOf: [boolean, { currencyCode, value }, string(date)] -> Union
   private static createContainerType(parent: IType, schema: SchemaObject, ref?: string) {
     let result: IType | null;
 
@@ -244,11 +253,27 @@ export class Factory {
       warn(context, '[factory]', `items in array have mixed array types - returning JSON type`);
       return new Scalar(parent, 'JSON', items);
     }
-    // a mixed choice (plain value + real object) merges away the plain branch's fields if left to
-    // Union — e.g. (stripe) owners: { items: { anyOf: [string, $ref Owner] } } -> [JSON]      #131
+    // Builds a mixed type for supported output list items; other mixed items keep JSON.
+    // e.g. (stripe) owners: { items: { anyOf: [string, $ref Owner] } } -> [OwnersUnion]
     if (!('$ref' in items) && Schemas.holdsMixedPlainAndObjectValues(context, items)) {
-      warn(context, '[factory]', `items in array have both plain and object values - returning JSON type`);
-      return new Scalar(parent, 'JSON', items);
+      const members = items.oneOf ?? items.anyOf;
+      // a named-ref anyOf member rebuilds its shared schema on every branch — same limit as
+      // fromProp's anyOf arms, see docs/TASKS.md #223. oneOf list items are untouched.
+      const namedRefMembers = Boolean(
+        items.anyOf && members && Factory.hasNamedRefMember(context, members as (SchemaObject | ReferenceObject)[]),
+      );
+      if (
+        parent instanceof PropArray &&
+        parent.kind !== 'input' &&
+        members &&
+        Schemas.analyzeMixedValue(context, members as (SchemaObject | ReferenceObject)[]) &&
+        !namedRefMembers
+      ) {
+        return Factory.fromSchema(context, parent, items);
+      }
+      const reason = namedRefMembers ? JsonDegradeReasons.namedMembersAnyOf() : undefined;
+      warn(context, '[factory]', reason ?? `items in array have both plain and object values - returning JSON type`);
+      return new Scalar(parent, 'JSON', items, reason);
     }
     return Factory.fromSchema(context, parent, items);
   }
@@ -373,27 +398,37 @@ export class Factory {
     if (type) {
       // 1st case is if the type is an array
       if (type === 'array') {
-        const array = new PropArray(parent, propName, schema!);
-        // const itemsName = Naming.genArrayItems(propName);
+        // a tuple (`prefixItems`, no `items`) has no single item shape a list can hold — same
+        // degrade as createScalarType's array branch. see docs/FIXED.md #204
+        //   e.g. (ashby) AuditLogFieldChange: { type: array, prefixItems: [before, after] }
+        if (!schemaObj.items) {
+          const reason = JsonDegradeReasons.tupleArray();
+          warn(context, '[factory]', reason);
+          prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+        } else {
+          const array = new PropArray(parent, propName, schema!);
+          // const itemsName = Naming.genArrayItems(propName);
 
-        const itemsSchema = Factory.unwrapRedundantArrayItems(context, _.get(schemaObj, 'items') as ArraySchemaObject);
-        // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
-        const itemsType = Factory.fromArrayItems(context, array, itemsSchema);
+          const itemsSchema = Factory.unwrapRedundantArrayItems(context, _.get(schemaObj, 'items') as ArraySchemaObject);
+          // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
+          const itemsType = Factory.fromArrayItems(context, array, itemsSchema);
 
-        array.setItems(itemsType);
-        prop = array;
+          array.setItems(itemsType);
+          prop = array;
 
-        // Array items resolve eagerly here, so if the item ref re-entered a schema on the path
-        // (fromSchema returned the circular sentinel), bubble the cut up to the whole list field:
-        // render `# children: [Node] — circular reference omitted`. see docs/FIXED.md #10
-        if (itemsType instanceof CircularRef) {
-          return new PropCircRef(parent, array);
+          // Array items resolve eagerly here, so if the item ref re-entered a schema on the path
+          // (fromSchema returned the circular sentinel), bubble the cut up to the whole list field:
+          // render `# children: [Node] — circular reference omitted`. see docs/FIXED.md #10
+          if (itemsType instanceof CircularRef) {
+            return new PropCircRef(parent, array);
+          }
         }
       }
       // 2nd checks for obj property
       else if (
         schemaObj?.type === 'object' ||
         schemaObj?.oneOf ||
+        schemaObj?.anyOf ||
         schemaObj?.allOf ||
         !_.isEmpty(schemaObj.properties)
       ) {
@@ -401,8 +436,13 @@ export class Factory {
           if (Schemas.holdsPlainValues(context, schemaObj)) {
             // a oneOf of only plain scalars/enums has no object member a union can hold — same
             // empty-type family as #108 (map)/#110 (array item), just at a plain property. #134
-            const reason =
-              'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
+            const reason = JsonDegradeReasons.scalarOnlyOneOf();
+            warn(context, '[factory]', reason);
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+          } else if (parent.kind === 'input' && Schemas.mixesObjectAndPlainMembers(context, schemaObj)) {
+            // GraphQL has no input unions, and mixed values (#208) are output-only — an input oneOf
+            // mixing object and non-object members has no typed shape either way.
+            const reason = JsonDegradeReasons.mixedInputChoice();
             warn(context, '[factory]', reason);
             prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
           } else {
@@ -416,6 +456,52 @@ export class Factory {
             );
             prop = inner;
           }
+        } else if (schemaObj.anyOf) {
+          // e.g. (ashby) CustomField.value: anyOf [boolean, number, string, [string], {currency…}, …, null]
+          const members = schemaObj.oneOf ?? schemaObj.anyOf;
+          if (Schemas.holdsPlainValues(context, schemaObj)) {
+            const reason = JsonDegradeReasons.scalarOnlyOneOf();
+            warn(context, '[factory]', reason);
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+          } else if (parent.kind === 'input' && Schemas.mixesObjectAndPlainMembers(context, schemaObj)) {
+            const reason = JsonDegradeReasons.mixedInputChoice();
+            warn(context, '[factory]', reason);
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+          } else if (Schemas.holdsOnlyObjectMembers(context, schemaObj)) {
+            const reason = JsonDegradeReasons.objectOnlyAnyOf();
+            warn(context, '[factory]', reason);
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+          } else if (Schemas.mixesObjectAndPlainMembers(context, schemaObj)) {
+            if (!Schemas.analyzeMixedValue(context, members as (SchemaObject | ReferenceObject)[])) {
+              // e.g. anyOf: [integer(int64), object required {code}, object optional {code}] ->
+              // stays JSON; the oneOf spelling of the same shape merges unsafely today (#212).
+              const reason = JsonDegradeReasons.unbuildableMixedAnyOf();
+              warn(context, '[factory]', reason);
+              prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+            } else if (Factory.hasNamedRefMember(context, members as (SchemaObject | ReferenceObject)[])) {
+              // a named-ref anyOf member rebuilds its shared schema on every branch — stays JSON
+              // for now. see docs/TASKS.md #223
+              const reason = JsonDegradeReasons.namedMembersAnyOf();
+              warn(context, '[factory]', reason);
+              prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+            } else {
+              const inner: PropComp = new PropComp(parent, propName, schemaObj);
+              inner.comp = new Union(
+                inner,
+                ref || _.get(schemaObj, 'name'),
+                members as SchemaObject[],
+                false,
+                _.get(schemaObj, 'discriminator'),
+              );
+              prop = inner;
+            }
+          } else {
+            // a member that is itself a choice, or a map, is neither plain nor object to the
+            // checks above — the same unrecognised-shape fallback a typed property gets. #221
+            const reason = JsonDegradeReasons.unknownShape();
+            warn(context, '[factory]', reason);
+            prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+          }
         } else if (schemaObj.allOf) {
           const propComp: PropComp = new PropComp(parent, propName, schemaObj);
           propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
@@ -424,8 +510,7 @@ export class Factory {
           if (parent.kind === 'input') {
             // GraphQL input types can't take arbitrary keys, so a map in input position has no
             // typed shape to write — send it as JSON instead. #133
-            const reason =
-              "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+            const reason = JsonDegradeReasons.mapAsInput();
             warn(context, '[factory]', reason);
             prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
           } else {
@@ -483,14 +568,53 @@ export class Factory {
     else if (schemaObj.oneOf) {
       if (Schemas.holdsPlainValues(context, schemaObj)) {
         // same guard as the typed branch above, reached here because this schema has no `type` key. #134
-        const reason =
-          'a oneOf of only plain scalar/enum values has no GraphQL union member to build — sent as raw JSON instead.';
+        const reason = JsonDegradeReasons.scalarOnlyOneOf();
+        warn(context, '[factory]', reason);
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+      } else if (parent.kind === 'input' && Schemas.mixesObjectAndPlainMembers(context, schemaObj)) {
+        // same guard as the typed branch above, reached here because this schema has no `type` key. #208
+        const reason = JsonDegradeReasons.mixedInputChoice();
         warn(context, '[factory]', reason);
         prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
       } else {
         const inner: PropComp = new PropComp(parent, propName, schemaObj);
         inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
         prop = inner;
+      }
+    } else if (schemaObj.anyOf) {
+      const members = schemaObj.oneOf ?? schemaObj.anyOf;
+      if (Schemas.holdsPlainValues(context, schemaObj)) {
+        const reason = JsonDegradeReasons.scalarOnlyOneOf();
+        warn(context, '[factory]', reason);
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+      } else if (parent.kind === 'input' && Schemas.mixesObjectAndPlainMembers(context, schemaObj)) {
+        const reason = JsonDegradeReasons.mixedInputChoice();
+        warn(context, '[factory]', reason);
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+      } else if (Schemas.holdsOnlyObjectMembers(context, schemaObj)) {
+        const reason = JsonDegradeReasons.objectOnlyAnyOf();
+        warn(context, '[factory]', reason);
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+      } else if (Schemas.mixesObjectAndPlainMembers(context, schemaObj)) {
+        if (!Schemas.analyzeMixedValue(context, members as (SchemaObject | ReferenceObject)[])) {
+          const reason = JsonDegradeReasons.unbuildableMixedAnyOf();
+          warn(context, '[factory]', reason);
+          prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+        } else if (Factory.hasNamedRefMember(context, members as (SchemaObject | ReferenceObject)[])) {
+          const reason = JsonDegradeReasons.namedMembersAnyOf();
+          warn(context, '[factory]', reason);
+          prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+        } else {
+          const inner: PropComp = new PropComp(parent, propName, schemaObj);
+          inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[]);
+          prop = inner;
+        }
+      } else {
+        // a member that is itself a choice, or a map, is neither plain nor object to the checks
+        // above — the same unrecognised-shape fallback a typed property gets. #221
+        const reason = JsonDegradeReasons.unknownShape();
+        warn(context, '[factory]', reason);
+        prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
       }
     } else if (schemaObj.allOf) {
       const propComp: PropComp = new PropComp(parent, propName, schemaObj);
@@ -499,8 +623,7 @@ export class Factory {
     } else if (Schemas.isMap(schemaObj)) {
       if (parent.kind === 'input') {
         // same as the typed branch above, reached here because this schema has no `type` key. #133
-        const reason =
-          "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+        const reason = JsonDegradeReasons.mapAsInput();
         warn(context, '[factory]', reason);
         prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
       } else {
@@ -514,8 +637,7 @@ export class Factory {
     }
     // default case: no type, no oneOf/allOf, not a map, no properties — an unrecognised shape. #133
     else {
-      const reason =
-        "this field's shape didn't match any known pattern and defaulted to JSON — worth checking the source OAS schema.";
+      const reason = JsonDegradeReasons.unknownShape();
       warn(context, '[factory]', reason);
       prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
     }
@@ -582,8 +704,8 @@ export class Factory {
     return parent.ancestors().find((a) => a.schema === schema);
   }
 
-  // A union's cycle identity: its sorted member-$ref set. Undefined when any non-null member is
-  // inline or <2 are $refs — keeps e.g. (stripe) `anyOf: [string, $ref]` out of the cut. see docs/FIXED.md #118
+  // Identifies a choice made entirely of component references, ignoring null members.
+  // e.g. (hubspot) oneOf: [$ref OrBranch, $ref AndBranch] has the same identity in either order.
   private static unionRefSignature(members: (SchemaObject | ReferenceObject)[]): string | undefined {
     const real = members.filter((m) => m && (m as SchemaObject).type !== 'null');
     const refs = real
@@ -610,6 +732,16 @@ export class Factory {
     const node = new RefCircRef(parent, Naming.getRefName(ref) ?? ancestor.name);
     node.ref = ancestor;
     return node;
+  }
+
+  // True when an anyOf/oneOf member is a $ref to a named object schema — building it here rebuilds
+  // the shared schema on every branch. e.g. (stripe) Customer.default_source: anyOf [string, $ref Card]
+  private static hasNamedRefMember(context: OasContext, members: (SchemaObject | ReferenceObject)[]): boolean {
+    return members.some((member) => {
+      if (!('$ref' in member)) return false;
+      const resolved = context.resolvePointer(member.$ref!) as SchemaObject | undefined;
+      return resolved != null && Schemas.isObjectMember(resolved);
+    });
   }
 
   public static fromResponse(_context: OasContext, parent: IType, mediaSchema: SchemaObject): IType {

@@ -1,0 +1,15 @@
+{
+  "config": { "schema": "generated-at-test-time.graphql" },
+  "tests": [
+    {
+      "name": "get-pet",
+      "connector": "Query.petByPetId",
+      "variables": { "args": { "petId": "42" } },
+      "apiResponseBody": "{\"id\": 42, \"name\": \"Rex\", \"category\": {\"id\": 1, \"name\": \"Dogs\"}, \"photoUrls\": [\"http://example.com/rex.jpg\"], \"tags\": [{\"id\": 1, \"name\": \"friendly\"}], \"status\": \"available\"}",
+      "expect": {
+        "connectorRequest": { "url": "https://petstore3.swagger.io/v3/pet/42", "method": "GET" },
+        "connectorResponse": "{\"category\": {\"id\": 1, \"name\": \"Dogs\"}, \"id\": 42, \"name\": \"Rex\", \"photoUrls\": [\"http://example.com/rex.jpg\"], \"status\": \"available\", \"tags\": [{\"id\": 1, \"name\": \"friendly\"}]}"
+      }
+    }
+  ]
+}

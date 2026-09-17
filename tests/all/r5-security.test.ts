@@ -11,7 +11,8 @@ import { captureWarnings } from './_setup.js';
 // warnings are actually observable.
 test('test_R5_security_bearer_emits_authorization_header', async () => {
   // Global bearerAuth (http/bearer), no per-op overrides -> Authorization: Bearer.
-  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 6);
+  // dataPoints: [DataPoint] in one dataPoint branch, [[Float]] in another -> JSON, DataPoint unreachable (5, not 6).
+  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 5);
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),
@@ -21,8 +22,8 @@ test('test_R5_security_bearer_emits_authorization_header', async () => {
 
 test('test_R5_security_skip_auth_omits_all_auth', async () => {
   // Same spec as the bearer test (global bearerAuth), but with --skip-auth: no Authorization
-  // header on @source and no auth value anywhere — the scheme is fully ignored.
-  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 6, { skipAuth: true });
+  // header on @source and no auth value anywhere — the scheme is fully ignored (5, not 6: same dataPoints clash as the bearer test above).
+  const schema = await runOasTest('simple-time-series.yaml', ['get:/search>**'], 1, 5, { skipAuth: true });
   assert.ok(schema !== undefined);
   assert.ok(!schema!.includes('Authorization'), 'no Authorization header anywhere with --skip-auth');
   assert.ok(!schema!.includes('{$config.token'), 'no {$config.token} auth value with --skip-auth');
@@ -135,8 +136,8 @@ test('test_R5_security_per_op_apikey_emits_on_connect', async () => {
 
 test('test_R5_security_per_op_bearer_emits_on_connect', async () => {
   // time-series-1.0.28 has a global bearer requirement AND the op declares the same -> per-op
-  // mode: @source headerless, the op's @connect carries Authorization: Bearer.
-  const schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 15);
+  // mode: @source headerless, the op's @connect carries Authorization: Bearer (14, not 15: same dataPoints clash as the simple-time-series tests above).
+  const schema = await runOasTest('time-series-1.0.28.yaml', ['post:/market-data-services/time-series/search>**'], 1, 14);
   assert.ok(schema !== undefined);
   assert.ok(
     schema!.includes('{ name: "Authorization", value: "Bearer {$config.token}" }'),

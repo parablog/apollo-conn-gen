@@ -1,0 +1,34 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf whose object members disagree on a field's shape (excluded from the merge)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /entry.get:
+    get:
+      operationId: getEntry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: TextData
+                        properties:
+                          data:
+                            type: string
+                      - type: object
+                        title: ListData
+                        properties:
+                          data:
+                            type: array
+                            items:
+                              type: string

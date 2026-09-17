@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "colliding-name-required-mismatch.detail-underscore-a",
+      "connector": "Query.collidingNameRequiredMismatch",
+      "variables": {},
+      "apiResponseBody": "{\"item\": {\"detail\": {}}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/colliding-name-required-mismatch",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"item\": {\"detail\": {}}}"
+      }
+    }
+  ]
+}

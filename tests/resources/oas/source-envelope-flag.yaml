@@ -1,0 +1,56 @@
+openapi: 3.0.3
+info:
+  title: Flag-and-payload service, Slack's ok/error envelope in miniature
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /channel.info:
+    get:
+      operationId: channelInfo
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: A single channel, or a failure flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelInfoResponse'
+  /channel.list:
+    get:
+      operationId: channelList
+      responses:
+        '200':
+          description: Every channel, or a failure flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelListResponse'
+components:
+  schemas:
+    ChannelInfoResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        error: { type: string }
+        channel:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+    ChannelListResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        error: { type: string }
+        channels:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }

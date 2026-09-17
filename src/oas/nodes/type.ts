@@ -55,6 +55,13 @@ export abstract class Type implements IType {
     return [];
   }
 
+  public selectionSuffix(_context: OasContext): string | undefined {
+    return undefined;
+  }
+
+  // Overrides path() below when set: a clone kept the path its own field had in the selection. #208
+  public pathInSelection?: string;
+
   // children are addressed by id (name-derived): two same-named siblings would collapse into
   // one path — suffix the duplicate (`[inline:Input]`, `[inline:Input]:1`). see #34
   protected withUniqueName(child: IType): IType {
@@ -121,6 +128,9 @@ export abstract class Type implements IType {
   }
 
   public path(): string {
+    if (this.pathInSelection) {
+      return this.pathInSelection;
+    }
     const ancestors = this.ancestors();
     return Naming.abbreviateRef(ancestors.map((t) => t.id).join(Naming.PATH_SEPARATOR));
   }

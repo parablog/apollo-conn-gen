@@ -1,0 +1,332 @@
+openapi: 3.0.3
+info:
+  title: RPC-style service, Ashby's own shape in miniature
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widget.list:
+    post:
+      operationId: widgetList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cursor: { type: string }
+                limit: { type: integer }
+      responses:
+        '200':
+          description: A page of widgets
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetListSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.info:
+    post:
+      operationId: widgetInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: A single widget
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /gadget.info:
+    post:
+      operationId: gadgetInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                gadgetId: { type: string }
+      responses:
+        '200':
+          description: A single gadget
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/GadgetInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /gizmo.info:
+    post:
+      operationId: gizmoInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                includeArchived: { type: boolean }
+      responses:
+        '200':
+          description: A single gizmo
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/GizmoInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /token.info:
+    post:
+      operationId: tokenInfo
+      responses:
+        '200':
+          description: The current token
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/TokenInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /file.info:
+    post:
+      operationId: fileInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileHandle]
+              properties:
+                fileHandle: { type: string }
+      responses:
+        '200':
+          description: A single file
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/FileInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /pair.info:
+    post:
+      operationId: pairInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, other]
+              properties:
+                id: { type: string }
+                other: { type: string }
+      responses:
+        '200':
+          description: A single pair
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/PairInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.infoWithRegion:
+    post:
+      operationId: widgetInfoWithRegion
+      parameters:
+        - name: region
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: A single widget, region-scoped
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.infoForm:
+    post:
+      operationId: widgetInfoForm
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: A single widget, form-encoded request
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.infoVendorJson:
+    post:
+      operationId: widgetInfoVendorJson
+      requestBody:
+        required: true
+        content:
+          application/vnd.example+json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: A single widget, vendor JSON request
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /widget.delete:
+    post:
+      operationId: widgetDelete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: The deleted widget
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string }
+        owner:
+          type: object
+          properties:
+            name: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+    Gadget:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+    Gizmo:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+    Token:
+      type: object
+      properties:
+        value: { type: string }
+    File:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+    Pair:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+    ErrorDetail:
+      type: object
+      properties:
+        message: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+    WidgetListSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Widget'
+        moreDataAvailable: { type: boolean }
+        nextCursor: { type: string }
+    WidgetInfoSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/Widget'
+    GadgetInfoSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/Gadget'
+    GizmoInfoSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/Gizmo'
+    TokenInfoSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/Token'
+    FileInfoSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/File'
+    PairInfoSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/Pair'

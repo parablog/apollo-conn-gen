@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "null.connector",
+      "connector": "Query.valuesList",
+      "variables": {},
+      "apiResponseBody": "{\"values\": [null]}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/values.list",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"values\": [{\"raw\": null}]}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "same-type-required-mismatch.no-detail",
+      "connector": "Query.sameTypeRequiredMismatch",
+      "variables": {},
+      "apiResponseBody": "{\"item\": {}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/same-type-required-mismatch",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"item\": {}}"
+      }
+    }
+  ]
+}

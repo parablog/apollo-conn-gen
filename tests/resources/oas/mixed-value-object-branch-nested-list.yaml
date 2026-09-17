@@ -1,0 +1,41 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf whose object branch nests a list of objects (Confluence labels shape)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /content.descendant:
+    get:
+      operationId: getContentDescendant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labels:
+                    oneOf:
+                      - type: string
+                      - type: object
+                        title: LabelsResult
+                        properties:
+                          results:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Label'
+components:
+  schemas:
+    Label:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        prefix:
+          type: string

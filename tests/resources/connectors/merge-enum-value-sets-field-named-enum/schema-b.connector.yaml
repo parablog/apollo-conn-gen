@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "schema-b.connector",
+      "connector": "Query.bGet",
+      "variables": {},
+      "apiResponseBody": "{\"value\": {\"enum\": \"C\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/b.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"value\": {\"object\": {\"enum\": \"C\"}, \"raw\": {\"enum\": \"C\"}}}"
+      }
+    }
+  ]
+}

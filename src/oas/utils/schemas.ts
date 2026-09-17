@@ -9,6 +9,15 @@ import { Naming } from './naming.js';
 // Keywords that give a schema a renderable GraphQL shape; a schema with none is metadata-only. #5
 const SHAPE_KEYWORDS = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf', 'additionalProperties'];
 
+// What analyzeMixedValue found: which plain shapes the oneOf allows, and which of its members are objects.
+export interface MixedValueShape {
+  isText: boolean;
+  isBoolean: boolean;
+  isNumber: boolean;
+  listItemType?: 'String' | 'JSON';
+  objectMemberIndexes: number[];
+}
+
 // Questions about an OAS schema's shape, asked while building nodes. Nothing here creates a node.
 export class Schemas {
   // True when a schema says nothing about its shape — a description and no more.
@@ -84,6 +93,137 @@ export class Schemas {
     const isRealObject = (member: SchemaObject) => !isPlainValue(member) && !Schemas.isShapelessObject(member);
 
     return members.some(isPlainValue) && members.some(isRealObject);
+  }
+
+  // Which members of a oneOf/anyOf are a real object, and which plain shapes the others have. Works
+  // on the schema, so it gives the same answer before or after a node exists. see docs/FIXED.md #208
+  //   e.g. (ashby) oneOf: [boolean, { currencyCode, value }, string(date)] -> text, boolean, object
+  public static analyzeMixedValue(
+    context: OasContext,
+    members: (SchemaObject | ReferenceObject)[],
+  ): MixedValueShape | undefined {
+    // the same order createContainerType checks the shapes in.
+    const isRealObjectMember = (m: SchemaObject): boolean => {
+      if (m.allOf != null) return true;
+      if (m.oneOf != null || m.anyOf != null) return false;
+      if (Schemas.isMap(m)) return false;
+      return (m.type === 'object' || (m.type == null && !_.isEmpty(m.properties))) && !Schemas.isShapelessObject(m);
+    };
+
+    let isText = false;
+    let isBoolean = false;
+    let isNumber = false;
+    let hasNonObject = false;
+    let isList = false;
+    let isStringList = true;
+    // indexes into `members`, so a caller can map back to the child a Union built at that position.
+    const objectMemberIndexes: number[] = [];
+
+    for (let index = 0; index < members.length; index++) {
+      const raw = members[index];
+      const member = '$ref' in raw ? (context.resolvePointer(raw.$ref!) as SchemaObject | undefined) : raw;
+      if (member == null || member.type === 'null') continue;
+
+      if (isRealObjectMember(member)) {
+        objectMemberIndexes.push(index);
+        continue;
+      }
+
+      // A member that is neither a real object nor one of the plain shapes below (a shapeless
+      // object, a map, an unknown type) counts as neither, as before.
+      if (member.enum != null) {
+        // an enum reads its own type first, not text by default — an integer enum is a number.
+        //   e.g. oneOf: [integer enum [1, 2], object] -> number, not text
+        hasNonObject = true;
+        if (member.type === 'integer') {
+          if (GqlUtils.gqlScalarFor(member, 'integer') === 'String') return undefined;
+          isNumber = true;
+        } else if (member.type === 'number') {
+          isNumber = true;
+        } else if (member.type === 'boolean') {
+          isBoolean = true;
+        } else if (member.type === 'string') {
+          isText = true;
+        } else {
+          // no declared type: fall back to the values themselves.
+          const values = member.enum as unknown[];
+          if (values.every((v) => typeof v === 'number')) isNumber = true;
+          else if (values.every((v) => typeof v === 'boolean')) isBoolean = true;
+          else isText = true;
+        }
+      } else if (member.type === 'string') {
+        hasNonObject = true;
+        isText = true;
+      } else if (member.type === 'boolean') {
+        hasNonObject = true;
+        isBoolean = true;
+      } else if (member.type === 'integer') {
+        // an integer too wide for Int is written as String; the same check createScalarType makes.
+        if (GqlUtils.gqlScalarFor(member, 'integer') === 'String') {
+          return undefined;
+        }
+        hasNonObject = true;
+        isNumber = true;
+      } else if (member.type === 'number') {
+        hasNonObject = true;
+        isNumber = true;
+      } else if (member.type === 'array') {
+        hasNonObject = true;
+        isList = true;
+        const items = member.items as SchemaObject | undefined;
+        if (items?.type !== 'string') isStringList = false;
+      }
+    }
+
+    if (!hasNonObject || objectMemberIndexes.length === 0) {
+      return undefined;
+    }
+
+    return {
+      isText,
+      isBoolean,
+      isNumber,
+      listItemType: isList ? (isStringList ? 'String' : 'JSON') : undefined,
+      objectMemberIndexes,
+    };
+  }
+
+  // Recognises object members, including composed objects without an explicit type.
+  // e.g. { allOf: [{ type: object, properties: { code: { type: string } } }] } -> true
+  public static isObjectMember(member: SchemaObject): boolean {
+    return member.type === 'object' || member.allOf != null || (member.type == null && !_.isEmpty(member.properties));
+  }
+
+  // True when a oneOf/anyOf mixes object members with plain ones (scalar, enum, array).
+  //   e.g. (ashby) oneOf: [boolean, { currencyCode, value }, string]  ->  true. see docs/FIXED.md #208
+  public static mixesObjectAndPlainMembers(context: OasContext, schema: SchemaObject): boolean {
+    const choice = (schema.oneOf ?? schema.anyOf) as (SchemaObject | ReferenceObject)[] | undefined;
+    if (!choice) {
+      return false;
+    }
+
+    const members = choice
+      .map((member) => ('$ref' in member ? (context.resolvePointer(member.$ref!) as SchemaObject) : member))
+      .filter((member) => member != null && !('$ref' in member) && member.type !== 'null');
+
+    // Both sides are needed: a oneOf of only plain values is a different case, handled by
+    // scalarOnlyOneOf.
+    return members.some(Schemas.isObjectMember) && members.some((member) => !Schemas.isObjectMember(member));
+  }
+
+  // Checks that every resolved, non-null choice member is an object.
+  // e.g. anyOf: [$ref A { code required }, $ref B { code optional }] -> true
+  public static holdsOnlyObjectMembers(context: OasContext, schema: SchemaObject): boolean {
+    const choice = (schema.oneOf ?? schema.anyOf) as (SchemaObject | ReferenceObject)[] | undefined;
+    if (!choice) {
+      return false;
+    }
+
+    const members = choice
+      .map((member) => ('$ref' in member ? (context.resolvePointer(member.$ref!) as SchemaObject) : member))
+      .filter((member) => member != null && !('$ref' in member) && member.type !== 'null');
+
+    return members.length > 0 && members.every(Schemas.isObjectMember);
   }
 
   // True for a flat object whose fields are all plain text - no nesting, lists, references, or

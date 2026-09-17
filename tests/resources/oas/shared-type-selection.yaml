@@ -1,0 +1,44 @@
+openapi: 3.1.0
+info:
+  title: Shared type, different selections per op
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /items/create:
+    post:
+      operationId: createItem
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    $ref: '#/components/schemas/Item'
+  /items/copy:
+    post:
+      operationId: copyItem
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    $ref: '#/components/schemas/Item'
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+        name:
+          type: string

@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "compatible.basic",
+      "connector": "Query.compatible",
+      "variables": {},
+      "apiResponseBody": "{\"item\": {\"detail\": {\"summary\": \"short\"}}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/compatible",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"item\": {\"detail\": {\"summary\": \"short\"}}}"
+      }
+    }
+  ]
+}

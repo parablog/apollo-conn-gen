@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "string.connector",
+      "connector": "Query.customFieldList",
+      "variables": {},
+      "apiResponseBody": "{\"value\": \"hello\"}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/customField.list",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"value\": {\"text\": \"hello\", \"raw\": \"hello\"}}"
+      }
+    }
+  ]
+}

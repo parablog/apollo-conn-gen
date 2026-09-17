@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "missing-key.connector",
+      "connector": "Query.cards",
+      "variables": {},
+      "apiResponseBody": "[{\"cvv_number\": 123, \"id\": 1}]",
+      "expect": {
+        "connectorRequest": {
+          "url": "http://localhost:9000/cards",
+          "method": "GET"
+        },
+        "connectorResponse": "[{\"cvvNumber\": 123, \"id\": 1}]"
+      }
+    }
+  ]
+}

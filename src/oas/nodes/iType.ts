@@ -39,4 +39,8 @@ export interface IType {
   select(context: OasContext, writer: Writer, selection: string[]): void;
 
   dependencies(context: OasContext, selection: string[]): IType[];
+
+  // What follows the field name in the selection, e.g. (ashby) `->echo({ raw: @ })` for a mixed
+  // value; undefined when the bare name is enough.
+  selectionSuffix(context: OasContext): string | undefined;
 }

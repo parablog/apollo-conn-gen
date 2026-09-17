@@ -22,10 +22,23 @@ export type OverrideEntry = {
   // Places this one operation under "query" or "mutation" regardless of its HTTP method — e.g.
   // "POST /items/search" (search filters in the body, but only reads data) -> root: 'query'.
   root?: 'query' | 'mutation';
+  // The field this op's root field returns instead of the whole response; `null` keeps the whole
+  // response even when "$source" below names a default. see docs/FIXED.md #226
+  //   e.g. { success: true, results: Job } -> "payload": "results" returns Job
+  payload?: string | null;
+};
+
+// Settings for the whole API under the "$source" key: how @source tells success from failure,
+// and the default payload field for every op. see docs/FIXED.md #226
+//   e.g. { "$source": { "isSuccess": "$.success", "errors": { "message": "$.errors.0.message" }, "payload": "results" } }
+export type SourceOverride = {
+  isSuccess?: string;
+  errors?: { message?: string; extensions?: string };
+  payload?: string;
 };
 
 // request overrides, keyed by op id. e.g. { "get:/pets/{id}": { path: "/v2/pets/{id}" } }
-export type OverridesConfig = Record<string, OverrideEntry>;
+export type OverridesConfig = Record<string, OverrideEntry> & { $source?: SourceOverride };
 
 // R6: per-batch-endpoint settings. The only knob is the size cap; everything else
 // (entity, key, request, selection) is inferred. `{}`/`null` = defaults.

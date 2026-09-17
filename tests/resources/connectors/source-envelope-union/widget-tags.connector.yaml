@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "widget-tags.connector",
+      "connector": "Query.createWidgetTags",
+      "variables": {},
+      "apiResponseBody": "{\"success\": true, \"results\": [\"red\", \"blue\"]}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/widget.tags",
+          "method": "POST"
+        },
+        "connectorResponse": "[\"red\", \"blue\"]"
+      }
+    }
+  ]
+}

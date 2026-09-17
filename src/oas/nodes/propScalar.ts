@@ -55,24 +55,27 @@ export class PropScalar extends Prop {
 
   public select(context: OasContext, writer: Writer, selection: string[]) {
     trace(context, '   [prop:select]', this.name);
-    let sanitised = this.fieldForSelect(context);
-    if (this.stringifiedNumber && this.parent?.kind !== 'input') {
-      // `field: field->jsonStringify` (or `alias: key->jsonStringify` when renamed)
-      sanitised = sanitised.includes(':') ? `${sanitised}->jsonStringify` : `${sanitised}: ${sanitised}->jsonStringify`;
-    }
-    writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
-    // aliasing already writes its own colon, and only an actually-written default covers a
-    // missing key — a real field's default writes nothing below the gate. see docs/FIXED.md #165
-    const writesDefaultFallback =
-      sanitised === this.name && this.propType instanceof Scalar && this.propType.coalescesDefault(context);
-    if (writesDefaultFallback) {
-      for (const child of this.children) {
-        child.select(context, writer, selection);
+    if (this.stringifiedNumber && this.parent?.kind !== 'input') {
+      // wide integers widened to String read back through `->jsonStringify`.
+      // e.g. (box) `chunkSize: chunk_size?->jsonStringify`
+      this.writeFieldHead(context, writer, { suffix: '->jsonStringify' });
+    } else {
+      const sanitised = this.fieldForSelect(context);
+      writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
+
+      // aliasing already writes its own colon, and only an actually-written default covers a
+      // missing key — a real field's default writes nothing below the gate. see docs/FIXED.md #165
+      const writesDefaultFallback =
+        sanitised === this.name && this.propType instanceof Scalar && this.propType.coalescesDefault(context);
+      if (writesDefaultFallback) {
+        for (const child of this.children) {
+          child.select(context, writer, selection);
+        }
+      } else if (this.isOptionalInSelection(context)) {
+        // the default branch above already covers a missing key with `??` — no `?` on top
+        writer.write('?');
       }
-    } else if (this.isOptionalInSelection(context)) {
-      // the default branch above already covers a missing key with `??` — no `?` on top
-      writer.write('?');
     }
 
     if (context.generateOptions.showParentInSelections) {

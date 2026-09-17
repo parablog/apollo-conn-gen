@@ -2045,9 +2045,9 @@ members pointing at different object types (`DetailBasic` vs `DetailRich`) resol
 `getValue()` strings too, but that collision was always meant to keep the first member's type
 (shadowing the rest), not degrade to JSON. The correct comparison is **kind**, not resolved type —
 the `id`'s subclass segment (`prop.id.split(':')[1]`: `enum`, `scalar`, `ref`, `obj`, `comp`, `map`,
-`array`). Two members giving a field the *same kind* (whatever concrete type each resolves to) can
-still be safely shadowed — selecting common sub-fields from differently-shaped payloads is fine,
-exactly the #39 case. Two members giving a field *different kinds* (enum vs scalar, object vs
+`array`). Superseded by #208: same kind alone is not always safe to shadow (a list of strings next
+to a list of objects, say) — see #208 for the field-by-field, requiredness-aware rule that replaced it.
+Two members giving a field *different kinds* (enum vs scalar, object vs
 scalar, …) genuinely can't share one GraphQL representation — that's when it degrades to the
 untyped JSON scalar fallback instead of arbitrarily picking one member's kind, reusing the same
 "give up, use JSON scalar" policy already shipped for incompatible object-typed query params
@@ -5148,8 +5148,8 @@ triple in lockstep:
 **Not folded in:**
 - `Composed`/`Union` members — they never consulted the overrides (#89's own scope-out); an
   member with every field removed surfacing through an allOf needs that lookup in `comp.ts` first.
-- an object with every field removed as array items or a map value (`[Contributors]` would need `[JSON]`) — no
-  corpus example.
+- an object with every field removed as array items or a map value (`[Contributors]` would need `[JSON]`) — fixed
+  as #201.
 - an object with every field removed as the whole response — it would reference an unwritten name; no corpus
   example.
 - a hand-written narrow selection that picks only a mixed type's removed fields still prints a
@@ -10266,3 +10266,889 @@ off.
 (`--use-operation-ids`), `tests/resources/oas/operation-ids.yaml`,
 `tests/resources/oas/operation-ids-duplicate.yaml`, `tests/all/use-operation-ids.test.ts`,
 `docs/FIXED.md #88`, `docs/FIXED.md #116`.
+
+
+## 201 · A list or map of a type whose every field was cut still names the uncut type — ✅ Fixed
+**Symptom:** docusign's `put:/v2.1/accounts/{accountId}/templates/{templateId}/documents/{documentId}`
+fails compose with `cannot find type`: the SDL references `DocGenFormFieldRowValue` and
+`DocGenFormFieldRowValueInput` but never declares either.
+
+**OAS** (docusign, Swagger 2 `definitions` — two arrays close a loop):
+```yaml
+docGenFormField:
+  properties:
+    rowValues: { type: array, items: { $ref: '#/definitions/docGenFormFieldRowValue' } }
+docGenFormFieldRowValue:
+  properties:
+    docGenFormFieldList: { type: array, items: { $ref: '#/definitions/docGenFormField' } }  # re-enters the parent -> cut
+```
+
+**Example**:
+```graphql
+# before — names a type that is never written; composition fails
+rowValues: [DocGenFormFieldRowValue]
+# selection:  rowValues { # docGenFormFieldList: circular reference omitted … }
+
+# after — the field reads whole, the definition is never written
+rowValues: [JSON]
+# selection:  rowValues
+```
+
+**Cause:** `#101`'s `T.everyFieldRemoved` predicate already answers "does this type have any field
+left to print", and `PropObj` already asks it. `PropArray.getValue` (list items) and `Map`'s value
+readers never asked the same question, so a list or map whose item type lost every field still
+named it.
+
+**Fix:** the same predicate, three readers wired up in each place `PropObj` already has it:
+- `PropArray.getValue`/`jsonReason`/`dependencies`/`select` — items degrade to `JSON`, the selection
+  reads the field whole, `dependencies` drops the type so the #26 walk stops reaching it.
+- `Map.valueTypeName`/`needsValueSelection`/`dependencies` and a write-time check in `Map.generate`
+  (`everyFieldRemovedValue`, `map.ts:143`) — the map's NEEDS ATTENTION note has to be computed at
+  write time, not during `visit()`, because it depends on `context.propOverrides`, which visit()
+  runs before.
+- the reason text itself moved next to the predicate, `JsonDegradeReasons.everyFieldRemoved`
+  (`src/oas/utils/jsonReasons.ts`), so `PropObj`, `PropArray` and `Map` print the identical sentence.
+
+**Not folded in:**
+- an object with every field removed as the whole response — stays open, no corpus example (#101).
+- `Composed`/`Union` members — never consulted overrides either (#101's own scope-out).
+
+**Verified:** fixture `only-field-in-a-cycle.yaml` gains `contributorGroups` (array) and
+`contributorsByKey` (map), both `$ref`ing `Contributors`, the type whose only field already loops
+back to `History` (#101). Revert check: with the guard removed from `propArray.ts`/`map.ts`, both
+`test_101` and the new `test_201` fail — they share the fixture and selection, and the reverted
+readers once again name `Contributors`/`ContributorsByKeyEntry.value` without declaring them, the
+same `cannot find type` shape as the docusign bug. With the guard restored, both pass; `test_76`
+(a different fixture) is unaffected either way. Full suite: 542 tests, 538 pass, 0 fail, 4 todo
+(pre-existing). `npm run lint` and `npx tsc --noEmit` clean. Docusign repro before/after: two
+undeclared references -> zero, `rowValues: [JSON]` on both sides, two `[prop-array]` warnings in
+stderr.
+
+**Refs:** `src/oas/nodes/typeUtils.ts` (`everyFieldRemoved`), `src/oas/utils/jsonReasons.ts`
+(`everyFieldRemoved`), `src/oas/nodes/propArray.ts`, `src/oas/nodes/map.ts`, `src/oas/nodes/propObj.ts`. Fixture
+`only-field-in-a-cycle.yaml`, test `test_201_list_and_map_of_type_with_every_field_removed_become_json`.
+Folds in `docs/FIXED.md #101`'s open list/map bullet; see #26 for the walk, #89 for the removals.
+
+## 204 [BUG] [P3] · `prefixItems` (tuple array) crashed instead of degrading to JSON — ✅ Fixed
+
+**Symptom:** `post:/auditLog.list` (ashby.json) threw `Should have been handled already? array,
+schema: {...}` and killed the whole-spec generation. Every other "no clean GraphQL equivalent"
+shape warns and falls back to `JSON`; this was the one array shape that threw instead.
+
+**OAS** (ashby.json), a `[before, after]` tuple written the JSON Schema way — `prefixItems`, no `items`:
+```json
+{
+  "type": "array",
+  "prefixItems": [{ "description": "…" }, { "description": "…" }]
+}
+```
+
+**Cause:** the array check at `factory.ts:92` only recognises `items`, so a `prefixItems`-only
+array falls through `fromSchema` to `createScalarType`'s array branch, which never expected to
+receive one and threw. Two independent routes reach it: a map value
+(`Map.visitAdditionalProperties` → `Factory.fromSchema` directly) and a plain property
+(`fromProp`'s `type === 'array'` branch), which failed with a *different* exception
+(`TypeError: Cannot use 'in' operator to search for '$ref' in undefined`, `fromArrayItems`'s first
+line) before ever reaching `createScalarType` — same root cause, two different crash sites.
+
+**Fix:** both routes now warn and degrade to `JSON` instead of building a list:
+- `createScalarType`'s array branch (`factory.ts:138-143`) replaces the throw with the same
+  warn-and-`Scalar` pattern every sibling fallback in this file uses.
+- `fromProp`'s array branch (`factory.ts:381-403`) gains a guard ahead of `PropArray`: when
+  `type === 'array'` and there is no `items` (only `prefixItems`), it builds a JSON `PropScalar`
+  directly instead of reaching `PropArray`/`fromArrayItems`, which have nothing to hand a
+  list-item builder.
+- New reason, `JsonDegradeReasons.tupleArray()`: "this array fixes what goes in each position (a
+  tuple), and a GraphQL list has one item type — sent as raw JSON instead."
+
+**Accepted double `warn()`:** `PropScalar.visit()` unconditionally re-derives its type via
+`Factory.fromSchema(context, this, this.schema)`, landing back on `createScalarType`'s array
+branch a second time — the field route's tuple field warns twice for one property. Every other
+`fromProp` JSON-fallback site (`mapAsInput`, `scalarOnlyOneOf`, `unknownShape`) gets silently
+re-driven the same way but takes a different branch on the second pass (straight to
+`createContainerType`, no `warn()`); this is the one case whose second pass lands on itself. Not
+worth a new de-dup predicate for a cosmetic duplicate log line — the test asserts the reason's
+presence, not a call count.
+
+**Not fixed here (flagged for Fernando):** `PropScalar.visit()`'s unconditional re-derivation
+silently rebuilds and discards a real type node for every JSON-fallback field built through
+`fromProp` — wasted work beyond just this one warning, worth its own look.
+
+**Example**:
+```graphql
+# before — throws, kills the whole generation
+# after
+byField: [ByFieldEntry]      # the map field itself stays typed
+type ByFieldEntry { key: String, "NEEDS ATTENTION: ..." value: JSON }
+latest: JSON                 # "NEEDS ATTENTION: this array fixes what goes in each position ..."
+```
+
+**Verified:** fixture `prefix-items.yaml` (one op, one map-value route + one plain-property
+route), test `test_204_prefix_items_tuple_array_becomes_json` in `oas-core.test.ts`. Revert check:
+restoring the pre-fix `factory.ts` (via `cp`, not git) reproduces the exact original `TypeError` on
+the same test; restoring the fix passes it again. `post:/auditLog.list>**` on the real
+`tests/resources/oas/ashby.json` now generates and composes cleanly on the local composer.
+`npx tsc --noEmit` and lint clean; new test plus `degrade-reasons.test.ts` pass.
+
+**Refs:** `src/oas/nodes/factory.ts` (`createScalarType:138-143`, `fromProp:381-403`),
+`src/oas/utils/jsonReasons.ts` (`tupleArray`). Fixture `prefix-items.yaml`, test
+`test_204_prefix_items_tuple_array_becomes_json`. Corpus: `tests/all/corpus.test.ts`
+`test_corpus_ashby`, `tests/resources/oas/ashby.json`.
+
+## 207 [BUG] [P3] · No warning when two ops select different fields of one shared type — ✅ Fixed
+
+**Symptom:** two ops returning the same component can select different fields of it; the type is
+declared with only one op's fields, but the other op's own `@connect` selection still names the
+rest, and the composer dies with an internal error naming the missing field. Nothing in the build
+log said why.
+
+**OAS** (ashby.json) — `application.create` selects `results { id }`, `referral.create` also
+selects `results { id createdAt }`, both on `#/components/schemas/Application`:
+```
+post:/application.create>res:r>union:type:createApplicationCreateResponse>obj:type:#/components/schemas/ApplicationCreateSuccessResponse>prop:obj:results>obj:type:#/components/schemas/Application>prop:scalar:id
+post:/referral.create>res:r>union:type:createReferralCreateResponse>obj:type:#/components/schemas/ReferralCreateSuccessResponse>prop:obj:results>obj:type:#/components/schemas/Application>prop:scalar:createdAt
+```
+
+**Not a generator bug:** the CLI and the web app let a person tick fields op by op, and a
+selection that asks for different fields of one type in two places is the person's to fix, not
+the generator's. What was missing is that gen said nothing.
+
+**Cause:** each op builds its own copy of the shared type; the collector keeps the first copy per
+id (`typesCollector.ts:93-95`) and `selectedProps` only counts a field kept if the selection holds
+that field's own path, which starts with the winning op — the other op's paths never match, and
+nothing compared the two.
+
+**Fix:** one pass, `warnMismatchedSelections`, runs once in `collect()` after the reachability
+fixpoint loop settles `pendingTypes` (between the loop and `this.types = pendingTypes`), so it
+fires exactly once per `collect()` call. It reuses `walkKeptAndRemoved`'s node-graph walk, extended
+with a new, additive `keptByOp` map (type id → field name → set of op keys, read off
+`child.path().split(Naming.PATH_SEPARATOR)[0]`) — `kept`/`removed` and their two existing callers
+(`consolidateRemovedFields`, `removeFieldsNeverSelected`) are untouched. For each pending type, the
+winner's declared names come from `selectedProps(expanded, keep)`; any `keptByOp` field not among
+them, kept by some other op, gets one `warn()` naming the type, the winning op, the other op(s),
+and the field(s):
+```
+[collector] `Application` is written from post:/application.create's selection; post:/referral.create also selects createdAt on it, which the type won't declare. Select the same Application fields on both, or drop createdAt.
+```
+
+**Only a warning — the mismatch itself is unchanged.** The declaration still drops the extra
+field, the other op's selection still names it, and composing that SDL still fails the same way
+it did before this change (confirmed byte-identical SDL and the same internal-error compose
+failure on the real Ashby repro above) — not a regression, this change adds no fix for the
+mismatch, only the warning.
+
+**Pre-existing smell, not fixed here:** `consolidateRemovedFields`, `removeFieldsNeverSelected` and
+this new pass each call `walkKeptAndRemoved(expanded)` independently — three full node-graph walks
+per `collect()` call where one shared result would do. Flagged for Fernando, out of scope here.
+
+**Open point for Fernando:** whether `warn()` lines reach the web app's issues panel (built from
+`lintSelections` and its own checks, `web/src/lib/issues.ts`, not the build log) — if not, the same
+message wants a lint check in `src/oas/lint/checks/`, a follow-up task, not this change.
+
+**Verified:** fixture `shared-type-selection.yaml` (two POST ops sharing one `Item`), tests
+`test_207_mismatched_selections_warn_once` (drives `OasGen` directly — not `runOasTest`, since
+composing this SDL is not the claim under test and `runOasTest`'s own `getTypes()`+
+`generateSchema()` would `collect()` twice, double-counting the warning; asserts an exact count of
+one) and `test_207_matching_selections_no_warning` (through `runOasTest`, pathsSize 2, typesSize 3
+— one shared `Item` plus one inline response wrapper per op — asserts zero warnings, and that this
+matching-selection SDL does compose). Revert check: restoring the pre-fix `typesCollector.ts` (via
+`cp`, not git) makes the mismatch test fail at count 0, not 1; restoring the fix passes it again.
+`npx tsc --noEmit` and lint clean; both new tests, `degrade-reasons.test.ts`, and
+`test_89_field_removed_on_any_route_is_removed_everywhere` pass (#125 has no dedicated test — it's
+exercised by the full suite per its own FIXED.md entry).
+
+**Refs:** `src/oas/generator/typesCollector.ts` (`warnMismatchedSelections`, `walkKeptAndRemoved`,
+the pass ordering in `collect()`). Fixture `shared-type-selection.yaml`, tests
+`test_207_mismatched_selections_warn_once`, `test_207_matching_selections_no_warning`. See #89 and
+#125 (the two existing `walkKeptAndRemoved` callers this leaves untouched).
+
+## 208 [FEAT] [P3] · One field per kind, for a `oneOf` mixing object and non-object members — ✅ Fixed
+
+**Symptom:** a `oneOf` that mixes object members with scalar, list, or enum members flattens to
+one merged object — the object members' fields survive, but every non-object member contributes
+nothing, silently, with no warning and no JSON fallback. True at a property, a list item, and a map
+value.
+
+**OAS** (Ashby `OverlayCustomField.value`) — `oneOf: [boolean, { currencyCode, value }, string]`
+used to emit `ValueUnion { currencyCode value }`, dropping the boolean and the string entirely.
+
+**Fix:** for a flat union at an eligible position (a property, a list item, or a map value) with at
+least one object member AND at least one plain-value member, the union's own type keeps every kind
+as its own nullable field, discriminated at runtime by the JSON value's own shape:
+```graphql
+type ValueUnion {
+  text: String              # string and enum members
+  number: Float              # number/integer members
+  boolean: Boolean
+  list: [String]              # array members; [JSON] unless every item is a string
+  object: ValueUnionObject   # only when object members exist
+  raw: JSON                   # always
+}
+type ValueUnionObject { currencyCode: String value: Float }   # all nullable
+```
+```
+value: value?->echo({ raw: @ }) {
+  ... raw->jsonStringify->slice(0, 1)->match(
+    ["\"", { text: raw }],
+    ["t", { boolean: raw }],
+    ["f", { boolean: raw }],
+    ["{", { object: raw { currencyCode? value? } }]
+  )
+  raw
+}
+```
+Only branches for kinds actually present are written; `[@, { number: raw }]` only when a number
+member exists.
+
+**Mechanism.** One question, asked at the schema level so it gives the same answer whether a node
+exists yet or not: `Schemas.analyzeMixedValue(context, members)` (`schemas.ts`) classifies each
+member (object members need `type: 'object'` OR `allOf` — a bare `allOf` composes an object with no
+`type` sibling, common in TMF-style specs) and returns `undefined` unless at least one is a real
+object and at least one is a plain value, or a numeric member needs `String` widening (an int64 or
+out-of-`Int32` bound doesn't fit a single `Float` field — the union keeps today's lossy merge
+instead, with a `warn()`). `Union.analyzeMixedValue()` (`union.ts`) adds the position gate (output
+side; parent is a property, a list item, or a map value) on top. `Factory.fromArrayItems`
+(`factory.ts`) asks the same function directly on `items.oneOf` before a `Union` node even exists,
+to decide whether a mixed-shape list item is worth building one for at all (`oneOf` only — `anyOf`
+list items are untouched, #206's separate gap; a list of lists is excluded by construction, since
+the nested array reaches `fromArrayItems` as an `Arr`, never a `PropArray`).
+
+`MixedValue` (`mixedValue.ts`, new) owns everything the analysis produces: `text`/`number`/
+`boolean`/`raw` as `PropScalar` over a literal schema, `list` as `PropArray` over a plain `Scalar`
+items node, and `object` — a real `Obj` named `<Union>Object`, **registered exactly like any other
+object type** (`objectType.visit(context)`, name-collision check included) and then filled with
+**clones** of the selected object members' fields (`required` flipped to `false`; today's merge
+shares `Prop` instances by reference, so mutating in place would corrupt the source component).
+`Union.consolidate()` builds one `MixedValue` per eligible union and keeps it on `union.mixedValue`;
+`generate`/`select`/`dependencies`/`selectionSuffix` all delegate to it.
+
+**Two bugs fixed alongside the rewrite:**
+- **Name collision.** The generated `<Name>Object` type used to skip the name checks every other
+  object type runs (`T.collidesWithStoredType` and friends) — a component already named e.g.
+  `valueUnionObject` produced two `type ValueUnionObject` definitions and rover rejected the whole
+  schema. Fixed by building the object branch through the ordinary `Obj.visit()` path instead of a
+  hand-rolled `visited = true`. Fixture `mixed-value-object-branch-name-collision.yaml`: a real
+  `valueUnionObject` component alongside a mixed value whose object branch wants the same name —
+  the component keeps `ValueUnionObject`, the mixed value's own type is renamed to
+  `ValueUnionValueUnionObject`, and both compose.
+- **Incompatible field shapes silently merged.** Two object members naming the same field
+  differently (`{ data: string }` vs. `{ data: [string] }`, or even `{ data: string }` vs.
+  `{ data: integer }` — same prop *kind*, different GraphQL type) used to keep whichever member's
+  copy was visited first, silently — compose and `test-connectors` both passed, but the router
+  failed at request time for the branch that lost. Fixed by extracting the flat merge's own
+  incompatibility check (`Union.dedupeByName`, shared by both the flat merge and the object branch)
+  and widening its comparison key from prop kind alone to kind **plus, for a scalar, its GraphQL
+  type name** — a clash now degrades to `data: JSON` with a `NEEDS ATTENTION` note, same as the
+  flat merge already did for a kind mismatch. Fixtures `mixed-value-object-branch-incompatible-
+  fields.yaml` (list vs. scalar, runtime-verified with both bodies), `mixed-value-object-branch-
+  incompatible-scalar-types.yaml` and `flat-merge-incompatible-scalar-types.yaml` (same-kind,
+  different-GraphQL-type, at the object branch and at the plain flat merge respectively).
+
+**Selection heads, unified.** `IType.readAs()` is renamed `selectionSuffix()` (a suffix, not a
+replacement expression — the old name and doc comment disagreed). `Prop.writeFieldHead()`
+(`prop.ts`) is the one place that writes a field's name, self-alias (only when a suffix or
+`alwaysAlias` needs one and the name carried none of its own), `?`, and the suffix — `PropComp`,
+`PropObj`, `PropArray` (wraps the suffix as `->map(@…)`), and `PropMap` (`alwaysAlias: true`, for
+`->entries`) all call it instead of repeating the same four lines. `Map.selectEntries`'s one-line
+`value: value<suffix>` form is unchanged. Runtime-verified heads (stock federation 2.15.1,
+`test-connectors`, one body per kind):
+```
+values: values?->map(@->echo({ raw: @ })) { <match body> raw }                      # list items
+byKey: byKey?->entries { key value: value->echo({ raw: @ }) { <match body> raw } }  # map values
+```
+
+**Saved paths.** A path that used to name a field flat on the union before it became a mixed value
+(`...>union:type:valueUnion>prop:scalar:currencyCode`) resolves to the union itself instead of
+throwing — `consolidate()` is lazy, so the exact relocated field isn't known yet when the path is
+walked. `SelectionPath.resolveSegment` now takes `context` to ask `analyzeMixedValue()` directly.
+Clones sit in `objectType.props` for this recovery to reach, and are owned by the object type
+(`clone.parent = objectType`, fixing the object type's own fields disagreeing with their type's
+ancestry) while still matching the path the selection already knows them by, via a new
+`Type.pathInSelection?: string` that `path()` honours first.
+
+**Input guard.** GraphQL has no input unions, and mixed values are output-only. A mixed input
+`oneOf` is sent as `JSON` (`JsonDegradeReasons.mixedInputChoice()`): "a oneOf mixing object and
+plain members in a request body is sent as raw JSON: rebuilding it as a typed input is not
+implemented yet."
+
+**Open gaps, deliberately not solved here:** wide integers (kept as today's lossy merge, `warn()`d);
+inputs (sent as JSON, no tagged shape); a union under a nested array (excluded, `parent instanceof
+Arr`, real double-`->map` selection out of scope until measured need). See #209.
+
+**Verified:** every fixture and test named above renamed to drop "kind" (the word collided with
+`this.kind`, input/output side) in favour of "mixed value"; `npx tsc --noEmit` and lint clean;
+`json-fallback-mapping`, `json-fallback-runtime`, `oas-core` (236), `regen`, `corpus`,
+`corpus-mutations` all pass, no corpus type counts moved. One caught-and-fixed bug along the way:
+the first schema-level rewrite counted *any* non-object member (including a shapeless
+`{ type: object, additionalProperties: true }`, PagerDuty's `AcknowledgerReference`) as "mixing",
+where the old node-based check required a recognised plain value — a real production divergence
+between the two analyses this refactor exists to remove, caught by PagerDuty's own corpus count
+(363 -> 370) before it shipped.
+
+**Refs:** `src/oas/nodes/mixedValue.ts` (new), `src/oas/nodes/union.ts` (`analyzeMixedValue`,
+`dedupeByName`, `consolidate`, `select`, `selectionSuffix`), `src/oas/nodes/prop.ts`
+(`writeFieldHead`), `src/oas/nodes/propComp.ts`/`propObj.ts`/`propArray.ts`/`propMap.ts` (`select`),
+`src/oas/nodes/map.ts` (`selectEntries`), `src/oas/nodes/obj.ts` (`visit`, reused unchanged by the
+object branch), `src/oas/nodes/iType.ts`/`type.ts` (`selectionSuffix`, `pathInSelection`),
+`src/oas/nodes/factory.ts` (`fromArrayItems`), `src/oas/utils/schemas.ts` (`analyzeMixedValue`,
+`hasNonObjectMember`), `src/oas/utils/jsonReasons.ts` (`mixedInputChoice`),
+`src/oas/utils/selectionPath.ts` (`resolveSegment`), `src/oas/generator/typesCollector.ts`
+(`collect`'s Union recovery branch). Fixtures `nested-oneof-branch-loss.yaml`,
+`oneof-mixed-scalars-objects.yaml`, `oneof-wide-integer-gap.yaml`, `propcomp-select-head-
+variants.yaml`, the nine `mixed-value-*.yaml` fixtures (renamed from `kind-fields-*.yaml`),
+`mixed-value-object-branch-name-collision.yaml`, and the three new incompatible-shape fixtures
+above. Tests `tests/all/json-fallback-mapping.test.ts`,
+`tests/all/json-fallback-runtime.test.ts`. See #206 (the sibling `anyOf` routing gap, not touched
+here) and #209 (the remaining slices this opens).
+
+**Merge rules for same-named fields, each reproduced at the router:**
+1. **`dedupeByName` compared the field's kind, not its shape.** A list of strings vs. a list of
+   objects, `{ field: string }` vs. `{ field: [string] }`, `enum [A]` vs. `enum [B]` — same old
+   "array"/"object"/"enum" kind, still silently kept the first branch. The key is now what the
+   field would actually be written as (`prop.getValue(context)` — `String`, `[String]`, `Owner`, …,
+   pure in all five prop classes it needed), plus an enum's own sorted values, so a real shape or
+   value-set clash degrades to JSON like any other. A field read through `->jsonStringify` (a wide
+   integer) is not the same field as a plain string either, even though both write `String` — the
+   key marks it, so `{ data: int64 }` vs `{ data: string }` clashes too. When every member's
+   version of the field is an enum, the field stays typed instead of degrading: the merge holds one
+   enum with every branch's values, first-seen order — `status: enum [active]` next to `status:
+   enum [suspended]` becomes one `status: enum [active, suspended]`, not JSON.
+2. **A property literally named `enum` lost its own enum's name.** The naming path a lone inline
+   enum already used (and the merge above now shares) treated the string `'enum'` as a stand-in for
+   "no name was given" — a real property spelled `enum` hit that same check and skipped its own
+   rename, so two unrelated `enum`-named fields elsewhere in one spec could collide and one would
+   silently keep the other's values. Fixed by tracking "was a name actually given" as its own flag,
+   set once at construction, instead of guessing from what the name happens to spell.
+2. **The match sorted by first character, sending anything unrecognised to the number catch-all.**
+   `oneOf: [number, object, {}]` with no text member: a string body's first character (a quote)
+   fell into `[@, { number: raw }]`, handing a string to a `Float` field. Runtime-checked first,
+   before any code: `->typeof->match(...)` failed to compose on stock 2.15.1
+   (`CONNECTORS_UNRESOLVED_FIELD` for every field the match touched), so the fallback landed
+   instead — the same first-character match, with one arm per digit (and `-`) for the number kind,
+   and the catch-all itself always empty.
+3. **An `enum` member was text before its own type was even read.** `oneOf: [integer enum [1, 2],
+   object]` declared `text: String` and a body of `1` filled only `raw`. `analyzeMixedValue` now
+   reads an enum's `type` first (integer/number -> number, boolean -> boolean, string -> text);
+   with no `type` at all, it falls back to the values themselves.
+4. **Two same-named objects merge by field-by-field agreement, not by written name.** `detail:
+   $ref Basic` next to `detail: $ref Rich`, where `Rich` declares every field `Basic` does (plus
+   its own `deep`, which is dropped), keeps `Basic` typed — a field only one side declares, or
+   where a field's required-ness disagrees, degrades the whole colliding field to JSON. The
+   required-ness check runs on the colliding field itself first, not only on what's inside it:
+   `detail: DetailBasic!` next to `detail: DetailRich` (optional) is JSON even when `DetailBasic`
+   and `DetailRich` otherwise agree on every field. Two members whose field resolves to the same
+   shared component or byte-identical schema content (not merely the same written name, and not
+   merely the same `.id` — an inline union's `.id` can collide with an unrelated union's across a
+   request/response name-sharing pair) keep it typed once the colliding field's required-ness
+   agrees, without walking its contents. See `Union.declaresEveryKeptField` (`union.ts`).
+
+One real production divergence caught while fixing 1: PagerDuty's, box's, digitalocean's, omni's,
+stripe's, motion's and a few `oas-core` fixtures' merged unions had genuine same-kind,
+different-shape or different-enum-value clashes that used to merge silently — every affected
+`corpus`/`oas-core` type count is updated in place with a `#208` note naming the reason; no
+`corpus.test.ts`/`corpus-mutations.test.ts` count needed a change.
+
+**Verified:** `mixed-value-object-branch-incompatible-enums.yaml`, `flat-merge-list-of-strings-vs-
+list-of-objects.yaml` (item 1, both with a runtime suite per branch's body — the `{ field: string }`
+vs. `{ field: [string] }` case was already covered by `mixed-value-object-branch-incompatible-
+fields.yaml`); `mixed-value-number-object-no-text.yaml` (item 2, runtime-verified with a string
+body); `mixed-value-integer-enum-number.yaml` (item 3, runtime-verified);
+`merge-stringified-number-vs-string.yaml` (the `->jsonStringify` clash, both member orders,
+runtime-verified with a plain string and a wide integer). `npx tsc --noEmit` and lint clean;
+`json-fallback-mapping`, `json-fallback-runtime`, `oas-core` (277), `regen`, `corpus`,
+`corpus-mutations` all pass; no count moved.
+
+**Follow-up (2026-09-17):** the merged enum dropped its `!` unconditionally. It now stays required
+when every branch requires the field, e.g. (omni) `Routine.destination` is `oneOf [EmailDestination,
+SlackDestination]` with `required: [type]` on both, so `type: RoutineDestinationType!` again.
+Fixture `merged-enum-required.yaml`, test `test_208_merged_enum_keeps_required_when_every_branch_requires_it`.
+
+**Refs:** `src/oas/nodes/union.ts` (`dedupeByName`), `src/oas/nodes/mixedValue.ts`
+(`writeSelection`), `src/oas/utils/schemas.ts` (`analyzeMixedValue`). See #209 (enum value-set
+merging, noted as a refinement).
+
+## 213 [BUG] [P2] · A wide integer's `?` landed after `->jsonStringify`, not before, breaking the reader for the whole op — ✅ Fixed
+
+**Symptom:** every op with a wide integer widened to `String` writes its coercion as
+`chunk_size->jsonStringify?` — the `?` after the method call instead of before it. The lint
+reader only takes `?` right after a path, so this spelling starts a phantom field, the block
+never closes, and every field after it in that selection is reported unread. 54 ops across the
+corpus carried this token; the composer accepts both spellings, which is why nothing else caught
+it. Example (box `get:/events`): `chunkSize` reads clean, but `entries` and
+`next_stream_position` — both present a few lines further down the same selection — were
+reported unread, though the selection asks for them.
+
+**OAS** (box) `Events.chunk_size`, `integer, format: int64`, optional.
+
+**Cause:** `PropScalar.select()` (`src/oas/nodes/propScalar.ts`) built the wide-integer head by
+hand: it appended `->jsonStringify` to the already-sanitised field text, then fell through to the
+shared tail that appends `?` for an optional field — landing the marker after the suffix instead
+of before it. `writeFieldHead()` (`src/oas/nodes/prop.ts`), the helper every other suffixed
+selection head already goes through (`PropComp`, `PropObj`, `PropArray`, `PropMap`), writes the
+name, the self-alias, then `?`, then the suffix, in that order — `PropScalar` was the one caller
+still rolling its own.
+
+**Fix:** the wide-integer branch now calls `writeFieldHead(context, writer, { suffix:
+'->jsonStringify' })` instead of hand-building the alias. Every other scalar keeps its existing
+path untouched, including the `??` default-fallback branch (a stringified number never took it —
+its alias already made the field's written name differ from its JSON key).
+
+**Tests:** `tests/all/int64-widening.test.ts` — the two existing text assertions move the marker
+to `card_number?->jsonStringify` / `cardNumber?->jsonStringify`, plus two new runtime cases
+against `test-connectors` (`tests/resources/connectors/int64-widening/`): a wide integer round-
+trips as its string, and a key the API left out stays absent from the result, not `null`.
+`tests/all/r11-lint.test.ts` — `test_R11_int64_widening_marker_reads_clean` generates
+`int64-widening.yaml` `get:/cards>**` and asserts the marker sits before `->jsonStringify`, the
+selection lints clean, and the response-coverage check reads `card_number` rather than treating
+it as unread.
+
+**Corpus result:** scoped `tools/lint-corpus.mts` runs, both verbs, for the six specs that carried
+the token. Blind went to 0 in every one. Fields read, GET verb, before the fix (the last run with
+the old writer) to after:
+- box.yaml: 1809 → 4097
+- incidentio.json: 2834 → 3745
+- square.json: 2184 → 4349
+- docker-engine.json: 654 → 1838
+- gong.json: 346 → 393
+
+Mutations verb, same six specs, after the fix (blind 0 in every one; ashby has no GET operations,
+so its GET row above is skipped): box.yaml 4176, incidentio.json 3833, square.json 8768,
+docker-engine.json 155, gong.json 426, ashby.json 8902.
+
+**Refs:** `src/oas/nodes/propScalar.ts` (`select`), `src/oas/nodes/prop.ts` (`writeFieldHead`).
+Fixture `tests/resources/oas/int64-widening.yaml`, cases
+`tests/resources/connectors/int64-widening/wide-integer.connector.yaml` and
+`.../missing-key.connector.yaml`. See #10 (the Int32 widening this coercion belongs to), #16 (the
+optional-marker rule the reader enforces), #176 (the response-coverage check that surfaced this
+across the corpus). #214 files a separate, unrelated gap the same sweep turned up.
+
+## 220 [FEAT] [P2] · Mixed `anyOf` properties and list items retain their typed members — ✅ Fixed
+
+**OAS:** Ashby `CustomField.value`, including all nine members and their descriptions:
+
+```json
+{
+  "anyOf": [
+    {
+      "type": "boolean"
+    },
+    {
+      "type": "number"
+    },
+    {
+      "type": "string"
+    },
+    {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number",
+          "description": "The currency amount"
+        },
+        "currencyCode": {
+          "type": "string",
+          "description": "The currency code"
+        }
+      },
+      "required": [
+        "value",
+        "currencyCode"
+      ],
+      "additionalProperties": {}
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The range type"
+        },
+        "minValue": {
+          "type": "number",
+          "description": "The minimum value"
+        },
+        "maxValue": {
+          "type": "number",
+          "description": "The maximum value"
+        }
+      },
+      "required": [
+        "type",
+        "minValue",
+        "maxValue"
+      ],
+      "additionalProperties": {}
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The compensation range type"
+        },
+        "minValue": {
+          "type": "number",
+          "description": "The minimum compensation value"
+        },
+        "maxValue": {
+          "type": "number",
+          "description": "The maximum compensation value"
+        },
+        "currencyCode": {
+          "type": "string",
+          "description": "The currency code"
+        },
+        "interval": {
+          "type": "string",
+          "description": "The compensation interval"
+        }
+      },
+      "required": [
+        "type",
+        "minValue",
+        "maxValue",
+        "currencyCode",
+        "interval"
+      ],
+      "additionalProperties": {}
+    },
+    {
+      "type": "object",
+      "properties": {
+        "country": {
+          "description": "The country of the location",
+          "type": "string"
+        },
+        "region": {
+          "description": "The region of the location",
+          "type": "string"
+        },
+        "city": {
+          "description": "The city of the location",
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    {
+      "type": "null"
+    }
+  ],
+  "description": "The value of the custom field"
+}
+```
+
+**Symptom:** generating each of Ashby's 197 mutation operations separately produced 426 JSON fallback fields.
+405 carried the `unknownShape` text.
+Those 405 were 124 mixed custom-field value occurrences, 139 `valueLabel` occurrences, 106 synthetic `keyString` occurrences, and 36 other occurrences.
+They were not 405 copies of one schema.
+An occurrence here is a field in one operation's generated schema; shared types are counted again in another operation's schema.
+The combined schema had 80 fallback fields before this change, so its counts must not be compared with the per-operation total.
+
+**Fix:** both `Factory.fromProp` branches now recognise `anyOf` alongside `oneOf`.
+A plain-only `anyOf` stays JSON with `scalarOnlyOneOf`.
+A mixed input property stays JSON with `mixedInputChoice`.
+An object-only `anyOf` stays JSON with `objectOnlyAnyOf` until #212 makes required markers safe to merge.
+`holdsOnlyObjectMembers` uses the same `isObjectMember` predicate as `mixesObjectAndPlainMembers`, after resolving references and stripping null members.
+A nested choice does not count as an object merely because no plain member was found.
+A mixed output `anyOf` reaches `Union` only when `analyzeMixedValue` can build its mixed-value type.
+An unbuildable mixed `anyOf` stays JSON with `unbuildableMixedAnyOf`.
+For example, `anyOf: [integer(int64), object required {code}, object optional {code}]` stays JSON instead of entering the unsafe merge in #212.
+The corresponding `oneOf` keeps its existing merge-with-warning behavior.
+The output list-item gate now reads `items.oneOf ?? items.anyOf` and retains its input-side and `analyzeMixedValue` checks.
+The mixed type exposes `text`, `number`, `boolean`, `list`, `object`, and `raw` when those members are present.
+Its object fields are optional because different members supply different fields.
+`mapValuesAnyJson` now owns the text previously written inline in `Map.visitAdditionalProperties`; the text and behavior are unchanged.
+
+A mixed `anyOf` whose object members are named schemas — a `$ref`, not inlined — stays JSON
+instead of building a `Union`, at both the property and the list-item position (`fromProp`'s two
+`anyOf` arms, and `fromArrayItems` for `items.anyOf` only, not `items.oneOf`). Building a named
+schema rebuilds it from scratch on every branch it's reached from, and for Stripe's
+`Customer.default_source: anyOf [string, Card]` / `Card.customer: anyOf [string, Customer]` that
+rebuild does not finish — see #223 for the run-scoped registry that will let this widen later. Both
+call sites share one `Factory.hasNamedRefMember` check, driven by `Schemas.isObjectMember` (now
+public). The reason is `namedMembersAnyOf`. `PropArray.jsonReason()` now reads the item type's own
+`jsonReason` first, before its four structural re-derivations, so a JSON list item carries the
+right docstring text instead of the generic "mixed plain and object values" one.
+A property already reduced to JSON by an earlier check does not take this one.
+
+**Tests:** `tests/all/json-fallback-mapping.test.ts` covers the mixed response, input fallback, plain-only fallback, object-only references, wide-integer mismatch, and the unchanged `oneOf` counterpart.
+`mixed-choice-customer-card-cycle.yaml` checks that a named-ref anyOf property stays JSON with the `namedMembersAnyOf` text, and that the same schema spelled `oneOf` still builds a union — only `anyOf` takes the new case.
+`anyof-mixed-scalars-objects.yaml` includes all nine Ashby members on a response and a request body.
+`anyof-scalars-only.yaml`, `anyof-objects-only-refs.yaml`, and `anyof-mixed-wide-integer-required-mismatch.yaml` cover the guarded JSON cases.
+The existing `mixed-value-list-items-anyof.yaml` assertion now expects the same mixed type as its `oneOf` counterpart.
+Runtime cases under `anyof-mixed-scalars-objects/` and `mixed-value-list-items-anyof/` exercise scalar, object, array, missing-field, and null responses against the generated selections.
+The list-item named-refs case, cut from Stripe's actual `discounts` shape (the same shape as the older `array-of-anyof-string-or-object-loses-string-branch.yaml` fixture): `mixed-value-list-items-named-refs.yaml` carries three array properties in one file — `namedRefs` (items.anyOf of a plain string and two named refs) stays `[JSON]` with the `namedMembersAnyOf` text; `inlineRefs` (the same three members inlined instead of named) still builds a mixed-value union in the same run, pinning that the guard fires on "named", not on "mixed" alone; `namedRefsOneof` (the same three members spelled items.oneOf) still builds a union too, pinning that the new guard is anyOf-only at this position.
+The older fixture's own test, `oas-core.test.ts`'s `test_array_of_string_or_named_objects_stays_json` (renamed from `test_array_of_string_or_object_gets_a_mixed_value_type`), now pins the same JSON result — its `owners` field is exactly this shape, so it reverts to the pre-widening behavior on purpose, not by accident.
+
+**Corpus result:** a fresh generator per operation, across all 197 Ashby mutation operations, gives the following fallback census.
+
+| Reason | Before | After |
+| --- | ---: | ---: |
+| `unknownShape` | 405 | 345 |
+| `mapValuesAnyJson` | 10 | 10 |
+| `shapelessObject` | 5 | 5 |
+| `tupleArray` | 1 | 1 |
+| `mapAsInput` | 5 | 5 |
+| `scalarOnlyOneOf` | 0 | 4 |
+| `mixedInputChoice` | 0 | 6 |
+| `objectOnlyAnyOf` | 0 | 2 |
+| `unbuildableMixedAnyOf` | 0 | 0 |
+| `namedMembersAnyOf` | 0 | 9 |
+| **Fallback total** | **426** | **387** |
+| Mixed-value `raw` fields, with no fallback note | 0 | 115 |
+| **All JSON fields** | **426** | **502** |
+
+A different count circulated earlier, before this table's own corpus run finished: 370 for the
+fallback total, with no `namedMembersAnyOf` row. The table above is what running the actual code
+on this branch produces, and is the one to trust.
+Of the 387, 378 come from the `anyOf`/`oneOf` routing this whole entry adds; the other 9 are all
+`namedMembersAnyOf`, all one field, `OfferCustomField.value` (an `anyOf` mixing plain scalars and
+an array with one named `$ref` member, `OfferCurrencyNumericValue`, among otherwise-inline
+members), reached by nine offer mutation operations (`offer.approve`, `offer.create`,
+`offer.info`, `offer.list`, `offer.reject`, `offer.setDecidedAt`, `offer.setStatus`,
+`offer.startApprovalProcess`, `offer.update`) — before this entry's named-members guard, those
+nine built a mixed-value union instead.
+The 115 `raw` fields preserve the complete original value beside the newly typed fields.
+The remaining unknown-shape occurrences include 189 synthetic `keyString` fields and 147 `valueLabel` fields.
+The synthetic fields increase from 106 because the newly reachable mixed object types also contain them; their implementation is unchanged.
+The remaining nine unknown-shape occurrences are five `value`, two `submittedValues`, one `results`, and one `interviewEventIdToCancel`.
+#221 tracks nested choices and #222 tracks the incorrect reason on synthetic fields.
+`test_corpus_ashby` moves from 26 to 30 types for `post:/application.list>**`.
+`test_corpus_mut_ashby` moves from 22 to 26 types for `post:/application.create>**`.
+Both add `ValueUnion`, `ValueUnionObject`, `CustomFieldValueUnion`, and `CustomFieldValueUnionObject`; neither removes a type.
+
+**Verification:** `npm run lint` and `npx tsc --noEmit` pass.
+The mapping file passes 65 tests, including both choice keywords, the matching container cycle cut, and the named-members guard at both the property and list-item position.
+The runtime file passes all 64 cases through `test-connectors`, with no skips.
+The corpus files pass 19 and 12 tests respectively.
+The whole `oas-core.test.ts` file now completes and passes, 236 tests, 57.3s wall time — before the named-members guard landed, a Stripe curated-selection run was stopped by hand after two and a half minutes of continuous CPU work with no result, and the whole file could not be run at all.
+The six production vendor selections keep their pinned type counts: 340, 417, 365, 450, 760, and 1347 for Confluence, Omni, PagerDuty, Asana, Box, and DigitalOcean respectively.
+`test_73_curated_multi_op_stripe_selection_composes` completes in 10.8s: 587 paths, 779 types, unchanged from its pinned count, so no new type names — `discounts: [JSON]!` stays at 4 occurrences and no `DiscountsUnion` is emitted, so #105/#131's assertions hold with no edit.
+The scoped Ashby mutation lint reads 9244 fields across 197 operations, with 0 new findings, 0 blind operations, and 1 known finding (#214) — down from an earlier 9280 before the named-members guard landed, since `OfferCustomField.value`'s object branch no longer contributes its own fields to the count.
+The scoped Ashby mutation coverage composes all 197 operations separately and the combined selection, 100% OK, no degraded or failed ops.
+Composition uses the installed 2.15.1 binary for the pinned checks and the existing local composer for the other checks.
+
+## 224 [FEAT] [P2] · Type-level entity resolvers keyed through a POST body — ✅ Fixed
+
+**Symptom:** with `--infer-entity-resolvers`, Ashby got zero `@key` directives and zero
+type-level connectors. `inferEntityResolvers` skipped every operation whose verb was not `GET`
+before considering it as a resolver candidate at all — Ashby's 197 operations are all POST.
+
+**OAS** (Ashby `/job.info`, the real shape, not a simplified plain object):
+```json
+"responses": { "200": { "content": { "application/json": { "schema": {
+  "oneOf": [
+    { "$ref": "#/components/schemas/JobInfoSuccessResponse" },
+    { "$ref": "#/components/schemas/ErrorResponse" }
+  ]
+}}}}}
+```
+`JobInfoSuccessResponse` is `{ success: true, results: Job }`; `ErrorResponse` is
+`{ success: false, errors: ErrorDetail[] }` — `errors` is a list of objects, not scalars.
+`unwrapToObj` requires a plain object; a union response returned nothing, so every `.info` op
+failed the envelope test before the body/POST question even came up.
+
+**Rule.** An operation qualifies as a type-level resolver when it is GET (unchanged: every path
+parameter resolves to a selected scalar field through `findKeyField`, one param or several, the
+same as before), or when it is POST and all of:
+- `T.isQueryType(op, context)` is true — a POST with no `root: query` override, or an explicit
+  `root: mutation`, never qualifies, whatever its shape. This is what keeps a destructive op
+  (Ashby's `candidate.anonymize`, `department.archive`) out even when its body and response match
+  every other bullet below.
+- it sends exactly one request body whose media type is the literal default,
+  `application/json` — not merely "not form-encoded". The generator's own media-type resolution
+  also accepts `+json` variants and the bare `*/*` wildcard as a body's media type, none of which
+  the resolver's `http` block can send with the right `Content-Type` (it emits no such header,
+  unlike the ordinary Query/Mutation-field writer), so anything but the exact default is excluded.
+- it has no other required parameter — path, query, or header. The connector's request supplies
+  only the key property and existing auth; anything else required would go out incomplete.
+- among the body's own properties, exactly one resolves against the response object through the
+  same `findKeyField` call GET already makes for a sole path parameter — a literal name match, or
+  the `<TypeName>Id` alias to `id` when it is the only candidate under test — and every other body
+  property, required or not, is itself optional. A required, non-resolving property (Ashby's
+  hypothetical `pair.info { id, other }`) means the request would go out incomplete without it, so
+  the op is excluded rather than half-sent.
+
+Its response, after the existing one-layer unwrap, is one of: the object itself (today's GET-only
+case, unchanged); an object with exactly one object-typed property and every other property a
+scalar or a list of scalars (Ashby's `{ success, results: Job }`); or a union tested member by
+member against that same envelope shape, qualifying only when exactly one member matches (the
+success branch's `{ success, results: Job }` passes; the error branch's `{ success, errors: [...] }`
+fails, because `errors` is a list of objects) — no field-name matching on `"success"`/`"error"`,
+shape alone decides it. The winning envelope's own field name becomes the wrap point for the
+resolver's selection.
+
+**Fix.** `entity.ts`'s `inferEntityResolvers` now branches by verb into `getResolverCandidate`
+(today's GET path, moved but not changed) and `postResolverCandidate` (new), sharing one tail
+(type lookup, auth, push). A new function beside `unwrapToObj`, `unwrapPostResult`, resolves the
+union/envelope shape for POST only — GET keeps calling `unwrapToObj` exactly as before.
+`findBodyKeyField` reuses `findKeyField` unchanged: each body property is tried as its own
+one-element `pathParams` array, so the alias branch (which only fires for a sole candidate) stays
+reachable the same way it does for a real path parameter. `obj.ts`'s `writeEntityConnector` writes
+`body: "$({ <bodyProp>: $this.<key> })"` in the `http` block when the resolver carries one, and
+wraps the selection as `$.<envelopeField> { ... }` when the response was enveloped, mirroring
+`writeBatchConnector`'s existing body/queryParams and wrapper-key handling. `src/tests/
+connectors.ts`'s `ConnectorTestOptions` gained `inferEntityResolvers`/`overrides`, forwarded to
+`OasGen.fromFile` — neither was wired through before, so no runtime test could exercise this path
+at all, GET or POST, regardless of the flag.
+
+**Tests.** `tests/resources/oas/entity-rpc-post-key.yaml`, Ashby's shape in miniature: every op is
+POST, every response a real `oneOf [XSuccessResponse, XErrorResponse]` union, not a simplified
+plain envelope. `widget.info` (same-name key `id`), `gadget.info` (a divergent-name key,
+`gadgetId` aliasing to `Gadget.id` — the common Ashby case), `gizmo.info` (an extra optional,
+non-key body property, still qualifies), `token.info` (no body), `file.info` (`fileHandle`
+resolves nowhere), `pair.info` (a required, non-key body property), `widget.infoWithRegion` (an
+extra required query parameter), `widget.infoForm` (form-encoded body), `widget.infoVendorJson`
+(`application/vnd.example+json` body — the case that actually distinguishes the exact-media-type
+check from a bare "not form-encoded" one), `widget.list` (a list envelope — the batch shape, must
+not qualify), `widget.delete` (matches every shape rule but carries no `root: query` override, so
+it stays a mutation — shape alone cannot tell a read from a write apart). `tests/all/
+r1-entity.test.ts` gained five tests over that fixture (flag on: same-name key, divergent-name key
+plus the extra-property case, every excluded op, exactly one `@connect`/`@key` block on `Widget`
+even though five operations return it; flag off: byte-identical), plus a sixth,
+`test_R1_composite_path_key_literal_match_qualifies`, added to `entity-param-alias.yaml` — two
+path params (`/warehouse/{regionId}/{binId}`) that both literally name their own field on the
+response object, the positive counterpart to that file's existing negative two-param case, which
+only proved rejection, never a successful multi-param match. Adding that op to the shared fixture
+grew its total operation count from 5 to 6, so the file's other, pre-existing test needed its
+`pathsSize` argument bumped from 5 to 6 to match — the fixture growing, not a behavior change; no
+other existing test changed.
+
+A type-level connector is addressable by the runtime test harness — confirmed first against an
+existing GET resolver (no code change needed), then against the real POST case, before writing a
+permanent test: `supergraph-v2.15.1 list-connectors --schema <raw subgraph SDL>` (the composed
+supergraph returns none) names it `"<TypeName>[<index>]"`, e.g. `"Widget[0]"`, and a suite case
+addressing it with `variables: { "$this": { "id": "..." } }` builds the same request a live router
+would. `tests/resources/connectors/entity-rpc-post-key/widget-info.connector.yaml` is the
+permanent runtime case.
+
+**Verification:** `npm run lint`, `npx tsc --noEmit` clean. `r1-entity.test.ts` 15/15,
+`r6-batch.test.ts` 16/16, `oas-core.test.ts` 236/236, `corpus.test.ts` 19/19 (including
+`test_corpus_ashby`), `corpus-mutations.test.ts` 12/12 (including `test_corpus_mut_ashby`) — flag
+off everywhere but this feature's own tests, counts unmoved. The scoped Ashby lint (`--verbs all`)
+reads 197 ops, 9244 fields, 1 known finding (#214), 0 new — unchanged. The scoped Ashby coverage
+(`--verbs all`) composes all 197 operations, 100% OK, 0 degraded or failed.
+
+**Ashby result.** Generated with the override file plus `--use-operation-ids --service-prefix
+ashby --infer-entity-resolvers`, composed clean at 2.15.1. Of the 26 `.info` operations, 19
+qualify — `candidate.info` (`id`, optional), `department.info`, `feedbackFormDefinition.info`,
+`interview.info`, `interviewStage.info`, `interviewerPool.info`, `job.info`, `jobInterviewPlan.info`
+(a literal `jobId` field, no surrogate key: `@key(fields: "jobId")`), `jobPosting.info`,
+`location.info`, `notetakerTranscript.info`, `offer.info`, `opening.info`, `project.info`,
+`sequence.info`, `sequenceTemplate.info`, `surveyFormDefinition.info`, `takeHomeAssignment.info`,
+`user.info` — plus one more the `.info`-only survey missed: `user.interviewerSettings`, a read
+(already `root: query`) whose body has exactly one required property, `userId`, which is a
+literal field on the response object `InterviewerSettings` — the same match GET's own key-finding
+already makes for a literal name, just on an op not named `*.info`. **20 qualify in total.**
+
+Excluded (7), each for its own reason: `apiKey.info` and `referralForm.info` send no body at all;
+`file.info`'s `fileHandle` resolves against neither `File`'s own field nor a type-name alias;
+`application.info`'s `applicationId`/`submittedFormInstanceId` resolve against neither the
+response's real type, `ApplicationInfoResult`, nor its own `id` field; `customField.info`'s
+`customFieldId` fails the same way against `CustomFieldDefinition`; `webhook.info`'s `webhookId`
+fails the same way against `WebhookInfo`; `interviewBriefing.info`'s `interviewEventId` matches
+neither of `InterviewBriefing`'s own fields, `id` or `interviewId`.
+
+Against the hand-authored Ashby service in the GraphOS service factory's 16 wired types: all 16
+are covered by this rule's 20, except one, both ways. The hand schema wires `Application`; this
+rule doesn't, because the response is really named `ApplicationInfoResult`, not `Application`, and
+neither candidate body key resolves against that type's own fields or its type-name alias — the
+hand-authored wiring reads the vendor's intent (both keys clearly name the same candidate) in a
+way this mechanical rule, correctly, does not guess at. The fidelity comparator's findings by kind
+sit at the same 2602 total as the override-only run, `root-placement` still 0 — `key-directive`
+and `connect-directive` are still 0 too, not newly nonzero: the comparator only reaches a type's
+own directives after first field-matching its containing object, and every root response on our
+side is still wrapped in `{ results, success, errors, ... }` against the hand schema's flat shape,
+so the walk never gets far enough to reach `Job`/`Ashby_Job` and compare their `@key` at all. The
+20-vs-16 census above is the real evidence this change did something, not the comparator.
+
+**Refs:** `src/oas/nodes/entity.ts`, `src/oas/nodes/obj.ts`, `src/tests/connectors.ts`,
+`src/oas/nodes/typeUtils.ts` (`T.isQueryType`), `src/oas/utils/sparseFieldsets.ts` (the existing
+precedent for reusing `T.isQueryType` to gate a POST-shaped feature to reads), `docs/FIXED.md`
+#150, #191 (id-keyed link targets only), #196 (entity-link stub sharing across an op's duplicate
+type copies — unrelated to this change's own type-instance accumulation), the factory's
+`service-catalog/ashby/ashby.graphql`.
+
+**Refs:** #206, #208, #209, #212, #223; `src/oas/nodes/factory.ts` (`fromProp`, `fromArrayItems`, `hasNamedRefMember`); `src/oas/utils/schemas.ts` (`isObjectMember`); `src/oas/utils/jsonReasons.ts`; `src/oas/nodes/propArray.ts` (`jsonReason`); `src/oas/nodes/map.ts`.
+
+## 226 [FEAT] [P2] · Source error mapping and the payload field from the overrides file — ✅ Fixed
+
+**Symptom:** some APIs answer every request with HTTP 200 whether it worked or not, and put
+success or failure in the body. The generator wrote neither the success/failure mapping nor a way
+to name the field the real payload sits under, so a generated schema exposed the flag/error fields
+as plain data and every root field returned the whole wrapper object instead of the payload.
+
+**OAS:** Ashby answers every op with `oneOf [ { success: true, results: <payload> },
+{ success: false, errors: [{ message }] } ]`. Slack answers `{ ok: boolean, error?: string,
+...payload fields }` on one flat schema, no `oneOf` at all.
+
+**Config:** two additions to the overrides file, both optional. A reserved top-level key,
+`"$source"`, carries the mapping for every op using that source:
+```json
+{
+  "$source": {
+    "isSuccess": "$.success",
+    "errors": { "message": "$($.errors?->first?.message ?? 'Ashby request failed')",
+                "extensions": "httpStatus: $status" },
+    "payload": "results"
+  }
+}
+```
+`isSuccess` and `errors` are written onto `@source` as given, so the router turns a failed body
+into a GraphQL error. `payload` names the field every op's result should return instead of the
+whole response object; a per-op entry's own `"payload": "<field>"` overrides it for that op, and
+`"payload": null` keeps that one op's current shape even though a default is set.
+
+**Fix.** `schemaWriter.ts` writes `isSuccess` and `errors` onto `@source` when the `$source`
+settings have them, quoted and escaped, with `extensions` as a block string when it spans lines.
+`src/oas/utils/payload.ts` has the two lookups: `payloadField` reads the field name for an op from
+the overrides (the op's own entry, then the `$source` default), and `findPayload` finds that
+property on the response object, or on one member of a merged `oneOf`. `get.ts` (shared by
+`post.ts`) writes that property's type as the root field's return type. `operationWriter.ts` writes
+the selection as `$.results` for a plain value and `$.results { ... }` around the fields of an
+object or list of objects, the way `writeBatchConnector` already does for a batch key. The node
+graph is untouched, so saved selection paths keep resolving. `typesCollector.ts` drops a response
+type once no selected op returns it any more.
+
+**Tests.** `tests/resources/oas/source-envelope-union.yaml` (Ashby's shape, five ops covering an
+object, a list of objects, a scalar, a list of scalars, and a success branch with no payload field
+at all) and `source-envelope-flag.yaml` (Slack's shape, two ops, no payload configured).
+`tests/all/source-envelope.test.ts`: no config is unchanged for both fixtures; the configured union
+fixture unwraps every payload kind correctly and drops every wrapper type an op no longer returns;
+a `payload: null` override keeps one op's wrapper while every other op still changes; the flag
+fixture's root fields stay unchanged with only the `@source` mapping added; a selection path saved
+before the config still resolves to the same nodes after it; both fixtures compose on the local
+composer and on stock rover 2.15.1. Runtime: the success cases run through the connector-test
+binary where it can pass the arguments, and through the pinned router against a local stub API
+otherwise. The two failure cases, one per fixture, run through the router as well: the
+connector-test binary accepts `isSuccess` and `errors.message` but ignores `errors.extensions`,
+so only the router proves the whole mapping. One more case runs the real Ashby spec with the
+`$source` block through `runOasTest`.
+
+**Ashby result.** `tests/resources/oas/ashby-overrides.json` now carries the `$source` block.
+Generated with `--use-operation-ids --service-prefix ashby --infer-entity-resolvers --overrides`
+plus that file, the whole spec composes clean on stock rover 2.15.1: 87 Query and 110 Mutation
+fields, 214 root selections opening on `$.results`, and three ops kept as they were because their
+success branch has no `results` property (`assessment.list`, `customFields.fetch`,
+`approvalDefinition.update`), each with a warning. `post:/application.list>**` on its own goes
+from 30 types to 29: the wrapper is gone, the payload type stays. A `structuralDiff` run against
+the factory's `service-catalog/ashby/ashby.graphql` read 127 findings without the block and 158
+with it; that is a different measurement from #224's 2602 and the two are not compared here.
+
+**Out of scope:** a response type reached only through a wrapper's own error field (e.g. a shared
+`ErrorDetail`) can stay in the schema, unreferenced, once every op sharing that wrapper returns its
+payload directly instead — the prune step above drops the wrapper itself, not what became
+unreferenced through it. See docs/TASKS.md #227.
+
+**Refs:** #150 (root override), #224 (the `$.results { ... }` shape on a type-level connector),
+`src/oas/io/schemaWriter.ts`, `src/oas/utils/payload.ts`, `src/oas/nodes/get.ts`,
+`src/oas/io/operationWriter.ts`, `src/oas/generator/typesCollector.ts`, `src/oas/nodes/res.ts`
+(`Res.select`, the same plain-value test), router `apollo-federation/src/connectors/spec/source.rs:285`
+(PR #7894, the `isSuccess`/`errors` mapping this writes onto `@source`).

@@ -1,0 +1,21 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "widget-info.connector",
+      "connector": "Widget[0]",
+      "variables": { "$this": { "id": "w1" } },
+      "apiResponseBody": "{\"success\": true, \"results\": {\"id\": \"w1\", \"title\": \"Foo\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/widget.info",
+          "method": "POST",
+          "body": "{\"id\":\"w1\"}"
+        },
+        "connectorResponse": "{\"id\": \"w1\", \"title\": \"Foo\"}"
+      }
+    }
+  ]
+}

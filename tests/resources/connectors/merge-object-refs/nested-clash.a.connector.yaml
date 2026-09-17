@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "nested-clash.a",
+      "connector": "Query.nestedClash",
+      "variables": {},
+      "apiResponseBody": "{\"item\": {\"detail\": {\"field\": \"hello\"}}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/nested-clash",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"item\": {\"detail\": {\"field\": \"hello\"}}}"
+      }
+    }
+  ]
+}

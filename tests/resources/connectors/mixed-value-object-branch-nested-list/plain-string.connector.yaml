@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "plain-string.connector",
+      "connector": "Query.contentDescendant",
+      "variables": {},
+      "apiResponseBody": "{\"labels\": \"none\"}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/content.descendant",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"labels\": {\"text\": \"none\", \"raw\": \"none\"}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "boolean.connector",
+      "connector": "Query.byKeyGet",
+      "variables": {},
+      "apiResponseBody": "{\"byKey\": {\"a\": true}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/byKey.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"byKey\": [{\"key\": \"a\", \"value\": {\"boolean\": true, \"raw\": true}}]}"
+      }
+    }
+  ]
+}

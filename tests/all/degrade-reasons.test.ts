@@ -29,24 +29,24 @@ const DEFAULT_SCHEMA = `extend schema
 scalar JSON
 
 type Thing {
-  "NEEDS ATTENTION: this field's shape didn't match any known pattern and defaulted to JSON -- worth checking the source OAS schema."
+  "NEEDS ATTENTION: a oneOf of only plain scalar/enum values has no GraphQL union member to build -- sent as raw JSON instead."
   bareBlob: JSON
   """
   An opaque blob.
 
-NEEDS ATTENTION: this field's shape didn't match any known pattern and defaulted to JSON -- worth checking the source OAS schema.
+NEEDS ATTENTION: a oneOf of only plain scalar/enum values has no GraphQL union member to build -- sent as raw JSON instead.
   """
   blob: JSON
   """
   Uses an em--dash in its own text.
 
-NEEDS ATTENTION: this field's shape didn't match any known pattern and defaulted to JSON -- worth checking the source OAS schema.
+NEEDS ATTENTION: a oneOf of only plain scalar/enum values has no GraphQL union member to build -- sent as raw JSON instead.
   """
   emDash: JSON
   """
   Author note: NEEDS ATTENTION: check this value by hand.
 
-NEEDS ATTENTION: this field's shape didn't match any known pattern and defaulted to JSON -- worth checking the source OAS schema.
+NEEDS ATTENTION: a oneOf of only plain scalar/enum values has no GraphQL union member to build -- sent as raw JSON instead.
   """
   literalNote: JSON
   thingId: Int

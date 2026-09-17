@@ -19,10 +19,11 @@ import {
   Union,
 } from '../nodes/internal.js';
 import { OasGen } from '../oasGen.js';
-import { trace } from '../log/trace.js';
+import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { SelectionPath } from '../utils/selectionPath.js';
+import { findPayload } from '../utils/payload.js';
 
 export class TypesCollector {
   types: Map<string, IType> = new Map();
@@ -31,8 +32,10 @@ export class TypesCollector {
   constructor(private gen: OasGen) {}
 
   public collect(selection: string[]): void {
+    const context = this.gen.getContext();
     const pendingTypes: Map<string, IType> = new Map();
-    let expanded: string[] = new PathsCollector(this.gen).collectExpandedPaths(selection);
+    const pathsCollector = new PathsCollector(this.gen);
+    let expanded: string[] = pathsCollector.collectExpandedPaths(selection);
 
     for (const path of expanded) {
       let collection = Array.from(this.gen.paths.values());
@@ -62,7 +65,7 @@ export class TypesCollector {
           break;
         }
 
-        current = SelectionPath.resolveSegment(last, collection, part);
+        current = SelectionPath.resolveSegment(context, last, collection, part);
         if (!current) {
           const tree = T.print(last!.ancestors()[0]);
 
@@ -86,6 +89,21 @@ export class TypesCollector {
       if (!hitWildcard && current && current.path() !== path) {
         const idx = expanded.indexOf(path);
         if (idx !== -1) expanded[idx] = current.path();
+
+        // A saved path from before this union became a mixed value names a field directly on it;
+        // collect every leaf field of its object members instead, nested ones included.
+        //   e.g. (confluence) labels' object member holds results: [Label] -> Label's id/label/name/prefix
+        if (current instanceof Union) {
+          const union = current;
+          const shape = union.analyzeMixedValue(context, true);
+          if (shape) {
+            const memberLeaves = new Set<string>();
+            shape.objectMemberIndexes.forEach((i) => pathsCollector.collectLeafPaths(union.children[i], memberLeaves));
+            memberLeaves.forEach((p) => {
+              if (!expanded.includes(p)) expanded.push(p);
+            });
+          }
+        }
       }
 
       if (current && !(current instanceof Scalar)) {
@@ -141,8 +159,42 @@ export class TypesCollector {
       removedAny = this.removeFieldsNeverSelected(pendingTypes, expanded) > 0;
     }
 
+    // #207: on the final, settled set only, so this fires exactly once per collect() call.
+    this.warnMismatchedSelections(pendingTypes, expanded);
+
+    this.dropUnreturnedWrappers(pendingTypes, expanded);
+
     this.types = pendingTypes;
     this.expanded = expanded;
+  }
+
+  // Drops a response type once every selected op that returned it returns a payload field instead.
+  //   e.g. Ashby: oneOf [{ success: true, results: Job }, ...] with payload "results": the wrapper goes, Job stays
+  private dropUnreturnedWrappers(pendingTypes: Map<string, IType>, expanded: string[]): void {
+    const context = this.gen.context!;
+    const opIds = new Set(expanded.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
+    const wrappers = new Set<IType>();
+    const stillReturned = new Set<IType>();
+
+    for (const op of this.gen.paths.values()) {
+      if (!T.isOp(op) || !opIds.has(op.id)) {
+        continue;
+      }
+      const wrapper = op.resultType instanceof Res ? op.resultType.response : undefined;
+      if (!wrapper) {
+        continue;
+      }
+      wrappers.add(wrapper);
+      if (!findPayload(context, op)) {
+        stillReturned.add(wrapper);
+      }
+    }
+
+    for (const wrapper of wrappers) {
+      if (!stillReturned.has(wrapper)) {
+        pendingTypes.delete(wrapper.id);
+      }
+    }
   }
 
   // The selected operations' result and body nodes — where the read-only walks start. #26 #89
@@ -268,15 +320,19 @@ export class TypesCollector {
   }
 
   // same walk as collectReachable, but records what each visited type's own fields are: e.g.
-  // (confluence) Content is reached at 6 positions, kept "space" at 2 -> kept.get('Content') has
-  // "space"; lost it to a cycle at the other 4 -> removed.get('Content') has "space" too.
+  // (confluence) Content is reached at 6 positions, kept "space" at 2 (naming those two ops) and
+  // lost it to a cycle at the other 4 -> removed.get('Content') has "space" too. see #207
   private walkKeptAndRemoved(expanded: string[]): {
-    kept: Map<string, Set<string>>;
+    kept: Map<string, Map<string, Set<string>>>;
     removed: Map<string, Set<string>>;
   } {
     const context = this.gen.context!;
     const removed = new Map<string, Set<string>>();
-    const kept = new Map<string, Set<string>>();
+    // type id -> field name -> the set of op ids whose own selection kept that field.
+    //   e.g. (ashby, #207) application.create selects results { id }, referral.create selects
+    //   results { id createdAt }, both on Application -> kept.get('obj:type:#/c/s/Application') is
+    //   Map { "id" -> Set { both ops }, "createdAt" -> Set { "post:/referral.create" } }
+    const kept = new Map<string, Map<string, Set<string>>>();
     const queue = this.selectedRoots(expanded);
     const visited = new Set<IType>();
     while (queue.length > 0) {
@@ -289,20 +345,89 @@ export class TypesCollector {
       if (T.isFieldOwner(node)) {
         for (const child of children) {
           if (child instanceof Prop) {
-            // a PropCircRef is a route that lost the field to a cycle; any other prop kept it
-            const bucket = child instanceof PropCircRef ? removed : kept;
-            let names = bucket.get(node.id);
-            if (!names) {
-              names = new Set();
-              bucket.set(node.id, names);
+            if (child instanceof PropCircRef) {
+              // a PropCircRef is a route that lost the field to a cycle
+              let names = removed.get(node.id);
+              if (!names) {
+                names = new Set();
+                removed.set(node.id, names);
+              }
+              names.add(child.name);
+              continue;
             }
-            names.add(child.name);
+
+            // i.e.: "createdAt" -> Set { "post:/referral.create" } }.
+            let byField = kept.get(node.id);
+            if (!byField) {
+              byField = new Map();
+              kept.set(node.id, byField);
+            }
+            // i.e.: "post:/referral.create"
+            const opId = child.path().split(Naming.PATH_SEPARATOR)[0];
+            let ops = byField.get(child.name);
+            if (!ops) {
+              ops = new Set();
+              byField.set(child.name, ops);
+            }
+            ops.add(opId);
           }
         }
       }
       queue.push(...children);
     }
     return { kept, removed };
+  }
+
+  // two ops sharing one component can select different fields of it — the type is written from
+  // the first op's selection only. e.g. (ashby) application.create selects results { id },
+  // referral.create also selects createdAt on the same #/c/s/Application. see docs/FIXED.md #207
+  private warnMismatchedSelections(pendingTypes: Map<string, IType>, expanded: string[]): void {
+    const context = this.gen.context!;
+    const keep = context.generateOptions?.keepFieldNames === true;
+    const { kept } = this.walkKeptAndRemoved(expanded);
+    for (const type of pendingTypes.values()) {
+      if (!T.isFieldOwner(type)) {
+        continue;
+      }
+      const byField = kept.get(type.id);
+      if (!byField) {
+        continue;
+      }
+      const declared = new Set(type.selectedProps(expanded, keep).map((prop) => prop.name));
+      // pendingTypes keeps the first copy of a type per id (`collect()`'s main loop above) — that
+      // copy's own path names the op whose selection the type is written from. see docs/FIXED.md #207
+      const declaredOp = type.path().split(Naming.PATH_SEPARATOR)[0];
+
+      const extraByOp = new Map<string, Set<string>>();
+      for (const [field, ops] of byField) {
+        if (declared.has(field)) {
+          continue;
+        }
+        for (const op of ops) {
+          if (op === declaredOp) {
+            continue;
+          }
+          let extra = extraByOp.get(op);
+          if (!extra) {
+            extra = new Set();
+            extraByOp.set(op, extra);
+          }
+          extra.add(field);
+        }
+      }
+      if (extraByOp.size === 0) {
+        continue;
+      }
+      const others = Array.from(extraByOp.entries())
+        .map(([op, fields]) => `${op} also selects ${Array.from(fields).join(', ')}`)
+        .join('; ');
+      const extraFields = Array.from(new Set(Array.from(extraByOp.values()).flatMap((fields) => Array.from(fields))));
+      warn(
+        context,
+        '[collector]',
+        `\`${Naming.getRefName(type.name)}\` is written from ${declaredOp}'s selection; ${others} on it, which the type won't declare. Select the same ${Naming.getRefName(type.name)} fields on both, or drop ${extraFields.join(', ')}.`,
+      );
+    }
   }
 }
 
@@ -327,6 +452,7 @@ class PathsCollector {
   }
 
   public collectPaths(path: string, collection: IType[]): IType[] {
+    const context = this.gen.getContext();
     const stack: IType[] = [];
     let current: IType | undefined;
     let last: IType | undefined;
@@ -336,7 +462,7 @@ class PathsCollector {
     do {
       const part = Naming.expandRef(parts[i]);
 
-      current = SelectionPath.resolveSegment(last, collection, part);
+      current = SelectionPath.resolveSegment(context, last, collection, part);
       if (!current) {
         throw new Error('Could not find type: ' + part + ' from ' + path + ', last: ' + last?.pathToRoot());
       }
@@ -354,6 +480,94 @@ class PathsCollector {
     return stack;
   }
 
+  // Every leaf path under `root`, expanding along the way — the same walk `>**` already uses.
+  //   e.g. (confluence) a union's object member, reused by TypesCollector.collect below.
+  public collectLeafPaths(root: IType, into: Set<string>): void {
+    T.traverse(root, (child) => {
+      // a list of lists of plain values is a leaf too — there is nothing below it to select, and
+      // the field vanished with the op when it was the only property. see docs/FIXED.md #96
+      //   e.g. (digitalocean) neighbor_ids: { type: array, items: { type: array, items: integer } }
+      const listOfValues = child instanceof PropArray && child.items instanceof Scalar;
+      const nestedListOfValues =
+        child instanceof PropArray && child.items instanceof Arr && child.items.itemsType instanceof Scalar;
+      // a list of enum values is a leaf too, or the field vanishes and an only-property body
+      // goes empty; illegal values are degraded to plain strings long before reaching here.
+      //   e.g. (motion) include: { type: array, items: { type: string, enum: [workHours] } }
+      // see docs/FIXED.md #170 #172
+      const listOfEnumValues = child instanceof PropArray && child.items instanceof En;
+      if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues) {
+        into.add(child.path());
+      } else if (child instanceof PropEn) {
+        // enum props are leaves too — without this, `>**` silently drops every enum field
+        // (slack's `ok`-only stubs collapsed to zero types). see docs/FIXED.md #24
+        into.add(child.path());
+      } else if (child instanceof PropCircRef) {
+        // a cut cycle is a leaf: include its path so the commented field is emitted (in both the
+        // SDL and the selection) instead of silently dropped. see docs/FIXED.md #10
+        into.add(child.path());
+      } else if (child instanceof Scalar && child.parent instanceof Res) {
+        // a response that is just a value, no object around it — a write answering `true` (adobe
+        // commerce), or a token string (petstore `/user/login`):
+        //   responses: { '200': { schema: { type: boolean } } }
+        // Nothing to pick apart, so the value itself is the leaf. see docs/FIXED.md #32
+        into.add(child.path());
+      } else if (child instanceof En && child.parent instanceof Res) {
+        // a response that is just an enum value, no object around it — same shape as #32's bare
+        // scalar, just enum-typed. see docs/FIXED.md #120
+        into.add(child.path());
+      } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
+        // the case above with a list around it — a response that is just an array of values,
+        // no object around it (spotify's "check saved" endpoints answer `[true, false]`):
+        //   responses: { '200': { schema: { type: array, items: { type: boolean } } } }
+        // Nothing to pick apart, so the array itself is the leaf. see docs/FIXED.md #47
+        into.add(child.path());
+      } else {
+        // the value type is only known once the node is expanded, so the map check comes after
+        this.gen.expand(child);
+        // An object that declares no properties is selected whole; its field is written as JSON.
+        // e.g. (stripe) payment_method_amazon_pay: { type: object } -> amazonPay: JSON
+        // Response side only, the check below still owns the body side. see docs/FIXED.md #182
+        if (child instanceof PropObj && _.isEmpty(child.obj.props) && child.kind !== 'input') {
+          into.add(child.path());
+        }
+        // A map of plain values has nothing below it to select — the map itself is the leaf,
+        // whether it hangs off a property (#70) or is the whole response (#92).
+        //   e.g. (map-input-suffix.yaml) labels: { additionalProperties: { type: string } }  #70
+        //   e.g. (github) get:/emojis: { additionalProperties: string }  #92
+        // (whole values only — a cycle-cut value would select bare against a composite SDL type  #76, #182)
+        const mapUnderProp = child instanceof PropMap ? child.map : undefined;
+        const mapAsResponse = child instanceof MapNode && child.parent instanceof Res ? child : undefined;
+        // a map nested inside another map's value fits neither case above, so a map of maps of
+        // plain values silently lost its whole field. see docs/FIXED.md #171
+        //   e.g. additionalProperties: { additionalProperties: { type: integer } }
+        const mapNested = child instanceof MapNode && child.parent instanceof MapNode ? child : undefined;
+        const map = mapUnderProp ?? mapAsResponse ?? mapNested;
+        if (map?.valueType && T.isWholeMapValue(map.valueType)) {
+          into.add(child.path());
+        }
+      }
+    });
+
+    // a side of the op whose expansion found nothing selectable still has fields to write when
+    // its only content is a free-form JSON object (asana: `data: $ref EmptyResponse` ->
+    // `data: JSON`, emitted as an EMPTY invalid type before) — take those fields as the leaves.
+    // Per side, not per op: a write whose body is selectable can still answer with an empty
+    // object, and checking the op as a whole never fires for it. see docs/FIXED.md #32, #51
+    const sides = T.isOp(root) ? root.children : [root];
+    for (const side of sides) {
+      if (Array.from(into).some((p) => p.startsWith(side.path()))) {
+        continue;
+      }
+      // scoped to an otherwise-empty side on purpose: doing it everywhere diverged the
+      // selections of types shared across connectors. see docs/FIXED.md #32
+      T.traverse(side, (child) => {
+        if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
+          into.add(child.path());
+        }
+      });
+    }
+  }
+
   public collectExpandedPaths(selection: string[]) {
     const newSelection = new Set<string>();
     // A bare op (no path segments) never gets walked past the op node itself, so its response/body
@@ -368,89 +582,7 @@ class PathsCollector {
 
     nodes.forEach((stack) => {
       const root = _.last(stack)!;
-      T.traverse(root, (child) => {
-        // a list of lists of plain values is a leaf too — there is nothing below it to select, and
-        // the field vanished with the op when it was the only property. see docs/FIXED.md #96
-        //   e.g. (digitalocean) neighbor_ids: { type: array, items: { type: array, items: integer } }
-        const listOfValues = child instanceof PropArray && child.items instanceof Scalar;
-        const nestedListOfValues =
-          child instanceof PropArray && child.items instanceof Arr && child.items.itemsType instanceof Scalar;
-        // a list of enum values is a leaf too, or the field vanishes and an only-property body
-        // goes empty; illegal values are degraded to plain strings long before reaching here.
-        //   e.g. (motion) include: { type: array, items: { type: string, enum: [workHours] } }
-        // see docs/FIXED.md #170 #172
-        const listOfEnumValues = child instanceof PropArray && child.items instanceof En;
-        if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues) {
-          newSelection.add(child.path());
-        } else if (child instanceof PropEn) {
-          // enum props are leaves too — without this, `>**` silently drops every enum field
-          // (slack's `ok`-only stubs collapsed to zero types). see docs/FIXED.md #24
-          newSelection.add(child.path());
-        } else if (child instanceof PropCircRef) {
-          // a cut cycle is a leaf: include its path so the commented field is emitted (in both the
-          // SDL and the selection) instead of silently dropped. see docs/FIXED.md #10
-          newSelection.add(child.path());
-        } else if (child instanceof Scalar && child.parent instanceof Res) {
-          // a response that is just a value, no object around it — a write answering `true` (adobe
-          // commerce), or a token string (petstore `/user/login`):
-          //   responses: { '200': { schema: { type: boolean } } }
-          // Nothing to pick apart, so the value itself is the leaf. see docs/FIXED.md #32
-          newSelection.add(child.path());
-        } else if (child instanceof En && child.parent instanceof Res) {
-          // a response that is just an enum value, no object around it — same shape as #32's bare
-          // scalar, just enum-typed. see docs/FIXED.md #120
-          newSelection.add(child.path());
-        } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
-          // the case above with a list around it — a response that is just an array of values,
-          // no object around it (spotify's "check saved" endpoints answer `[true, false]`):
-          //   responses: { '200': { schema: { type: array, items: { type: boolean } } } }
-          // Nothing to pick apart, so the array itself is the leaf. see docs/FIXED.md #47
-          newSelection.add(child.path());
-        } else {
-          // the value type is only known once the node is expanded, so the map check comes after
-          this.gen.expand(child);
-          // An object that declares no properties is selected whole; its field is written as JSON.
-          // e.g. (stripe) payment_method_amazon_pay: { type: object } -> amazonPay: JSON
-          // Response side only, the check below still owns the body side. see docs/FIXED.md #182
-          if (child instanceof PropObj && _.isEmpty(child.obj.props) && child.kind !== 'input') {
-            newSelection.add(child.path());
-          }
-          // A map of plain values has nothing below it to select — the map itself is the leaf,
-          // whether it hangs off a property (#70) or is the whole response (#92).
-          //   e.g. (map-input-suffix.yaml) labels: { additionalProperties: { type: string } }  #70
-          //   e.g. (github) get:/emojis: { additionalProperties: string }  #92
-          // (whole values only — a cycle-cut value would select bare against a composite SDL type  #76, #182)
-          const mapUnderProp = child instanceof PropMap ? child.map : undefined;
-          const mapAsResponse = child instanceof MapNode && child.parent instanceof Res ? child : undefined;
-          // a map nested inside another map's value fits neither case above, so a map of maps of
-          // plain values silently lost its whole field. see docs/FIXED.md #171
-          //   e.g. additionalProperties: { additionalProperties: { type: integer } }
-          const mapNested = child instanceof MapNode && child.parent instanceof MapNode ? child : undefined;
-          const map = mapUnderProp ?? mapAsResponse ?? mapNested;
-          if (map?.valueType && T.isWholeMapValue(map.valueType)) {
-            newSelection.add(child.path());
-          }
-        }
-      });
-
-      // a side of the op whose expansion found nothing selectable still has fields to write when
-      // its only content is a free-form JSON object (asana: `data: $ref EmptyResponse` ->
-      // `data: JSON`, emitted as an EMPTY invalid type before) — take those fields as the leaves.
-      // Per side, not per op: a write whose body is selectable can still answer with an empty
-      // object, and checking the op as a whole never fires for it. see docs/FIXED.md #32, #51
-      const sides = T.isOp(root) ? root.children : [root];
-      for (const side of sides) {
-        if (Array.from(newSelection).some((p) => p.startsWith(side.path()))) {
-          continue;
-        }
-        // scoped to an otherwise-empty side on purpose: doing it everywhere diverged the
-        // selections of types shared across connectors. see docs/FIXED.md #32
-        T.traverse(side, (child) => {
-          if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
-            newSelection.add(child.path());
-          }
-        });
-      }
+      this.collectLeafPaths(root, newSelection);
     });
 
     // finally remove the expanded paths from the selection

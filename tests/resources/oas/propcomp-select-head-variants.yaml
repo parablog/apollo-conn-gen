@@ -1,0 +1,47 @@
+openapi: 3.0.0
+info:
+  title: PropComp.select readAs head variants — required field, and a field name needing sanitising
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /thing.get:
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - requiredValue
+                properties:
+                  value:
+                    oneOf:
+                      - type: boolean
+                        title: Boolean
+                      - type: object
+                        title: Choice
+                        properties:
+                          label:
+                            type: string
+                  requiredValue:
+                    oneOf:
+                      - type: boolean
+                        title: Boolean
+                      - type: object
+                        title: Choice
+                        properties:
+                          label:
+                            type: string
+                  custom-value:
+                    oneOf:
+                      - type: boolean
+                        title: Boolean
+                      - type: object
+                        title: Choice
+                        properties:
+                          label:
+                            type: string

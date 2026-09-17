@@ -1,0 +1,23 @@
+openapi: 3.0.0
+info:
+  title: a property literally named the empty string
+  version: "1.0"
+paths:
+  /status:
+    get:
+      operationId: getStatus
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      "":
+                        type: string

@@ -1,0 +1,74 @@
+openapi: 3.0.3
+info:
+  title: A field's enum merged across oneOf branches keeps its required marker only when every branch requires it
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /routines/{id}:
+    get:
+      operationId: getRoutine
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: A routine with one delivery destination; both destination shapes require `type`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  destination:
+                    oneOf:
+                      - $ref: '#/components/schemas/EmailDestination'
+                      - $ref: '#/components/schemas/SlackDestination'
+  /schedules/{id}:
+    get:
+      operationId: getSchedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: A schedule with one target; only the first target shape requires `kind`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  target:
+                    oneOf:
+                      - $ref: '#/components/schemas/FtpTarget'
+                      - $ref: '#/components/schemas/WebhookTarget'
+components:
+  schemas:
+    EmailDestination:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [email] }
+        address: { type: string }
+    SlackDestination:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [slack] }
+        channel: { type: string }
+    FtpTarget:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [ftp] }
+        host: { type: string }
+    WebhookTarget:
+      type: object
+      properties:
+        kind: { type: string, enum: [webhook] }
+        url: { type: string }

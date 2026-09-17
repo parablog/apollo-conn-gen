@@ -95,6 +95,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+  /warehouse/{regionId}/{binId}:
+    get:
+      operationId: getStockLocation
+      summary: Two path params, both literally naming their own selected field — a composite key
+      parameters:
+        - name: regionId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: binId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single stock location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockLocation'
 components:
   schemas:
     Pet:
@@ -121,3 +143,12 @@ components:
       properties:
         id:
           type: string
+    StockLocation:
+      type: object
+      properties:
+        regionId:
+          type: string
+        binId:
+          type: string
+        quantity:
+          type: integer

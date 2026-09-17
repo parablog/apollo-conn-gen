@@ -1,0 +1,71 @@
+openapi: 3.0.0
+info:
+  title: two unrelated merges under a property literally named enum, disjoint value sets
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+components:
+  schemas:
+    EnumValueA1:
+      type: string
+      enum: [A]
+    EnumValueA2:
+      type: string
+      enum: [B]
+    EnumValueB1:
+      type: string
+      enum: [C]
+    EnumValueB2:
+      type: string
+      enum: [D]
+paths:
+  /a.get:
+    get:
+      operationId: getA
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: RecordA1
+                        properties:
+                          enum:
+                            $ref: '#/components/schemas/EnumValueA1'
+                      - type: object
+                        title: RecordA2
+                        properties:
+                          enum:
+                            $ref: '#/components/schemas/EnumValueA2'
+  /b.get:
+    get:
+      operationId: getB
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: string
+                        title: PlainValue
+                      - type: object
+                        title: RecordB1
+                        properties:
+                          enum:
+                            $ref: '#/components/schemas/EnumValueB1'
+                      - type: object
+                        title: RecordB2
+                        properties:
+                          enum:
+                            $ref: '#/components/schemas/EnumValueB2'

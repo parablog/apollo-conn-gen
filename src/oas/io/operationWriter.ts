@@ -2,8 +2,10 @@ import _ from 'lodash';
 import { ParameterObject } from 'oas/types';
 import { OasContext, OverrideEntry } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
-import { Body, IType, Op, Param, T } from '../nodes/internal.js';
+import { Body, IType, Map as MapNode, Op, Param, Prop, T } from '../nodes/internal.js';
+import { findPayload, payloadField } from '../utils/payload.js';
 import { Naming } from '../utils/naming.js';
+import { warn } from '../log/trace.js';
 import { Params } from '../utils/params.js';
 import { ErrorsWriter } from './errorsWriter.js';
 import { Writer } from './writer.js';
@@ -84,7 +86,7 @@ export class OperationWriter {
 
     // truthiness, not _.has — the declared-but-unset field is still an own property. #33
     if (op.resultType) {
-      this.writeSelection(context, writer, op.resultType, selection);
+      this.writeSelection(context, writer, op, selection);
     }
 
     writer.write(spacing).write('"""\n');
@@ -284,9 +286,37 @@ export class OperationWriter {
     return Params.arrayJoin(p.parameter);
   }
 
-  private writeSelection(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
+  private writeSelection(context: OasContext, writer: Writer, op: Op & IType, selection: string[]): void {
     context.indent = 6;
-    type.select(context, writer, selection);
+    const payload = findPayload(context, op);
+    const wanted = payloadField(op.id, context.generateOptions.overrides);
+    if (wanted && !payload) {
+      warn(context, '[payload]', `"${op.id}" has no "${wanted}" property to return; response kept as is`);
+    }
+    if (payload) {
+      this.writePayloadSelection(context, writer, payload, selection);
+    } else {
+      op.resultType!.select(context, writer, selection);
+    }
+  }
+
+  // Writes the payload field at the root of the selection: `$.results` for a plain value, and
+  // `$.results { ... }` around the fields of the object, or list of objects, it holds.
+  //   e.g. Ashby: { success: true, results: Job } -> $.results { id title }
+  private writePayloadSelection(context: OasContext, writer: Writer, payload: Prop, selection: string[]): void {
+    const indent = ' '.repeat(context.indent);
+    const value = T.findLastArrayItemIn(payload.dependencies(context, selection)[0]);
+    writer.write(indent).write(`$.${payload.name}`);
+    if (value instanceof MapNode) {
+      value.selectEntries(context, writer, selection);
+    } else if (value && T.isContainer(value)) {
+      writer.write(' {\n');
+      context.enter(payload);
+      value.select(context, writer, selection);
+      context.leave(payload);
+      writer.write(indent).write('}');
+    }
+    writer.write('\n');
   }
 
   // mirrors Body.select formatting, but the user's raw JSONSelection replaces the whole mapping.

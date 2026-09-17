@@ -1,0 +1,39 @@
+openapi: 3.0.0
+info:
+  title: a container whose every field vanishes drops whole
+  version: "1.0"
+paths:
+  /folders:
+    get:
+      operationId: getFolders
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  uris:
+                    type: object
+                    properties:
+                      all:
+                        oneOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: string
+                      css:
+                        oneOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: string
+                      js:
+                        oneOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: string

@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "integer-enum-value.connector",
+      "connector": "Query.entryGet",
+      "variables": {},
+      "apiResponseBody": "{\"value\": 1}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/entry.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"value\": {\"number\": 1, \"raw\": 1}}"
+      }
+    }
+  ]
+}

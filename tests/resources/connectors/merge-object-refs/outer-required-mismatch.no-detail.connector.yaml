@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "outer-required-mismatch.no-detail",
+      "connector": "Query.outerRequiredMismatch",
+      "variables": {},
+      "apiResponseBody": "{\"item\": {}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/outer-required-mismatch",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"item\": {}}"
+      }
+    }
+  ]
+}

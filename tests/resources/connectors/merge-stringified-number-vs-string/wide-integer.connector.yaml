@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "wide-integer.connector",
+      "connector": "Query.entryGet",
+      "variables": {},
+      "apiResponseBody": "{\"intFirst\": {\"data\": 9007199254740993}, \"stringFirst\": {\"data\": 9007199254740993}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/entry.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"intFirst\": {\"object\": {\"data\": 9007199254740993}, \"raw\": {\"data\": 9007199254740993}}, \"stringFirst\": {\"object\": {\"data\": 9007199254740993}, \"raw\": {\"data\": 9007199254740993}}}"
+      }
+    }
+  ]
+}

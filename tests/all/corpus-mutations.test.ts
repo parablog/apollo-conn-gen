@@ -60,10 +60,22 @@ test('test_corpus_mut_github', async () => {
 });
 
 test('test_corpus_mut_omni', async () => {
+  // Omni Analytics API, synced 2026-09-15: docs.omni.co/api/openapi.yaml (OAS 3.1.0)
+  // skipValidation: one operation's path parameter is named id but its path uses {routineId}
+  // patch: broken ref PutAppBody -> AppPutBody (source typo)
+  // patch: broken ref PutAppResponse -> AppPutResponse (source typo)
+  // patch: broken ref ApiError405 -> ApiError409 (wrong status code in the source)
   // 5 types since #85: `201` carries the created group, which brings its own members and meta
-  await runOasTest('omni.yaml', ['post:/scim/v2/groups>**'], 146, 5, { skipValidation: true });
+  await runOasTest('omni.yaml', ['post:/scim/v2/groups>**'], 210, 5, { skipValidation: true });
 });
 
 test('test_corpus_mut_confluence', async () => {
   await runOasTest('confluence.json', ['put:/wiki/rest/api/audit/retention>**'], 130, 3);
+});
+
+test('test_corpus_mut_ashby', async () => {
+  // application.create: body-only params (RPC style, no query/path params) with a nested
+  // ApplicationCreateRequestInput; passes generate + compose same as the read-style entry above.
+  // 26 since #220: CustomField.value's anyOf now builds a mixed-value type, same 4 new types.
+  await runOasTest('ashby.json', ['post:/application.create>**'], 197, 26);
 });

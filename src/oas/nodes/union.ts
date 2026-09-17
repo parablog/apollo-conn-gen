@@ -1,11 +1,18 @@
 import {
   Arr,
   Composed,
+  En,
   Factory,
   Get,
   IType,
+  Map as MapType,
+  MixedValue,
   Param,
   Prop,
+  PropArray,
+  PropComp,
+  PropEn,
+  PropObj,
   PropScalar,
   Res,
   Scalar,
@@ -17,8 +24,10 @@ import { SchemaObject } from 'oas/types';
 import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { GqlUtils } from '../utils/gql.js';
 import { Naming } from '../utils/naming.js';
-import { Schemas } from '../utils/schemas.js';
+import { Schemas, MixedValueShape } from '../utils/schemas.js';
+import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 
 export class Union extends Type {
   public schemas: SchemaObject[];
@@ -40,6 +49,9 @@ export class Union extends Type {
   //   /shelf: get -> { featured: $ref Media, ... }  # nested: merged/flat object
   //   Media: oneOf [Book, Movie], discriminator kind
   public forcedFlat = false;
+
+  // set once by consolidate() when this flat union mixes a plain value with a real object. see docs/FIXED.md #208
+  public mixedValue?: MixedValue;
 
   constructor(
     parent: IType,
@@ -164,9 +176,16 @@ export class Union extends Type {
       const name = Union.resolvedTypeName(this.name);
 
       if (this.isFlat()) {
+        // the mixed-value analysis must run before hasSelectedProps below reads this.props. #208
+        this.consolidateMembers(context, selection);
+
         // an empty merge writes no type — its field was written as JSON  #80
         if (!this.hasSelectedProps(context, selection, keep)) {
           trace(context, '   [union::generate]', `[union] no fields to merge, skipping: ${this.name}`);
+        }
+        // FIXED #208: a mixed oneOf — every branch kept as a field, not merged away.
+        else if (this.mixedValue) {
+          this.mixedValue.generate(context, writer, name);
         }
         // No real union here: an input-position oneOf (GraphQL has no input unions) or no
         // discriminator (no tag for `->match`). Emit the merged object — the selection falls back to
@@ -237,30 +256,39 @@ export class Union extends Type {
     writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
   }
 
-  // Members can give the same field name two different shapes. Both objects — keep the first,
-  // picking common fields out of differently-shaped payloads is fine (launch library):
-  //   LaunchNormal:   { rocket: { allOf: [{ $ref: '#/…/RocketNormal' }] } }
-  //   LaunchDetailed: { rocket: { allOf: [{ $ref: '#/…/RocketDetailed' }] } }
-  // A list of allowed values next to a plain string — no single field fits both, so fall back to
-  // the JSON scalar rather than pick a member (TMF717):
-  //   Individual: { status: { $ref: '#/…/IndividualStateType' } }   # enum
-  //   PartyRole:  { status: { type: string } }
-  // see docs/FIXED.md #39, #44
   private dedupedSelectedProps(context: OasContext, selection: string[], keep: boolean): Prop[] {
-    const kindOf = (prop: Prop) => prop.id.split(':')[1];
+    return Union.dedupeByName(this.selectedProps(selection, keep), context, keep, this);
+  }
 
+  // Members can give the same field name three outcomes: the same written shape keeps the first, an
+  // all-enum clash merges every value, and two same-named objects fold under declaresEveryKeptField.
+  //   e.g. Individual: { status: enum-ref }, PartyRole: { status: { type: string } } -> status: JSON
+  public static dedupeByName(props: Prop[], context: OasContext, keep: boolean, union: Union): Prop[] {
     const firstByName = new Map<string, Prop>();
-    const kindByName = new Map<string, string>();
-    const incompatible = new Set<string>();
+    const allByName = new Map<string, Prop[]>();
 
-    for (const prop of this.selectedProps(selection, keep)) {
-      const kind = kindOf(prop);
-      const existingKind = kindByName.get(prop.name);
-      if (existingKind === undefined) {
+    for (const prop of props) {
+      const clashing = allByName.get(prop.name);
+      if (clashing) {
+        clashing.push(prop);
+      } else {
+        allByName.set(prop.name, [prop]);
         firstByName.set(prop.name, prop);
-        kindByName.set(prop.name, kind);
-      } else if (kind !== existingKind) {
-        incompatible.add(prop.name);
+      }
+    }
+
+    const incompatible = new Set<string>();
+    for (const [name, group] of allByName) {
+      if (group.length === 1) {
+        continue;
+      }
+      const kept = group[0];
+      const later = group.slice(1);
+      const compatible = group.every((p) => Union.objectOf(p) !== undefined)
+        ? later.every((other) => Union.declaresEveryKeptField(kept, other, context))
+        : later.every((other) => Union.shapeOf(context, other) === Union.shapeOf(context, kept));
+      if (!compatible) {
+        incompatible.add(name);
       }
     }
 
@@ -271,13 +299,106 @@ export class Union extends Type {
         if (!incompatible.has(name)) {
           return prop;
         }
-        const reason =
-          'different branches of a merged type declare this field differently, and no single GraphQL type fits both — sent as raw JSON.';
+        const clashing = allByName.get(name)!;
+        if (clashing.every((p): p is PropEn => p instanceof PropEn)) {
+          return Union.mergeEnums(context, name, clashing, union);
+        }
+        const reason = JsonDegradeReasons.incompatibleMergedField();
         warn(null, '[union]', reason);
         return new PropScalar(prop.parent!, name, 'JSON', Schemas.withJsonNote(context, {}, reason));
       }),
       keep,
     );
+  }
+
+  // The written shape dedupeByName keys same-named non-object fields on: an enum also carries its
+  // sorted values, a wide integer read through ->jsonStringify is not the same read as a plain
+  // string. e.g. { data: int64 } vs { data: string } -> data: JSON, not merged as both "String"
+  private static shapeOf(context: OasContext, prop: Prop): string {
+    const written = prop.getValue(context);
+    if (prop instanceof PropEn) {
+      const values = ((prop.schema.enum ?? []) as string[]).slice().sort();
+      return `${written}:${values.join(',')}`;
+    }
+    if (prop instanceof PropScalar && prop.stringifiedNumber) {
+      return `${written}->jsonStringify`;
+    }
+    return written;
+  }
+
+  // The object a prop resolves to: PropObj's $ref/inline object, or PropComp's allOf/oneOf type — undefined otherwise.
+  private static objectOf(prop: Prop): IType | undefined {
+    if (prop instanceof PropObj) return prop.obj;
+    if (prop instanceof PropComp) return prop.comp;
+    return undefined;
+  }
+
+  // Whether two objects are known to match without comparing their fields: the same `$ref` (an
+  // inline name is not enough, unrelated objects can share one), or the same schema text.
+  //   e.g. (launch library) agency: $ref AgencyMini on every branch -> match
+  private static sameComponentOrSchema(a: IType, b: IType): boolean {
+    if (T.isRef(a.name) && a.id === b.id) {
+      return true;
+    }
+    return T.sameSchemaAs(a, b);
+  }
+
+  // Whether a value shaped like `other` can be read through `kept`'s type: `other` is at least as
+  // required, and the two match by $ref or schema, or every field of `kept` exists in `other` the same way.
+  //   e.g. detail: DetailBasic! vs detail: DetailRich, same fields -> no (required differs), JSON
+  private static declaresEveryKeptField(
+    kept: Prop,
+    other: Prop,
+    context: OasContext,
+    visited: Set<string> = new Set(),
+  ): boolean {
+    if (kept.required && !other.required) {
+      return false;
+    }
+
+    const keptObj = Union.objectOf(kept);
+    const otherObj = Union.objectOf(other);
+    if (keptObj && otherObj) {
+      if (Union.sameComponentOrSchema(keptObj, otherObj)) {
+        return true;
+      }
+      if (keptObj.props.size === 0) {
+        return false;
+      }
+      const pairId = `${keptObj.id}|${otherObj.id}`;
+      if (visited.has(pairId)) {
+        return true;
+      }
+      visited.add(pairId);
+      for (const [fieldName, keptField] of keptObj.props) {
+        const otherField = otherObj.props.get(fieldName);
+        if (!otherField || !Union.declaresEveryKeptField(keptField, otherField, context, visited)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    return Union.shapeOf(context, kept) === Union.shapeOf(context, other);
+  }
+
+  // Every member's version of a field is an enum: one enum holding every value, first-seen order.
+  //   e.g. Individual: { status: enum [active] }, PartyRole: { status: enum [suspended] } -> status: enum [active, suspended]
+  private static mergeEnums(context: OasContext, name: string, props: PropEn[], union: Union): PropEn {
+    const owner = union;
+    const values: string[] = [];
+    for (const prop of props) {
+      values.push(...((prop.schema.enum ?? []) as string[]));
+    }
+
+    const en = new En(owner, name, { type: 'string', enum: values }, values);
+    en.visit(context);
+
+    const prop = new PropEn(owner, name, en, props[0].schema);
+    prop.add(en);
+    // present on every branch only when every branch requires it
+    prop.required = props.every((p) => p.required);
+    return prop;
   }
 
   // Reasons behind any member that gave up its own shape and became plain JSON — such a member has
@@ -325,6 +446,10 @@ export class Union extends Type {
       // shared field is kept, so reading the fields before the merge can name a different type than
       // the writer emits — box collected enum WebLinkBaseType but wrote `type: FileBaseType!`. #57
       this.consolidateMembers(context, selection);
+      // FIXED #208: the mixed-value fields, so the collector reaches the object type through PropObj.
+      if (this.mixedValue) {
+        return this.mixedValue.dependencies();
+      }
       const keep = context.generateOptions?.keepFieldNames === true;
       return this.dedupedSelectedProps(context, selection, keep);
     }
@@ -342,7 +467,7 @@ export class Union extends Type {
     const keep = context.generateOptions?.keepFieldNames === true;
 
     if (!this.consolidated) {
-      this.consolidate(selection, keep);
+      this.consolidate(context, selection, keep);
     }
 
     // R2: for a real output `union X = A | B` (output position + discriminator) produce the
@@ -351,6 +476,12 @@ export class Union extends Type {
     // fall back to the flat selection below. see docs/FIXED.md #25, #36
     if (!this.isFlat()) {
       this.selectAbstract(context, writer, selection);
+      trace(context, '<- [union::select]', `-> out: ${this.name}`);
+      return;
+    }
+
+    if (this.mixedValue) {
+      this.mixedValue.writeSelection(context, writer, selection);
       trace(context, '<- [union::select]', `-> out: ${this.name}`);
       return;
     }
@@ -459,51 +590,57 @@ export class Union extends Type {
       return;
     }
     const keep = context.generateOptions?.keepFieldNames === true;
-    for (const member of this.consolidate(selection, keep)) {
+    for (const member of this.consolidate(context, selection, keep)) {
       if (member.name !== this.name) {
         context.decRefCount(member.name);
       }
     }
   }
 
-  public consolidate(selection: string[], keep: boolean): Set<IType> {
+  public consolidate(context: OasContext, selection: string[], keep: boolean): Set<IType> {
     T.composables(this).forEach((child) => {
       (child as Composed).consolidate(selection);
     });
 
     const ids: Set<IType> = new Set();
-    const props: Prop[] = [];
-    const prefixes = selectionPrefixes(selection);
-    const discriminator = this.discriminator;
 
-    this.children?.forEach((child) => {
-      // .filter((prop) => selection.find((s) => s.startsWith(prop.path())))
-      ids.add(child);
+    // A flat union under a field, list item or map value that mixes plain values with objects keeps
+    // every branch as its own field, instead of the field merge below that keeps only the objects. #208
+    const shape = this.isFlat() ? this.analyzeMixedValue(context) : undefined;
+    if (shape) {
+      this.mixedValue = new MixedValue(this, shape, context, selection);
+      this.mixedValue.dependencies().forEach((prop) => this.props.set(prop.name, prop));
+    } else {
+      const props: Prop[] = [];
+      const prefixes = selectionPrefixes(selection);
+      const discriminator = this.discriminator;
 
-      // go deeper to get the fields from those inner members, if needed, and only those selected
-      if (child instanceof Union) {
-        props.push(...child.selectedProps(selection, keep));
-        return;
+      this.children?.forEach((child) => {
+        // go deeper to get the fields from those inner members, if needed, and only those selected
+        if (child instanceof Union) {
+          props.push(...child.selectedProps(selection, keep));
+          return;
+        }
+
+        Array.from(child.props.values())
+          .filter((prop) => prefixes.has(prop.path()))
+          .forEach((prop) => props.push(prop));
+      });
+
+      // add the discriminator, if we have one
+      if (discriminator) {
+        const prop = (this.children || [])
+          .map((child) => child.props.get(discriminator))
+          .find((prop) => prop !== undefined);
+
+        if (prop) props.push(prop);
       }
 
-      Array.from(child.props.values())
-        .filter((prop) => prefixes.has(prop.path()))
-        .forEach((prop) => props.push(prop));
-
-      // props.push(...child.props.values());
-    });
-
-    // add the discriminator, if we have one
-    if (discriminator) {
-      const prop = (this.children || [])
-        .map((child) => child.props.get(discriminator))
-        .find((prop) => prop !== undefined);
-
-      if (prop) props.push(prop);
+      // and finally sort the props and copy them to our original
+      props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
     }
 
-    // and finally sort the props and copy them to our original
-    props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
+    this.children?.forEach((child) => ids.add(child));
 
     // and return the set of types we've used
     this.consolidated = true;
@@ -518,6 +655,34 @@ export class Union extends Type {
     }
 
     return ids;
+  }
+
+  // Whether this union mixes a plain value with a real object, or undefined when it doesn't:
+  // input side, not under a field/list/map, not mixed, or a wide integer member (open gap, #208).
+  //   e.g. (ashby) OverlayCustomField.value: oneOf [boolean, { currencyCode, value }, string] -> text, boolean, object
+  public analyzeMixedValue(context: OasContext, quiet: boolean = false): MixedValueShape | undefined {
+    if (this.kind === 'input') {
+      return undefined;
+    }
+    if (!(this.parent instanceof PropComp || this.parent instanceof PropArray || this.parent instanceof MapType)) {
+      return undefined;
+    }
+
+    const members = this.schemas.filter((s) => s?.type !== 'null');
+    const shape = Schemas.analyzeMixedValue(context, members);
+    if (!shape && !quiet && Union.hasWideIntegerMember(context, members)) {
+      warn(null, '[union]', `wide-integer member in a mixed oneOf keeps today's merge: ${this.name}`);
+    }
+    return shape;
+  }
+
+  // Whether a member is an integer too wide for Int: the one reason analyzeMixedValue declines,
+  // and worth a warning since the field then merges away its plain branches. #208
+  private static hasWideIntegerMember(context: OasContext, members: SchemaObject[]): boolean {
+    return members.some((m) => {
+      const resolved = '$ref' in m ? (context.resolvePointer((m as { $ref: string }).$ref) as SchemaObject) : m;
+      return resolved?.type === 'integer' && GqlUtils.gqlScalarFor(resolved, 'integer') === 'String';
+    });
   }
 
   private visitProperties(_context: OasContext): void {
@@ -540,8 +705,13 @@ export class Union extends Type {
   //   fields to merge, so the operation answers JSON instead of an empty type
   public emptyMergeReason(context: OasContext, selection: string[], keep: boolean): string | undefined {
     return this.isFlat() && !this.hasSelectedProps(context, selection, keep)
-      ? "this union merges every member's fields into one type, but none were selected — sent as raw JSON instead."
+      ? JsonDegradeReasons.emptyMerge()
       : undefined;
+  }
+
+  // A mixed-value union reads the whole value, e.g. (ashby) `value?->echo({ raw: @ })`. #208
+  public selectionSuffix(_context: OasContext): string | undefined {
+    return this.mixedValue?.selectionSuffix();
   }
 
   public selectedProps(selection: string[], keep: boolean) {

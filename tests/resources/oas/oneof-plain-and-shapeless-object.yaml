@@ -1,0 +1,58 @@
+openapi: 3.0.0
+info:
+  title: a oneOf mixing a plain scalar with a shapeless object
+  version: "1.0"
+paths:
+  /widgets:
+    get:
+      operationId: getWidgets
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  payload:
+                    oneOf:
+                      - type: object
+                        additionalProperties: true
+                      - type: string
+                  args:
+                    type: array
+                    items:
+                      oneOf:
+                        - type: string
+                        - type: object
+                          additionalProperties: true
+                  value:
+                    oneOf:
+                      - {}
+                      - type: number
+  /entries:
+    get:
+      operationId: getEntries
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - value
+                      properties:
+                        value:
+                          oneOf:
+                            - {}
+                            - type: number

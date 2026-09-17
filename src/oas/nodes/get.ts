@@ -9,7 +9,9 @@ import { Media } from '../utils/media.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import { Params } from '../utils/params.js';
+import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
+import { findPayload } from '../utils/payload.js';
 import _ from 'lodash';
 
 // statuses that, per the HTTP spec itself, never carry a body -- these are the only ones where
@@ -118,7 +120,7 @@ export class Get extends Type implements Op {
 
     if (this.resultType) {
       writer.write(': ');
-      this.resultType.generate(context, writer, selection);
+      this.writeReturnType(context, writer, selection);
     }
 
     writer.write('\n');
@@ -128,6 +130,18 @@ export class Get extends Type implements Op {
 
   public select(_context: OasContext, _writer: Writer, _selection: string[]) {
     // do nothing
+  }
+
+  // Writes the root field's return type: the payload field's own type when the overrides name
+  // one, otherwise the response type.
+  //   e.g. Ashby: { success: true, results: Job } with payload "results" -> Job
+  protected writeReturnType(context: OasContext, writer: Writer, selection: string[]): void {
+    const payload = findPayload(context, this);
+    if (payload) {
+      writer.write(payload.getValue(context)).write(payload.required ? '!' : '');
+      return;
+    }
+    this.resultType!.generate(context, writer, selection);
   }
 
   // Why the op returns plain JSON instead of a real type, or undefined if it doesn't. resultType is
@@ -344,7 +358,7 @@ export class Get extends Type implements Op {
       // data, it just wasn't written down, so we read the raw response instead of making up an
       // empty "it worked" answer that would hide that data.
       //   e.g. (world anvil) get:/manuscript 200: { description: ok }  — no `content` key   #147
-      const reason = `the '${statusCode}' response declares no body — the real API may still return data this spec doesn't describe, so it's read as raw JSON instead of a fabricated empty result.`;
+      const reason = JsonDegradeReasons.emptyResponseBody(statusCode);
       warn(context, `  [${code}]`, reason);
       const schema = Schemas.withJsonNote(context, {}, reason);
       // build the Res first so the Scalar below is parented to it from birth — building it the

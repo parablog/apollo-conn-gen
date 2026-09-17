@@ -33,7 +33,6 @@ const base = './tests/resources/oas';
 
 // Vendor corpus plus tracked real fixtures that are broad enough to measure beyond one smoke test.
 const ALL_SPECS = [
-  'docusign.json',
   'googlebooks.yaml',
   'slack.yaml',
   'digitalocean.yaml',
@@ -84,6 +83,7 @@ const ALL_SPECS = [
   'mailchimp.json',
   'fullstory-events.json',
   'fullstory-users.json',
+  'ashby.json',
 ];
 
 // One pass at the current shipping versions (connect v0.4 / fed v2.14, per DEFAULT_VERSIONS): real
@@ -153,8 +153,8 @@ const COMPOSE_TIMEOUT_MS = Number(process.env.COV_COMPOSE_TIMEOUT) || 30_000;
 const WHOLE_TIMEOUT_MS = Number(process.env.COV_WHOLE_TIMEOUT) || 120_000;
 // Above this SDL size we compose one at a time — eight rovers on a 300K schema each is what ate 60 GB.
 const BIG_SCHEMA_BYTES = 200_000;
-// Above this spec-FILE size the whole sweep runs one at a time — several docusign-class sweeps at
-// once (each may need most of the 16 GB worker heap) ran the machine itself out of memory.
+// Above this spec-FILE size the whole sweep runs one at a time — several such sweeps at once
+// (each may need most of the 16 GB worker heap) ran the machine itself out of memory.
 const HEAVY_SPEC_BYTES = Number(process.env.COV_HEAVY_SPEC_BYTES) || 1_000_000;
 // A fresh dir per run (same reason as runners.ts): the GET and mutations sweeps name their files
 // by index, so a shared dir would swap schemas between them when the two passes run concurrently.
@@ -188,7 +188,7 @@ async function loadBase(file: string): Promise<{ gen: OasGen; skip: boolean } | 
 }
 
 // takes the schema as a file, not a string — schemas are written to disk as soon as they are
-// generated, so a big spec's sweep never holds them all in memory at once (docusign: 247).
+// generated, so a big spec's sweep never holds them all in memory at once (some run 200+ ops).
 async function compose(
   op: string,
   schemaFile: string,
@@ -325,7 +325,7 @@ async function runPass(
   const verdicts: Record<string, string> = {};
   // Phase 1 (sequential, CPU): fresh gen per op -> classify generation, collect compose candidates.
   // Each schema goes straight to a file; keeping all of a big spec's schemas in memory through the
-  // compose phase is what ran the sweep worker out of memory (docusign, 247 schemas).
+  // compose phase is what ran the sweep worker out of memory on the heaviest specs.
   const candidates: { op: string; file: string; bytes: number }[] = [];
   for (const op of ops) {
     const sel = SelectionPath.everythingUnder(op); // full-subtree selection, exactly like the corpus tests / vet-spec
@@ -450,8 +450,8 @@ const reports: (SpecReport | undefined)[] = [];
 const globalBuckets = new Map<string, Bucket>();
 
 async function sweepSpec(file: string, slots: Int32Array): Promise<SpecOutcome> {
-  // slots[2] is the heavy-sweep token: a docusign-class spec can take most of the worker heap,
-  // so only one of them sweeps at a time — small specs keep full parallelism.
+  // slots[2] is the heavy-sweep token: the heaviest specs can take most of the worker heap, so
+  // only one of them sweeps at a time — small specs keep full parallelism.
   if (fs.statSync(`${base}/${file}`).size >= HEAVY_SPEC_BYTES) {
     return withSlot(slots, 2, 1, () => sweepSpecNow(file, slots));
   }
@@ -537,8 +537,8 @@ async function sweepSpecInWorker(file: string, slots: Int32Array): Promise<SpecO
     register();
     import(${JSON.stringify(import.meta.url)});
   `;
-  // generating one docusign mutation can peak past 8 GB on its own — a 16 GB in-process run got
-  // through all 247, so the worker gets the same room. COV_WORKER_HEAP_MB overrides it.
+  // one mutation on the heaviest spec in the corpus can peak into the multiple-GB range on its
+  // own, so the worker gets a large room. COV_WORKER_HEAP_MB overrides it.
   const worker = new Worker(bootstrap, {
     eval: true,
     workerData: { file, slots, argv: process.argv.slice(2) },

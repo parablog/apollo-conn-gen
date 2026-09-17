@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "wide-integer.connector",
+      "connector": "Query.cards",
+      "variables": {},
+      "apiResponseBody": "[{\"card_number\": 9999999999999999, \"cvv_number\": 123, \"id\": 1}]",
+      "expect": {
+        "connectorRequest": {
+          "url": "http://localhost:9000/cards",
+          "method": "GET"
+        },
+        "connectorResponse": "[{\"cardNumber\": \"9999999999999999\", \"cvvNumber\": 123, \"id\": 1}]"
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+openapi: 3.0.0
+info:
+  title: mixed oneOf with an integer enum member, classified by type not by having an enum
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /entry.get:
+    get:
+      operationId: getEntry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    oneOf:
+                      - type: integer
+                        enum: [1, 2]
+                      - type: object
+                        title: Detail
+                        properties:
+                          amount:
+                            type: number

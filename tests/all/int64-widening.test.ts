@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { runOasTest } from '../../src/tests/runners.js';
+import { runConnectorTest } from '../../src/tests/connectors.js';
 import './_setup.js';
 
 // GraphQL Int is spec-defined as signed 32-bit. An OpenAPI integer that declares format: int64,
@@ -21,7 +22,7 @@ test('test_widens_and_coerces_response_fields', async () => {
   assert.ok(schema!.includes('card_number: String'), 'out-of-Int32-bounds integer widens to String');
   // card_number is optional in Card, so the coercion carries the `?` optional marker
   assert.ok(
-    schema!.includes('card_number: card_number->jsonStringify?'),
+    schema!.includes('card_number: card_number?->jsonStringify'),
     'widened response field coerces the upstream JSON number',
   );
   // cvv_number's bounds fit in Int32: untouched
@@ -51,5 +52,24 @@ test('test_coercion_composes_with_camelcase_alias', async () => {
   // and the coercion appends to that alias instead of duplicating it
   const schema = await run();
   assert.ok(schema!.includes('cardNumber: String'), 'widened field still camelCases');
-  assert.ok(schema!.includes('cardNumber: card_number->jsonStringify'), 'coercion appends to the existing alias');
+  assert.ok(schema!.includes('cardNumber: card_number?->jsonStringify'), 'coercion appends to the existing alias');
 });
+
+// The router is proven to take `key?->jsonStringify` and coerce: a wide integer round-trips as
+// its string, and a key the API left out entirely stays left out, not `null`.
+const RUNTIME_CASES = ['wide-integer', 'missing-key'];
+for (const name of RUNTIME_CASES) {
+  test(`int64-widening runtime: ${name}`, async (t) => {
+    const result = await runConnectorTest(
+      'int64-widening.yaml',
+      ['get:/cards>**'],
+      `tests/resources/connectors/int64-widening/${name}.connector.yaml`,
+      { skipValidation: true },
+    );
+    if (result.skipped) {
+      t.skip(result.output);
+      return;
+    }
+    assert.ok(result.success, result.output);
+  });
+}

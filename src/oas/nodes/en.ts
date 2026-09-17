@@ -7,13 +7,17 @@ import { GqlUtils } from '../utils/gql.js';
 import { Naming } from '../utils/naming.js';
 
 export class En extends Type {
+  // true only when built with no name at all, not whenever the name happens to spell "enum".
+  private unnamed: boolean;
+
   constructor(
     parent: IType,
-    name: string = 'enum',
+    name: string | undefined,
     public schema: SchemaObject,
     public items: string[] = [],
   ) {
-    super(parent, name);
+    super(parent, name ?? 'enum');
+    this.unnamed = name === undefined;
     // a spec that lists a value twice must not write it twice; the first keeps its place.
     // e.g. (openfigi) stateCode: { enum: [AB, AC, AC, HI, HI, …] }  see docs/FIXED.md #102
     this.items = Array.from(new Set(items));
@@ -36,11 +40,12 @@ export class En extends Type {
       // below gives it the owner-prefixed form instead of the shared name Enum.
       //   e.g. (motion) include: { type: array, items: { enum: [workHours] } } -> enum SchedulesGetRequestInclude
       // see docs/FIXED.md #173
-      if (this.name === 'enum' && this.parent instanceof PropArray) {
+      if (this.unnamed && this.parent instanceof PropArray) {
         this.name = this.parent.name;
+        this.unnamed = false;
       }
       // rename an inline enum, i.e: status: { type: string, enum: [placed, approved, delivered] }   # -> enum OrderStatus
-      if (!T.isRef(this.name) && this.name !== 'enum') {
+      if (!T.isRef(this.name) && !this.unnamed) {
         T.resolveNameConflict(this, context);
       }
       context.store(this.name, this);
