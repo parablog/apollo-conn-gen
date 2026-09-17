@@ -531,6 +531,8 @@ Some APIs answer every request with HTTP 200 whether it worked or not, and put s
 
 `isSuccess` and `errors` are written onto `@source` as given, so the router turns a failed body into a GraphQL error instead of leaving the flag/error fields as plain data. `payload` names the field every op's result should return instead of the whole response object — its own type becomes the root field's return type, and its own selection replaces the wrapper's. A per-op entry's own `"payload": "<field>"` overrides the default for that op; `"payload": null` keeps that one op's current shape even though a default is set. An op whose response has no property by that name is left unchanged, with a warning.
 
+An operation whose error body does not fit the `"$source"` mapping can carry its own `"errors"`, same `message`/`extensions` keys, on its own override entry (exact or `"$match"`): `{ "post:/customFields.fetch": { "errors": { "message": "$.errorInfo.message" } } }`. That mapping is written on that operation's own `@connect`, winning over both `"$source"`'s mapping and the inferred `--emit-connector-errors` block for that operation. Every other operation keeps answering through `"$source"`.
+
 ### Request bodies
 
 A body is taken from the first content type the router can send: JSON, or `application/x-www-form-urlencoded`. A form body is mapped the same way a JSON one is, and its `@connect` also writes `headers: [{ name: "Content-Type", value: "application/x-www-form-urlencoded" }]` — the router form-encodes the body when it reads exactly that value (`name=x&tags[0]=a&address[city]=Luton`). Your own `Content-Type` header, from the spec or from an override, is left alone.

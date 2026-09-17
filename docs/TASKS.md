@@ -832,21 +832,3 @@ re-derive it the same way the existing settle loop above it does) so a type left
 reference is dropped too, not just the wrapper itself.
 
 **Refs:** `src/oas/generator/typesCollector.ts` (`dropUnreturnedWrappers`), `docs/FIXED.md` #226.
-
-## 228 [FEAT] [P3] · One operation's error shape differs from the source's and the overrides file cannot say so — ⬜ Open
-
-**Symptom:** `$source.errors` in the overrides file maps every operation's error the same way.
-Ashby's `customFields.fetch` answers `{ success: false, errors: ["invalid_input"], errorInfo: { message } }`,
-where `errors` is a list of codes and the text lives in `errorInfo.message`, so the source-wide
-`$.errors?->first?.message` finds nothing and the client only ever sees the fallback text.
-
-**OAS** (ashby.json, `post:/customFields.fetch`): `oneOf [ { fields }, OverlayErrorResponse ]`, with
-`OverlayErrorResponse.errors: [string]` and `OverlayErrorResponse.errorInfo: { code, message, requestId }`.
-
-**Shape:** accept `errors` on a per-operation override entry
-(`"assessmentPartnerCustomFieldsFetch": { "errors": { "message": "$.errorInfo.message" } }`) and write
-it as `errors: { message: ... }` on that operation's `@connect`, which the router already lets override
-the `@source` mapping. Same `message`/`extensions` keys as `$source.errors`, nothing new to learn.
-
-**Refs:** `src/oas/oasContext.ts` (`OverrideEntry`), `src/oas/io/schemaWriter.ts`
-(`writeSourceErrorMapping`), `src/oas/io/operationWriter.ts`, `docs/FIXED.md` #226.

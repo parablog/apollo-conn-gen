@@ -11,6 +11,10 @@ import { DirectivesConfig } from './lint/directives.js';
 
 export type { DirectivesConfig };
 
+// How a failed body maps to a GraphQL error: message and extensions are JSONSelection strings.
+//   e.g. Ashby: { "message": "$($.errors?->first?.message ?? 'Ashby request failed')", "extensions": "httpStatus: $status" }
+export type ErrorsMapping = { message?: string; extensions?: string };
+
 // per-operation request rewiring, keyed by op id (`get:/pets/{id}`): replace the HTTP path,
 // query params (raw JSONSelection values, e.g. `$('2024-01')`), headers (string templates,
 // e.g. `{$config.key}`) and/or the whole body mapping; null drops one, unknown keys append
@@ -26,6 +30,9 @@ export type OverrideEntry = {
   // response even when "$source" below names a default. see docs/FIXED.md #226
   //   e.g. { success: true, results: Job } -> "payload": "results" returns Job
   payload?: string | null;
+  // This operation's own error mapping, written on its @connect instead of the "$source" one.
+  //   e.g. Ashby's post:/customFields.fetch: { "errors": { "message": "$.errorInfo.message" } }
+  errors?: ErrorsMapping;
 };
 
 // Settings for the whole API under the "$source" key: how @source tells success from failure,
@@ -33,7 +40,7 @@ export type OverrideEntry = {
 //   e.g. { "$source": { "isSuccess": "$.success", "errors": { "message": "$.errors.0.message" }, "payload": "results" } }
 export type SourceOverride = {
   isSuccess?: string;
-  errors?: { message?: string; extensions?: string };
+  errors?: ErrorsMapping;
   payload?: string;
 };
 

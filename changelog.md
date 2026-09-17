@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- One operation can have its own error mapping when the source-wide `"$source"` mapping doesn't
+  fit its error body. Before, every operation shared that one mapping — Ashby's
+  `customFields.fetch`, whose error body carries the message under `errorInfo.message` instead,
+  only ever showed the fallback text. Add `"errors"` to that operation's own override entry (exact
+  or `"$match"`), same `message`/`extensions` keys as `"$source"`:
+  `{ "post:/customFields.fetch": { "errors": { "message": "$.errorInfo.message" } } }`. Issue #228.
 - The overrides file can now cover many operations with one entry instead of one per operation.
   Add a `"$match"` entry with a regex, and every operation whose key matches it gets that entry's
   settings — before, an API that names every read `.list`/`.info`/`.search` needed one entry per

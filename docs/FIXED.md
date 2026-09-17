@@ -11213,3 +11213,70 @@ byte-identical to the old 87-entry file: 87 Query and 110 Mutation fields.
 
 **Refs:** `src/oas/utils/overrides.ts` (`findOverride`), `src/oas/nodes/typeUtils.ts`,
 `src/oas/io/operationWriter.ts`, `src/oas/utils/payload.ts`, `src/oas/oasGen.ts`, #150, #224, #226.
+
+## 228 [FEAT] [P3] · One operation's own error mapping in the overrides file — ✅ Fixed
+
+**Symptom:** `$source.errors` maps every operation's failure the same way. Ashby's
+`customFields.fetch` answers `{ success: false, errors: ["invalid_input"], errorInfo: { code,
+message } }` — a list of codes plus the text under `errorInfo.message` — so the source-wide
+`$.errors?->first?.message` finds nothing there and the client only ever sees the fallback text.
+The router already lets `errors` on `@connect` override the `@source` mapping; the generator had
+no way to write it.
+
+**OAS:** (ashby.json, `post:/customFields.fetch`) `oneOf [ { success, fields }, { success, errors:
+[string], errorInfo: { code, message, requestId } } ]`.
+
+**Config:** an override entry (exact or `$match`) can now carry its own `errors`, same
+`message`/`extensions` keys as `$source.errors`:
+```json
+{
+  "$source": {
+    "isSuccess": "$.success",
+    "errors": { "message": "$($.errors?->first?.message ?? 'Ashby request failed')",
+                "extensions": "httpStatus: $status" },
+    "payload": "results"
+  },
+  "post:/customFields.fetch": {
+    "errors": { "message": "$.errorInfo.message" }
+  }
+}
+```
+Written onto that operation's own `@connect`:
+```graphql
+customFieldsFetch(...): ... @connect(
+  source: "api"
+  http: { POST: "/customFields.fetch" ... }
+  selection: """ ... """
+  errors: { message: "$.errorInfo.message" }
+)
+```
+- An operation's own `errors` replaces `@source`'s mapping for that operation only — every other
+  operation still answers through `$source.errors`.
+- It wins over the R4 `--emit-connector-errors` block too: an operation with its own `errors` gets
+  that block and not the inferred one.
+- Setting only `message` still lets the router apply `@source`'s `extensions` for that operation —
+  confirmed through the router, not assumed.
+
+**Fix.** `ErrorsMapping` (`{ message?, extensions? }`) in `oasContext.ts` is the one shape shared by
+`SourceOverride.errors` and the new `OverrideEntry.errors`. `errorsWriter.ts`'s `write()` checks the
+operation's own override first (through `findOverride`, so a `$match` entry carries it too) and
+writes it with the new `writeMapping`, one line at the `@connect` argument level, before falling
+through to the existing R4 inference. `quotedString`/`quotedOrBlockString` moved from private
+statics on `SchemaWriter` to `src/oas/utils/gql.ts`, shared by both writers.
+
+**Tests.** `tests/resources/oas/overrides-errors.yaml`: two POST operations, Ashby-shaped —
+`widget.info` fits the `$source` error shape, `customFields.fetch` does not, plus a documented
+`400` response so the R4 inference has something to read. `tests/all/source-envelope.test.ts`: an
+operation's own `errors` is written on that operation's `@connect` only, `@source` unchanged; the
+same works through a `$match` pattern; it wins over the inferred R4 block; the schema composes on
+stock rover 2.15.1. Runtime, through the router: `customFields.fetch`'s own mapping picks
+`errorInfo.message` over the `$source` fallback text, and still carries `$source`'s `extensions`
+since the entry only set `message`; `widget.info`, untouched, still answers through `$source`.
+
+**Ashby result.** `tests/resources/oas/ashby-overrides.json` gains one `errors` entry for
+`post:/customFields.fetch`. Generated with `-n --infer-entity-resolvers --overrides`, the only
+change is that one line, `errors: { message: "$.errorInfo.message" }`, inside its `@connect`: 87
+Query and 110 Mutation fields, unchanged.
+
+**Refs:** `src/oas/io/errorsWriter.ts`, `src/oas/oasContext.ts`, `src/oas/utils/gql.ts`,
+`src/oas/io/schemaWriter.ts`, #226, #225.

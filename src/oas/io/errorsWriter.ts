@@ -1,13 +1,16 @@
 import _ from 'lodash';
 import { ResponseObject, SchemaObject } from 'oas/types';
-import { OasContext } from '../oasContext.js';
+import { ErrorsMapping, OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Op } from '../nodes/internal.js';
 import { Media } from '../utils/media.js';
+import { quotedOrBlockString, quotedString } from '../utils/gql.js';
+import { findOverride } from '../utils/overrides.js';
 import { Writer } from './writer.js';
 
-// R4 (opt-in): the `errors:` block of a connector — `message` from the documented error body,
-// `extensions` carrying `$status`.
+// The `errors:` block of a connector: an operation's own mapping from the overrides file when it
+// names one, otherwise (R4, opt-in) `message` inferred from the documented error body plus `$status`.
+//   e.g. (ashby) post:/customFields.fetch with { "errors": { "message": "$.errorInfo.message" } }
 export class ErrorsWriter {
   // corpus-measured priority for the error-body message field: `message` (755 error schemas),
   // `error` (362), `detail` (7)
@@ -15,9 +18,16 @@ export class ErrorsWriter {
 
   constructor(private gen: OasGen) {}
 
-  // emit an `errors { message extensions { statusCode: $status } }` block for operations that
-  // document HTTP error responses.
+  // Writes the errors block: the operation's own mapping when its override entry names one, else
+  // the inferred R4 block for operations that document HTTP error responses.
+  //   e.g. (ashby) post:/customFields.fetch with { "errors": { "message": "$.errorInfo.message" } }
   public write(context: OasContext, writer: Writer, op: Op, indent: number): void {
+    const mapping = findOverride(op.id, context.generateOptions.overrides)?.errors;
+    if (mapping?.message || mapping?.extensions) {
+      this.writeMapping(writer, mapping, indent);
+      return;
+    }
+
     if (!context.generateOptions?.emitConnectorErrors || !this.hasDocumentedErrors(op)) {
       return;
     }
@@ -43,6 +53,20 @@ export class ErrorsWriter {
       .write('"""\n')
       .write(labelSpacing)
       .write('}\n');
+  }
+
+  // Writes the file's own errors mapping for one operation, one line at the @connect arg level.
+  //   e.g. (ashby) { message: "$.errorInfo.message" } -> errors: { message: "$.errorInfo.message" }
+  private writeMapping(writer: Writer, mapping: ErrorsMapping, indent: number): void {
+    const labelSpacing = ' '.repeat(indent + 6);
+    writer.write(labelSpacing).write('errors: {');
+    if (mapping.message) {
+      writer.write(` message: ${quotedString(mapping.message)}`);
+    }
+    if (mapping.extensions) {
+      writer.write(` extensions: ${quotedOrBlockString(mapping.extensions)}`);
+    }
+    writer.write(' }\n');
   }
 
   // True when the operation documents an HTTP error response. Accepts both concrete numeric statuses

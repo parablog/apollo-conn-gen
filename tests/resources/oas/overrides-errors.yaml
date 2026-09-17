@@ -1,0 +1,110 @@
+openapi: 3.0.3
+info:
+  title: R228 per-operation errors mapping
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /widget.info:
+    post:
+      operationId: widgetInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: A single widget
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WidgetInfoSuccessResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+  /customFields.fetch:
+    post:
+      operationId: customFieldsFetch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200':
+          description: One custom field definition
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/CustomFieldsFetchSuccessResponse'
+                  - $ref: '#/components/schemas/CustomFieldsFetchErrorResponse'
+        '400':
+          description: The request was rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponse'
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+    ErrorDetail:
+      type: object
+      properties:
+        message: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+    WidgetInfoSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        results:
+          $ref: '#/components/schemas/Widget'
+    Field:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+    CustomFieldsFetchSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/Field'
+    CustomFieldsFetchErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        errors:
+          type: array
+          items: { type: string }
+        errorInfo:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+    BadRequestResponse:
+      type: object
+      properties:
+        message: { type: string }

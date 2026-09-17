@@ -395,6 +395,113 @@ test('source-envelope flag runtime: a failing body becomes a mapped GraphQL erro
   assert.strictEqual(error.message, 'channel_not_found');
 });
 
+// --- an operation's own errors mapping, written on its @connect instead of the "$source" one (see docs/FIXED.md #228) ---
+
+const OVERRIDES_ERRORS_ALL = ['post:/widget.info>**', 'post:/customFields.fetch>**'];
+
+const ERRORS_SOURCE: OverridesConfig['$source'] = {
+  isSuccess: '$.success',
+  errors: {
+    message: "$($.errors?->first?.message ?? 'Ashby request failed')",
+    extensions: 'httpStatus: $status',
+  },
+};
+
+test("source-envelope: an operation's own errors is written on that op's @connect only", async () => {
+  const overrides: OverridesConfig = {
+    $source: ERRORS_SOURCE,
+    'post:/customFields.fetch': { errors: { message: '$.errorInfo.message', extensions: 'code: $.errorInfo.code' } },
+  };
+  const schema = await runOasTest('overrides-errors.yaml', OVERRIDES_ERRORS_ALL, 2, 8, { useOperationIds: true, overrides });
+
+  assert.ok(
+    schema!.includes('errors: { message: "$.errorInfo.message" extensions: "code: $.errorInfo.code" }'),
+    "customFieldsFetch carries the file's own errors mapping",
+  );
+  const errorsBlocks = schema!.match(/errors: \{/g) ?? [];
+  assert.strictEqual(errorsBlocks.length, 2, 'one on @source, one on customFieldsFetch, none on widgetInfo');
+  assert.ok(
+    schema!.includes('errors: { message: "$($.errors?->first?.message ?? \'Ashby request failed\')" extensions: "httpStatus: $status" })'),
+    '@source still carries the $source mapping',
+  );
+});
+
+test("source-envelope: an operation's own errors also works through a $match pattern", async () => {
+  const overrides: OverridesConfig = {
+    $source: ERRORS_SOURCE,
+    $match: [{ pattern: '\\.fetch$', errors: { message: '$.errorInfo.message' } }],
+  };
+  const schema = await runOasTest('overrides-errors.yaml', OVERRIDES_ERRORS_ALL, 2, 8, { useOperationIds: true, overrides });
+
+  assert.ok(schema!.includes('errors: { message: "$.errorInfo.message" }'), "the pattern's own errors mapping reaches customFieldsFetch");
+});
+
+test("source-envelope: an operation's own errors wins over the inferred R4 block", async () => {
+  const overrides: OverridesConfig = {
+    $source: ERRORS_SOURCE,
+    'post:/customFields.fetch': { errors: { message: '$.errorInfo.message', extensions: 'code: $.errorInfo.code' } },
+  };
+  const schema = await runOasTest('overrides-errors.yaml', OVERRIDES_ERRORS_ALL, 2, 8, {
+    useOperationIds: true,
+    overrides,
+    emitConnectorErrors: true,
+  });
+
+  // one on @source, one on customFieldsFetch's own mapping; none inferred, none on widgetInfo
+  const errorsBlocks = schema!.match(/errors: \{/g) ?? [];
+  assert.strictEqual(errorsBlocks.length, 2, "customFieldsFetch carries exactly one errors argument, the file's own, and widgetInfo none");
+  assert.ok(schema!.includes('errors: { message: "$.errorInfo.message" extensions: "code: $.errorInfo.code" }'));
+});
+
+test("source-envelope: an operation's own errors composes on stock rover 2.15.1", async () => {
+  const overrides: OverridesConfig = {
+    $source: ERRORS_SOURCE,
+    'post:/customFields.fetch': { errors: { message: '$.errorInfo.message', extensions: 'code: $.errorInfo.code' } },
+  };
+  await runOasTest('overrides-errors.yaml', OVERRIDES_ERRORS_ALL, 2, 8, { useOperationIds: true, overrides, forceRover: true });
+});
+
+test("source-envelope runtime: an operation's own errors mapping picks the API's own message over the $source fallback", async (t) => {
+  if (!routerAvailable()) return t.skip(`router binary not found at ${routerBinary()}`);
+
+  const overrides: OverridesConfig = {
+    $source: ERRORS_SOURCE,
+    'post:/customFields.fetch': { errors: { message: '$.errorInfo.message' } },
+  };
+  const response = await runBodyThroughRouter(
+    'overrides-errors.yaml',
+    OVERRIDES_ERRORS_ALL,
+    overrides,
+    '{"success": false, "errors": ["invalid_input"], "errorInfo": {"code": "invalid_input", "message": "field id is required"}}',
+    'mutation { customFieldsFetch(input: {id: "1"}) { success } }',
+  );
+
+  assert.ok(response.errors && response.errors.length > 0, 'a failed body must answer with a GraphQL error, not data');
+  const error = response.errors![0] as { message: string; extensions?: Record<string, unknown> };
+  assert.strictEqual(error.message, 'field id is required', "the operation's own mapping wins over the $source fallback text");
+  assert.strictEqual(error.extensions?.httpStatus, 200, 'the $source extensions still apply when the entry sets only message');
+});
+
+test("source-envelope runtime: an operation's own errors mapping leaves every other operation on the $source mapping", async (t) => {
+  if (!routerAvailable()) return t.skip(`router binary not found at ${routerBinary()}`);
+
+  const overrides: OverridesConfig = {
+    $source: ERRORS_SOURCE,
+    'post:/customFields.fetch': { errors: { message: '$.errorInfo.message' } },
+  };
+  const response = await runBodyThroughRouter(
+    'overrides-errors.yaml',
+    OVERRIDES_ERRORS_ALL,
+    overrides,
+    '{"success": false, "errors": [{"message": "widget not found"}]}',
+    'mutation { widgetInfo(input: {id: "1"}) { success } }',
+  );
+
+  assert.ok(response.errors && response.errors.length > 0, 'a failed body must answer with a GraphQL error, not data');
+  const error = response.errors![0] as { message: string };
+  assert.strictEqual(error.message, 'widget not found', 'widgetInfo still answers through the untouched $source mapping');
+});
+
 // --- the real Ashby spec with the config; the corpus tests keep the unconfigured baseline ---
 
 // docs/FIXED.md #225: a "$match" pattern entry's fields (including "payload") merge under an

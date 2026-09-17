@@ -4,6 +4,7 @@ import { OasGen } from '../oasGen.js';
 import { Writer } from './writer.js';
 import { SecurityPlan } from './security.js';
 import { ServerUrl } from '../utils/serverUrl.js';
+import { quotedOrBlockString, quotedString } from '../utils/gql.js';
 
 export class SchemaWriter {
   constructor(
@@ -50,27 +51,17 @@ export class SchemaWriter {
     }
 
     if (source.isSuccess) {
-      writer.write(`\n    isSuccess: ${SchemaWriter.quotedString(source.isSuccess)}`);
+      writer.write(`\n    isSuccess: ${quotedString(source.isSuccess)}`);
     }
     if (source.errors?.message || source.errors?.extensions) {
       writer.write('\n    errors: {');
       if (source.errors.message) {
-        writer.write(` message: ${SchemaWriter.quotedString(source.errors.message)}`);
+        writer.write(` message: ${quotedString(source.errors.message)}`);
       }
       if (source.errors.extensions) {
-        writer.write(` extensions: ${SchemaWriter.quotedOrBlockString(source.errors.extensions)}`);
+        writer.write(` extensions: ${quotedOrBlockString(source.errors.extensions)}`);
       }
       writer.write(' }');
     }
-  }
-
-  // Wraps a value in double quotes, escaping any backslash or double quote inside it.
-  private static quotedString(value: string): string {
-    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-  }
-
-  // A """block string""" when the value spans lines, e.g. two extensions keys, else quoted.
-  private static quotedOrBlockString(value: string): string {
-    return value.includes('\n') ? `"""\n${value}\n"""` : SchemaWriter.quotedString(value);
   }
 }

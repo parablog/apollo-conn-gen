@@ -1,6 +1,16 @@
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
 
+// Wraps a value in double quotes, escaping any backslash or double quote inside it.
+export function quotedString(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+// A """block string""" when the value spans lines, e.g. two extensions keys, else quoted.
+export function quotedOrBlockString(value: string): string {
+  return value.includes('\n') ? `"""\n${value}\n"""` : quotedString(value);
+}
+
 export class GqlUtils {
   // True when every value is a legal GraphQL enum value once trimmed (TMF637 ships `'aborted '`):
   // a bare identifier that is not a boolean or null. Numbers and `+1` have no enum form.

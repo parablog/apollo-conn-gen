@@ -12,5 +12,8 @@
       "pattern": "^post:/.*\\.(list\\w*|info|search\\w*|fetch|interviewerSettings|getRecentEmailMessages|generate|synchronous)$",
       "root": "query"
     }
-  ]
+  ],
+  "post:/customFields.fetch": {
+    "errors": { "message": "$.errorInfo.message" }
+  }
 }
