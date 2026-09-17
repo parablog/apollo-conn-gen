@@ -409,7 +409,10 @@ export class Factory {
           const array = new PropArray(parent, propName, schema!);
           // const itemsName = Naming.genArrayItems(propName);
 
-          const itemsSchema = Factory.unwrapRedundantArrayItems(context, _.get(schemaObj, 'items') as ArraySchemaObject);
+          const itemsSchema = Factory.unwrapRedundantArrayItems(
+            context,
+            _.get(schemaObj, 'items') as ArraySchemaObject,
+          );
           // const itemsType = Factory.fromProp(context, array, itemsName, itemsSchema); // TODO: re-test
           const itemsType = Factory.fromArrayItems(context, array, itemsSchema);
 

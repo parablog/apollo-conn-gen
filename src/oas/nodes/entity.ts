@@ -1,4 +1,18 @@
-import { Body, IType, Obj, Op, Param, Prop, PropArray, PropEntityLink, PropObj, Res, Scalar, T, Union } from './internal.js';
+import {
+  Body,
+  IType,
+  Obj,
+  Op,
+  Param,
+  Prop,
+  PropArray,
+  PropEntityLink,
+  PropObj,
+  Res,
+  Scalar,
+  T,
+  Union,
+} from './internal.js';
 import type { NameValue, SecurityPlan } from '../io/security.js';
 import { Naming } from '../utils/naming.js';
 import { OasContext } from '../oasContext.js';
@@ -121,8 +135,12 @@ function envelopeCandidate(node: IType): { obj: Obj; envelopeField: string } | u
     (prop): prop is PropObj => prop instanceof PropObj && prop.obj instanceof Obj,
   );
   const rest = Array.from(node.props.values()).filter((prop) => !objectProps.includes(prop as PropObj));
-  const wrapped = rest.every((prop) => T.isPropScalar(prop) || (prop instanceof PropArray && prop.items instanceof Scalar));
-  return objectProps.length === 1 && wrapped ? { obj: objectProps[0].obj as Obj, envelopeField: objectProps[0].name } : undefined;
+  const wrapped = rest.every(
+    (prop) => T.isPropScalar(prop) || (prop instanceof PropArray && prop.items instanceof Scalar),
+  );
+  return objectProps.length === 1 && wrapped
+    ? { obj: objectProps[0].obj as Obj, envelopeField: objectProps[0].name }
+    : undefined;
 }
 
 // A POST op's response after one Res layer: the object itself, one wrapped property, or a union
@@ -134,7 +152,9 @@ function unwrapPostResult(resultType: IType | undefined): { obj: Obj; envelopeFi
     node = node.response;
   }
   if (node instanceof Union) {
-    const candidates = node.children.map((member) => envelopeCandidate(member)).filter((candidate) => candidate !== undefined);
+    const candidates = node.children
+      .map((member) => envelopeCandidate(member))
+      .filter((candidate) => candidate !== undefined);
     return candidates.length === 1 ? candidates[0] : undefined;
   }
   if (!node) {
@@ -230,7 +250,13 @@ function postResolverCandidate(
     return undefined;
   }
 
-  return { obj: unwrapped.obj, keyFields: [match.field], path: op.operation.path, bodyProp: match.bodyProp, envelopeField: unwrapped.envelopeField };
+  return {
+    obj: unwrapped.obj,
+    keyFields: [match.field],
+    path: op.operation.path,
+    bodyProp: match.bodyProp,
+    envelopeField: unwrapped.envelopeField,
+  };
 }
 
 // Discovers GET-by-key and read-only POST-by-key (#224) operations and records them as

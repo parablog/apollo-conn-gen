@@ -104,7 +104,14 @@ export class MixedValue {
       .write(name)
       .write(this.union.nameSuffix())
       .write(' {\n');
-    for (const prop of [this.fields.text, this.fields.number, this.fields.boolean, this.fields.list, this.fields.object, this.fields.raw]) {
+    for (const prop of [
+      this.fields.text,
+      this.fields.number,
+      this.fields.boolean,
+      this.fields.list,
+      this.fields.object,
+      this.fields.raw,
+    ]) {
       if (prop) prop.generate(context, writer, []);
     }
     writer.write('}\n\n');
