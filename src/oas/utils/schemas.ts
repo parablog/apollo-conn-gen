@@ -226,6 +226,47 @@ export class Schemas {
     return members.length > 0 && members.every(Schemas.isObjectMember);
   }
 
+  // True when a choice (oneOf/anyOf), once $ref members resolve, holds nothing but arrays — the
+  // list-shaped counterpart to holdsOnlyObjectMembers.
+  //   e.g. (ashby) results: anyOf [ [string], [$ref HiringTeamRoleSummary] ] -> true
+  public static holdsOnlyArrayMembers(context: OasContext, schema: SchemaObject): boolean {
+    const choice = (schema.oneOf ?? schema.anyOf) as (SchemaObject | ReferenceObject)[] | undefined;
+    if (!choice) {
+      return false;
+    }
+
+    const members = choice
+      .map((member) => ('$ref' in member ? (context.resolvePointer(member.$ref!) as SchemaObject) : member))
+      .filter((member) => member != null && !('$ref' in member) && member.type !== 'null');
+
+    return members.length > 0 && members.every((member) => member.type === 'array');
+  }
+
+  // Among an all-array choice, the one member whose items are an object — undefined if none or
+  // more than one qualify. Returns the original (possibly $ref) member, not a resolved copy.
+  //   e.g. (ashby) results: anyOf [ [string], [$ref HiringTeamRoleSummary] ] -> the second member
+  public static findObjectItemsArrayMember(
+    context: OasContext,
+    schema: SchemaObject,
+  ): SchemaObject | ReferenceObject | undefined {
+    const choice = (schema.oneOf ?? schema.anyOf) as (SchemaObject | ReferenceObject)[] | undefined;
+    if (!choice) {
+      return undefined;
+    }
+
+    const arrayMembersWithObjectItems = choice.filter((original) => {
+      const resolved = '$ref' in original ? (context.resolvePointer(original.$ref!) as SchemaObject) : original;
+      if (resolved == null || resolved.type !== 'array') {
+        return false;
+      }
+      const rawItems = resolved.items as SchemaObject | ReferenceObject | undefined;
+      const items = rawItems && '$ref' in rawItems ? (context.resolvePointer(rawItems.$ref!) as SchemaObject) : rawItems;
+      return items != null && Schemas.isObjectMember(items);
+    });
+
+    return arrayMembersWithObjectItems.length === 1 ? arrayMembersWithObjectItems[0] : undefined;
+  }
+
   // True for a flat object whose fields are all plain text - no nesting, lists, references, or
   // files. e.g. (swagger2-formdata.yaml) /upload's title and description fields -> true.
   // /avatar mixes in a `file` field -> false   #137

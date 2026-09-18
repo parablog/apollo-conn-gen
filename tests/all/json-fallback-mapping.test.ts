@@ -1028,3 +1028,87 @@ test('test_merge_object_refs_colliding_inline_union_id_is_json', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/detail: JSON\n/.test(schema!), 'same id, different schema content, falls back to JSON');
 });
+
+// --- FIXED #230: a property that is "a list of names or a list of objects" takes the object list ---
+
+test('test_230_list_of_names_or_objects_takes_the_objects', async () => {
+  // Ashby's hiringTeamRole.list shape: results: anyOf [ [string], [$ref Role] ]. The object list
+  // wins, and with a payload override the whole operation returns it.
+  const schema = await runOasTest('list-or-names.yaml', ['post:/roles.list>**'], 5, 2, {
+    overrides: { $source: { payload: 'results' } },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(/createRolesList\(input: CreateRolesListInput!\): \[Role\]/.test(schema!), 'the operation returns the object list');
+  assert.ok(schema!.includes('$.results {') && schema!.includes('id?') && schema!.includes('title?'), 'the selection reaches into results for the objects');
+  assert.ok(!schema!.includes('NEEDS ATTENTION'), 'no field falls back to JSON with a degrade note');
+});
+
+test('test_230_the_warning_names_the_dropped_list', async () => {
+  // One build only: runOasTest's two-pass getTypes/generateSchema would double the warning count.
+  const messages = await captureErrors(async () => {
+    const gen = await OasGen.fromFile(`${oasBasePath}/list-or-names.yaml`, { showParentInSelections: false });
+    await gen.visit();
+    gen.generateSchema(['post:/roles.list>**']);
+  });
+  assert.ok(
+    messages.some((m) => m.includes("property 'results' can answer a list of plain values or a list of objects")),
+    'warn() names the property and explains the list of plain values is dropped',
+  );
+});
+
+test('test_230_without_payload_the_wrapper_field_is_the_list', async () => {
+  // Same op, no payload override: the rule holds on the wrapper's own results field too.
+  const schema = await runOasTest('list-or-names.yaml', ['post:/roles.list>**'], 5, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/results: \[Role\]\n/.test(schema!), "the wrapper's results field is the object list");
+});
+
+test('test_230_oneof_spelling_takes_the_objects', async () => {
+  // The untyped oneOf arm produces the same typed array as its anyOf twin, not an unnamed union
+  // with an empty selection.
+  const schema = await runOasTest('list-or-names.yaml', ['post:/roles.listOneOf>**'], 5, 2, {
+    overrides: { $source: { payload: 'results' } },
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /createRolesListOneOf\(input: CreateRolesListOneOfInput!\): \[Role\]/.test(schema!),
+    'the operation returns the object list',
+  );
+  assert.ok(schema!.includes('$.results {') && schema!.includes('id?') && schema!.includes('title?'), 'the selection reaches into results for the objects');
+  assert.ok(!schema!.includes('NEEDS ATTENTION'), 'no field falls back to JSON with a degrade note');
+});
+
+test('test_230_oneof_spelling_warning_names_the_dropped_list', async () => {
+  const messages = await captureErrors(async () => {
+    const gen = await OasGen.fromFile(`${oasBasePath}/list-or-names.yaml`, { showParentInSelections: false });
+    await gen.visit();
+    gen.generateSchema(['post:/roles.listOneOf>**']);
+  });
+  assert.ok(
+    messages.some((m) => m.includes("property 'results' can answer a list of plain values or a list of objects")),
+    'the oneOf spelling gets the identical warning text',
+  );
+});
+
+test('test_230_two_object_lists_stay_json', async () => {
+  // Two object-item arrays: no single winner, same unknownShape fallback as today.
+  const schema = await runOasTest('list-or-names.yaml', ['post:/roles.pair>**'], 5, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/results: JSON/.test(schema!), 'no winner between two object lists leaves the field JSON');
+  assert.ok(schema!.includes("didn't match any known pattern"), 'the docstring carries the unknownShape reason');
+});
+
+test('test_230_two_plain_lists_stay_json', async () => {
+  // Two plain-item arrays: same unknownShape fallback.
+  const schema = await runOasTest('list-or-names.yaml', ['post:/roles.codes>**'], 5, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/results: JSON/.test(schema!), 'no winner between two plain lists leaves the field JSON');
+});
+
+test('test_230_two_object_lists_stay_json_oneof', async () => {
+  // The oneOf regression pin: before this change, this exact shape built an unnamed union with an
+  // empty selection and did not compose. Reaching runOasTest's compose step at all is the pin.
+  const schema = await runOasTest('list-or-names.yaml', ['post:/roles.pairOneOf>**'], 5, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/results: JSON/.test(schema!), 'no winner between two object lists leaves the field JSON, same as the anyOf twin');
+});

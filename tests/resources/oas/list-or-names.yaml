@@ -1,0 +1,144 @@
+openapi: 3.0.0
+info:
+  title: a property answers either a list of names or a list of objects
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /roles.list:
+    post:
+      operationId: rolesList
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                namesOnly:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  results:
+                    anyOf:
+                      - type: array
+                        items:
+                          type: string
+                      - type: array
+                        items:
+                          $ref: '#/components/schemas/Role'
+  /roles.listOneOf:
+    post:
+      operationId: rolesListOneOf
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                namesOnly:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  results:
+                    oneOf:
+                      - type: array
+                        items:
+                          type: string
+                      - type: array
+                        items:
+                          $ref: '#/components/schemas/Role'
+  /roles.pair:
+    post:
+      operationId: rolesPair
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  results:
+                    anyOf:
+                      - type: array
+                        items:
+                          $ref: '#/components/schemas/Role'
+                      - type: array
+                        items:
+                          $ref: '#/components/schemas/Team'
+  /roles.pairOneOf:
+    post:
+      operationId: rolesPairOneOf
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  results:
+                    oneOf:
+                      - type: array
+                        items:
+                          $ref: '#/components/schemas/Role'
+                      - type: array
+                        items:
+                          $ref: '#/components/schemas/Team'
+  /roles.codes:
+    post:
+      operationId: rolesCodes
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  results:
+                    anyOf:
+                      - type: array
+                        items:
+                          type: string
+                      - type: array
+                        items:
+                          type: integer
+components:
+  schemas:
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string

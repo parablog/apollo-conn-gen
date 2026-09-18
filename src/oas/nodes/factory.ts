@@ -448,6 +448,8 @@ export class Factory {
             const reason = JsonDegradeReasons.mixedInputChoice();
             warn(context, '[factory]', reason);
             prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+          } else if (Schemas.holdsOnlyArrayMembers(context, schemaObj)) {
+            prop = Factory.fromListChoice(context, parent, propName, schemaObj);
           } else {
             const inner: PropComp = new PropComp(parent, propName, schemaObj);
             inner.comp = new Union(
@@ -498,6 +500,8 @@ export class Factory {
               );
               prop = inner;
             }
+          } else if (Schemas.holdsOnlyArrayMembers(context, schemaObj)) {
+            prop = Factory.fromListChoice(context, parent, propName, schemaObj);
           } else {
             // a member that is itself a choice, or a map, is neither plain nor object to the
             // checks above — the same unrecognised-shape fallback a typed property gets. #221
@@ -579,6 +583,8 @@ export class Factory {
         const reason = JsonDegradeReasons.mixedInputChoice();
         warn(context, '[factory]', reason);
         prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
+      } else if (Schemas.holdsOnlyArrayMembers(context, schemaObj)) {
+        prop = Factory.fromListChoice(context, parent, propName, schemaObj);
       } else {
         const inner: PropComp = new PropComp(parent, propName, schemaObj);
         inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
@@ -612,6 +618,8 @@ export class Factory {
           inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[]);
           prop = inner;
         }
+      } else if (Schemas.holdsOnlyArrayMembers(context, schemaObj)) {
+        prop = Factory.fromListChoice(context, parent, propName, schemaObj);
       } else {
         // a member that is itself a choice, or a map, is neither plain nor object to the checks
         // above — the same unrecognised-shape fallback a typed property gets. #221
@@ -665,6 +673,24 @@ export class Factory {
     }
 
     return prop;
+  }
+
+  // A property whose choice is all arrays: the list of objects when exactly one member has object
+  // items (the list of plain values is dropped with a warning), else JSON like any unknown shape.
+  //   e.g. (ashby) results: anyOf [ [string], [$ref HiringTeamRoleSummary] ] -> [HiringTeamRoleSummary]
+  private static fromListChoice(context: OasContext, parent: IType, propName: string, schemaObj: SchemaObject): Prop {
+    const list = Schemas.findObjectItemsArrayMember(context, schemaObj);
+    if (list) {
+      warn(
+        context,
+        '[factory]',
+        `property '${propName}' can answer a list of plain values or a list of objects — taking the list of objects, the list of plain values is dropped`,
+      );
+      return Factory.fromProp(context, parent, propName, list);
+    }
+    const reason = JsonDegradeReasons.unknownShape();
+    warn(context, '[factory]', reason);
+    return new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
   }
 
   // Discards all the empty schemas from an allOf and finds the real target schema. Resolves the ref if needed.
