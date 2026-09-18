@@ -817,6 +817,56 @@ test('test_inline_identical_shapes_dedup_not_renamed', async () => {
   assert.ok(/\bpermissions: OfferPermissions\b/.test(schema!), 'offer references the split type');
 });
 
+// --- FIXED #231: an inline copy is compared with its occupant only after its own properties are built ---
+
+test('test_231_identical_inline_copies_dedup_despite_normalisation', async () => {
+  // Application and Opening carry the same inline customFields item, one field spelled anyOf-with-null.
+  // The first copy visited used to win by being normalised first; both now dedup. see docs/FIXED.md #231
+  const schema = await runOasTest('inline-twins-nullable.yaml', ['get:/applications/{id}>**', 'get:/openings/{id}>**'], 4, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/type CustomFieldsItem \{/.test(schema!), 'one shared item type');
+  assert.ok(!/ApplicationCustomFieldsItem|OpeningCustomFieldsItem/.test(schema!), 'neither copy was renamed');
+  assert.ok(/customFields: \[CustomFieldsItem\]/.test(schema!.match(/type Application \{[\s\S]*?\}/)![0]), 'Application uses the shared item type');
+  assert.ok(/customFields: \[CustomFieldsItem\]/.test(schema!.match(/type Opening \{[\s\S]*?\}/)![0]), 'Opening uses the shared item type');
+  assert.ok(/value: String/.test(schema!), 'the nullable field still types as String, not JSON');
+});
+
+test('test_231_visit_order_does_not_matter', async () => {
+  // Same two operations, opposite selection order — Opening visits first this time. The result
+  // must be identical: which copy visits first must not decide which name survives.
+  const schema = await runOasTest('inline-twins-nullable.yaml', ['get:/openings/{id}>**', 'get:/applications/{id}>**'], 4, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(/type CustomFieldsItem \{/.test(schema!), 'one shared item type');
+  assert.ok(!/ApplicationCustomFieldsItem|OpeningCustomFieldsItem/.test(schema!), 'neither copy was renamed');
+  assert.ok(/customFields: \[CustomFieldsItem\]/.test(schema!.match(/type Application \{[\s\S]*?\}/)![0]), 'Application uses the shared item type');
+  assert.ok(/customFields: \[CustomFieldsItem\]/.test(schema!.match(/type Opening \{[\s\S]*?\}/)![0]), 'Opening uses the shared item type');
+});
+
+test('test_231_a_different_copy_still_gets_its_own_name', async () => {
+  // Job's customFields item is the same shape plus one extra field (weight). Only identical
+  // copies may dedup — Job's must still split into its own type.
+  const schema = await runOasTest('inline-twins-nullable.yaml', ['get:/applications/{id}>**', 'get:/jobs/{id}>**'], 4, 4);
+  assert.ok(schema !== undefined);
+  assert.ok(/type CustomFieldsItem \{/.test(schema!), 'Application keeps the plain item type');
+  assert.ok(/type JobCustomFieldsItem \{[^}]*\bweight: Int\b/s.test(schema!), 'Job gets its own, different item type');
+  assert.ok(/customFields: \[JobCustomFieldsItem\]/.test(schema!.match(/type Job \{[\s\S]*?\}/)![0]), 'Job references its own item type');
+});
+
+test('test_231_shared_component_across_two_ops_stays_deduped', async () => {
+  // /applications/{id}/duplicate answers the same $ref'd Application component, not a copy. The
+  // second read of one component must not look like a colliding twin; nothing renames on either side.
+  const schema = await runOasTest(
+    'inline-twins-nullable.yaml',
+    ['get:/applications/{id}>**', 'get:/applications/{id}/duplicate>**'],
+    4,
+    2,
+  );
+  assert.ok(schema !== undefined);
+  assert.strictEqual((schema!.match(/type Application \{/g) ?? []).length, 1, 'exactly one Application type');
+  assert.strictEqual((schema!.match(/type CustomFieldsItem \{/g) ?? []).length, 1, 'exactly one item type');
+  assert.ok(!/Application2|CustomFieldsItem2/.test(schema!), 'no rename on either side');
+});
+
 test('test_composed_collision_with_stored_object_splits_by_container', async () => {
   // An inline allOf named from its property key (#7) sharing that key with an already-stored
   // inline OBJECT (`link.permissions` Obj vs `media.permissions` allOf — box `/files/{file_id}`)
@@ -3407,8 +3457,10 @@ test(
     // genuine shape clashes and stay JSON.
     // 417: owner now declares the same fields on every merged branch (only its written name
     // differed before), so it stays kept and typed instead of falling to JSON — OwnerInternal.
+    // 416: #231 dedups an inline-twin pair (same shape, one had a nullable field normalised
+    // before the other visited) that used to rename apart; one fewer type.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('omni-full.json', selections, 163, 417, {
+    const schema = await runOasTest('omni-full.json', selections, 163, 416, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',

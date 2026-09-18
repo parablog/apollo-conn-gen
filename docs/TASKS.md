@@ -816,3 +816,20 @@ prove it.
 `src/oas/nodes/obj.ts` (`visitProperties`), `src/oas/generator/typesCollector.ts`
 (`collectLeafPaths`), #219, #220.
 
+## 231 [BUG] [P4] · A twin whose only difference sits inside a nested inline object still renames apart — ⬜ Open
+
+**Symptom:** #231's fix dedups identical inline twins by comparing them once both sides' own
+properties are normalised. A twin whose only raw-vs-normalised difference sits inside a *nested*
+inline object still renames apart, since that nested object is normalised by its own later visit,
+not by its parent's. On Ashby this leaves four twins split: `ApplicationListResultOpeningsItem`,
+`ApplicationListResultOpeningsItemLatestVersion`, `ApplicationUpdateHistoryResultOpeningsItem`,
+`ApplicationUpdateHistoryResultOpeningsItemLatestVersion`.
+
+**OAS:** the twin item carries a nested inline object with a 3.1-nullable field, e.g. `address: {
+properties: { city: { type: [string, 'null'] } } }`.
+
+**Shape:** the nested object would need normalising before the parent's own collision check runs —
+that normalisation is what construction already does, just one visit later.
+
+**Refs:** #231, `src/oas/nodes/obj.ts` (`visit`).
+

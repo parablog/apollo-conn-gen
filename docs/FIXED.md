@@ -11364,3 +11364,106 @@ composes on rover 2.15.1. The same spec shape on Omni: 77 lines removed, all `ke
 
 **Refs:** `src/oas/nodes/obj.ts` (`visitProperties`), `src/oas/utils/schemas.ts` (`Schemas.isEmpty`),
 `src/oas/nodes/map.ts` (the pure-map case that stays unchanged).
+
+## 230 [BUG] [P3] · A property that is "a list of names or a list of objects" fell back to JSON (or, spelled `oneOf`, to a broken empty union) — ✅ Fixed
+
+**Symptom:** a property whose choice is two arrays — one of plain values, one of objects — took no
+typed shape at all. Spelled `anyOf`, the whole field (and, with a payload override, the whole
+operation) became `JSON`. Spelled `oneOf`, the identical shape built an unnamed union type with an
+empty selection, which does not compose.
+
+**OAS:** (ashby) `hiringTeamRole.list`'s `results`, read straight from
+`HiringTeamRoleListSuccessResponse.properties.results`, answers either a list of role names or a
+list of role objects, chosen by the request's `namesOnly` flag:
+
+```yaml
+results:
+  anyOf:
+    - { type: array, items: { type: string } }
+    - { type: array, items: { $ref: '#/components/schemas/HiringTeamRoleSummary' } }
+```
+
+**Cause:** `Factory.fromProp` (`src/oas/nodes/factory.ts`) builds a property's `oneOf`/`anyOf` in
+four near-identical arms (typed/untyped × `oneOf`/`anyOf`). None of the four recognised "every
+choice member is an array" as its own shape. The `anyOf` arms fell through to the generic
+unrecognised-shape fallback and stayed `JSON`. The `oneOf` arms had no such fallback: they built a
+`Union` unconditionally, and `Union.visit` has no code path for array-typed members, so the two
+inline array members left the union unnamed and its selection empty.
+
+**Fix.** Two new questions in `src/oas/utils/schemas.ts`: `holdsOnlyArrayMembers` (every choice
+member, once `$ref`s resolve, is an array) and `findObjectItemsArrayMember` (the one member whose
+items are an object, or `undefined` if none or more than one qualify). All four `fromProp` arms
+gained one new branch, in the same position relative to their existing checks: when
+`holdsOnlyArrayMembers` answers true and exactly one member has object items, that member's array
+is the property's real shape — `fromProp` recurses on it as if it were a plain `type: array`
+property, dropping the plain-values branch with a warning naming the property (a request flag may
+still select it at runtime, and the typed selection then yields nulls for those items). With no
+single winner (two object-item arrays, two plain-item arrays), the field stays `JSON` with the same
+"didn't match any known pattern" note as before — for the `oneOf` arms this replaces the broken
+empty-selection union with the same `JSON` fallback their `anyOf` twins already had.
+
+**Tests.** `tests/resources/oas/list-or-names.yaml`, five operations covering: the Ashby shape
+spelled `anyOf` and spelled `oneOf` (both take the object list, both warn), two object-item arrays
+and two plain-item arrays (both stay `JSON`), and the two-object-list shape spelled `oneOf` (the
+regression pin — before this fix it built the broken empty-selection union and failed to compose;
+after, it reaches `JSON` like its `anyOf` twin). `tests/all/json-fallback-mapping.test.ts`
+`test_230_*`.
+
+**Ashby result.** Generated the whole spec with `-n --infer-entity-resolvers --overrides
+tests/resources/oas/ashby-overrides.json`: `createHiringTeamRoleList` now returns
+`[HiringTeamRoleSummary]!` with selection `$.results { id title }`, one new type
+(`HiringTeamRoleSummary`), JSON fields drop from 59 to 58, one new warning line, 87 Query / 110
+Mutation fields unchanged, every other line identical. Composes on rover 2.15.1.
+
+A body override pins the request when the flag should never select the names branch, e.g.
+`{ "post:/hiringTeamRole.list": { "body": "$({ namesOnly: false })" } }`.
+
+**Refs:** `src/oas/nodes/factory.ts` (`fromProp`), `src/oas/utils/schemas.ts`
+(`holdsOnlyArrayMembers`, `findObjectItemsArrayMember`); #80 (the response-root union-of-arrays
+case, unaffected — different code path); #226 (the `payload` override this Ashby result reads
+through).
+
+## 231 [BUG] [P3] · An identical inline copy still renamed apart once one side had a 3.1-nullable field normalised — ✅ Fixed
+
+**Symptom:** two byte-identical inline objects pasted at different places in a spec used to split
+into two differently-named types instead of one shared type, whenever the shape had a field spelled
+the OAS 3.1 `anyOf: [X, { type: 'null' }]` way. On Ashby this happened to the same custom-field item
+at every use site: `CustomFieldsItem`, `ApplicationCustomFieldsItem`,
+`ApplicationInfoResultCustomFieldsItem`, `LatestVersionCustomFieldsItem`, and more — eleven names
+for one shape.
+
+**OAS:** (ashby) two operations each carry their own inline `customFields` item, both shaped
+`{ id: string, value: anyOf [{ type: string }, { type: 'null' }], label: { type: [string, 'null'] } }`.
+
+**Cause:** `Factory.fromProp` normalises each property's schema in place as the property is built
+(`src/oas/nodes/factory.ts:368`, `Nullability.normalize`: `anyOf: [X, { type: 'null' }]` becomes
+`anyOf: [X], nullable: true`). The first copy visited had its properties built and normalised
+before it registered as the occupant other same-named types check against. The second copy's name
+collision check (`Obj.visit`, `T.sameSchemaAs`, #18) ran *before* its own properties were built, so
+it compared its still-raw schema against the first copy's already-normalised one. Raw never equals
+normalised, so the check answered false and the second copy renamed after its parent instead of
+deduping.
+
+**Fix.** `Obj.visit` (`src/oas/nodes/obj.ts`) moves the collision check to run after
+`visitProperties`, so both sides being compared are always in the same state — whichever
+construction itself put them in. No copy, no cache, no second normalisation.
+
+**What it does not cover:** a twin whose only difference sits inside a *nested* inline object still
+renames apart, since that nested object is normalised by its own later visit, not by its parent's.
+On Ashby this leaves four twins apart: `ApplicationListResultOpeningsItem`,
+`ApplicationListResultOpeningsItemLatestVersion`, `ApplicationUpdateHistoryResultOpeningsItem`,
+`ApplicationUpdateHistoryResultOpeningsItemLatestVersion`. Filed as `docs/TASKS.md` #231.
+
+**Ashby result.** Generated the whole spec with `-n --infer-entity-resolvers --overrides
+tests/resources/oas/ashby-overrides.json`: the custom-field item family drops from eleven names to
+one (`CustomFieldsItem`), object types drop from 267 to 254, JSON fields from 58 to 48, 87 Query /
+110 Mutation fields unchanged, every removed type a merged twin with its references repointed to
+the survivor. Composes on rover 2.15.1. Stripe, GitHub and Confluence are byte-identical; Omni
+merges one twin (`ComputationsItem`).
+
+**Tests.** `tests/resources/oas/inline-twins-nullable.yaml`; `tests/all/oas-core.test.ts`
+`test_231_*` (identical copies dedup regardless of visit order, a genuinely different copy still
+gets its own name, a `$ref`'d component read twice is not mistaken for a colliding copy).
+
+**Refs:** `src/oas/nodes/obj.ts` (`visit`), `src/oas/nodes/typeUtils.ts` (`sameSchemaAs`),
+`src/oas/nodes/factory.ts:368` (`Nullability.normalize`); #18, #23.

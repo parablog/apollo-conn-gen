@@ -1,0 +1,129 @@
+openapi: 3.1.0
+info:
+  title: Identical inline copies with an OAS 3.1 nullable field, pasted at two places
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /applications/{id}:
+    get:
+      operationId: getApplication
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+  /applications/{id}/duplicate:
+    get:
+      operationId: getApplicationDuplicate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: the same Application component, read by a second operation, not a copy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+  /openings/{id}:
+    get:
+      operationId: getOpening
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opening'
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+components:
+  schemas:
+    Application:
+      type: object
+      properties:
+        customFields:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              value:
+                anyOf:
+                  - type: string
+                  - type: 'null'
+              label:
+                type:
+                  - string
+                  - 'null'
+    Opening:
+      type: object
+      properties:
+        customFields:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              value:
+                anyOf:
+                  - type: string
+                  - type: 'null'
+              label:
+                type:
+                  - string
+                  - 'null'
+    Job:
+      type: object
+      properties:
+        customFields:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              value:
+                anyOf:
+                  - type: string
+                  - type: 'null'
+              label:
+                type:
+                  - string
+                  - 'null'
+              weight:
+                type: integer

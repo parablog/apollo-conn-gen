@@ -50,6 +50,11 @@ export class Obj extends Type {
       trace(context, '[obj]', 'In object: ' + (this.name ? this.name : this.parent?.name));
     }
 
+    this.visitProperties(context);
+
+    // Compares this object with an occupant already normalised in place, so this object's own
+    // properties are built first. E.g. (ashby) two inline customFields items, value: anyOf
+    // [{ type: string }, { type: 'null' }], compare equal only once both are normalised.
     const collides =
       T.collidesWithStoredType(this, context) ||
       T.collidesWithContainedComponent(this) ||
@@ -58,7 +63,6 @@ export class Obj extends Type {
       T.resolveNameConflict(this, context);
     }
 
-    this.visitProperties(context);
     this.visited = true;
 
     // register as the occupant that later same-named types check against. see #9/#12

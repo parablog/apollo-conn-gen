@@ -578,8 +578,9 @@ test('source-envelope ashby: the real spec unwraps application.list under the co
       payload: 'results',
     },
   };
-  // typesSize 28: ErrorDetail, reached only through the dropped wrapper, goes with it
-  const schema = await runOasTest('ashby.json', ['post:/application.list>**'], 197, 28, { overrides });
+  // typesSize 26: ErrorDetail, reached only through the dropped wrapper, goes with it; #231 also
+  // dedups two inline-twin item shapes on this path that used to rename apart.
+  const schema = await runOasTest('ashby.json', ['post:/application.list>**'], 197, 26, { overrides });
 
   assert.ok(schema!.includes('isSuccess: "$.success"'));
   assert.ok(schema!.includes("errors: { message: \"$($.errors?->first?.message ?? 'Ashby request failed')\""));

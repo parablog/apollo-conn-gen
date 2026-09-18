@@ -34,6 +34,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   every op used to return) stayed in the schema with nothing left returning it, and rover refused
   to compose, `CONNECTORS_UNRESOLVED_FIELD: No connector resolves field ErrorDetail.message`.
   Issue #227.
+- A field that is either a list of plain values or a list of objects — the same choice spelled as
+  `anyOf` or as `oneOf` — is now typed as the list of objects. Before, the `anyOf` spelling (and,
+  with a payload override, the whole operation) fell back to `JSON`; the `oneOf` spelling built an
+  invalid union with an empty selection and failed to compose. E.g. (ashby)
+  `hiringTeamRole.list`'s `results`, either a list of role names or a list of role objects chosen
+  by the request's `namesOnly` flag, now types as `[HiringTeamRoleSummary]!` with selection
+  `$.results { id title }`. Issue #230.
+- The same inline object pasted at several places in a spec is now one type. Before, once the
+  object had a field spelled the OAS 3.1 nullable way (`anyOf: [X, { type: 'null' }]`), every copy
+  after the first one renamed apart instead of sharing a type. E.g. (ashby) the same inline
+  `customFields` item, pasted at eleven places, used to build eleven differently-named types
+  (`CustomFieldsItem`, `ApplicationCustomFieldsItem`, …) and now builds one. Issue #231.
 
 ## [0.30.0]
 
