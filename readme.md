@@ -480,7 +480,15 @@ node ./dist/cli/oas -h
 
 ### Request overrides
 
-`--overrides <file>` (library: the `overrides` option) loads per-operation request overrides from a JSON file, keyed by op id. `path` replaces the HTTP path; `queryParams` values are raw JSONSelection, `headers` values are string templates — in both, a string replaces the inferred value, `null` drops the entry, an unknown key is appended:
+`--overrides <file>` (library: the `overrides` option) loads a JSON file keyed by operation id, `verb:path`, e.g. `post:/application.list`. An entry can carry:
+
+- `path`: replaces the HTTP path.
+- `queryParams`: raw JSONSelection per parameter. A string replaces the inferred value, `null` drops it, an unknown key is added.
+- `headers`: string templates per header, same rules as `queryParams`.
+- `body`: one raw JSONSelection string replacing the whole inferred `$args.input { … }` mapping. `null` drops the body.
+- `root`: `"query"` or `"mutation"` writes the operation under that type regardless of its HTTP method. The request keeps its real method. Any other value stops the run.
+- `payload`: the response field this operation returns, see `$source` below. `null` keeps the whole response even when `$source` sets a default.
+- `errors`: this operation's own error mapping, same `message`/`extensions` keys as `$source`. Written on its `@connect`, it wins over `$source` and over `--emit-connector-errors`.
 
 ```json
 {
@@ -489,17 +497,20 @@ node ./dist/cli/oas -h
     "queryParams": { "page": null, "api-version": "$(\"2024-01\")" },
     "headers": { "X-Api-Key": "{$config.apiKey}" }
   },
-  "post:/pets": {
-    "body": "name: $args.input.name\nsource: $(\"web\")"
-  }
+  "post:/pets": { "body": "name: $args.input.name\nsource: $(\"web\")" },
+  "post:/items/search": { "root": "query" },
+  "post:/customFields.fetch": { "errors": { "message": "$.errorInfo.message" } }
 }
 ```
 
-`body` is one raw JSONSelection string replacing the whole inferred `$args.input { … }` mapping (`null` drops the body).
+A key that matches no operation is ignored with a warning. `$source` and `$match` are reserved keys and never name an operation.
 
-An operation is normally written under `type Query` when its HTTP method is GET, and under `type Mutation` otherwise. `root: "query"` or `root: "mutation"` moves one operation to the named side instead, regardless of its HTTP method — for example, a `POST /items/search` endpoint that only reads data (the body carries search filters) can be written under `type Query` with `{ "post:/items/search": { "root": "query" } }`. The HTTP request itself is unaffected: `@connect` still uses the operation's real method.
+#### `$match`: one entry for many operations
 
-A `"$match"` entry applies one override to every operation whose key matches a pattern, instead of naming operations one at a time — useful for an API that names every read `.list`/`.info`/`.search` and the like, the way Ashby does. `"$match"` is a list; each item is an ordinary override entry plus a `"pattern"` regex tested against the operation's key (`verb:path`, e.g. `post:/application.list`). The first item whose pattern matches an operation applies to it; an exact entry for that same operation is then laid over it and wins field by field:
+- `$match` is a list. Each item is an override entry plus a `pattern` regex tested against the operation key.
+- The first item whose pattern matches an operation applies to it. An exact entry for that operation is laid over it and wins field by field.
+- Every field listed above works on a pattern entry.
+- A pattern that is not a valid regex stops the run when the file loads, naming the pattern.
 
 ```json
 {
@@ -510,13 +521,9 @@ A `"$match"` entry applies one override to every operation whose key matches a p
 }
 ```
 
-Every field an exact entry can carry (`path`, `queryParams`, `headers`, `body`, `root`, `payload`) works the same way on a pattern entry. The verb is already part of the key, so a pattern moves a GET that writes just as easily as a POST that reads.
+#### `$source`: success flag, errors and payload
 
-An override key that matches no operation is ignored with a warning — except `"$source"` and `"$match"`, reserved top-level keys that never name an operation (see above and below). A `root` value other than `"query"`/`"mutation"` stops the run, on an exact entry or on a `"$match"` pattern; a pattern that is not a valid regex stops the run as soon as the file is loaded, naming the pattern.
-
-#### Source error mapping and the payload field
-
-Some APIs answer every request with HTTP 200 whether it worked or not, and put success or failure in the body — Ashby answers `oneOf [ { success: true, results: <payload> }, { success: false, errors: [{ message }] } ]`; Slack answers `{ ok: boolean, error?: string, ...payload fields }` on one flat schema. The top-level `"$source"` key configures both:
+For an API that answers HTTP 200 whether or not the call worked and puts the outcome in the body. Ashby answers `oneOf [{ success: true, results }, { success: false, errors: [{ message }] }]`; Slack answers `{ ok, error?, ...fields }` on one flat schema.
 
 ```json
 {
@@ -529,9 +536,11 @@ Some APIs answer every request with HTTP 200 whether it worked or not, and put s
 }
 ```
 
-`isSuccess` and `errors` are written onto `@source` as given, so the router turns a failed body into a GraphQL error instead of leaving the flag/error fields as plain data. `payload` names the field an operation returns instead of the whole response object, when that field is the only data in it. Fields `isSuccess` and `errors` read (`success`, `errors` above) don't count as data, so Ashby's `job.info` `{ success, results }` returns `results` alone. When other data sits beside it, the operation keeps its response type without those `isSuccess`/`errors` fields: Ashby's `application.list` `{ success, results, nextCursor, moreDataAvailable, syncToken }` returns a type carrying `results` and the three paging fields. A per-op entry's own `"payload": "<field>"` overrides the default for that op; `"payload": null` keeps that one op's current shape even though a default is set. An op whose response has no property by that name is left unchanged, with a warning.
-
-An operation whose error body does not fit the `"$source"` mapping can carry its own `"errors"`, same `message`/`extensions` keys, on its own override entry (exact or `"$match"`): `{ "post:/customFields.fetch": { "errors": { "message": "$.errorInfo.message" } } }`. That mapping is written on that operation's own `@connect`, winning over both `"$source"`'s mapping and the inferred `--emit-connector-errors` block for that operation. Every other operation keeps answering through `"$source"`.
+- `isSuccess` and `errors` are written onto `@source` as given. The router turns a failed body into a GraphQL error instead of returning the flag and error fields as data.
+- `payload` names the field an operation returns instead of the whole response, when that field is the only data in it. The fields `isSuccess` and `errors` read (`success` and `errors` here) do not count as data: Ashby's `job.info` `{ success, results }` returns `results` alone.
+- When other data sits beside that field, the operation keeps its response type without the `isSuccess`/`errors` fields: Ashby's `application.list` `{ success, results, nextCursor, moreDataAvailable, syncToken }` returns a type with `results` and the three paging fields.
+- An operation whose response has no property by that name is left unchanged, with a warning.
+- A per-operation `payload` or `errors`, on an exact entry or a `$match` item, overrides `$source` for that operation.
 
 ### Request bodies
 
