@@ -4,48 +4,37 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.31.0]
 
 ### Added
 
 - One operation can have its own error mapping when the source-wide `"$source"` mapping doesn't
-  fit its error body. Before, every operation shared that one mapping — Ashby's
-  `customFields.fetch`, whose error body carries the message under `errorInfo.message` instead,
-  only ever showed the fallback text. Add `"errors"` to that operation's own override entry (exact
-  or `"$match"`), same `message`/`extensions` keys as `"$source"`:
+  fit its error body. Add `"errors"` to that operation's own override entry (exact or `"$match"`),
+  same `message`/`extensions` keys as `"$source"`. E.g. (ashby) `customFields.fetch` reports its
+  error under `errorInfo.message`:
   `{ "post:/customFields.fetch": { "errors": { "message": "$.errorInfo.message" } } }`. Issue #228.
-- The overrides file can now cover many operations with one entry instead of one per operation.
-  Add a `"$match"` entry with a regex, and every operation whose key matches it gets that entry's
-  settings — before, an API that names every read `.list`/`.info`/`.search` needed one entry per
-  read; Ashby's file had 87. `{ "$match": [{ "pattern": "^post:/.*\\.list$", "root": "query" }] }`
-  moves every `.list` operation to `Query` in one line. Issue #225.
+- The overrides file can cover many operations with one entry. Add a `"$match"` entry with a regex,
+  and every operation whose key matches it gets that entry's settings. E.g. (ashby)
+  `{ "$match": [{ "pattern": "^post:/.*\\.list$", "root": "query" }] }` moves every `.list`
+  operation to `Query` in one line. Issue #225.
 
 ### Fixed
 
-- An object with declared properties and `additionalProperties: {}` now types only its declared
-  fields. Before, it also got a `keyString: JSON` catch-all field and a `"[key: string]": keyString`
-  selection, even though `{}` says nothing about the extra keys — the same as
-  `additionalProperties: true` or leaving it out, neither of which added a field. On Ashby this
-  removed 37 needless fields and 25 selections the router had nothing to fill, e.g. (ashby)
-  `fieldSubmissions.items: { properties: { path, value }, additionalProperties: {} }`. Issue #229.
-- A schema with `"payload"` configured now composes even when an operation's error body shares a
-  type with other operations. Before, once every operation returning that type switched to its
-  payload field, the shared type (Ashby's `ErrorDetail`, reached only through the `errors` field
-  every op used to return) stayed in the schema with nothing left returning it, and rover refused
-  to compose, `CONNECTORS_UNRESOLVED_FIELD: No connector resolves field ErrorDetail.message`.
-  Issue #227.
-- A field that is either a list of plain values or a list of objects — the same choice spelled as
-  `anyOf` or as `oneOf` — is now typed as the list of objects. Before, the `anyOf` spelling (and,
-  with a payload override, the whole operation) fell back to `JSON`; the `oneOf` spelling built an
-  invalid union with an empty selection and failed to compose. E.g. (ashby)
-  `hiringTeamRole.list`'s `results`, either a list of role names or a list of role objects chosen
-  by the request's `namesOnly` flag, now types as `[HiringTeamRoleSummary]!` with selection
-  `$.results { id title }`. Issue #230.
-- The same inline object pasted at several places in a spec is now one type. Before, once the
-  object had a field spelled the OAS 3.1 nullable way (`anyOf: [X, { type: 'null' }]`), every copy
-  after the first one renamed apart instead of sharing a type. E.g. (ashby) the same inline
-  `customFields` item, pasted at eleven places, used to build eleven differently-named types
-  (`CustomFieldsItem`, `ApplicationCustomFieldsItem`, …) and now builds one. Issue #231.
+- An object with declared properties and `additionalProperties: {}` types only its declared
+  fields, the same as `additionalProperties: true` or leaving it out. E.g. (ashby)
+  `fieldSubmissions.items: { properties: { path, value }, additionalProperties: {} }` types `path`
+  and `value` only. Issue #229.
+- A schema with `"payload"` configured composes when an operation's error body shares a type with
+  other operations: a type nothing returns any more is left out of the schema. E.g. (ashby)
+  `ErrorDetail`, reached only through the `errors` field, is written only while some operation
+  still returns it. Issue #227.
+- A field that is either a list of plain values or a list of objects, spelled as `anyOf` or as
+  `oneOf`, is typed as the list of objects. E.g. (ashby) `hiringTeamRole.list`'s `results`, a list
+  of role names or of role objects chosen by the request's `namesOnly` flag, types as
+  `[HiringTeamRoleSummary]!` with selection `$.results { id title }`. Issue #230.
+- The same inline object pasted at several places in a spec is one type, including when a field is
+  spelled the OAS 3.1 nullable way (`anyOf: [X, { type: 'null' }]`). E.g. (ashby) the inline
+  `customFields` item, pasted at eleven places, builds one `CustomFieldsItem`. Issue #231.
 - A `payload` override keeps the response type when other fields sit beside the payload. E.g. (ashby)
   `application.list` now returns `nextCursor`, `moreDataAvailable` and `syncToken` next to `results`;
   `job.info` still returns `results` alone. Issue #232.
