@@ -50,7 +50,7 @@ const SLACK_SOURCE: OverridesConfig = {
 };
 
 test('source-envelope union: no config leaves the old @source and every wrapper type in place', async () => {
-  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 5, 10, { useOperationIds: true, overrides: UNION_ROOTS });
+  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 6, 10, { useOperationIds: true, overrides: UNION_ROOTS });
   assert.ok(schema!.includes('@source(name: "api", http: { baseURL: "https://api.example.com" })\n'));
   assert.ok(schema!.includes('widgetInfo(input: WidgetInfoInput!): WidgetInfoResponse'));
   assert.ok(schema!.includes('type WidgetInfoResponse'));
@@ -63,7 +63,7 @@ test('source-envelope flag: no config leaves the old @source and the flat respon
 });
 
 test('source-envelope union: configured payload unwraps every op by its own shape', async () => {
-  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 5, 6, {
+  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 6, 7, {
     useOperationIds: true,
     overrides: ASHBY_SOURCE,
   });
@@ -81,10 +81,12 @@ test('source-envelope union: configured payload unwraps every op by its own shap
   assert.ok(schema!.includes('widgetInfo(input: WidgetInfoInput!): Widget'));
   assert.ok(schema!.includes('$.results {\n       id?\n       title?\n      }'));
 
-  // a list of objects: [Widget]; the paging fields next to results are dropped on purpose
-  assert.ok(schema!.includes('widgetList(input: WidgetListInput!): [Widget]'));
-  assert.ok(!schema!.includes('moreDataAvailable'));
-  assert.ok(!schema!.includes('nextCursor'));
+  // a list of objects with paging fields beside results: the wrapper stays, no $.results prefix
+  assert.ok(schema!.includes('widgetList(input: WidgetListInput!): WidgetListResponse'));
+  assert.ok(schema!.includes('type WidgetListResponse'));
+  assert.ok(schema!.includes('moreDataAvailable?\n      nextCursor?\n      results? {\n       id?\n       title?\n      }'));
+  const widgetListResponseBlock = schema!.match(/type WidgetListResponse \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(!widgetListResponseBlock.includes('success'), 'the kept wrapper has no success field');
 
   // a plain value: Int, and $.results alone
   assert.ok(schema!.includes('widgetCount: Int'));
@@ -96,11 +98,52 @@ test('source-envelope union: configured payload unwraps every op by its own shap
   assert.ok(schema!.includes('widgetNoPayload(input: WidgetNoPayloadInput!): WidgetNoPayloadResponse'));
   assert.ok(schema!.includes('type WidgetNoPayloadResponse'));
 
-  // the response types nothing returns any more are gone
+  // the response types nothing returns any more are gone; widget.list's own wrapper survives
   assert.ok(!schema!.includes('type WidgetInfoResponse'));
-  assert.ok(!schema!.includes('type WidgetListResponse'));
   assert.ok(!schema!.includes('type WidgetCountResponse'));
   assert.ok(!schema!.includes('type WidgetTagsResponse'));
+});
+
+test('source-envelope union: a kept wrapper drops the whole errors subtree, ErrorDetail included', async () => {
+  // widget.list alone, not the full UNION_ALL: widget.noPayload has no results field, so it keeps
+  // its own errors/ErrorDetail either way.
+  const schema = await runOasTest('source-envelope-union.yaml', ['post:/widget.list>**'], 6, 3, {
+    useOperationIds: true,
+    overrides: ASHBY_SOURCE,
+  });
+
+  assert.ok(schema!.includes('widgetList(input: WidgetListInput!): WidgetListResponse'));
+  // @source's own "isSuccess: $.success"/"errors: {...}" declaration also matches "success"/"errors"
+  // as bare substrings, so the checks below scope to the response type itself, not the whole schema.
+  const responseBlock = schema!.match(/type WidgetListResponse \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(responseBlock.includes('moreDataAvailable') && responseBlock.includes('nextCursor') && responseBlock.includes('results'));
+  assert.ok(!responseBlock.includes('success'), 'no success field on the kept wrapper');
+  assert.ok(!responseBlock.includes('errors'), 'the whole errors subtree is gone, not just the top-level name');
+  assert.ok(!schema!.includes('type ErrorDetail'), 'ErrorDetail, two levels under errors, is gone too');
+});
+
+test('source-envelope union: a payload alone, no other siblings, still unwraps', async () => {
+  const schema = await runOasTest('source-envelope-union.yaml', ['post:/widget.info>**'], 6, 2, {
+    useOperationIds: true,
+    overrides: ASHBY_SOURCE,
+  });
+  assert.ok(schema!.includes('widgetInfo(input: WidgetInfoInput!): Widget'));
+  assert.ok(schema!.includes('$.results {\n       id?\n       title?\n      }'));
+});
+
+test('source-envelope union: envelope field names come from the isSuccess/errors expressions, not fixed names', async () => {
+  // Slack's own field names (ok/error), not Ashby's (success/errors) -- proves envelopeFields reads
+  // the configured expressions instead of assuming a fixed shape.
+  const overrides: OverridesConfig = {
+    'post:/widget.slack': { root: 'query' },
+    $source: { isSuccess: '$.ok', errors: { message: '$.error' }, payload: 'results' },
+  };
+  const schema = await runOasTest('source-envelope-union.yaml', ['post:/widget.slack>**'], 6, 2, { useOperationIds: true, overrides });
+
+  assert.ok(schema!.includes('widgetSlack: WidgetSlackResponse'), 'cursor beside results keeps the wrapper');
+  const responseBlock = schema!.match(/type WidgetSlackResponse \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(responseBlock.includes('cursor'), 'cursor is not named by isSuccess/errors, so it stays');
+  assert.ok(!responseBlock.includes('ok:') && !responseBlock.includes('error'), 'ok/error are named by isSuccess/errors, so they go');
 });
 
 test('source-envelope union: a no-match payload warns once with the op and the field name', async () => {
@@ -120,7 +163,7 @@ test('source-envelope union: a no-match payload warns once with the op and the f
 
 test('source-envelope union: two scalar-list widget.count/widget.tags selections both write $.results alone', async () => {
   // typesSize 0: ErrorDetail, reached only through the two dropped wrappers, goes with them
-  const schema = await runOasTest('source-envelope-union.yaml', ['post:/widget.count>**', 'post:/widget.tags>**'], 5, 0, {
+  const schema = await runOasTest('source-envelope-union.yaml', ['post:/widget.count>**', 'post:/widget.tags>**'], 6, 0, {
     useOperationIds: true,
     overrides: ASHBY_SOURCE,
   });
@@ -133,11 +176,11 @@ test('source-envelope union: a per-op payload:null keeps that op wrapped under t
     ...ASHBY_SOURCE,
     'post:/widget.info': { root: 'query', payload: null },
   };
-  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 5, 7, { useOperationIds: true, overrides });
+  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 6, 8, { useOperationIds: true, overrides });
 
   assert.ok(schema!.includes('widgetInfo(input: WidgetInfoInput!): WidgetInfoResponse'), 'payload:null keeps its wrapper');
   assert.ok(schema!.includes('type WidgetInfoResponse'));
-  assert.ok(schema!.includes('widgetList(input: WidgetListInput!): [Widget]'), 'every other op still returns its own field');
+  assert.ok(schema!.includes('widgetList(input: WidgetListInput!): WidgetListResponse'), 'every other op still returns its own field');
 });
 
 test('source-envelope flag: configured isSuccess/errors leaves both root fields unchanged', async () => {
@@ -171,8 +214,32 @@ test('source-envelope union: a selection path saved before the config resolves t
   assert.ok(schema.includes('widgetInfo(input: WidgetInfoInput!): Widget'), 'the saved node ids still resolve, now returning the payload field directly');
 });
 
+test('source-envelope union: a selection saved before the config still drops success/errors once the config applies', async () => {
+  const before = await OasGen.fromFile(`${oasBasePath}/source-envelope-union.yaml`, {
+    showParentInSelections: false,
+    useOperationIds: true,
+  });
+  await before.visit();
+  const saved = before.expanded(['post:/widget.list>**']);
+  assert.ok(saved.some((p) => p.endsWith('prop:scalar:success')), 'the unconfigured saved list still names success directly');
+  assert.ok(saved.some((p) => p.includes('ErrorResponse')), 'the unconfigured saved list still names the error branch directly');
+
+  const after = await OasGen.fromFile(`${oasBasePath}/source-envelope-union.yaml`, {
+    showParentInSelections: false,
+    useOperationIds: true,
+    overrides: ASHBY_SOURCE,
+  });
+  await after.visit();
+  const schema = after.generateSchema(saved);
+
+  const responseBlock = schema.match(/type WidgetListResponse \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(!responseBlock.includes('success') && !responseBlock.includes('errors'), 'old saved leaf paths for the envelope fields are dropped');
+  assert.ok(responseBlock.includes('moreDataAvailable') && responseBlock.includes('nextCursor') && responseBlock.includes('results'));
+  assert.ok(!schema.includes('type ErrorDetail'));
+});
+
 test('source-envelope union: configured schema composes on stock rover 2.15.1', async () => {
-  await runOasTest('source-envelope-union.yaml', UNION_ALL, 5, 6, { useOperationIds: true, overrides: ASHBY_SOURCE, forceRover: true });
+  await runOasTest('source-envelope-union.yaml', UNION_ALL, 6, 7, { useOperationIds: true, overrides: ASHBY_SOURCE, forceRover: true });
 });
 
 test('source-envelope flag: configured schema composes on stock rover 2.15.1', async () => {
@@ -202,9 +269,11 @@ test('source-envelope union runtime: widget-list (list-of-objects payload)', asy
     UNION_ALL,
     ASHBY_SOURCE,
     '{"success": true, "results": [{"id": "w1", "title": "Foo"}], "moreDataAvailable": true, "nextCursor": "c2"}',
-    'query { widgetList(input: {cursor: "c1"}) { id title } }',
+    'query { widgetList(input: {cursor: "c1"}) { results { id title } moreDataAvailable nextCursor } }',
   );
-  assert.deepStrictEqual(response.data, { widgetList: [{ id: 'w1', title: 'Foo' }] });
+  assert.deepStrictEqual(response.data, {
+    widgetList: { results: [{ id: 'w1', title: 'Foo' }], moreDataAvailable: true, nextCursor: 'c2' },
+  });
 });
 
 test('source-envelope union runtime: widget-count (scalar payload)', async (t) => {
@@ -520,7 +589,10 @@ test('source-envelope: a type reached only through dropped wrappers goes with th
 });
 
 test("source-envelope: a wrapper another op still returns whole stays, with its error type", async () => {
-  const overrides: OverridesConfig = { 'post:/widget.info': { payload: 'results' } };
+  const overrides: OverridesConfig = {
+    $source: { isSuccess: '$.success', errors: { message: "$($.errors?->first?.message ?? 'Ashby request failed')" } },
+    'post:/widget.info': { payload: 'results' },
+  };
   const schema = await runOasTest('shared-wrapper.yaml', ['post:/widget.info>**', 'post:/widget.info2>**'], 2, 3, {
     useOperationIds: true,
     overrides,
@@ -538,14 +610,18 @@ test("source-envelope: a wrapper another op still returns whole stays, with its 
 
 test('source-envelope union: a pattern payload is inherited, and an exact payload:null keeps the pattern root', async () => {
   const overrides: OverridesConfig = {
+    $source: { isSuccess: '$.success', errors: { message: "$($.errors?->first?.message ?? 'Ashby request failed')" } },
     $match: [{ pattern: '^post:/widget\\.(info|list)$', root: 'query', payload: 'results' }],
     'post:/widget.info': { payload: null },
   };
-  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 5, 9, { useOperationIds: true, overrides });
+  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 6, 10, { useOperationIds: true, overrides });
 
-  // widget.list matches the pattern only: unwraps to [Widget], proving the pattern's own
-  // "payload" is read, not just its "root"
-  assert.ok(schema!.includes('widgetList(input: WidgetListInput!): [Widget]'), 'the pattern payload unwraps widget.list');
+  // widget.list matches the pattern only and keeps its wrapper.
+  assert.ok(schema!.includes('widgetList(input: WidgetListInput!): WidgetListResponse'), 'the pattern payload resolves for widget.list');
+  assert.ok(schema!.includes('results? {\n       id?\n       title?\n      }'), 'results is selected as its own object, not read whole');
+  const widgetListResponseBlock = schema!.match(/type WidgetListResponse \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(!widgetListResponseBlock.includes('success'), 'no success field once the pattern payload resolves');
+  assert.ok(widgetListResponseBlock.includes('moreDataAvailable') && widgetListResponseBlock.includes('nextCursor'));
 
   // widget.info matches the pattern (root: query) and gets an exact payload:null: stays under
   // Query (the pattern's root survives) but keeps its wrapper (the exact payload wins)
@@ -561,12 +637,12 @@ test('source-envelope union: a pattern with no payload falls back to the $source
     $source: ASHBY_SOURCE.$source,
     $match: [{ pattern: '^post:/widget\\.count$', root: 'query' }],
   };
-  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 5, 6, { useOperationIds: true, overrides });
+  const schema = await runOasTest('source-envelope-union.yaml', UNION_ALL, 6, 7, { useOperationIds: true, overrides });
 
   assert.ok(schema!.includes('widgetCount: Int'), 'widget.count still unwraps through $source.payload with no payload on the pattern itself');
 });
 
-test('source-envelope ashby: the real spec unwraps application.list under the configured payload', async () => {
+test('source-envelope ashby: the real spec keeps application.list under the configured payload', async () => {
   const overrides: OverridesConfig = {
     'post:/application.list': { root: 'query' },
     $source: {
@@ -578,12 +654,80 @@ test('source-envelope ashby: the real spec unwraps application.list under the co
       payload: 'results',
     },
   };
-  // typesSize 26: ErrorDetail, reached only through the dropped wrapper, goes with it; #231 also
-  // dedups two inline-twin item shapes on this path that used to rename apart.
-  const schema = await runOasTest('ashby.json', ['post:/application.list>**'], 197, 26, { overrides });
+  // typesSize 27: one more than the old unwrap-to-Job baseline (26), the kept response type itself.
+  // #231 also dedups two inline-twin item shapes on this path that used to rename apart.
+  const schema = await runOasTest('ashby.json', ['post:/application.list>**'], 197, 27, { overrides });
 
   assert.ok(schema!.includes('isSuccess: "$.success"'));
   assert.ok(schema!.includes("errors: { message: \"$($.errors?->first?.message ?? 'Ashby request failed')\""));
-  assert.ok(schema!.includes('createApplicationList(input: ApplicationListRequestInput!): [ApplicationListResult]!'));
-  assert.ok(schema!.includes('$.results {'));
+  assert.ok(schema!.includes('createApplicationList(input: ApplicationListRequestInput!): CreateApplicationListResponse'));
+  assert.ok(schema!.includes('results {'));
+  assert.ok(!schema!.includes('type ErrorDetail'), 'errors is the only source of ErrorDetail here, and it is excluded too');
+  const responseBlock = schema!.match(/type CreateApplicationListResponse \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(!responseBlock.includes('success'), 'no success field once the payload resolves');
+});
+
+test('source-envelope ashby runtime: application.list (list payload through the router)', async (t) => {
+  if (!routerAvailable()) return t.skip(`router binary not found at ${routerBinary()}`);
+
+  const overrides: OverridesConfig = {
+    'post:/application.list': { root: 'query' },
+    $source: {
+      isSuccess: '$.success',
+      errors: {
+        message: "$($.errors?->first?.message ?? 'Ashby request failed')",
+        extensions: 'httpStatus: $status',
+      },
+      payload: 'results',
+    },
+  };
+  // the real spec's own documented example body, plus a nextCursor.
+  // application.list's input is an object, test-connectors cannot pass it, so this goes through the router.
+  const sampleResult = {
+    id: 'e9ed20fd-d45f-4aad-8a00-a19bfba0083e',
+    createdAt: '2024-01-15T10:30:00.000Z',
+    updatedAt: '2024-01-16T10:30:00.000Z',
+    status: 'Active',
+    customFields: [],
+    candidate: {
+      id: '84bfbed7-ed0a-496d-bb18-11b73369f666',
+      name: 'Michael Bluth',
+      primaryEmailAddress: { value: 'michael@bluth.example', type: 'Personal', isPrimary: true },
+      primaryPhoneNumber: null,
+    },
+    currentInterviewStage: {
+      id: 'c153b3e9-8b97-4fc0-bad1-6c654122c1f8',
+      title: 'Application Review',
+      type: 'PreInterviewScreen',
+      orderInInterviewPlan: 1,
+      interviewStageGroupId: null,
+      interviewPlanId: 'd3f4762e-1234-4abc-9876-aabbccddeeff',
+    },
+    source: null,
+    archiveReason: null,
+    archivedAt: null,
+    job: { id: '4071538b-3cac-4fbf-ac76-f78ed250ffdd', title: 'First Designer', locationId: null, departmentId: null },
+    creditedToUser: null,
+    hiringTeam: [],
+    appliedViaJobPostingId: null,
+    submitterClientIp: null,
+    submitterUserAgent: null,
+  };
+  const body = JSON.stringify({
+    success: true,
+    results: [sampleResult],
+    moreDataAvailable: true,
+    nextCursor: 'n1',
+  });
+
+  const response = await runBodyThroughRouter(
+    'ashby.json',
+    ['post:/application.list>**'],
+    overrides,
+    body,
+    'query { applicationList(input: {}) { results { id } nextCursor moreDataAvailable } }',
+  );
+  assert.deepStrictEqual(response.data, {
+    applicationList: { results: [{ id: 'e9ed20fd-d45f-4aad-8a00-a19bfba0083e' }], nextCursor: 'n1', moreDataAvailable: true },
+  });
 });

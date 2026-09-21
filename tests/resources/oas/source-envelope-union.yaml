@@ -70,6 +70,16 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/WidgetTagsSuccessResponse'
                   - $ref: '#/components/schemas/ErrorResponse'
+  /widget.slack:
+    post:
+      operationId: widgetSlack
+      responses:
+        '200':
+          description: A Slack-shaped envelope, ok/error instead of success/errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetSlackResponse'
   /widget.noPayload:
     post:
       operationId: widgetNoPayload
@@ -142,3 +152,13 @@ components:
       type: object
       properties:
         success: { type: boolean }
+    WidgetSlackResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        error: { type: string }
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Widget'
+        cursor: { type: string }

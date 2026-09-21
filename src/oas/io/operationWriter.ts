@@ -3,7 +3,7 @@ import { ParameterObject } from 'oas/types';
 import { OasContext, OverrideEntry } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { Body, IType, Map as MapNode, Op, Param, Prop, T } from '../nodes/internal.js';
-import { findPayload, payloadField } from '../utils/payload.js';
+import { findConfiguredPayload, findPayload, payloadField } from '../utils/payload.js';
 import { findOverride } from '../utils/overrides.js';
 import { Naming } from '../utils/naming.js';
 import { warn } from '../log/trace.js';
@@ -291,7 +291,7 @@ export class OperationWriter {
     context.indent = 6;
     const payload = findPayload(context, op);
     const wanted = payloadField(op.id, context.generateOptions.overrides);
-    if (wanted && !payload) {
+    if (wanted && !findConfiguredPayload(context, op)) {
       warn(context, '[payload]', `"${op.id}" has no "${wanted}" property to return; response kept as is`);
     }
     if (payload) {

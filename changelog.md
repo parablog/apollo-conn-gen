@@ -46,6 +46,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   after the first one renamed apart instead of sharing a type. E.g. (ashby) the same inline
   `customFields` item, pasted at eleven places, used to build eleven differently-named types
   (`CustomFieldsItem`, `ApplicationCustomFieldsItem`, …) and now builds one. Issue #231.
+- A `payload` override keeps the response type when other fields sit beside the payload. E.g. (ashby)
+  `application.list` now returns `nextCursor`, `moreDataAvailable` and `syncToken` next to `results`;
+  `job.info` still returns `results` alone. Issue #232.
 
 ## [0.30.0]
 

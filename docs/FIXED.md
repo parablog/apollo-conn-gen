@@ -11467,3 +11467,62 @@ gets its own name, a `$ref`'d component read twice is not mistaken for a collidi
 
 **Refs:** `src/oas/nodes/obj.ts` (`visit`), `src/oas/nodes/typeUtils.ts` (`sameSchemaAs`),
 `src/oas/nodes/factory.ts:368` (`Nullability.normalize`); #18, #23.
+
+## 232 [BUG] [P3] · A payload override dropped paging fields sitting beside the payload — ✅ Fixed
+
+**Symptom:** `$source.payload: "results"` returns the `results` property instead of the whole
+response, dropping every sibling. On a list call, the siblings are paging fields — a client could
+send `cursor` in but never got `nextCursor` back, so page two was unreachable.
+
+**OAS:** (ashby) `application.list`'s success response:
+```yaml
+ApplicationListSuccessResponse:
+  properties:
+    success: { type: boolean }
+    results: { type: array, items: { $ref: '#/components/schemas/ApplicationListResult' } }
+    nextCursor: { type: string }
+    moreDataAvailable: { type: boolean }
+    syncToken: { type: string }
+```
+Measured on Ashby's 197 operations: 149 have the payload as the only field beside the envelope
+(`success`/`errors`), 45 have paging fields beside it too, and 3 have no `results` property at all
+(unaffected either way).
+
+**Config:** nothing new — the existing `$source.payload`/per-op `payload` from #226.
+
+**Fix.**
+- The rule: unwrap only when the payload is the only field left once the fields `isSuccess`/`errors`
+  already read are removed; otherwise keep the response type, with those fields left out of it.
+- The `isSuccess`/`errors` field names come from the configured expressions, read off with one
+  regex (`envelopeFields`, `src/oas/utils/payload.ts`) — `isSuccess: "$.success"` and
+  `errors.message: "$($.errors?->first?.message ?? '…')"` name `success` and `errors`.
+- `findPayload` now answers `undefined` (keeping the wrapper) when the response has other data
+  fields beside the returned field, beyond what `isSuccess`/`errors` already read.
+- A kept response type leaves the `isSuccess`/`errors` fields out, done in the selection — an
+  unselected property is neither written nor collected.
+
+**Tests.**
+- `tests/resources/oas/source-envelope-union.yaml` (`tests/all/source-envelope.test.ts`):
+  `widget.list` (paging fields beside `results`) now keeps its wrapper with no `success` field,
+  while `widget.info`/`widget.count`/`widget.tags` (payload alone) still unwrap exactly as before.
+- A new Slack-shaped op (`ok`/`error`/`results`/`cursor`) proves the envelope names come from the
+  configured expressions, not a fixed `success`/`errors` spelling.
+- New tests cover a kept wrapper dropping the whole `errors` subtree (`ErrorDetail` included), and
+  a selection saved before the config still dropping `success`/`errors` once the config applies.
+- `tests/resources/oas/shared-wrapper.yaml`'s and the pattern-override tests' overrides gained an
+  `isSuccess`/`errors` mapping where they had none, so their own `success` field is recognised
+  instead of misread as an unrelated extra field.
+- `tests/all/json-fallback-mapping.test.ts`'s two `#230` list-or-names tests gained the same
+  `isSuccess` mapping for the same reason.
+- A new runtime test sends `application.list`'s own paging shape through the router.
+
+**Ashby result.** Generated the whole spec with `-n --infer-entity-resolvers --overrides`:
+- 45 list operations now return a response type carrying the payload and its paging fields.
+- 152 unchanged: 149 unwrap as before, and the 3 with no `results` field keep
+  `success`/`errors`/`ErrorDetail` as before.
+- JSON fields still 48, 87 Query / 110 Mutation fields, composes on rover 2.15.1.
+
+**Refs:** `src/oas/utils/payload.ts` (`envelopeFields`, `responseObjects`, `findConfiguredPayload`,
+`findPayload`, `isEnvelopeNode`), `src/oas/generator/typesCollector.ts` (`collectLeafPaths`,
+`collectExpandedPaths`), `src/oas/io/operationWriter.ts` (`writeSelection`),
+`src/oas/nodes/get.ts` (`writeReturnType`); #227.

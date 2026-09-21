@@ -7,6 +7,7 @@ import {
   // aliased: this file builds plenty of real `Map`s, and the node class would shadow the built-in
   Map as MapNode,
   Obj,
+  Op,
   Prop,
   PropArray,
   PropCircRef,
@@ -23,7 +24,7 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { SelectionPath } from '../utils/selectionPath.js';
-import { findPayload } from '../utils/payload.js';
+import { EnvelopeContext, envelopeContext, findPayload, isEnvelopeNode } from '../utils/payload.js';
 
 export class TypesCollector {
   types: Map<string, IType> = new Map();
@@ -97,8 +98,11 @@ export class TypesCollector {
           const union = current;
           const shape = union.analyzeMixedValue(context, true);
           if (shape) {
+            const op = this.gen.paths.get(path.split(Naming.PATH_SEPARATOR)[0]) as IType & Op;
             const memberLeaves = new Set<string>();
-            shape.objectMemberIndexes.forEach((i) => pathsCollector.collectLeafPaths(union.children[i], memberLeaves));
+            shape.objectMemberIndexes.forEach((i) =>
+              pathsCollector.collectLeafPaths(union.children[i], memberLeaves, op),
+            );
             memberLeaves.forEach((p) => {
               if (!expanded.includes(p)) expanded.push(p);
             });
@@ -469,8 +473,16 @@ class PathsCollector {
 
   // Every leaf path under `root`, expanding along the way — the same walk `>**` already uses.
   //   e.g. (confluence) a union's object member, reused by TypesCollector.collect below.
-  public collectLeafPaths(root: IType, into: Set<string>): void {
+  public collectLeafPaths(root: IType, into: Set<string>, op: IType & Op): void {
+    const context = this.gen.getContext();
+    const envelope = envelopeContext(context, op);
     T.traverse(root, (child) => {
+      // A field the overrides file reads through isSuccess or errors, or anything inside it, is not selected;
+      // the @connect already handles it. see docs/FIXED.md #232
+      //   e.g. (ashby) application.list: errors and ErrorDetail.message are skipped, nextCursor is selected.
+      if (isEnvelopeNode(child, op, envelope)) {
+        return;
+      }
       // a list of lists of plain values is a leaf too — there is nothing below it to select, and
       // the field vanished with the op when it was the only property. see docs/FIXED.md #96
       //   e.g. (digitalocean) neighbor_ids: { type: array, items: { type: array, items: integer } }
@@ -556,6 +568,7 @@ class PathsCollector {
   }
 
   public collectExpandedPaths(selection: string[]) {
+    const context = this.gen.getContext();
     const newSelection = new Set<string>();
     // A bare op (no path segments) never gets walked past the op node itself, so its response/body
     // silently never visits. Treat it as `<op>>**`, the same full-subtree walk every other op gets.
@@ -569,10 +582,27 @@ class PathsCollector {
 
     nodes.forEach((stack) => {
       const root = _.last(stack)!;
-      this.collectLeafPaths(root, newSelection);
+      this.collectLeafPaths(root, newSelection, stack[0] as IType & Op);
     });
 
-    // finally remove the expanded paths from the selection
-    return [...newSelection, ...selection.filter((p) => !expands.includes(p))];
+    // a saved selection or an explicit CLI path can still name an envelope field directly; drop it
+    // here, unless it reaches its target through a literal `*` (resolveSegment can't resolve that).
+    //   e.g. (ashby) a saved `post:/widget.list>success` path is dropped, `post:/widget.list>*` is not.
+    const envelopeByOp = new Map<string, EnvelopeContext>();
+    const passThrough = selection.filter((p) => !expands.includes(p)).filter((p) => {
+      if (p.split(Naming.PATH_SEPARATOR).includes('*')) {
+        return true;
+      }
+      const stack = this.collectPaths(p, paths);
+      const op = stack[0] as IType & Op;
+      let envelope = envelopeByOp.get(op.id);
+      if (!envelope) {
+        envelope = envelopeContext(context, op);
+        envelopeByOp.set(op.id, envelope);
+      }
+      return !isEnvelopeNode(_.last(stack)!, op, envelope);
+    });
+
+    return [...newSelection, ...passThrough];
   }
 }

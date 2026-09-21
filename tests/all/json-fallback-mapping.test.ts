@@ -1033,9 +1033,9 @@ test('test_merge_object_refs_colliding_inline_union_id_is_json', async () => {
 
 test('test_230_list_of_names_or_objects_takes_the_objects', async () => {
   // Ashby's hiringTeamRole.list shape: results: anyOf [ [string], [$ref Role] ]. The object list
-  // wins, and with a payload override the whole operation returns it.
+  // wins; isSuccess names "success" as the envelope field so it doesn't block the unwrap. see #232
   const schema = await runOasTest('list-or-names.yaml', ['post:/roles.list>**'], 5, 2, {
-    overrides: { $source: { payload: 'results' } },
+    overrides: { $source: { isSuccess: '$.success', payload: 'results' } },
   });
   assert.ok(schema !== undefined);
   assert.ok(/createRolesList\(input: CreateRolesListInput!\): \[Role\]/.test(schema!), 'the operation returns the object list');
@@ -1065,9 +1065,9 @@ test('test_230_without_payload_the_wrapper_field_is_the_list', async () => {
 
 test('test_230_oneof_spelling_takes_the_objects', async () => {
   // The untyped oneOf arm produces the same typed array as its anyOf twin, not an unnamed union
-  // with an empty selection.
+  // with an empty selection. isSuccess names "success" so it doesn't block the unwrap. see #232
   const schema = await runOasTest('list-or-names.yaml', ['post:/roles.listOneOf>**'], 5, 2, {
-    overrides: { $source: { payload: 'results' } },
+    overrides: { $source: { isSuccess: '$.success', payload: 'results' } },
   });
   assert.ok(schema !== undefined);
   assert.ok(
