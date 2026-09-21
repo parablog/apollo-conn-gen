@@ -589,19 +589,21 @@ class PathsCollector {
     // here, unless it reaches its target through a literal `*` (resolveSegment can't resolve that).
     //   e.g. (ashby) a saved `post:/widget.list>success` path is dropped, `post:/widget.list>*` is not.
     const envelopeByOp = new Map<string, EnvelopeContext>();
-    const passThrough = selection.filter((p) => !expands.includes(p)).filter((p) => {
-      if (p.split(Naming.PATH_SEPARATOR).includes('*')) {
-        return true;
-      }
-      const stack = this.collectPaths(p, paths);
-      const op = stack[0] as IType & Op;
-      let envelope = envelopeByOp.get(op.id);
-      if (!envelope) {
-        envelope = envelopeContext(context, op);
-        envelopeByOp.set(op.id, envelope);
-      }
-      return !isEnvelopeNode(_.last(stack)!, op, envelope);
-    });
+    const passThrough = selection
+      .filter((p) => !expands.includes(p))
+      .filter((p) => {
+        if (p.split(Naming.PATH_SEPARATOR).includes('*')) {
+          return true;
+        }
+        const stack = this.collectPaths(p, paths);
+        const op = stack[0] as IType & Op;
+        let envelope = envelopeByOp.get(op.id);
+        if (!envelope) {
+          envelope = envelopeContext(context, op);
+          envelopeByOp.set(op.id, envelope);
+        }
+        return !isEnvelopeNode(_.last(stack)!, op, envelope);
+      });
 
     return [...newSelection, ...passThrough];
   }

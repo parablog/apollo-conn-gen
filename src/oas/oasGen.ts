@@ -216,7 +216,9 @@ export class OasGen {
       try {
         new RegExp(match.pattern);
       } catch (error) {
-        throw new Error(`[overrides] "$match" pattern "${match.pattern}" does not compile: ${(error as Error).message}`);
+        throw new Error(
+          `[overrides] "$match" pattern "${match.pattern}" does not compile: ${(error as Error).message}`,
+        );
       }
     }
 
@@ -258,7 +260,9 @@ export class OasGen {
         if (!this.paths.has(key)) {
           console.warn(`[overrides] no operation matches "${key}" — override ignored.`);
         } else if (override && hasInvalidRoot(override)) {
-          throw new Error(`[overrides] "${key}".root must be "query" or "mutation", got ${JSON.stringify(override.root)}.`);
+          throw new Error(
+            `[overrides] "${key}".root must be "query" or "mutation", got ${JSON.stringify(override.root)}.`,
+          );
         }
       }
 

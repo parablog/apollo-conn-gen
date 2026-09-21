@@ -17,7 +17,13 @@ export function payloadField(opId: string, overrides: OverridesConfig | undefine
 export function envelopeFields(opId: string, overrides: OverridesConfig | undefined): Set<string> {
   const source = overrides?.$source;
   const opErrors = findOverride(opId, overrides)?.errors;
-  const expressions = [source?.isSuccess, source?.errors?.message, source?.errors?.extensions, opErrors?.message, opErrors?.extensions];
+  const expressions = [
+    source?.isSuccess,
+    source?.errors?.message,
+    source?.errors?.extensions,
+    opErrors?.message,
+    opErrors?.extensions,
+  ];
 
   const names = new Set<string>();
   for (const expression of expressions) {
@@ -68,7 +74,9 @@ export function findPayload(context: OasContext, op: IType & Op): Prop | undefin
   }
   const envelope = envelopeFields(op.id, context.generateOptions.overrides);
   const holder = responseObjects(context, op).find((candidate) => candidate.props.get(prop.name) === prop);
-  const keepsResponse = Array.from(holder?.props.keys() ?? []).some((name) => name !== prop.name && !envelope.has(name));
+  const keepsResponse = Array.from(holder?.props.keys() ?? []).some(
+    (name) => name !== prop.name && !envelope.has(name),
+  );
   return keepsResponse ? undefined : prop;
 }
 
@@ -98,7 +106,11 @@ export function isEnvelopeNode(node: IType, op: IType & Op, envelope: EnvelopeCo
 
   let current: IType | undefined = node;
   while (current && current !== (op as IType)) {
-    if (current instanceof Prop && envelope.names.has(current.name) && envelope.objects.includes(current.parent as Obj)) {
+    if (
+      current instanceof Prop &&
+      envelope.names.has(current.name) &&
+      envelope.objects.includes(current.parent as Obj)
+    ) {
       return true;
     }
     current = current.parent;

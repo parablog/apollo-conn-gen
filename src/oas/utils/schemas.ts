@@ -260,7 +260,8 @@ export class Schemas {
         return false;
       }
       const rawItems = resolved.items as SchemaObject | ReferenceObject | undefined;
-      const items = rawItems && '$ref' in rawItems ? (context.resolvePointer(rawItems.$ref!) as SchemaObject) : rawItems;
+      const items =
+        rawItems && '$ref' in rawItems ? (context.resolvePointer(rawItems.$ref!) as SchemaObject) : rawItems;
       return items != null && Schemas.isObjectMember(items);
     });
 
