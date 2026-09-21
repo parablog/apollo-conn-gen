@@ -76,6 +76,6 @@ test('test_corpus_mut_confluence', async () => {
 test('test_corpus_mut_ashby', async () => {
   // application.create: body-only params (RPC style, no query/path params) with a nested
   // ApplicationCreateRequestInput; passes generate + compose same as the read-style entry above.
-  // 26 since #220: CustomField.value's anyOf now builds a mixed-value type, same 4 new types.
-  await runOasTest('ashby.json', ['post:/application.create>**'], 197, 26);
+  // 25 since #231: the two identical inline customFields item copies are one type.
+  await runOasTest('ashby.json', ['post:/application.create>**'], 197, 25);
 });
