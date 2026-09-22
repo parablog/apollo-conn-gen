@@ -1,0 +1,96 @@
+openapi: 3.1.0
+info:
+  title: nested choice members -- a string or a list of strings (Ashby valueLabel shape)
+  version: "1.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /thing.get:
+    get:
+      operationId: thingGet
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  # (ashby) 16 declarations: anyOf [anyOf [string, [string]], null]
+                  nested:
+                    anyOf:
+                      - anyOf:
+                          - type: string
+                          - type: array
+                            items:
+                              type: string
+                      - type: 'null'
+                  # same nesting, plus a nullable list item -- 4 of the 16 carry this
+                  nestedNullItems:
+                    anyOf:
+                      - anyOf:
+                          - type: string
+                          - type: array
+                            items:
+                              anyOf:
+                                - type: string
+                                - type: 'null'
+                      - type: 'null'
+                  # (ashby) 3 declarations: anyOf [string, [string]]
+                  flat:
+                    anyOf:
+                      - type: string
+                      - type: array
+                        items:
+                          type: string
+                  # (ashby) 1 declaration: oneOf [string, [string]] -- vanishes today, no fix needed
+                  flatOneOf:
+                    oneOf:
+                      - type: string
+                      - type: array
+                        items:
+                          type: string
+                  # same shape at the list-item position
+                  valueList:
+                    type: array
+                    items:
+                      anyOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: string
+                  # same shape at the map-value position
+                  valueByKey:
+                    type: object
+                    additionalProperties:
+                      anyOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: string
+  /thing.create:
+    post:
+      operationId: thingCreate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                # input side keeps JSON with a reason -- GraphQL has no input unions
+                flat:
+                  anyOf:
+                    - type: string
+                    - type: array
+                      items:
+                        type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string

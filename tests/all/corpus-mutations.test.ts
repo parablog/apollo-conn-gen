@@ -77,5 +77,7 @@ test('test_corpus_mut_ashby', async () => {
   // application.create: body-only params (RPC style, no query/path params) with a nested
   // ApplicationCreateRequestInput; passes generate + compose same as the read-style entry above.
   // 25 since #231: the two identical inline customFields item copies are one type.
-  await runOasTest('ashby.json', ['post:/application.create>**'], 197, 25);
+  // 27 since #221: valueLabel's anyOf/oneOf now build a mixed-value type -- valueLabelUnion and
+  // CustomFieldValueLabelUnion, 2 more types.
+  await runOasTest('ashby.json', ['post:/application.create>**'], 197, 27);
 });

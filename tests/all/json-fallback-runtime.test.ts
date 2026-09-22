@@ -285,3 +285,12 @@ test('merge-object-refs: get-mixed-detail.member-b', (t) =>
     'merge-object-refs',
     'get-mixed-detail.member-b',
   ));
+
+// #221: a plain scalar or a list of that scalar, nested or flat, at the property, list-item, and
+// map-value positions in one response -- the Ashby valueLabel shape.
+const NESTED_CHOICE_PATHS = ['get:/thing.get>**', 'post:/thing.create>**'];
+const NESTED_CHOICE_CASES = ['string', 'list', 'null'];
+for (const name of NESTED_CHOICE_CASES) {
+  test(`nested-choice-plain-and-list: ${name}`, (t) =>
+    runFixtureCase(t, 'nested-choice-plain-and-list.yaml', NESTED_CHOICE_PATHS, 'nested-choice-plain-and-list', name));
+}

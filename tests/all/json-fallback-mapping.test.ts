@@ -1112,3 +1112,57 @@ test('test_230_two_object_lists_stay_json_oneof', async () => {
   assert.ok(schema !== undefined);
   assert.ok(/results: JSON/.test(schema!), 'no winner between two object lists leaves the field JSON, same as the anyOf twin');
 });
+
+// --- #221: a nested/flat choice of a plain scalar and a list of that scalar, no object member ---
+
+test('test_221_nested_choice_plain_and_list_property', async () => {
+  const schema = await runOasTest(
+    'nested-choice-plain-and-list.yaml',
+    ['get:/thing.get>**', 'post:/thing.create>**'],
+    2,
+    10,
+  );
+  assert.ok(schema !== undefined);
+
+  // all four property spellings get the wrapper, none keeps a NEEDS ATTENTION note
+  for (const name of ['Nested', 'NestedNullItems', 'Flat', 'FlatOneOf']) {
+    assert.ok(
+      schema!.includes(`type ${name}Union {\n  text: String\n  list: [String]\n  raw: JSON\n}`),
+      `${name}Union carries text/list/raw, no object member`,
+    );
+  }
+  const selectionBlock = schema!.match(/selection: """([\s\S]*?)"""\s*\)\s*\n}\s*\n\ntype Mutation/)?.[1] ?? '';
+  for (const field of ['nested', 'nestedNullItems', 'flat', 'flatOneOf']) {
+    assert.ok(selectionBlock.includes(`${field}: ${field}?->echo({ raw: @ }) {`), `${field}'s selection head`);
+  }
+  const responseType = schema!.match(/type ThingGetResponse \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(!/NEEDS ATTENTION/.test(responseType), 'no fallback note on any of the four response fields');
+
+  // input side keeps JSON with a reason -- GraphQL has no input unions
+  assert.ok(schema!.includes('flat: JSON'), 'the input field stays JSON');
+  assert.ok(schema!.includes("this field's shape didn't match any known pattern"), 'the input field keeps its reason');
+});
+
+test('test_221_nested_choice_plain_and_list_position', async () => {
+  // list item and map value: the shapes step 3's selection fix specifically covers -- typed AND
+  // selected, not just typed in isolation (that's what the string matches on the selection block prove).
+  const schema = await runOasTest(
+    'nested-choice-plain-and-list.yaml',
+    ['get:/thing.get>**', 'post:/thing.create>**'],
+    2,
+    10,
+  );
+  assert.ok(schema !== undefined);
+
+  assert.ok(
+    schema!.includes('type ValueListUnion {\n  text: String\n  list: [String]\n  raw: JSON\n}'),
+    'list item gets the wrapper',
+  );
+  assert.ok(schema!.includes('valueList: valueList?->map(@->echo({ raw: @ }))'), 'list item is selected, not commented out');
+
+  assert.ok(
+    schema!.includes('type ValueByKeyEntryUnion {\n  text: String\n  list: [String]\n  raw: JSON\n}'),
+    'map value gets the wrapper',
+  );
+  assert.ok(schema!.includes('valueByKey: valueByKey?->entries {'), 'map value is selected, not commented out');
+});

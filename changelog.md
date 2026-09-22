@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- A field that can be a plain scalar or a list of that scalar, spelled `anyOf`/`oneOf`, nested or
+  flat, types as `{ text, list, raw }` instead of `JSON`. E.g. (ashby) `valueLabel: anyOf [anyOf
+  [string, [string]], null]` types as `CustomFieldValueLabelUnion { text: String list: [String]
+  raw: JSON }`. Issue #221.
+
 ## [0.31.0]
 
 ### Added

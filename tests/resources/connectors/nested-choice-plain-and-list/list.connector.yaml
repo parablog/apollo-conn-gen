@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "list.connector",
+      "connector": "Query.thingGet",
+      "variables": {},
+      "apiResponseBody": "{\"nested\": [\"a1\", \"a2\"], \"nestedNullItems\": [\"b1\"], \"flat\": [\"c1\"], \"flatOneOf\": [\"d1\"], \"valueList\": [[\"e1\", \"e2\"]], \"valueByKey\": {\"k1\": [\"f1\"]}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/thing.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"nested\": {\"list\": [\"a1\", \"a2\"], \"raw\": [\"a1\", \"a2\"]}, \"nestedNullItems\": {\"list\": [\"b1\"], \"raw\": [\"b1\"]}, \"flat\": {\"list\": [\"c1\"], \"raw\": [\"c1\"]}, \"flatOneOf\": {\"list\": [\"d1\"], \"raw\": [\"d1\"]}, \"valueList\": [{\"list\": [\"e1\", \"e2\"], \"raw\": [\"e1\", \"e2\"]}], \"valueByKey\": [{\"key\": \"k1\", \"value\": {\"list\": [\"f1\"], \"raw\": [\"f1\"]}}]}"
+      }
+    }
+  ]
+}

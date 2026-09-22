@@ -48,8 +48,54 @@ export class Nullability {
 
     // both choice-list spellings
     for (const key of ['oneOf', 'anyOf'] as const) {
+      Nullability.flattenNestedChoice(source, key);
       Nullability.removeNullChoice(source, key);
     }
+  }
+
+  // Replaces each member that is only a oneOf/anyOf with that member's own members, after
+  // normalizing it; a null it allowed becomes this schema's `nullable`. Without this the checks
+  // in Factory.fromProp find no type on that member and send the whole field to JSON. #221
+  //   e.g. (ashby) valueLabel: anyOf [ anyOf [string, [string]], null ] -> anyOf [string, [string]], nullable: true
+  private static flattenNestedChoice(schema: Record<string, unknown>, key: 'oneOf' | 'anyOf'): void {
+    const choices = schema[key];
+    if (!Array.isArray(choices)) {
+      return;
+    }
+
+    const memberChoices: unknown[] = [];
+    let carriedNullable = false;
+
+    for (const choice of choices) {
+      if (!Nullability.isNestedChoice(choice as SchemaObject)) {
+        memberChoices.push(choice);
+        continue;
+      }
+      const member = choice as SchemaObject & Record<string, unknown>;
+      Nullability.normalize(member);
+      if (member.nullable === true) {
+        carriedNullable = true;
+      }
+      const memberOwnChoices = (member.oneOf ?? member.anyOf) as unknown[] | undefined;
+      memberChoices.push(...(memberOwnChoices ?? []));
+    }
+
+    if (carriedNullable) {
+      schema.nullable = true;
+    }
+    schema[key] = memberChoices;
+  }
+
+  // True when a schema's only shape keyword is oneOf or anyOf; description/title beside it don't count.
+  //   e.g. { anyOf: [string, array], description: "..." } -> true; { type: string, oneOf: [...] } -> false
+  private static isNestedChoice(choice: SchemaObject): boolean {
+    const choiceAsMap = choice as Record<string, unknown>;
+    if (choiceAsMap.oneOf == null && choiceAsMap.anyOf == null) {
+      return false;
+    }
+    return Nullability.SHAPE_KEYWORDS.every(
+      (shape) => shape === 'oneOf' || shape === 'anyOf' || choiceAsMap[shape] == null,
+    );
   }
 
   // Takes the `or null` choice out of the list and marks the schema `nullable` instead. What is

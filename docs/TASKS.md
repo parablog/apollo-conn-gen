@@ -681,31 +681,6 @@ plus shapeless object" that lands on `JSON` with a warning, the same fallback a 
 `isShapelessObject`). Pinned by fixture `oneof-plain-and-shapeless-object.yaml` and test
 `test_gap_215_plain_or_shapeless_object_vanishes` (`tests/all/lint-known-gaps.test.ts`).
 
-## 216 [BUG] [P3] · A container whose every property individually vanishes by its own oneOf drops whole — ⬜ Open
-
-**Symptom:** a container object whose *every* property is, on its own, a `oneOf` mixing an array
-with a plain scalar or an object (a different combination than #215's) disappears whole from its
-parent — no field, no JSON, no warning. A sibling field of the container itself, one level up, is
-unaffected.
-
-**OAS** (docker-engine) `ContainerConfig.Cmd`/`.Entrypoint`: `oneOf: [array, string]`. Same shape
-on every child of one container (confluence) `WebResourceDependencies.uris`/`SuperBatchWebResources.uris`:
-`{ all, css, js }`, each `oneOf: [array, string]`; (slack) `profile.fields`: `oneOf: [object,
-array]`.
-
-**Cause:** observed in generated SDL — the container itself is missing from the type once every
-one of its own properties has individually folded away by its own `oneOf` (not #215's shapeless-
-object mechanism). The line that drops a zero-property container was not traced for the plain-
-object case specifically; it plausibly shares the "a zero-property type is not written" behaviour
-#215's list-item case hits, but that is not traced here. Sibling properties one level up from
-the container survive through the ordinary property-read path and need no separate explanation.
-
-**Shape:** find and fix whatever drops a zero-property object type without a warning — likely the
-same code #215's container case will end up touching, so worth looking at together.
-
-**Refs:** `src/oas/utils/schemas.ts`. Pinned by fixture `container-whose-fields-all-vanish-drops.yaml`
-and test `test_gap_216_container_whose_fields_all_vanish_drops` (`tests/all/lint-known-gaps.test.ts`).
-
 ## 217 [BUG] [P4] · A property named the empty string is read fine but still reported unread — ⬜ Open
 
 **Symptom:** not a generator gap — a property literally named `""` sanitises to `_` and is
@@ -765,16 +740,6 @@ calls, or memoise the chain while a node's parent is fixed.
 
 **Refs:** `src/oas/nodes/type.ts` (`ancestors`, `path`), `src/oas/generator/typesCollector.ts`
 (`collect`).
-
-## 221 [BUG] [P3] · Nested choice members miss the plain and object classifiers — ⬜ Open
-
-**OAS:** Ashby `valueLabel: anyOf [anyOf [string, [string]], null]`.
-**Symptom:** a member that is itself a `oneOf` or `anyOf` is not recognised as a plain value or an object.
-The property keeps JSON with `unknownShape`.
-The current source has 16 nested-choice `valueLabel` declarations, including variants whose list items also allow null.
-The per-operation census contains 139 `valueLabel` JSON occurrences across 14 distinct emitted type-and-field names, before and after #220.
-**Shape:** flatten nested choices before classifying their members, preserving nullability and each member's constraints.
-**Refs:** `src/oas/utils/schemas.ts` (`holdsPlainValues`, `isObjectMember`, `mixesObjectAndPlainMembers`), `src/oas/nodes/factory.ts` (`fromProp`), #220.
 
 ## 222 [BUG] [P4] · Synthetic `keyString` fields carry the wrong JSON reason — ⬜ Open
 

@@ -656,7 +656,9 @@ test('source-envelope ashby: the real spec keeps application.list under the conf
   };
   // typesSize 27: one more than the old unwrap-to-Job baseline (26), the kept response type itself.
   // #231 also dedups two inline-twin item shapes on this path that used to rename apart.
-  const schema = await runOasTest('ashby.json', ['post:/application.list>**'], 197, 27, { overrides });
+  // 29 since #221: valueLabel's anyOf/oneOf now build a mixed-value type -- valueLabelUnion and
+  // CustomFieldValueLabelUnion, 2 more types.
+  const schema = await runOasTest('ashby.json', ['post:/application.list>**'], 197, 29, { overrides });
 
   assert.ok(schema!.includes('isSuccess: "$.success"'));
   assert.ok(schema!.includes("errors: { message: \"$($.errors?->first?.message ?? 'Ashby request failed')\""));

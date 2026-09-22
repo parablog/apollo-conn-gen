@@ -231,6 +231,11 @@ export class Factory {
   // What a list holds. An object with no fields becomes JSON — an empty type would take the whole
   // field with it. e.g. archivedChannels: { type: array, items: { type: object } } -> [JSON]. #56
   public static fromArrayItems(context: OasContext, parent: IType, items: SchemaObject | ReferenceObject): IType {
+    // holdsPlainValues and holdsMixedPlainAndObjectValues below read items.oneOf/anyOf before
+    // fromSchema gets to normalize them, so items is normalized here first. #221
+    if (!('$ref' in items)) {
+      Nullability.normalize(items);
+    }
     // a $ref'd shapeless object is still shapeless — resolve before checking, same idiom as get.ts.
     // e.g. (pagerduty) items: { $ref: IncidentReference }, IncidentReference: { additionalProperties: true }  #110
     // resolvePointer, not lookupRef: a sniff that may discard the ref must not bump refCount.
@@ -502,6 +507,16 @@ export class Factory {
             }
           } else if (Schemas.holdsOnlyArrayMembers(context, schemaObj)) {
             prop = Factory.fromListChoice(context, parent, propName, schemaObj);
+          } else if (
+            // Builds the #208 mixed-value wrapper when analyzeMixedValue finds a shape, output
+            // side only — GraphQL has no input unions. #221
+            //   e.g. (ashby) valueLabel: anyOf [string, array] -> ValueLabelUnion { text list raw }
+            parent.kind !== 'input' &&
+            Schemas.analyzeMixedValue(context, members as (SchemaObject | ReferenceObject)[])
+          ) {
+            const inner: PropComp = new PropComp(parent, propName, schemaObj);
+            inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[], false, _.get(schemaObj, 'discriminator'));
+            prop = inner;
           } else {
             // a member that is itself a choice, or a map, is neither plain nor object to the
             // checks above — the same unrecognised-shape fallback a typed property gets. #221
@@ -620,6 +635,14 @@ export class Factory {
         }
       } else if (Schemas.holdsOnlyArrayMembers(context, schemaObj)) {
         prop = Factory.fromListChoice(context, parent, propName, schemaObj);
+      } else if (
+        // same wrapper as the typed branch above, reached here because this schema has no `type` key. #221
+        parent.kind !== 'input' &&
+        Schemas.analyzeMixedValue(context, members as (SchemaObject | ReferenceObject)[])
+      ) {
+        const inner: PropComp = new PropComp(parent, propName, schemaObj);
+        inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[]);
+        prop = inner;
       } else {
         // a member that is itself a choice, or a map, is neither plain nor object to the checks
         // above — the same unrecognised-shape fallback a typed property gets. #221

@@ -45,11 +45,20 @@ test('test_gap_215_plain_or_shapeless_object_vanishes', async () => {
   assert.ok(!entries.sdl.includes('data'), 'the item type had only that one property, so the whole list drops too');
 });
 
+// #221 fixed the no-object-member case (docker-engine/confluence's `oneOf [array, string]`):
+// uris/all/css/js now read as the mixed-value wrapper, not dropped. See docs/TASKS.md #216 --
+// narrowed to slack's `oneOf [object, array]`, which has a real object member and is out of scope.
 test('test_gap_216_container_whose_fields_all_vanish_drops', async () => {
   const { sdl, parsed, findings } = await findingsFor('container-whose-fields-all-vanish-drops.yaml', 'get:/folders');
   assert.ok(parsed.selections.length > 0);
-  assert.deepEqual(findings, [{ code: 'RESPONSE_FIELD_NOT_READ', field: 'uris' }]);
-  assert.ok(!sdl.includes('uris'), 'every one of its own properties folded away, so the container itself is gone too');
+  assert.deepEqual(findings, []);
+  assert.ok(sdl.includes('uris: Uris'), 'the container survives once its own fields do');
+  for (const name of ['All', 'Css', 'Js']) {
+    assert.ok(
+      sdl.includes(`type ${name}Union {\n  text: String\n  list: [String]\n  raw: JSON\n}`),
+      `${name} gets the mixed-value wrapper, not a silent drop`,
+    );
+  }
 });
 
 test('test_gap_217_empty_string_property_name_is_a_checker_false_positive', async () => {

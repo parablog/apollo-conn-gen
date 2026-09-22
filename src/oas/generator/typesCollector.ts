@@ -11,6 +11,7 @@ import {
   Prop,
   PropArray,
   PropCircRef,
+  PropComp,
   PropEn,
   PropMap,
   PropObj,
@@ -476,6 +477,13 @@ class PathsCollector {
   public collectLeafPaths(root: IType, into: Set<string>, op: IType & Op): void {
     const context = this.gen.getContext();
     const envelope = envelopeContext(context, op);
+    // True for a union with no object member that still types as { text, list, raw } -- the
+    // property/list-item/map-value leaf checks below all call this. #221
+    //   e.g. (ashby) valueLabel: anyOf [string, array] -> ValueLabelUnion { text list raw }
+    const isPlainOrListUnion = (union: Union): boolean => {
+      const shape = union.analyzeMixedValue(context, true);
+      return shape != null && shape.objectMemberIndexes.length === 0;
+    };
     T.traverse(root, (child) => {
       // A field the overrides file reads through isSuccess or errors, or anything inside it, is not selected;
       // the @connect already handles it. see docs/FIXED.md #232
@@ -494,11 +502,17 @@ class PathsCollector {
       //   e.g. (motion) include: { type: array, items: { type: string, enum: [workHours] } }
       // see docs/FIXED.md #170 #172
       const listOfEnumValues = child instanceof PropArray && child.items instanceof En;
-      if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues) {
+      // a list of `string | [string]` values is the same leaf, at the list-item position. #221
+      const listOfPlainOrList =
+        child instanceof PropArray && child.items instanceof Union && isPlainOrListUnion(child.items);
+      if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues || listOfPlainOrList) {
         into.add(child.path());
       } else if (child instanceof PropEn) {
         // enum props are leaves too — without this, `>**` silently drops every enum field
         // (slack's `ok`-only stubs collapsed to zero types). see docs/FIXED.md #24
+        into.add(child.path());
+      } else if (child instanceof PropComp && child.comp instanceof Union && isPlainOrListUnion(child.comp)) {
+        // a no-object-member mixed-value property, e.g. (ashby) valueLabel: anyOf [string, array]. #221
         into.add(child.path());
       } else if (child instanceof PropCircRef) {
         // a cut cycle is a leaf: include its path so the commented field is emitted (in both the
@@ -541,7 +555,12 @@ class PathsCollector {
         //   e.g. additionalProperties: { additionalProperties: { type: integer } }
         const mapNested = child instanceof MapNode && child.parent instanceof MapNode ? child : undefined;
         const map = mapUnderProp ?? mapAsResponse ?? mapNested;
-        if (map?.valueType && T.isWholeMapValue(map.valueType)) {
+        // a map value that is a no-object-member mixed-value union is whole too. #221
+        if (
+          map?.valueType &&
+          (T.isWholeMapValue(map.valueType) ||
+            (map.valueType instanceof Union && isPlainOrListUnion(map.valueType)))
+        ) {
           into.add(child.path());
         }
       }

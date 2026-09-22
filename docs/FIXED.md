@@ -11526,3 +11526,119 @@ Measured on Ashby's 197 operations: 149 have the payload as the only field besid
 `findPayload`, `isEnvelopeNode`), `src/oas/generator/typesCollector.ts` (`collectLeafPaths`,
 `collectExpandedPaths`), `src/oas/io/operationWriter.ts` (`writeSelection`),
 `src/oas/nodes/get.ts` (`writeReturnType`); #227.
+
+## 221 [BUG] [P3] · A string-or-list choice, nested or flat, now gets the mixed-value wrapper — ✅ Fixed
+
+**Symptom:** Ashby's `valueLabel` is declared 20 times as a choice of a string or a list of
+strings. Every reachable one landed as `JSON` with an "unknown shape" note; the `oneOf` spelling
+was worse, vanishing with no note at all.
+
+**OAS** (ashby) `CustomField.valueLabel`:
+```yaml
+anyOf: [ { anyOf: [ {type: string}, {type: array, items: {type: string}} ] }, { type: 'null' } ]
+```
+
+**Before:**
+```graphql
+"""
+NEEDS ATTENTION: this field's shape didn't match any known pattern and defaulted to JSON.
+"""
+valueLabel: JSON
+```
+
+**After:**
+```graphql
+type CustomFieldValueLabelUnion {
+  text: String
+  list: [String]
+  raw: JSON
+}
+...
+valueLabel: valueLabel?->echo({ raw: @ }) {
+ ... raw->jsonStringify->slice(0, 1)->match(
+   ["\"", { text: raw }],
+   ["[", { list: raw }],
+   [@, {}]
+ )
+ raw
+}
+```
+
+**Cause, three gaps stacked on top of the FIXED #208 wrapper:**
+1. a member that is only another `anyOf`/`oneOf` (Ashby nests one for its `null` wrapper) —
+   `holdsPlainValues` and `holdsMixedPlainAndObjectValues` treated that member as neither a plain
+   value nor an object, so the property fell to the unknown-shape `JSON` before a `Union` ever
+   existed to carry the wrapper.
+2. `Schemas.analyzeMixedValue` (`schemas.ts:178`) required at least one object member — a plain
+   scalar plus a list has none, so it always returned `undefined`.
+3. even with 1 and 2 fixed, nothing in the selection pass kept the field: `PathsCollector.
+   collectLeafPaths` (`typesCollector.ts:476-568`) had no branch for a `PropComp` wrapping a
+   no-object-member `Union`, or the same shape at a list item or a map value. Today's `JSON`
+   fallback is a `PropScalar`, which `collectLeafPaths` already recognises as a leaf — fixing 1
+   and 2 alone would have replaced that recognised leaf with an unrecognised one, so the field
+   would have disappeared under wildcard selection instead of degrading to `JSON`.
+
+**Fix.**
+- `Nullability.normalize` (`src/oas/utils/nullability.ts`) replaces a member that is only another
+  `oneOf`/`anyOf` with that member's own members, carrying the member's own `null` up as the
+  parent's `nullable` — next to the existing null-choice strip, same idiom, both spellings. Also
+  called at the top of `Factory.fromArrayItems` and `Map.visitAdditionalProperties`, which used to
+  read their raw schema before `fromSchema` ever normalised it.
+- `Schemas.analyzeMixedValue`'s gate (`schemas.ts:178`) now also accepts a list member with no
+  object member: `{ text, list, raw }` needs no object.
+- `PathsCollector.collectLeafPaths` gained one leaf branch per position — property, list item, map
+  value — all keyed off `Union.analyzeMixedValue(context, true)` returning a shape with
+  `objectMemberIndexes.length === 0`. A union that also mixes in a real object member is untouched:
+  its object member's fields are already discovered through the existing per-member-leaf walk.
+- `Factory.fromProp`'s `anyOf` catch-all (both the typed and the untyped-schema copies) now builds
+  the same `Union` `oneOf` already did, when `Schemas.analyzeMixedValue` returns a shape, output
+  side only — `GraphQL` has no input unions, so an input-side choice keeps `JSON` with a reason.
+- Incidentally fixed: the `#177` one-member `anyOf` collapse (`factory.ts:374-379`) used to recurse
+  into the inner choice and drop the outer `nullable: true`; with the flatten done in `normalize`
+  the collapse no longer fires for this shape.
+
+**Census, fresh generator per operation, all 197 Ashby operations:** `valueLabel` `JSON` fallback
+occurrences went from 132 (across 9 emitted `*.valueLabel` fields, hit by 79 operations) to 0. The
+whole-spec generation now emits 5 distinct `*Union { text: String list: [String] raw: JSON }`
+wrapper types (fewer than the 9 emitted names above — several of those 9 share the exact same
+underlying member shape and converge onto one type once generated together, instead of each
+getting its own fresh-generator-local name); none has empty `props`. Read-only against
+`container-whose-fields-all-vanish-drops.yaml`'s `get:/folders>**` (docs/TASKS.md #216's own
+repro), all three previously-zero-prop unions (`all`/`css`/`js`) now consolidate to non-empty
+`props`.
+
+**Corpus pins moved:** `test_corpus_ashby` 28 → 30, `test_corpus_mut_ashby` 25 → 27, the
+`source-envelope ashby` pin 27 → 29 — each a +2 diff (`valueLabelUnion`, `CustomFieldValueLabelUnion`),
+checked against the actual type-list diff before changing the number.
+
+**docs/TASKS.md #216 closed, moved to this entry.** Its docker-engine/confluence shape (`oneOf
+[array, string]`, no object member) is exactly what this fix covers — `test_gap_216` now asserts
+the wrapper, not a drop. Slack's cited shape (`oneOf [object, array]`) has a real object member,
+which this issue's `objectMemberIndexes.length === 0` check deliberately leaves alone — checked
+directly with a slack-shaped fixture (object member with a `label` field, plus an array member):
+it already types and selects correctly, through the pre-existing `#208` per-member-leaf walk (a
+real object member's own properties are individually collected as ordinary leaves, which keeps the
+union's own field path alive as a selection prefix) — unrelated to this fix, and true independently
+of it. All three of #216's cited shapes come out typed today, so it closes here rather than staying
+narrowed.
+
+**Out of scope, left for later:** scalar-only choices (`oneOf [string, integer]`, #209 slice 2); the
+member-list extraction repeated across `Schemas`' helpers and `fromProp`'s inline reads (#186
+already names three copies, this entry adds more without folding them in); the input-side `oneOf
+[string, [string]]` still vanishes, same mechanism, input position — no open entry tracks it, since
+#216 closes here; widening `collectLeafPaths`' new branches to `objectMemberIndexes.length > 0` too
+(a union that mixes a real object member with plain members) was not attempted — checked directly
+above for #216's own slack shape, but not folded into a general test here.
+
+**Tests:** `tests/resources/oas/nested-choice-plain-and-list.yaml` — the four Ashby spellings as
+properties, plus the same shape at a list item and a map value, plus an input body pinning `JSON`.
+`tests/all/json-fallback-mapping.test.ts` (`test_221_*`) asserts every field types and selects
+correctly, including the list-item and map-value positions selecting (not just typing) the wrapper.
+`tests/all/json-fallback-runtime.test.ts` + `tests/resources/connectors/nested-choice-plain-and-list/`
+runs `string`/`list`/`null` bodies through `test-connectors`. `tests/all/lint-known-gaps.test.ts`
+flips `test_gap_216`.
+
+**Refs:** `src/oas/utils/nullability.ts` (`normalize`), `src/oas/utils/schemas.ts`
+(`analyzeMixedValue`), `src/oas/generator/typesCollector.ts` (`collectLeafPaths`),
+`src/oas/nodes/factory.ts` (`fromProp`, `fromArrayItems`), `src/oas/nodes/map.ts`
+(`visitAdditionalProperties`), `docs/FIXED.md #208` (the wrapper this reuses); closes `docs/TASKS.md #216`.

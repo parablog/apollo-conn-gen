@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "string.connector",
+      "connector": "Query.thingGet",
+      "variables": {},
+      "apiResponseBody": "{\"nested\": \"a\", \"nestedNullItems\": \"b\", \"flat\": \"c\", \"flatOneOf\": \"d\", \"valueList\": [\"e\"], \"valueByKey\": {\"k1\": \"f\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/thing.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"nested\": {\"text\": \"a\", \"raw\": \"a\"}, \"nestedNullItems\": {\"text\": \"b\", \"raw\": \"b\"}, \"flat\": {\"text\": \"c\", \"raw\": \"c\"}, \"flatOneOf\": {\"text\": \"d\", \"raw\": \"d\"}, \"valueList\": [{\"text\": \"e\", \"raw\": \"e\"}], \"valueByKey\": [{\"key\": \"k1\", \"value\": {\"text\": \"f\", \"raw\": \"f\"}}]}"
+      }
+    }
+  ]
+}

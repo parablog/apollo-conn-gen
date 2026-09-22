@@ -7,6 +7,7 @@ import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import { GqlUtils } from '../utils/gql.js';
 import { JsonDegradeReasons } from '../utils/jsonReasons.js';
+import { Nullability } from '../utils/nullability.js';
 
 export class Map extends Type {
   public valueType?: IType;
@@ -211,6 +212,9 @@ export class Map extends Type {
     }
 
     const additionalProps = this.schema.additionalProperties as SchemaObject;
+    // holdsPlainValues and holdsPlainValuesOrEmptyObject below read the value schema's oneOf/anyOf
+    // before fromSchema gets to normalize it, so it is normalized here first. #221
+    Nullability.normalize(additionalProps);
 
     // If additionalProperties is an empty object, create a JSON scalar type
     if (Object.keys(additionalProps).length === 0) {

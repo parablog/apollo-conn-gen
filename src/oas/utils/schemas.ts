@@ -175,7 +175,8 @@ export class Schemas {
       }
     }
 
-    if (!hasNonObject || objectMemberIndexes.length === 0) {
+    // a list member beside a plain one is enough: { text, list, raw } needs no object. #221
+    if (!hasNonObject || (objectMemberIndexes.length === 0 && !isList)) {
       return undefined;
     }
 
