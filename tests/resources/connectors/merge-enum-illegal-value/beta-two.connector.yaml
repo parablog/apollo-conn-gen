@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "beta-two.connector",
+      "connector": "Query.hyphenGet",
+      "variables": {},
+      "apiResponseBody": "{\"data\": {\"type\": \"beta-two\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/hyphen.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"data\": {\"type\": \"beta-two\"}}"
+      }
+    }
+  ]
+}

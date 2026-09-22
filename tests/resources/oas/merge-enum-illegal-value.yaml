@@ -1,0 +1,137 @@
+openapi: 3.0.0
+info:
+  title: a flat union merge where one branch's enum value is not a legal GraphQL name (#234)
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /hyphen.get:
+    get:
+      operationId: getHyphen
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - type: object
+                        title: Alpha
+                        properties:
+                          type:
+                            type: string
+                            enum: [alpha]
+                      - type: object
+                        title: BetaTwo
+                        properties:
+                          type:
+                            type: string
+                            enum: [beta-two]
+                      - type: object
+                        title: Gamma
+                        properties:
+                          type:
+                            type: string
+                            enum: [gamma]
+  /null-value.get:
+    get:
+      operationId: getNullValue
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - type: object
+                        title: Ready
+                        properties:
+                          type:
+                            type: string
+                            enum: [ready]
+                      - type: object
+                        title: NullTag
+                        properties:
+                          type:
+                            type: string
+                            enum: ["null"]
+  /plain-string.get:
+    get:
+      operationId: getPlainString
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - type: object
+                        title: EnumStatus
+                        properties:
+                          status:
+                            type: string
+                            enum: [ready, pending]
+                      - type: object
+                        title: PlainStatus
+                        properties:
+                          status:
+                            type: string
+  /numeric-enum.get:
+    get:
+      operationId: getNumericEnum
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - type: object
+                        title: StringStatusNumeric
+                        properties:
+                          status:
+                            type: string
+                            enum: [alpha, beta]
+                      - type: object
+                        title: NumericStatus
+                        properties:
+                          status:
+                            type: integer
+                            enum: [1]
+  /boolean-enum.get:
+    get:
+      operationId: getBooleanEnum
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - type: object
+                        title: StringStatusBoolean
+                        properties:
+                          status:
+                            type: string
+                            enum: [alpha, beta]
+                      - type: object
+                        title: BooleanStatus
+                        properties:
+                          status:
+                            type: boolean
+                            enum: [true]

@@ -303,6 +303,21 @@ export class Union extends Type {
         if (clashing.every((p): p is PropEn => p instanceof PropEn)) {
           return Union.mergeEnums(context, name, clashing, union);
         }
+        // one branch's enum value is not a legal name, so its field is String: the merged field is String, not JSON. #234
+        const stringEnumMember = Union.findStringEnumMember(clashing);
+        if (stringEnumMember) {
+          const illegalValue = (stringEnumMember.schema.enum as unknown[]).find(
+            (value) => !GqlUtils.isGqlEnumValue(value),
+          );
+          warn(
+            null,
+            '[union]',
+            `\`${name}\` is an enum on some branches but the value \`${illegalValue}\` is not a legal GraphQL enum name, so the merged field is String`,
+          );
+          const merged = new PropScalar(prop.parent!, name, 'String', { type: 'string' });
+          merged.required = clashing.every((p) => p.required);
+          return merged;
+        }
         const reason = JsonDegradeReasons.incompatibleMergedField();
         warn(null, '[union]', reason);
         return new PropScalar(prop.parent!, name, 'JSON', Schemas.withJsonNote(context, {}, reason));
@@ -399,6 +414,25 @@ export class Union extends Type {
     // present on every branch only when every branch requires it
     prop.required = props.every((p) => p.required);
     return prop;
+  }
+
+  // Finds, among the branches' fields of one name, the field that is a String only because its enum
+  // holds a value GraphQL cannot use as a name, and only when every other branch has a real enum.
+  // Any other mix (a plain string, an Int or Boolean enum) returns undefined and the field stays JSON. #234
+  //   e.g. (omni) ControlReadExternal.config.fieldSelection: oneOf of three inline objects, each with
+  //   mode: enum [full-model] / enum [auto] / enum [specific] -> the full-model branch's field, so mode: String!
+  private static findStringEnumMember(props: Prop[]): PropScalar | undefined {
+    const isStringEnumMember = (prop: Prop): prop is PropScalar =>
+      prop instanceof PropScalar && prop.type === 'String' && prop.schema.enum != null;
+
+    const stringEnumMember = props.find(isStringEnumMember);
+
+    const isMixedEnumGroup =
+      stringEnumMember != null &&
+      props.some((prop) => prop instanceof PropEn) &&
+      props.every((prop) => prop instanceof PropEn || isStringEnumMember(prop));
+
+    return isMixedEnumGroup ? stringEnumMember : undefined;
   }
 
   // Reasons behind any member that gave up its own shape and became plain JSON — such a member has

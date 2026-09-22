@@ -11645,3 +11645,87 @@ flips `test_gap_216`.
 (`analyzeMixedValue`), `src/oas/generator/typesCollector.ts` (`collectLeafPaths`),
 `src/oas/nodes/factory.ts` (`fromProp`, `fromArrayItems`), `src/oas/nodes/map.ts`
 (`visitAdditionalProperties`), `docs/FIXED.md #208` (the wrapper this reuses); closes `docs/TASKS.md #216`.
+
+## 234 [BUG] [P3] · A merged enum field with one illegal value became `String` on every branch, not `JSON` — ✅ Fixed
+
+**OAS** (omni) `fieldSelection`, a flat `oneOf` (no discriminator) sharing one `mode` field:
+```yaml
+fieldSelection:
+  oneOf:
+    - properties: { mode: { type: string, enum: [full-model] } }   # hyphen: not a legal GraphQL name
+      required: [mode]
+    - properties: { mode: { type: string, enum: [auto] }, topics: { type: array, items: { type: string } } }
+      required: [mode, topics]
+    - properties: { fields: { type: array, items: { ... } }, mode: { type: string, enum: [specific] } }
+      required: [fields, mode]
+```
+
+**Before:**
+```graphql
+type FieldSelectionUnion {
+  "NEEDS ATTENTION: different branches of a merged type declare this field differently, and no single GraphQL type fits both -- sent as raw JSON."
+  mode: JSON
+  topics: [String]!
+  fields: [FieldsItem]!
+}
+```
+
+**After:**
+```graphql
+type FieldSelectionUnion {
+  mode: String!
+  topics: [String]!
+  fields: [FieldsItem]!
+}
+```
+
+**Symptom:** a flat union merge (`Union.dedupeByName`) folds every branch's same-named field into
+one. When every branch's version of a field is an enum, `mergeEnums` combines their values into one
+shared enum. `full-model` is not a legal GraphQL name, so #24 already built that one branch's `mode`
+as a plain `String` instead of an enum — the `every branch is a PropEn` check then failed for the
+*whole* field, which fell through to a shape comparison, mismatched, and became `JSON` on every
+branch, including the two that were legal enums on their own.
+
+**Cause:** there is no per-branch outcome to fall back to here. A real discriminated union or the
+#208 mixed-value form keeps each branch's own field, so a legal enum on one branch already survives
+independently of what a sibling branch does. A flat merge writes one field for the whole merged
+object — `dedupeByName` only runs there — so "String on every branch" is the closest analog to what
+#24 already does for a single illegal enum, not a design compromise.
+
+**Fix:** `Union.findStringEnumMember` (`src/oas/nodes/union.ts`) recognises the group first: at least
+one branch is a real enum, at least one other branch is a `String` that exists only because its own
+enum value was illegal (`PropScalar` with `type === 'String'` and `schema.enum` set), and no branch
+is anything else — it returns that `String` branch, or nothing when the group doesn't match. When it
+matches, `dedupeByName` merges the field to one `String`, with a warning naming the field and the
+illegal value. Two shapes stay on the existing `JSON` path, unchanged: a plain string with no enum
+at all beside a real enum (a genuine wire-type collision, #44), and a numeric or boolean illegal enum
+beside a legal string enum (#24 types those `Int`/`Boolean`, not `String`, so reading them as the
+enum's string values would be wrong).
+
+Two candidates were measured before this one: the narrow form above flips exactly the shape this
+issue is about; a wider form (any enum beside any plain string, illegal enum or not) also flips 16
+more fields corpus-wide but breaks `test_R2_union_merge_kind_collision_degrades_to_json` (#44), which
+guards a real enum against a genuinely different plain-string field of the same name — the narrow
+form is the one shipped.
+
+**Corpus:** 21 (spec, union, field) groups match the narrow shape. Omni (`omni-full.json`) — four
+fields across `get:/api/v2/documents/{identifier}` and its `/draft/{draftIdentifier}` variant:
+`fieldSelectionUnion.mode`, `FiltersUsedInSqlEntryUnion.type`, `QueryTypeFiltersEntryUnion.type`,
+`ConfigUnion.type` — the `[union]` warning count for those two ops stays at 120 (same warnings,
+different text for these four), while the `JSON`-with-note occurrences among them drop by 4. Ably
+Control (`ably-control.json`) — `rule_patch.ruleType`, `rule_post.ruleType`. Motion (`motion.json`)
+— the same `*TimeUnion.operator` shape repeated across the spec plus three `*.type` fields; a full
+before/after diff of the whole generated schema shows only those fields' type/note changing, nothing
+else.
+
+**Tests:** `tests/resources/oas/merge-enum-illegal-value.yaml` — a hyphenated illegal value, the
+reserved word `"null"`, a #44 plain-string pin, and illegal-numeric/illegal-boolean pins (#24 types
+those `Int`/`Boolean`, so they must not be caught by a `schema.enum`-only check).
+`tests/all/json-fallback-mapping.test.ts` (`test_234_*`) checks the SDL and warning text for all five
+shapes. `tests/all/json-fallback-runtime.test.ts` + `tests/resources/connectors/merge-enum-illegal-value/`
+runs the three legal/illegal branch values through `test-connectors`, proving the string lands.
+
+**Refs:** `src/oas/nodes/union.ts` (`dedupeByName`, `findStringEnumMember`, `mergeEnums`),
+`src/oas/nodes/factory.ts` (the illegal-enum branch, #24), `src/oas/utils/gql.ts` (`isGqlEnumValue`,
+`isGqlEnum`, `getGQLScalarType`); closes `docs/TASKS.md #234`. The warning path/repeat count is a
+separate gap, tracked as #235 and still open.

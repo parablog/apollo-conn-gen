@@ -920,6 +920,53 @@ test('test_208_merge_enum_value_sets_field_named_enum_composes_patched', async (
   assert.ok(schema !== undefined);
 });
 
+// --- #234: an enum beside a String that exists only because its own enum value is illegal -----
+
+test('test_234_merged_field_is_string_when_one_branch_has_an_illegal_enum_value', async () => {
+  // Alpha/Gamma type it as an enum; BetaTwo's value has a hyphen (not a legal GraphQL name) so #24
+  // already types it String; NullTag's value is the reserved word "null", same reason. Both merges
+  // become String, not JSON, and neither carries a NEEDS ATTENTION note.
+  let schema: string | undefined;
+  const messages = await captureErrors(async () => {
+    schema = await runOasTest('merge-enum-illegal-value.yaml', ['get:/hyphen.get>**', 'get:/null-value.get>**'], 5, 4);
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(!schema!.includes('NEEDS ATTENTION'), 'no field falls back to JSON with a degrade note');
+  assert.strictEqual((schema!.match(/^\s*type: String$/gm) || []).length, 2, 'both merges type the field String');
+  const warnings = messages.join('\n');
+  assert.ok(
+    /`type` is an enum on some branches but the value `beta-two` is not a legal GraphQL enum name, so the merged field is String/.test(
+      warnings,
+    ),
+    'names the hyphenated value',
+  );
+  assert.ok(
+    /`type` is an enum on some branches but the value `null` is not a legal GraphQL enum name, so the merged field is String/.test(
+      warnings,
+    ),
+    'names the reserved-word value',
+  );
+});
+
+test('test_234_merged_field_stays_json_for_a_plain_string_or_a_numeric_or_boolean_enum', async () => {
+  // #44: a plain string with no enum at all beside a real enum is a genuine wire-type collision,
+  // not this issue's shape — stays JSON. A numeric/boolean illegal enum (#24 types those Int/
+  // Boolean, not String) beside a legal string enum is the same kind of collision — stays JSON too.
+  const schema = await runOasTest(
+    'merge-enum-illegal-value.yaml',
+    ['get:/plain-string.get>**', 'get:/numeric-enum.get>**', 'get:/boolean-enum.get>**'],
+    5,
+    6,
+  );
+  assert.ok(schema !== undefined);
+  assert.strictEqual((schema!.match(/status: JSON/g) || []).length, 3, 'all three stay JSON');
+  assert.strictEqual(
+    (schema!.match(/different branches of a merged type declare this field differently/g) || []).length,
+    3,
+    'all three carry the existing incompatible-merge note',
+  );
+});
+
 test('test_57_merged_union_field_is_one_enum_with_every_value', async () => {
   // File, folder, and web_link declare different type enums.
   // The merged field uses one enum containing all three values.

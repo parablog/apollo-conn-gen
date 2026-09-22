@@ -11,18 +11,23 @@ export function quotedOrBlockString(value: string): string {
   return value.includes('\n') ? `"""\n${value}\n"""` : quotedString(value);
 }
 
+const VALID_ENUM_VALUE = /^[_A-Za-z][_0-9A-Za-z]*$/;
+const RESERVED = new Set(['true', 'false', 'null']);
+
 export class GqlUtils {
-  // True when every value is a legal GraphQL enum value once trimmed (TMF637 ships `'aborted '`):
+  // Whether one enum value is legal as a GraphQL name once trimmed (TMF637 ships `'aborted '`):
   // a bare identifier that is not a boolean or null. Numbers and `+1` have no enum form.
+  //   e.g. "beta-two" -> false (a hyphen is not a legal name character), "alpha" -> true
+  public static isGqlEnumValue(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    return VALID_ENUM_VALUE.test(trimmed) && !RESERVED.has(trimmed);
+  }
+
+  // True when every value in the schema's enum is a legal GraphQL enum value.
   //   e.g. (github) reactions `enum: ["+1", "-1"]`  ->  false, written as String          #24
   public static isGqlEnum(schema: SchemaObject): boolean {
-    const VALID_ENUM_VALUE = /^[_A-Za-z][_0-9A-Za-z]*$/;
-    const RESERVED = new Set(['true', 'false', 'null']);
-    return _.every(schema.enum, (value) => {
-      if (typeof value !== 'string') return false;
-      const trimmed = value.trim();
-      return VALID_ENUM_VALUE.test(trimmed) && !RESERVED.has(trimmed);
-    });
+    return _.every(schema.enum, GqlUtils.isGqlEnumValue);
   }
 
   public static getGQLScalarType(schema: SchemaObject): string {

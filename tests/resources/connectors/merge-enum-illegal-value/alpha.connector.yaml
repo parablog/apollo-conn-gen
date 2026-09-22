@@ -1,0 +1,20 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "alpha.connector",
+      "connector": "Query.hyphenGet",
+      "variables": {},
+      "apiResponseBody": "{\"data\": {\"type\": \"alpha\"}}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/hyphen.get",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"data\": {\"type\": \"alpha\"}}"
+      }
+    }
+  ]
+}

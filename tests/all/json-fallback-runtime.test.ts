@@ -58,6 +58,15 @@ const HEAD_VARIANTS_PATHS = ['get:/thing.get>**'];
 test('propcomp-select-head-variants: renamed-field', (t) =>
   runFixtureCase(t, 'propcomp-select-head-variants.yaml', HEAD_VARIANTS_PATHS, 'propcomp-select-head-variants', 'renamed-field'));
 
+// #234: a flat union merge where one branch's enum value is not a legal GraphQL name — the merged
+// field reads as a plain String, one case per branch value.
+const ILLEGAL_ENUM_PATHS = ['get:/hyphen.get>**'];
+const ILLEGAL_ENUM_CASES = ['alpha', 'beta-two', 'gamma'];
+for (const name of ILLEGAL_ENUM_CASES) {
+  test(`merge-enum-illegal-value: ${name}`, (t) =>
+    runFixtureCase(t, 'merge-enum-illegal-value.yaml', ILLEGAL_ENUM_PATHS, 'merge-enum-illegal-value', name));
+}
+
 // FIXED #208 (widened): mixed-value fields at the list-item and map-value positions — PropArray's
 // `->map(@selectionSuffix)` head and Map.selectEntries' `value: value<selectionSuffix>` head, each
 // runtime-proven.
