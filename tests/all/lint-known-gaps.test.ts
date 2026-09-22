@@ -83,6 +83,13 @@ test('test_gap_214_allof_wrapping_scalar_oneof_vanishes', async () => {
   assert.ok(!sdl.includes('value'));
 });
 
+test('test_gap_238_allof_wrapping_recursive_ref_vanishes', async () => {
+  const { sdl, parsed, findings } = await findingsFor('allof-wrapping-recursive-ref.yaml', 'get:/event');
+  assert.ok(parsed.selections.length > 0);
+  assert.deepEqual(findings, [{ code: 'RESPONSE_FIELD_NOT_READ', field: 'templateEvent' }]);
+  assert.ok(!sdl.includes('templateEvent'));
+});
+
 test('test_gap_184_contradictory_nullable_oneof_vanishes', async () => {
   const { parsed, findings } = await findingsFor('required-nullable-oneof.yaml', 'get:/thing', { skipValidation: true });
   assert.ok(parsed.selections.length > 0);

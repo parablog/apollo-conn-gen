@@ -64,6 +64,12 @@ const KNOWN_GAPS: Gap[] = [
   { spec: 'ashby.json', field: 'value', ref: 'docs/TASKS.md #214' },
   { spec: 'allof-wrapping-scalar-oneof.yaml', field: 'value', ref: 'docs/TASKS.md #214' },
 
+  // docs/TASKS.md #238: a single-member allOf wrapping a $ref back to its own type isn't caught by
+  // the cycle check (which only looks at the wrapper, not the $ref inside), so the field never
+  // becomes the circular-reference sentinel and just vanishes, no omission comment.
+  { spec: 'jira-platform.json', field: 'templateEvent', ref: 'docs/TASKS.md #238' },
+  { spec: 'allof-wrapping-recursive-ref.yaml', field: 'templateEvent', ref: 'docs/TASKS.md #238' },
+
   // docs/TASKS.md #184: two contradictory nullable-oneOf shapes vanish with no trace.
   { spec: 'required-nullable-oneof.yaml', field: 'doubleNull', ref: 'docs/TASKS.md #184' },
   { spec: 'required-nullable-oneof.yaml', field: 'constrained', ref: 'docs/TASKS.md #184' },

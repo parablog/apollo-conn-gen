@@ -1,0 +1,43 @@
+openapi: 3.0.3
+info:
+  title: a request body that is a whole map writes its value's fields under $args.input, where they do not exist
+  version: '1'
+paths:
+  /associations:
+    put:
+      operationId: updateAssociations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssociationItem'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: boolean
+components:
+  schemas:
+    AssociationItem:
+      type: object
+      additionalProperties: false
+      properties:
+        restrictedTo:
+          type: array
+          items:
+            type: integer
+        schemeIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - schemeIds

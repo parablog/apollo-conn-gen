@@ -873,3 +873,163 @@ input unions. So the field gets built, then never selected, and vanishes with no
 
 **Refs:** `docs/FIXED.md` #221, #216.
 
+## 238 [BUG] [P3] · A one-member allOf wrapping a $ref back to its own type vanishes with no omission comment — ⬜ Open
+
+**Symptom:** `templateEvent` on jira-platform's `NotificationEvent` — a one-member `allOf` around a
+`$ref` back to `NotificationEvent` itself — vanishes from both the type and the selection. Unlike a
+plain `$ref` back to the same ancestor, which gets a "circular reference omitted" comment, this one
+gets nothing: `ResponseCoverageCheck` reports it as a real, unexplained field drop.
+
+**OAS** (jira-platform, trimmed):
+```yaml
+NotificationEvent:
+  type: object
+  properties:
+    name: { type: string }
+    templateEvent:
+      allOf: [{ $ref: '#/components/schemas/NotificationEvent' }]
+```
+
+**Repro:** `node ./dist/cli/oas <fixture> --skip-selection -n` prints a selection with only
+`name?` — `templateEvent` is gone.
+
+**Cause:** `Factory.fromProp` keeps the wrapper because `findAllOfSchema` (`factory.ts`, around
+line 744) resolves the `$ref` inside and finds an object-shaped target, so it declines to unwrap it
+and the field takes the generic `PropComp` + `Composed` path (`factory.ts`, around lines 654-655).
+The cycle check that would otherwise catch this (`factory.ts`, around line 691) looks at the wrapper
+schema, not the `$ref` inside it, so it never fires. `Composed.visitAllOfNode` then calls
+`Factory.fromSchema` (`comp.ts:232`, `factory.ts:79`) for the member, which does catch the cycle and
+returns the circular-reference marker — but only for that one member, not the field itself.
+`PathsCollector.collectLeafPaths` (`typesCollector.ts:517`) only treats `PropCircRef` as a leaf, so
+the wrapping `PropComp` is filtered out with nothing said about why (`type.ts`).
+
+A plain `$ref` straight back to the ancestor is caught by the same cycle check and gets the usual
+"circular reference omitted" comment; this allOf-wrapped form of the identical cycle gets none.
+
+**Shape:** the cycle check reached from `Factory.fromProp` should look through a one-member allOf
+to the `$ref` inside, the same way `cyclicUnionAncestor` already looks through union members, so the
+field lands as `PropCircRef` with the usual omission comment instead of silently vanishing.
+
+**Refs:** `docs/FIXED.md` #10 (the plain-`$ref` cycle cut this shape falls outside of).
+`src/oas/nodes/factory.ts` (`fromProp`, `findAllOfSchema`, `cyclicAncestor`, `cyclicUnionAncestor`),
+`src/oas/nodes/comp.ts` (`visitAllOfNode`), `src/oas/generator/typesCollector.ts`
+(`collectLeafPaths`). Pinned by fixture `allof-wrapping-recursive-ref.yaml` and test
+`test_gap_238_allof_wrapping_recursive_ref_vanishes` (`tests/all/lint-known-gaps.test.ts`).
+
+## 239 [BUG] [P2] · A response with content but no schema, only an example, makes the generator throw instead of degrading — ⬜ Open
+
+**Symptom:** the generator throws `No schema content found!` instead of producing a schema. Hits
+18 GET ops and 7 mutation ops in jira-software.json (e.g. `get:/rest/agile/1.0/board/{boardId}/epic`)
+and 2 mutation ops in jira-service-management.json (e.g.
+`post:/rest/servicedeskapi/servicedesk/{serviceDeskId}/attachTemporaryFile`) — the whole-spec runs
+for both specs fail on it.
+
+**OAS:**
+```yaml
+responses:
+  '200':
+    description: OK
+    content:
+      application/json:
+        example: '{"id": 1, "name": "a widget"}'
+```
+content is present, but has no `schema` key — only an `example`.
+
+**Repro:** `OasGen.fromFile(...)` + `gen.generateSchema(['get:/rest/agile/1.0/board/{boardId}/epic>**'])`
+on jira-software.json throws `No schema content found!`.
+
+**Cause:** `Get.visitResponse` (`get.ts:335`) takes the "response has a `content` property" branch
+whenever `content` exists at all, regardless of whether a media type inside it declares a `schema`,
+and calls `visitResponseContent`. `visitResponseContent` (`get.ts:387`) throws when
+`media.schema` is falsy. The sibling case — no `content` key at all — is handled two branches
+earlier (`get.ts:361`) by degrading to `JSON` with `JsonDegradeReasons.emptyResponseBody`, the fix
+`docs/FIXED.md #147` added; #148's repair of malformed responses (`oasGen.ts`) only rewrites a
+present-but-`null` `schema`, not a media type with no `schema` key at all, so this specific shape
+reaches neither fix and falls through to the throw.
+
+**Shape:** at `get.ts:387`, when `media.schema` is missing, take the same `JSON` +
+`emptyResponseBody` degrade the no-`content` case already gets, with a `warn`, instead of throwing.
+
+**Refs:** `docs/FIXED.md` #147, #148. `src/oas/nodes/get.ts` (`visitResponse`,
+`visitResponseContent`), `JsonDegradeReasons.emptyResponseBody`. Pinned by fixture
+`response-content-no-schema.yaml` and test `test_239_response_content_no_schema_throws`
+(`tests/all/oas-core.test.ts`), asserting today's throw.
+
+## 240 [BUG] [P3] · A boolean parameter whose name ends in Id is promoted to ID and its default false makes invalid SDL — ⬜ Open
+
+**Symptom:** rover reports `INVALID_GRAPHQL`: "Invalid default value (got: false) provided for
+argument ... (useGroupId:) of type ID" — SDL reads `useGroupId: ID = false`. Hits
+jira-platform.json `get:/rest/api/3/plans/plan/{planId}` and `post:/rest/api/3/plans/plan`.
+
+**OAS:**
+```yaml
+- in: query
+  name: useGroupId
+  schema:
+    type: boolean
+    default: false
+```
+
+**Repro:** `OasGen.fromFile(...)` + `gen.generateSchema(['get:/rest/api/3/plans/plan/{planId}>**'])`
+on jira-platform.json produces `restApi3PlansPlanByPlanId(planId: ID!, useGroupId: ID = false): GetPlanResponse`.
+
+**Cause:** `Param.visit` (`param.ts:46-48`) promotes any scalar-typed param whose name ends in
+`Id`/`ID` to GraphQL `ID`, regardless of its declared OAS type — `docs/FIXED.md #146` widened this
+promotion past plain strings to include boolean- and number-declared id-shaped params. Nothing
+excludes booleans specifically. `writeDefaultValue` (`param.ts:138`, boolean branch at `param.ts:149`)
+then writes the OAS `default: false` as a bare `false` literal against that now-`ID`-typed argument,
+which GraphQL SDL has no valid `ID` default syntax for.
+
+**Shape:** skip the `Id`/`ID`-name promotion in `Param.visit` when the param's declared schema type
+is `boolean` — a true/false flag is never an identifier, whatever its name looks like.
+
+**Refs:** `docs/FIXED.md` #142, #146. `src/oas/nodes/param.ts` (`visit`, `writeDefaultValue`).
+Pinned by fixture `param-boolean-named-id.yaml` and test `test_240_boolean_param_named_id_keeps_boolean_default`
+(`tests/all/oas-core.test.ts`), asserting today's `ID = false` output.
+
+## 241 [BUG] [P3] · A request body that is a whole map writes its value's fields under the input, where they do not exist — ⬜ Open
+
+**Symptom:** rover reports `INVALID_BODY` on five jira-platform.json mutations —
+`put`/`delete /rest/api/3/config/fieldschemes/fields`,
+`put`/`delete .../fieldschemes/fields/parameters`, `put .../fieldschemes/projects` — e.g.
+"`UpdateRestApi3ConfigFieldschemesFieldsInput` doesn't have a field named `restrictedToWorkTypes`".
+
+**OAS** (`.../fieldschemes/fields` body):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        type: object
+        additionalProperties:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpdateFieldAssociationsRequestItem'
+```
+the whole body is a map (no wrapping property) from arbitrary keys to a list of
+`{ restrictedToWorkTypes, schemeIds }` items.
+
+**Repro:** `OasGen.fromFile(...)` + `gen.generateSchema(['put:/rest/api/3/config/fieldschemes/fields>**'])`
+on jira-platform.json produces `input UpdateRestApi3ConfigFieldschemesFieldsInput { key: String,
+value: [UpdateFieldAssociationsRequestItemInput] }` alongside a body mapping of
+`$args.input { restrictedToWorkTypes schemeIds }` — fields that exist on the map's *value* type, not
+on `input`, which only has `key`/`value`.
+
+**Cause:** `Factory.fromSchema` (`factory.ts:213`) builds a whole request body that is itself a map
+(only `additionalProperties`, no `properties`) as a `Map` node the same way any other map-shaped
+schema is built, without the input-specific handling a map under a *property* already gets
+(`docs/TASKS.md #133`'s `mapAsInput` degrade). `Map.select` (`map.ts:156`) then just delegates to
+the value type's own `select`, writing the value's fields straight onto the selection with nothing
+wrapping them in the map's `key`/`value` shape — correct for a map reached through a property (where
+`PropMap` writes the `->entries` wrapper first), wrong for the whole body, which has no such wrapper.
+
+**Shape:** a whole request body that resolves to a map should take the same `JSON` + `mapAsInput`
+degrade a map property already gets, instead of building a `key`/`value` input type the selection
+then reads through incorrectly.
+
+**Refs:** `docs/FIXED.md` #84 (names this exact case as unfinished), #133. `docs/TASKS.md` #236
+(a different shape — a discriminated body, not a map). `src/oas/nodes/factory.ts` (`fromSchema`),
+`src/oas/nodes/map.ts` (`select`). Pinned by fixture `body-whole-map.yaml` and test
+`test_241_whole_body_map_writes_value_fields_under_input` (`tests/all/oas-core.test.ts`), asserting
+today's output.
+

@@ -1,0 +1,23 @@
+openapi: 3.0.3
+info:
+  title: a one-member allOf around a reference back to its own type
+  version: '1'
+servers: [{ url: https://example.com }]
+paths:
+  /event:
+    get:
+      operationId: getEvent
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationEvent' }
+components:
+  schemas:
+    NotificationEvent:
+      type: object
+      properties:
+        name: { type: string }
+        templateEvent:
+          allOf: [{ $ref: '#/components/schemas/NotificationEvent' }]

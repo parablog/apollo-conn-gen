@@ -1,0 +1,14 @@
+openapi: 3.0.3
+info:
+  title: a response with content but no schema, only an example
+  version: '1'
+paths:
+  /widgets:
+    get:
+      operationId: getWidgets
+      responses:
+        '200':
+          description: the widgets
+          content:
+            application/json:
+              example: '{"id": 1, "name": "a widget"}'

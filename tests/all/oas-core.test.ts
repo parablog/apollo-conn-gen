@@ -4104,3 +4104,39 @@ test('test_185_map_value_ref_choice_reads_json', async () => {
     'and its selection reads the map whole',
   );
 });
+
+// Each test below pins one finding docs/TASKS.md files, the way test_147 pins #147: the assertion
+// describes today's (buggy) behavior, and fails once the linked entry is actually fixed.
+
+test('test_239_response_content_no_schema_throws', async () => {
+  // docs/TASKS.md #239: a response with a `content` key but no `schema` inside it (only an
+  // `example`) throws instead of degrading, because the no-schema throw at get.ts:387 only
+  // expects the "content present" branch to be reached when a schema exists.
+  const gen = await OasGen.fromFile(`${oasBasePath}/response-content-no-schema.yaml`, { skipValidation: true });
+  await gen.visit();
+  assert.throws(() => gen.generateSchema(['get:/widgets>**']), /No schema content found!/);
+});
+
+test('test_240_boolean_param_named_id_keeps_boolean_default', async () => {
+  // docs/TASKS.md #240: a boolean query param named `useGroupId` is promoted to `ID` by name
+  // (param.ts:46-48) but keeps its OAS boolean default, writing invalid SDL (`ID = false`).
+  const schema = await runOasTest('param-boolean-named-id.yaml', ['get:/widgets>**'], 1, 1);
+  assert.ok(schema !== undefined);
+  assert.ok(/useGroupId: ID = false/.test(schema!), 'the boolean default survives the ID promotion as an invalid literal');
+});
+
+test('test_241_whole_body_map_writes_value_fields_under_input', async () => {
+  // docs/TASKS.md #241: a request body that is itself a map (no wrapping object) is built as a
+  // `key`/`value` input type, but the body mapping (map.ts:156) writes the value's own fields
+  // straight under $args.input, where they don't exist.
+  const schema = await runOasTest('body-whole-map.yaml', ['put:/associations>**'], 1, 3);
+  assert.ok(schema !== undefined);
+  assert.ok(
+    /input UpdateAssociationsInput \{\n {2}key: String\n {2}value: \[AssociationItemInput\]\n\}/.test(schema!),
+    'the whole-body map becomes a key/value input, not a JSON scalar',
+  );
+  assert.ok(
+    /\$args\.input \{\n\s+restrictedTo\n\s+schemeIds\n\s+\}/.test(schema!),
+    "the body mapping reads the value type's fields straight off input, which has no such fields",
+  );
+});

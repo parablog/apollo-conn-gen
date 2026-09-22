@@ -1,0 +1,24 @@
+openapi: 3.0.3
+info:
+  title: a boolean parameter whose name ends in Id gets promoted to ID and keeps its boolean default
+  version: '1'
+paths:
+  /widgets:
+    get:
+      operationId: getWidgets
+      parameters:
+        - name: useGroupId
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
