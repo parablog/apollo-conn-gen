@@ -572,10 +572,11 @@ export class Factory {
       else if (GqlUtils.gqlScalarFor(schemaObj, type as string)) {
         let scalar = GqlUtils.gqlScalarFor(schemaObj, type as string) as string;
         const stringifiedNumber = scalar === 'String' && GqlUtils.gqlScalar(type as string) === 'Int';
-        // A property named "id"/"*Id"/"*ID" reads as GraphQL's ID scalar regardless of the spec's
-        // declared type, e.g. `id: { type: integer, format: uuid }` -> ID, not Int. #142/#146
+        // a property or argument named id/*Id/*ID reads as ID whatever scalar the spec declared,
+        // except a boolean: true/false is a flag, never an identifier. #142 #146 #240
+        //   e.g. (jira-platform) ProjectCreateResourceIdentifier.anID: boolean -> stays Boolean
         const looksLikeId = propName === 'id' || propName.endsWith('Id') || propName.endsWith('ID');
-        if (looksLikeId) {
+        if (looksLikeId && scalar !== 'Boolean') {
           scalar = 'ID';
         }
         prop = new PropScalar(parent, propName, scalar, schemaObj, stringifiedNumber && !looksLikeId);

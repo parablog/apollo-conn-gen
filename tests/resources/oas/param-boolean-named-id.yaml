@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: a boolean parameter whose name ends in Id gets promoted to ID and keeps its boolean default
+  title: a boolean parameter or field whose name ends in Id stays Boolean, never ID
   version: '1'
 paths:
   /widgets:
@@ -22,3 +22,5 @@ paths:
                 properties:
                   id:
                     type: string
+                  archivedId:
+                    type: boolean

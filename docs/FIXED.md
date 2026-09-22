@@ -11775,3 +11775,43 @@ guards the case that should never happen now — every path with a missing schem
 **Refs:** `docs/FIXED.md` #147, #148. `src/oas/nodes/get.ts` (`visitResponse`,
 `readResponseAsRawJson`), `src/oas/utils/jsonReasons.ts` (`responseWithoutSchema`); closes
 `docs/TASKS.md #239`.
+
+## 240 [BUG] [P3] · A boolean parameter or field whose name ends in Id was promoted to ID and kept its boolean default, making invalid SDL — ✅ Fixed
+
+**OAS** (jira-platform) `get:/rest/api/3/plans/plan/{planId}`:
+```yaml
+- in: query
+  name: useGroupId
+  schema:
+    type: boolean
+    default: false
+```
+
+**Before:** `useGroupId: ID = false` — rover rejected it: "Invalid default value (got: false)
+provided for argument ... (useGroupId:) of type ID".
+
+**After:** `useGroupId: Boolean = false`.
+
+**Symptom:** also hit jira-platform's `post:/rest/api/3/plans/plan`, and any boolean-declared field
+named `id`/`*Id`/`*ID` in a response type (e.g. `ProjectCreateResourceIdentifier.anID: boolean`,
+which used to become `anID: ID` too).
+
+**Cause:** #146 widened the `id`/`*Id`/`*ID` name-based promotion to every declared scalar type, not
+just string, so a boolean-declared id-shaped value promoted to `ID` the same as an integer- or
+number-declared one. Nothing carved out booleans, but a true/false flag is never an identifier —
+unlike a wrongly-typed integer or number, its own value can't even be written as a valid `ID`
+default once promoted.
+
+**Fix:** one rule, two sites. `Param.visit` (`param.ts`) takes `Boolean` out of the `GQL_SCALARS`
+list the `id`/`*Id`/`*ID` promotion applies to. `Factory.fromProp` (`factory.ts`) guards its own
+promotion with `scalar !== 'Boolean'`. `id`, `ownerId`, and `rankId` (string/integer/number) still
+promote to `ID`; only the boolean case moved.
+
+**Tests:** `tests/resources/oas/param-boolean-named-id.yaml` (now also carries a boolean `archivedId`
+response field), `tests/all/oas-core.test.ts` (`test_240_boolean_param_named_id_stays_boolean`,
+and `test_146_id_shaped_field_promotes_to_id_regardless_of_declared_type` updated in place — its
+`verifiedId: { type: boolean }` fixture field is #240's own field-level conflict, so the assertion
+now reads `verifiedId: Boolean`, with `id`/`ownerId`/`rankId` left promoting to `ID` unchanged).
+
+**Refs:** `docs/FIXED.md` #142, #146. `src/oas/nodes/param.ts` (`visit`), `src/oas/nodes/factory.ts`
+(`fromProp`); closes `docs/TASKS.md #240`.

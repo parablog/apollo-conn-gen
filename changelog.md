@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   throwing. E.g. (jira-platform) `get:/rest/api/3/screens/tabs` 200 declares only
   `content: { application/json: { example: ... } } }` — types the field `JSON` with a note, instead
   of stopping the whole run. Issue #239.
+- A boolean parameter or field named `id`/`*Id`/`*ID` stays `Boolean` instead of promoting to `ID`.
+  E.g. (jira-platform) `get:/rest/api/3/plans/plan/{planId}` query param `useGroupId: { type:
+  boolean, default: false }` types `useGroupId: Boolean = false` instead of the invalid
+  `useGroupId: ID = false`. Issue #240.
 
 ## [0.31.0]
 

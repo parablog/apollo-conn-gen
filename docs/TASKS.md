@@ -936,38 +936,6 @@ field lands as `PropCircRef` with the usual omission comment instead of silently
 (`collectLeafPaths`). Pinned by fixture `allof-wrapping-recursive-ref.yaml` and test
 `test_gap_238_allof_wrapping_recursive_ref_vanishes` (`tests/all/lint-known-gaps.test.ts`).
 
-## 240 [BUG] [P3] · A boolean parameter whose name ends in Id is promoted to ID and its default false makes invalid SDL — ⬜ Open
-
-**Symptom:** rover reports `INVALID_GRAPHQL`: "Invalid default value (got: false) provided for
-argument ... (useGroupId:) of type ID" — SDL reads `useGroupId: ID = false`. Hits
-jira-platform.json `get:/rest/api/3/plans/plan/{planId}` and `post:/rest/api/3/plans/plan`.
-
-**OAS:**
-```yaml
-- in: query
-  name: useGroupId
-  schema:
-    type: boolean
-    default: false
-```
-
-**Repro:** `OasGen.fromFile(...)` + `gen.generateSchema(['get:/rest/api/3/plans/plan/{planId}>**'])`
-on jira-platform.json produces `restApi3PlansPlanByPlanId(planId: ID!, useGroupId: ID = false): GetPlanResponse`.
-
-**Cause:** `Param.visit` (`param.ts:46-48`) promotes any scalar-typed param whose name ends in
-`Id`/`ID` to GraphQL `ID`, regardless of its declared OAS type — `docs/FIXED.md #146` widened this
-promotion past plain strings to include boolean- and number-declared id-shaped params. Nothing
-excludes booleans specifically. `writeDefaultValue` (`param.ts:138`, boolean branch at `param.ts:149`)
-then writes the OAS `default: false` as a bare `false` literal against that now-`ID`-typed argument,
-which GraphQL SDL has no valid `ID` default syntax for.
-
-**Shape:** skip the `Id`/`ID`-name promotion in `Param.visit` when the param's declared schema type
-is `boolean` — a true/false flag is never an identifier, whatever its name looks like.
-
-**Refs:** `docs/FIXED.md` #142, #146. `src/oas/nodes/param.ts` (`visit`, `writeDefaultValue`).
-Pinned by fixture `param-boolean-named-id.yaml` and test `test_240_boolean_param_named_id_keeps_boolean_default`
-(`tests/all/oas-core.test.ts`), asserting today's `ID = false` output.
-
 ## 241 [BUG] [P3] · A request body that is a whole map writes its value's fields under the input, where they do not exist — ⬜ Open
 
 **Symptom:** rover reports `INVALID_BODY` on five jira-platform.json mutations —

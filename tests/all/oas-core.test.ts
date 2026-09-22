@@ -1848,12 +1848,14 @@ test('test_146_id_shaped_field_promotes_to_id_regardless_of_declared_type', asyn
   // #146: #142 only promoted a string-typed id-shaped field; a field the spec wrongly declared
   // as integer (World Anvil's `id: { type: integer, format: uuid }`, but the API returns a
   // UUID string) stayed Int and silently turned every id into null. Widened to cover every
-  // declared scalar type, not just integer -- boolean/number id-shaped fields promote too.
+  // declared scalar type, not just integer -- number id-shaped fields promote too. #240 later
+  // carved out boolean: true/false is a flag, never an identifier, so a boolean-declared
+  // id-shaped field stays Boolean instead.
   const schema = await runOasTest('id-scalar-wrong-declared-type.yaml', ['get:/worlds/{id}>**'], 1, 1);
   assert.ok(schema !== undefined);
   assert.ok(/^\s*id: ID$/m.test(schema!), 'wrongly-declared integer id field becomes ID');
   assert.ok(/^\s*ownerId: ID$/m.test(schema!), 'same for the *Id-suffixed sibling field');
-  assert.ok(/^\s*verifiedId: ID$/m.test(schema!), 'a boolean-declared id-shaped field becomes ID too');
+  assert.ok(/^\s*verifiedId: Boolean$/m.test(schema!), 'a boolean-declared id-shaped field stays Boolean — a flag is never an identifier, #240');
   assert.ok(/^\s*rankId: ID$/m.test(schema!), 'a number-declared id-shaped field becomes ID too');
   assert.ok(/^\s*title: String$/m.test(schema!), 'an unrelated field is unaffected');
   assert.ok(/\(id: ID!\)/.test(schema!), 'the operation argument is promoted too, distinct from the field match above');
@@ -4122,12 +4124,14 @@ test('test_239_response_content_no_schema_degrades_to_json', async () => {
   assert.ok(schema!.includes(docBlock), 'widgets carries a NEEDS ATTENTION note in its own operation docstring');
 });
 
-test('test_240_boolean_param_named_id_keeps_boolean_default', async () => {
-  // docs/TASKS.md #240: a boolean query param named `useGroupId` is promoted to `ID` by name
-  // (param.ts:46-48) but keeps its OAS boolean default, writing invalid SDL (`ID = false`).
+test('test_240_boolean_param_named_id_stays_boolean', async () => {
+  // docs/TASKS.md #240 (jira-platform get:/rest/api/3/plans/plan/{planId}): a boolean query param
+  // named `useGroupId` was promoted to `ID` by name (param.ts:46-48) but kept its OAS boolean
+  // default, writing invalid SDL (`ID = false`). A flag is never an identifier, so it stays Boolean.
   const schema = await runOasTest('param-boolean-named-id.yaml', ['get:/widgets>**'], 1, 1);
   assert.ok(schema !== undefined);
-  assert.ok(/useGroupId: ID = false/.test(schema!), 'the boolean default survives the ID promotion as an invalid literal');
+  assert.ok(/useGroupId: Boolean = false/.test(schema!), 'the boolean argument keeps its own type and default');
+  assert.ok(/^\s*archivedId: Boolean$/m.test(schema!), 'a boolean-declared *Id response field stays Boolean too');
 });
 
 test('test_241_whole_body_map_writes_value_fields_under_input', async () => {

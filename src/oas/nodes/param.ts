@@ -40,11 +40,13 @@ export class Param extends Type {
     this.add(type);
 
     this.resultType = type;
-    // Same ID promotion as fromProp's field sites in factory.ts, regardless of declared type. #142/#146
+    // a property or argument named id/*Id/*ID reads as ID whatever scalar the spec declared,
+    // except a boolean: true/false is a flag, never an identifier. #142 #146 #240
+    //   e.g. (jira-platform) get:/rest/api/3/plans/plan/{planId} useGroupId: boolean -> stays Boolean
     const GQL_SCALARS = ['String', 'Int', 'Float', 'Boolean'];
     if (this.resultType instanceof Scalar && GQL_SCALARS.includes(this.resultType.name)) {
       const looksLikeId = this.name === 'id' || this.name.endsWith('Id') || this.name.endsWith('ID');
-      if (looksLikeId) {
+      if (looksLikeId && this.resultType.name !== 'Boolean') {
         this.resultType.name = 'ID';
       }
     }
