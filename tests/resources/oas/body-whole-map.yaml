@@ -1,7 +1,9 @@
 openapi: 3.0.3
 info:
-  title: a request body that is a whole map writes its value's fields under $args.input, where they do not exist
+  title: a request body that is a whole map is sent whole as JSON, not built as a key/value input type
   version: '1'
+servers:
+  - url: https://api.example.com
 paths:
   /associations:
     put:

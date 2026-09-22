@@ -11815,3 +11815,97 @@ now reads `verifiedId: Boolean`, with `id`/`ownerId`/`rankId` left promoting to 
 
 **Refs:** `docs/FIXED.md` #142, #146. `src/oas/nodes/param.ts` (`visit`), `src/oas/nodes/factory.ts`
 (`fromProp`); closes `docs/TASKS.md #240`.
+
+## 241 [BUG] [P3] · A request body that is a whole map was built as a key/value input type, and the body mapping read fields that don't exist on it — ✅ Fixed
+
+**OAS** (jira-platform) `put:/rest/api/3/config/fieldschemes/fields`:
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        type: object
+        additionalProperties:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpdateFieldAssociationsRequestItem'
+```
+the whole body is a map (no wrapping property) from arbitrary keys to a list of
+`{ restrictedToWorkTypes, schemeIds }` items.
+
+**Before:**
+```graphql
+input UpdateAssociationsInput {
+  key: String
+  value: [AssociationItemInput]
+}
+...
+updateAssociations(input: UpdateAssociationsInput!): ...
+  @connect(
+    http: { body: """
+      $args.input {
+        restrictedTo
+        schemeIds
+      }
+    """ }
+  )
+```
+rover rejected it: `UpdateAssociationsInput` doesn't have a field named `restrictedTo`/`schemeIds` —
+those fields exist on the map's *value* type, not on `input`, which only has `key`/`value`.
+
+**After:**
+```graphql
+"""
+NEEDS ATTENTION: a map (object with arbitrary keys) can't be an input type in GraphQL -- sent as raw JSON instead of a typed structure.
+"""
+updateAssociations(input: JSON!): ...
+  @connect(http: { body: "$args.input" })
+```
+
+**Symptom:** hit five jira-platform.json mutations —
+`put`/`delete /rest/api/3/config/fieldschemes/fields`, `.../fieldschemes/fields/parameters`, and
+`put .../fieldschemes/projects`.
+
+**Cause:** `Factory.fromSchema` builds any map-shaped schema (only `additionalProperties`, no
+`properties`) as a `Map` node, whole-body or not — the input-specific `mapAsInput` degrade a map
+under a body *property* already gets (#84, #133) never ran for the body itself. `Map.select` then
+delegates straight to the value type's own `select`, which is right when a `PropMap` wrapper has
+already written the `->entries` block around it, and wrong for a whole body, which has no such
+wrapper — the value's fields land directly under `$args.input`, where they don't exist.
+
+**Fix:** `Body.visitBody`, after building the payload: when the result is a `Map`, replace it with a
+`JSON` `Scalar` carrying the `mapAsInput` reason, the same degrade a map property gets. From there
+the existing one-value body path (#67) does the rest — `input: JSON!`, `body: "$args.input"`.
+
+The reason also needed a place to land in the SDL that didn't exist yet: `Post.bodyArg` only ever
+writes the argument's type name, never a description, and `Post.generate`'s docstring note was built
+solely from the response side (`resultJsonReason`), never the body. Added `Post.bodyJsonReason`,
+parallel to `Get.resultJsonReason`, and a `bodyNote` docstring line written after the response-side
+note and before the params line, so a response-side and a body-side degrade can both show up without
+one overwriting the other. `Patch`, `Delete`, and `Put` inherit this for free — all three extend
+`Post` and share `generate()`.
+
+**Acceptance:** `post:/rest/api/3/issue` (`createIssue`) composes cleanly against jira-platform.json
+at connect v0.4 / federation 2.15.1. Its body type, `IssueUpdateDetailsInput`, has two fields that
+land as JSON by the *existing* (pre-#241) map-property degrade, not this fix: `fields` and `update`
+are both `additionalProperties`-only maps ("issue screen fields to update" / "field name to a list of
+operations"), same as `HistoryMetadataInput.extraData` and `EntityPropertyInput.value` a level down.
+This fix only changes what happens when the *whole body* is that shape, which `createIssue` isn't —
+its body is a real object with named properties, some of which happen to be maps.
+
+Running a `test-connectors` case for `createIssue`'s own body was not possible with the installed
+`supergraph-v2.15.1` binary: its test-suite format only accepts flat string values under
+`variables.$args`, for every argument type including a real input object, and any JSONSelection path
+into that value beyond the first level (`$args.input.fields`, `$args.input.historyMetadata`, ...)
+then fails with "Property ... not found in string" — confirmed with two independent argument shapes.
+The whole-body-map runtime case this issue is actually about (`tests/resources/connectors/body-whole-map/`)
+doesn't hit this, because its body mapping is the one-value form (`$args.input`, no further path) —
+that one runs end to end.
+
+**Tests:** `tests/resources/oas/body-whole-map.yaml`, `tests/all/oas-core.test.ts`
+(`test_241_whole_body_map_degrades_to_json`, including a `skipDegradeReasons` control case),
+`tests/all/json-fallback-runtime.test.ts` + `tests/resources/connectors/body-whole-map/` (runs the
+mapping through `test-connectors` end to end).
+
+**Refs:** `docs/FIXED.md` #67, #84, #133. `src/oas/nodes/body.ts` (`visitBody`), `src/oas/nodes/post.ts`
+(`bodyJsonReason`, `generate`); closes `docs/TASKS.md #241`.

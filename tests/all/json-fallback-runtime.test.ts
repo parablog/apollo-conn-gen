@@ -303,3 +303,10 @@ for (const name of NESTED_CHOICE_CASES) {
   test(`nested-choice-plain-and-list: ${name}`, (t) =>
     runFixtureCase(t, 'nested-choice-plain-and-list.yaml', NESTED_CHOICE_PATHS, 'nested-choice-plain-and-list', name));
 }
+
+// #241 (jira-platform put:/rest/api/3/config/fieldschemes/fields): a whole request body that is a
+// map sends $args.input straight through to the API, not a non-existent sub-field of it (the old
+// bug). test-connectors' own $args variables only take string values, so input here is JSON text
+// as a string and the wire body is that string JSON-encoded once more.
+test('body-whole-map: whole-map-body', (t) =>
+  runFixtureCase(t, 'body-whole-map.yaml', ['put:/associations>**'], 'body-whole-map', 'whole-map-body'));

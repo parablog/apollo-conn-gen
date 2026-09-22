@@ -1,0 +1,21 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "whole-map-body.connector",
+      "connector": "Mutation.updateAssociations",
+      "variables": { "$args": { "input": "{\"customfield_1\":[{\"schemeIds\":[1]}]}" } },
+      "apiResponseBody": "{\"updated\": true}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/associations",
+          "method": "PUT",
+          "body": "\"{\\\"customfield_1\\\":[{\\\"schemeIds\\\":[1]}]}\""
+        },
+        "connectorResponse": "{\"updated\": true}"
+      }
+    }
+  ]
+}

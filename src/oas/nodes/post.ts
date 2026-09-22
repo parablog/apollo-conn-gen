@@ -75,10 +75,12 @@ export class Post extends Get {
     const keep = context.generateOptions?.keepFieldNames === true;
     const jsonReason = this.resultJsonReason(context, selection, keep);
     const jsonNote = jsonReason ? Schemas.withJsonNote(context, {}, jsonReason).description : undefined;
+    const bodyReason = this.bodyJsonReason();
+    const bodyNote = bodyReason ? Schemas.withJsonNote(context, {}, bodyReason).description : undefined;
     const paramsLine = this.paramsDocLine(context);
     const responseFieldsLine = this.responseFieldsDocLine(context, selection);
 
-    if (summary || originalPath || jsonNote || paramsLine || responseFieldsLine) {
+    if (summary || originalPath || jsonNote || bodyNote || paramsLine || responseFieldsLine) {
       writer.write('  """\n').write('  ');
       if (summary) {
         writer.write(summary).write(' ');
@@ -88,6 +90,9 @@ export class Post extends Get {
       }
       if (jsonNote) {
         writer.write('\n\n  ').write(jsonNote);
+      }
+      if (bodyNote) {
+        writer.write('\n\n  ').write(bodyNote);
       }
       if (paramsLine) {
         writer.write('\n\n  ').write(paramsLine);
@@ -215,6 +220,14 @@ export class Post extends Get {
 
     const schema = content[mediaType].schema;
     return schema ? { schema, mediaType } : undefined;
+  }
+
+  // Why the body sends plain JSON instead of a real input type, or undefined if it doesn't.
+  // parallel to Get.resultJsonReason, but for the body side of the op instead of the response side.
+  //   e.g. (jira-platform) put:/rest/api/3/config/fieldschemes/fields: the whole body is a map ->
+  //   input: JSON! gains a "NEEDS ATTENTION" note explaining why
+  protected bodyJsonReason(): string | undefined {
+    return this.body?.payload instanceof Scalar ? this.body.payload.jsonReason : undefined;
   }
 
   // The `input:` argument for the op's body, or undefined when there is none. The argument

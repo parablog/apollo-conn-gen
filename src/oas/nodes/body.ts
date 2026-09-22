@@ -1,8 +1,10 @@
-import { Arr, Factory, Get, IType, Prop, ReferenceObject, Scalar, Type } from './internal.js';
+import { Arr, Factory, Get, IType, Map, Prop, ReferenceObject, Scalar, Type } from './internal.js';
 import { SchemaObject } from 'oas/types';
-import { trace } from '../log/trace.js';
+import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { Schemas } from '../utils/schemas.js';
+import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 import _ from 'lodash';
 
 export class Body extends Type {
@@ -125,7 +127,17 @@ export class Body extends Type {
     }
     // If the response has a content property, we need to find the JSON content.
     else if (schema) {
-      const type = Factory.fromSchema(context, this, schema as SchemaObject);
+      let type = Factory.fromSchema(context, this, schema as SchemaObject);
+
+      // Sends the body whole as JSON when it is a map: a GraphQL input type cannot take arbitrary keys,
+      // so there is no fixed set of fields to build. A map under a body property already lands this
+      // way (FIXED #84, #133); this is the same rule for the body itself. #241
+      //   e.g. (jira-platform) put:/rest/api/3/config/fieldschemes/fields: { additionalProperties: {...} }
+      if (type instanceof Map) {
+        const reason = JsonDegradeReasons.mapAsInput();
+        warn(context, '[body:visit]', reason);
+        type = new Scalar(this, 'JSON', Schemas.withJsonNote(context, schema as SchemaObject, reason), reason);
+      }
       this.add(type);
 
       this.payload = type;

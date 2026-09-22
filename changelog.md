@@ -23,6 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   E.g. (jira-platform) `get:/rest/api/3/plans/plan/{planId}` query param `useGroupId: { type:
   boolean, default: false }` types `useGroupId: Boolean = false` instead of the invalid
   `useGroupId: ID = false`. Issue #240.
+- A request body that is itself a map (no wrapping object) types as `JSON` instead of a key/value
+  input type whose fields the selection then reads wrong. E.g. (jira-platform)
+  `put:/rest/api/3/config/fieldschemes/fields` body `{ additionalProperties: { type: array, items:
+  $ref UpdateFieldAssociationsRequestItem } }` types `input: JSON!` with `body: "$args.input"`,
+  instead of an `UpdateAssociationsInput { key value }` type whose selection read non-existent
+  fields. Issue #241.
 
 ## [0.31.0]
 

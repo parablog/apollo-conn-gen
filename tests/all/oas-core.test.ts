@@ -4134,18 +4134,22 @@ test('test_240_boolean_param_named_id_stays_boolean', async () => {
   assert.ok(/^\s*archivedId: Boolean$/m.test(schema!), 'a boolean-declared *Id response field stays Boolean too');
 });
 
-test('test_241_whole_body_map_writes_value_fields_under_input', async () => {
-  // docs/TASKS.md #241: a request body that is itself a map (no wrapping object) is built as a
-  // `key`/`value` input type, but the body mapping (map.ts:156) writes the value's own fields
-  // straight under $args.input, where they don't exist.
-  const schema = await runOasTest('body-whole-map.yaml', ['put:/associations>**'], 1, 3);
+test('test_241_whole_body_map_degrades_to_json', async () => {
+  // docs/TASKS.md #241 (jira-platform put:/rest/api/3/config/fieldschemes/fields): a request body
+  // that is itself a map (no wrapping object) was built as a `key`/`value` input type, but the body
+  // mapping (map.ts:156) wrote the value's own fields straight under $args.input, where they don't
+  // exist. The whole body now degrades to JSON, the same as a map body *property* already does.
+  const schema = await runOasTest('body-whole-map.yaml', ['put:/associations>**'], 1, 1);
   assert.ok(schema !== undefined);
-  assert.ok(
-    /input UpdateAssociationsInput \{\n {2}key: String\n {2}value: \[AssociationItemInput\]\n\}/.test(schema!),
-    'the whole-body map becomes a key/value input, not a JSON scalar',
-  );
-  assert.ok(
-    /\$args\.input \{\n\s+restrictedTo\n\s+schemeIds\n\s+\}/.test(schema!),
-    "the body mapping reads the value type's fields straight off input, which has no such fields",
-  );
+  assert.ok(!/UpdateAssociationsInput/.test(schema!), 'no key/value input type is built for the whole body');
+  assert.ok(/input: JSON!/.test(schema!), 'the argument takes the whole body as JSON');
+  assert.ok(/body: "\$args\.input"/.test(schema!), 'the body mapping sends $args.input whole');
+
+  const reason = "a map (object with arbitrary keys) can't be an input type in GraphQL — sent as raw JSON instead of a typed structure.";
+  const docBlock = `NEEDS ATTENTION: ${reason.replace('—', '--')}`;
+  assert.ok(schema!.includes(docBlock), 'the mapAsInput reason lands in the operation docstring, not a field description');
+
+  const clean = await runOasTest('body-whole-map.yaml', ['put:/associations>**'], 1, 1, { skipDegradeReasons: true });
+  assert.ok(clean !== undefined);
+  assert.ok(!clean!.includes('NEEDS ATTENTION'), 'skipDegradeReasons drops the note from the docstring');
 });
