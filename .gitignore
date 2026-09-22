@@ -79,5 +79,10 @@ LINT-CORPUS.md
 /tests/resources/oas/fullstory-events.json
 /tests/resources/oas/fullstory-users.json
 /tests/resources/oas/ashby.json
+/tests/resources/oas/jira-platform.json
+/tests/resources/oas/jira-software.json
+/tests/resources/oas/jira-service-management.json
+/tests/resources/oas/bitbucket.json
+/tests/resources/oas/confluence-v2.json
 
 .issue-loop

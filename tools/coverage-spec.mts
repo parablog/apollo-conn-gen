@@ -84,6 +84,12 @@ const ALL_SPECS = [
   'fullstory-events.json',
   'fullstory-users.json',
   'ashby.json',
+  // Official Atlassian specs, added 2026-09-22; provenance in TEST_CORPUS.md.
+  'jira-platform.json',
+  'jira-software.json',
+  'jira-service-management.json',
+  'bitbucket.json',
+  'confluence-v2.json',
 ];
 
 // One pass at the current shipping versions (connect v0.4 / fed v2.14, per DEFAULT_VERSIONS): real

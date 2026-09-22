@@ -81,3 +81,26 @@ test('test_corpus_mut_ashby', async () => {
   // CustomFieldValueLabelUnion, 2 more types.
   await runOasTest('ashby.json', ['post:/application.create>**'], 197, 27);
 });
+
+test('test_corpus_mut_jira_platform', async () => {
+  await runOasTest('jira-platform.json', ['post:/rest/api/3/issuetype>**'], 619, 9);
+});
+
+test('test_corpus_mut_jira_software', async () => {
+  await runOasTest('jira-software.json', ['post:/rest/agile/1.0/board>**'], 105, 10);
+});
+
+test('test_corpus_mut_jira_service_management', async () => {
+  // skipValidation: see test_corpus_jira_service_management in corpus.test.ts (duplicate operationId).
+  await runOasTest('jira-service-management.json', ['post:/rest/servicedeskapi/organization>**'], 75, 4, {
+    skipValidation: true,
+  });
+});
+
+test('test_corpus_mut_bitbucket', async () => {
+  await runOasTest('bitbucket.json', ['post:/snippets/{workspace}>**'], 293, 9);
+});
+
+test('test_corpus_mut_confluence_v2', async () => {
+  await runOasTest('confluence-v2.json', ['post:/pages>**'], 218, 24);
+});
