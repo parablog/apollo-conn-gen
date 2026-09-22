@@ -614,3 +614,23 @@ router `origin/dev` at or after `a09276e3d` once the release gate above is green
 handle union/interface types in nested group selections"). Rust tool's matching gap: to be written
 in `graphos-service-factory/docs/DEFERRED.md`, or `docs/TASKS.md` if that repo has no
 `DEFERRED.md`.
+
+## 233 [BUG] · A POST read's root field keeps the "create" prefix after $match moves it to Query — ✅ Covered (2026-09-22, no code needed)
+
+**Symptom:** Ashby's reads are all POST, so `$match` moves them under `Query` with `root: "query"`
+(#225). The field name itself is still built from the HTTP method, so a read like `application.list`
+is named `createApplicationList` even though it lives under `Query`, not `Mutation`.
+
+**OAS:** (ashby) `post:/application.list` with `$match: [{ "pattern": "^post:/.*\\.list$", "root":
+"query" }]` -> `Query { createApplicationList(...): ... }`.
+
+**Covered without a dedicated code change:** `--use-operation-ids` names a field from the
+operation's own `operationId` instead of its HTTP method, and Ashby already has operationIds
+(`applicationList`, `applicationCreate`) — so no method-derived prefix ever appears. Verified with
+`node ./dist/cli/oas tests/resources/oas/ashby.json --overrides tests/resources/oas/ashby-overrides.json
+--use-operation-ids --grep 'post:/application\.(list|create)$' --skip-selection`:
+`Query { applicationList(...): ... }`, `Mutation { applicationCreate(...): ... }` — neither carries
+a `create`/`get` prefix. For a spec with no operationIds to fall back on, `--transform-rules` with a
+pattern like `^create(.*)` (the capture keeps the rest's own capitalization) strips the same prefix.
+
+**Refs:** #225, #232. No code change, so the entry stays here rather than moving to `docs/FIXED.md`.

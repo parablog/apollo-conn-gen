@@ -833,17 +833,3 @@ that normalisation is what construction already does, just one visit later.
 
 **Refs:** #231, `src/oas/nodes/obj.ts` (`visit`).
 
-## 233 [BUG] [P3] · A POST read's root field keeps the "create" prefix after $match moves it to Query — ⬜ Open
-
-**Symptom:** Ashby's reads are all POST, so `$match` moves them under `Query` with `root: "query"`
-(#225). The field name itself is still built from the HTTP method, so a read like `application.list`
-is named `createApplicationList` even though it lives under `Query`, not `Mutation`.
-
-**OAS:** (ashby) `post:/application.list` with `$match: [{ "pattern": "^post:/.*\\.list$", "root":
-"query" }]` -> `Query { createApplicationList(...): ... }`.
-
-**Shape:** the field name would need to drop the method-derived prefix on any operation `$match`/an
-exact override moves to `query`, the same override read that already decides `root`.
-
-**Refs:** #225, #232.
-
