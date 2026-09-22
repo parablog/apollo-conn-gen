@@ -3459,8 +3459,10 @@ test(
     // differed before), so it stays kept and typed instead of falling to JSON — OwnerInternal.
     // 416: #231 dedups an inline-twin pair (same shape, one had a nullable field normalised
     // before the other visited) that used to rename apart; one fewer type.
+    // 417: #221 -- UserAttributesListResponse.records[].default_value (anyOf [string, number,
+    // array, null], no object member) now types as default_valueUnion instead of JSON.
     const selections = JSON.parse(fs.readFileSync(`${oasBasePath}/omni-full-selection.json`, 'utf-8'));
-    const schema = await runOasTest('omni-full.json', selections, 163, 416, {
+    const schema = await runOasTest('omni-full.json', selections, 163, 417, {
       skipValidation: true,
       skipAuth: true,
       federationVersion: 'v2.14',

@@ -11609,7 +11609,10 @@ repro), all three previously-zero-prop unions (`all`/`css`/`js`) now consolidate
 
 **Corpus pins moved:** `test_corpus_ashby` 28 → 30, `test_corpus_mut_ashby` 25 → 27, the
 `source-envelope ashby` pin 27 → 29 — each a +2 diff (`valueLabelUnion`, `CustomFieldValueLabelUnion`),
-checked against the actual type-list diff before changing the number.
+checked against the actual type-list diff before changing the number. Omni's own production
+selection (`test_109_omni_full_production_selection`) also moves, 416 → 417: `UserAttributesListResponse.
+records[].default_value` (`anyOf [string, number, array, null]`, no object member) now types as
+`default_valueUnion` instead of `JSON`, same +1 diff check.
 
 **docs/TASKS.md #216 closed, moved to this entry.** Its docker-engine/confluence shape (`oneOf
 [array, string]`, no object member) is exactly what this fix covers — `test_gap_216` now asserts
