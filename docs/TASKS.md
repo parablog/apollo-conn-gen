@@ -936,45 +936,6 @@ field lands as `PropCircRef` with the usual omission comment instead of silently
 (`collectLeafPaths`). Pinned by fixture `allof-wrapping-recursive-ref.yaml` and test
 `test_gap_238_allof_wrapping_recursive_ref_vanishes` (`tests/all/lint-known-gaps.test.ts`).
 
-## 239 [BUG] [P2] · A response with content but no schema, only an example, makes the generator throw instead of degrading — ⬜ Open
-
-**Symptom:** the generator throws `No schema content found!` instead of producing a schema. Hits
-18 GET ops and 7 mutation ops in jira-software.json (e.g. `get:/rest/agile/1.0/board/{boardId}/epic`)
-and 2 mutation ops in jira-service-management.json (e.g.
-`post:/rest/servicedeskapi/servicedesk/{serviceDeskId}/attachTemporaryFile`) — the whole-spec runs
-for both specs fail on it.
-
-**OAS:**
-```yaml
-responses:
-  '200':
-    description: OK
-    content:
-      application/json:
-        example: '{"id": 1, "name": "a widget"}'
-```
-content is present, but has no `schema` key — only an `example`.
-
-**Repro:** `OasGen.fromFile(...)` + `gen.generateSchema(['get:/rest/agile/1.0/board/{boardId}/epic>**'])`
-on jira-software.json throws `No schema content found!`.
-
-**Cause:** `Get.visitResponse` (`get.ts:335`) takes the "response has a `content` property" branch
-whenever `content` exists at all, regardless of whether a media type inside it declares a `schema`,
-and calls `visitResponseContent`. `visitResponseContent` (`get.ts:387`) throws when
-`media.schema` is falsy. The sibling case — no `content` key at all — is handled two branches
-earlier (`get.ts:361`) by degrading to `JSON` with `JsonDegradeReasons.emptyResponseBody`, the fix
-`docs/FIXED.md #147` added; #148's repair of malformed responses (`oasGen.ts`) only rewrites a
-present-but-`null` `schema`, not a media type with no `schema` key at all, so this specific shape
-reaches neither fix and falls through to the throw.
-
-**Shape:** at `get.ts:387`, when `media.schema` is missing, take the same `JSON` +
-`emptyResponseBody` degrade the no-`content` case already gets, with a `warn`, instead of throwing.
-
-**Refs:** `docs/FIXED.md` #147, #148. `src/oas/nodes/get.ts` (`visitResponse`,
-`visitResponseContent`), `JsonDegradeReasons.emptyResponseBody`. Pinned by fixture
-`response-content-no-schema.yaml` and test `test_239_response_content_no_schema_throws`
-(`tests/all/oas-core.test.ts`), asserting today's throw.
-
 ## 240 [BUG] [P3] · A boolean parameter whose name ends in Id is promoted to ID and its default false makes invalid SDL — ⬜ Open
 
 **Symptom:** rover reports `INVALID_GRAPHQL`: "Invalid default value (got: false) provided for
@@ -1052,4 +1013,5 @@ then reads through incorrectly.
 `src/oas/nodes/map.ts` (`select`). Pinned by fixture `body-whole-map.yaml` and test
 `test_241_whole_body_map_writes_value_fields_under_input` (`tests/all/oas-core.test.ts`), asserting
 today's output.
+
 

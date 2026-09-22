@@ -345,6 +345,13 @@ export class Get extends Type implements Op {
         // non-JSON content (github /markdown returns text/html): nothing a connector can
         // select — fall back to the synthetic success response, like a missing body. #33
         this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
+      } else if (!json.schema) {
+        // a response with a `content` key but no `schema`, only an `example` — nothing to build a
+        // type from, so read it the same way a missing `content` key does.
+        //   e.g. (jira-platform) get:/rest/api/3/screens/tabs 200: example only, no schema   #239
+        const reason = JsonDegradeReasons.responseWithoutSchema(statusCode);
+        warn(context, `  [${code}]`, reason);
+        this.readResponseAsRawJson(context, reason);
       } else {
         this.visitResponseContent(context, code, json);
       }
@@ -360,22 +367,29 @@ export class Get extends Type implements Op {
       //   e.g. (world anvil) get:/manuscript 200: { description: ok }  — no `content` key   #147
       const reason = JsonDegradeReasons.emptyResponseBody(statusCode);
       warn(context, `  [${code}]`, reason);
-      const schema = Schemas.withJsonNote(context, {}, reason);
-      // build the Res first so the Scalar below is parented to it from birth — building it the
-      // other way round (Scalar as a constructor argument to `new Res(...)`) would parent it one
-      // level too high, the same trap PropObj's own pre-built `obj` argument fell into.
-      const res = new Res(this, 'r', schema);
-      res.response = new Scalar(res, 'JSON', schema, reason);
-      res.add(res.response);
-      res.visited = true;
-      this.resultType = res;
-      if (!this.children.includes(this.resultType)) {
-        this.add(this.resultType);
-      }
+      this.readResponseAsRawJson(context, reason);
     } else {
       // not a 2xx at all (the only other response `findSuccessResponseCode` can pick is a
       // `default` block) — outside what this fix covers, so keep the old behavior.
       this.visitResponse(context, '200', SYN_SUCCESS_RESPONSE);
+    }
+  }
+
+  // builds the synthetic `JSON` result type shared by every "nothing to build a real type from"
+  // response branch (a missing `content` key, or a `content` key with no `schema`).
+  //   e.g. (jira-platform) get:/rest/api/3/screens/tabs 200: example only, no schema   #239
+  private readResponseAsRawJson(context: OasContext, reason: string): void {
+    const schema = Schemas.withJsonNote(context, {}, reason);
+    // build the Res first so the Scalar below is parented to it from birth — building it the
+    // other way round (Scalar as a constructor argument to `new Res(...)`) would parent it one
+    // level too high, the same trap PropObj's own pre-built `obj` argument fell into.
+    const res = new Res(this, 'r', schema);
+    res.response = new Scalar(res, 'JSON', schema, reason);
+    res.add(res.response);
+    res.visited = true;
+    this.resultType = res;
+    if (!this.children.includes(this.resultType)) {
+      this.add(this.resultType);
     }
   }
 

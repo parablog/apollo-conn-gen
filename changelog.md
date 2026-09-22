@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - A flat union merge where one branch's enum value is not a legal GraphQL name types the merged
   field `String` instead of `JSON`. E.g. (omni) `fieldSelection.mode: oneOf [full-model, auto,
   specific]` — `full-model` has a hyphen — types `mode: String!` instead of `mode: JSON`. Issue #234.
+- A response whose `content` key has no `schema`, only an `example`, reads as `JSON` instead of
+  throwing. E.g. (jira-platform) `get:/rest/api/3/screens/tabs` 200 declares only
+  `content: { application/json: { example: ... } } }` — types the field `JSON` with a note, instead
+  of stopping the whole run. Issue #239.
 
 ## [0.31.0]
 

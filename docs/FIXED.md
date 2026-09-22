@@ -11729,3 +11729,49 @@ runs the three legal/illegal branch values through `test-connectors`, proving th
 `src/oas/nodes/factory.ts` (the illegal-enum branch, #24), `src/oas/utils/gql.ts` (`isGqlEnumValue`,
 `isGqlEnum`, `getGQLScalarType`); closes `docs/TASKS.md #234`. The warning path/repeat count is a
 separate gap, tracked as #235 and still open.
+
+## 239 [BUG] [P2] · A response with content but no schema, only an example, made the generator throw instead of degrading — ✅ Fixed
+
+**OAS** (jira-platform) `get:/rest/api/3/screens/tabs` 200:
+```yaml
+responses:
+  '200':
+    content:
+      application/json:
+        example: '{"isLast":true,"maxResults":100,"startAt":0,"total":2,"values":[...]}'
+```
+`content` is present, but the one media type inside it has no `schema` key, only an `example`.
+
+**Before:** the whole-spec run threw `No schema content found!` and stopped.
+
+**After:**
+```graphql
+"""
+(/rest/api/3/screens/tabs)
+
+NEEDS ATTENTION: the '200' response declares a body but no schema for it -- read as raw JSON instead.
+"""
+screensTabs: JSON
+```
+
+**Symptom:** 18 GET ops in jira-software.json and 2 mutation ops in jira-service-management.json hit
+the same shape, so both specs' whole-spec runs failed on the first one reached.
+
+**Cause:** `Get.visitResponse` took the "content is present" branch whenever the `content` key
+existed at all, regardless of whether the matched media type declared a `schema`, and called
+`visitResponseContent`, which threw when `media.schema` was missing. The sibling case — no `content`
+key at all — already degraded to `JSON` (#147); this one fell through to the throw because it does
+have a `content` key, just an empty one.
+
+**Fix:** the raw-JSON-read that built a `JSON` result (`Res` + `Scalar`, #147's shape) moved into one
+method, `Get.readResponseAsRawJson`, called from both the no-`content` branch and a new branch: when
+the matched media type has no `schema`, warn with `JsonDegradeReasons.responseWithoutSchema` and read
+it as raw JSON instead of entering `visitResponseContent`. The throw in `visitResponseContent` still
+guards the case that should never happen now — every path with a missing schema is caught earlier.
+
+**Tests:** `tests/resources/oas/response-content-no-schema.yaml`,
+`tests/all/oas-core.test.ts` (`test_239_response_content_no_schema_degrades_to_json`).
+
+**Refs:** `docs/FIXED.md` #147, #148. `src/oas/nodes/get.ts` (`visitResponse`,
+`readResponseAsRawJson`), `src/oas/utils/jsonReasons.ts` (`responseWithoutSchema`); closes
+`docs/TASKS.md #239`.

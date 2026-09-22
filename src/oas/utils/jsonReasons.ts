@@ -36,6 +36,12 @@ export class JsonDegradeReasons {
     return `the '${statusCode}' response declares no body — the real API may still return data this spec doesn't describe, so it's read as raw JSON instead of a fabricated empty result.`;
   }
 
+  // e.g. (jira-platform) get:/rest/api/3/screens/tabs 200: { content: { application/json: { example: ... } } }
+  // — an `example` with no `schema` #239
+  static responseWithoutSchema(statusCode: string): string {
+    return `the '${statusCode}' response declares a body but no schema for it — read as raw JSON instead.`;
+  }
+
   // moved from T.everyFieldRemovedReason. see docs/FIXED.md #101
   static everyFieldRemoved(type: IType): string {
     return `every field of ${Naming.getRefName(type.name)} was removed to break a reference cycle, leaving no type to write — sent as raw JSON instead.`;

@@ -4108,13 +4108,18 @@ test('test_185_map_value_ref_choice_reads_json', async () => {
 // Each test below pins one finding docs/TASKS.md files, the way test_147 pins #147: the assertion
 // describes today's (buggy) behavior, and fails once the linked entry is actually fixed.
 
-test('test_239_response_content_no_schema_throws', async () => {
-  // docs/TASKS.md #239: a response with a `content` key but no `schema` inside it (only an
-  // `example`) throws instead of degrading, because the no-schema throw at get.ts:387 only
-  // expects the "content present" branch to be reached when a schema exists.
-  const gen = await OasGen.fromFile(`${oasBasePath}/response-content-no-schema.yaml`, { skipValidation: true });
-  await gen.visit();
-  assert.throws(() => gen.generateSchema(['get:/widgets>**']), /No schema content found!/);
+test('test_239_response_content_no_schema_degrades_to_json', async () => {
+  // docs/TASKS.md #239 (jira-platform get:/rest/api/3/screens/tabs): a response with a `content`
+  // key but no `schema` inside it (only an `example`) now reads as raw JSON, the same as a
+  // response with no `content` key at all, instead of throwing.
+  const schema = await runOasTest('response-content-no-schema.yaml', ['get:/widgets>**'], 1, 0);
+  assert.ok(schema !== undefined);
+  assert.ok(/\bwidgets: JSON/.test(schema!), 'the op answers free-form JSON');
+  assert.ok(/selection: """\s*\n\s*\$\s*\n/.test(schema!), 'and the selection takes the response whole');
+
+  const reason = "the '200' response declares a body but no schema for it — read as raw JSON instead.";
+  const docBlock = `"""\n  (/widgets)\n\n  NEEDS ATTENTION: ${reason.replace('—', '--')}\n  """\n  widgets: JSON`;
+  assert.ok(schema!.includes(docBlock), 'widgets carries a NEEDS ATTENTION note in its own operation docstring');
 });
 
 test('test_240_boolean_param_named_id_keeps_boolean_default', async () => {
