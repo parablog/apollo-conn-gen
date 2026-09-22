@@ -798,6 +798,26 @@ that normalisation is what construction already does, just one visit later.
 
 **Refs:** #231, `src/oas/nodes/obj.ts` (`visit`).
 
+## 235 [BUG] [P4] · [union] warnings carry no path/operation and repeat per call site, not per clash — ⬜ Open
+
+**Symptom:** every `[union]` warning is `warn(null, '[union]', reason)` — `warn()` itself never
+prints a path regardless of what's passed, so there's no way to tell from the log which field or
+operation a clash came from. Worse, `dedupeByName` reruns once per call site that touches a shared
+union (once per operation that reaches it), so the same clash is logged once per operation instead
+of once per distinct union/field — Omni's spec produced 138 `[union]` lines for what is actually 13
+distinct (union, field) pairs.
+
+**Real-world hit:** same Omni run as #234 — `FiltersUsedInSqlEntryUnion.type` alone fires 6 times
+for `get:/api/v2/documents/{identifier}` and 5 more for its `/draft/{draftIdentifier}` variant, all
+the same clash.
+
+**Shape:** two independent fixes — pass the node context through so `warn` can print a path, the way
+`factory.ts`'s "Object has no properties" warnings already do; and cache `dedupeByName`'s clash
+result per (union, field) so repeat call sites for the same shared union reuse it instead of
+re-warning.
+
+**Refs:** `src/oas/nodes/union.ts` (`dedupeByName`), `src/oas/log/trace.ts` (`warn`).
+
 ## 236 [BUG] [P3] · A discriminated `oneOf` request body drops a field one branch doesn't share, and the body mapping still selects it — ⬜ Open
 
 **Symptom:** motion.json's mutations all-ops compose fails with three `INVALID_BODY` errors. Every
