@@ -798,3 +798,78 @@ that normalisation is what construction already does, just one visit later.
 
 **Refs:** #231, `src/oas/nodes/obj.ts` (`visit`).
 
+## 236 [BUG] [P3] · A discriminated `oneOf` request body drops a field one branch doesn't share, and the body mapping still selects it — ⬜ Open
+
+**Symptom:** motion.json's mutations all-ops compose fails with three `INVALID_BODY` errors. Every
+op passes on its own (241/241 per-op); only the all-ops (whole-spec) compose surfaces it — confirmed
+byte-identical on `main` before #221's changes, so this is pre-existing, not something #221 caused:
+```
+INVALID_BODY: [test_spec] In `@connect(http: {body:})` on `Mutation.patchV2TasksById`: `TasksV2UpdateRequestInput.*.data.*` doesn't have a field named `archivedTime`
+INVALID_BODY: [test_spec] In `@connect(http: {body:})` on `Mutation.createV2UsersMeSettingsTaskDefaults`: `UserTaskDefaultSettingsPostRequestInput.*.data.*` doesn't have a field named `level`
+INVALID_BODY: [test_spec] In `@connect(http: {body:})` on `Mutation.patchV2UsersMeSettingsTaskDefaults`: `UserTaskDefaultSettingsPatchRequestInput.*.data.*` doesn't have a field named `level`
+```
+
+**OAS:** `PATCH /v2/tasks/{id}`'s body is `data: oneOf` of four branches discriminated by `type`;
+only the `NORMAL` branch declares `archivedTime`:
+```yaml
+data:
+  oneOf:
+    - properties: { type: { enum: [NORMAL] }, archivedTime: { ... }, name: { ... }, ... }   # has it
+    - properties: { type: { enum: [RECURRING_INSTANCE] }, ... }                             # doesn't
+    - properties: { type: { enum: [CHUNK] }, ... }                                          # doesn't
+    - properties: { type: { enum: [RECURRING_TASK] }, ... }                                 # doesn't
+```
+The two task-defaults ops (`POST`/`PATCH /v2/users/me/settings/task-defaults`) shape the same way,
+but their `level` field is itself the discriminator — a single-value enum that differs per branch:
+```yaml
+data:
+  oneOf:
+    - properties: { level: { type: string, enum: [GLOBAL] }, ... }
+    - properties: { level: { type: string, enum: [WORKSPACE] }, ... }
+```
+In both cases the generated `*Input` type merges the branches into one flat input object, and
+`archivedTime`/`level` don't make it into that merged shape — but the `@connect` body mapping still
+selects them, so rover rejects the body at compose time.
+
+**Cause:** not traced.
+
+**Shape:** none yet.
+
+**Refs:** `COVERAGE-mutations.md` (all-ops column), `tools/coverage-spec.mts`.
+
+## 237 [BUG] [P4] · An input-side, discriminator-free `oneOf [string, [string]]` field vanishes with no fallback — ⬜ Open
+
+**Symptom:** the #221 fixture's `/thing.create` request body carries a `oneOf [string, array of
+string]` field (`flat`). Spelled `oneOf`, it disappears entirely — no field, no `JSON` fallback, no
+warning — worse than the `anyOf` spelling of the exact same shape, which degrades to `JSON` with a
+"NEEDS ATTENTION" note as intended. With nothing else in the body, the whole input type comes out
+empty (`input CreateThingCreateInput {}`), which the generator then rejects as invalid GraphQL.
+
+**OAS** (`/thing.create` request body):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          flat:
+            oneOf:
+              - type: string
+              - type: array
+                items:
+                  type: string
+```
+
+**Cause:** the same drop #221's fix traced for the output side, now hit from the input side.
+`Factory.fromProp`'s `oneOf` branch builds a real `Union`-backed field for this shape on both input
+and output alike — unlike its `anyOf` sibling, it never checks whether the parent is an input type
+before doing so. The leaf-selection pass only keeps that field when `Union.analyzeMixedValue` returns
+a shape, and that method always returns nothing for an input-kind union, by design — GraphQL has no
+input unions. So the field gets built, then never selected, and vanishes with nothing said about it.
+
+**Shape:** the input catch-all in `Factory.fromProp`'s `oneOf` branch should send this shape to
+`JSON` with a reason, the way the `anyOf` branch already does for the same shape.
+
+**Refs:** `docs/FIXED.md` #221, #216.
+
