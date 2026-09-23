@@ -84,5 +84,6 @@ LINT-CORPUS.md
 /tests/resources/oas/jira-service-management.json
 /tests/resources/oas/bitbucket.json
 /tests/resources/oas/confluence-v2.json
+/tests/resources/oas/meta-ads.json
 
 .issue-loop

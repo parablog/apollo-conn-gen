@@ -90,6 +90,9 @@ const ALL_SPECS = [
   'jira-service-management.json',
   'bitbucket.json',
   'confluence-v2.json',
+  // Meta Marketing API, added 2026-09-23: no published OpenAPI, converted from the SDK codegen
+  // JSON; provenance in TEST_CORPUS.md. Whole-spec generation OOMs at 4 GB (docs/TASKS.md #242).
+  'meta-ads.json',
 ];
 
 // One pass at the current shipping versions (connect v0.4 / fed v2.14, per DEFAULT_VERSIONS): real

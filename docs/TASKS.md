@@ -916,3 +916,46 @@ input unions. So the field gets built, then never selected, and vanishes with no
 **Refs:** `docs/FIXED.md` #221, #216.
 
 
+
+## 242 [BUG] [P3] · Whole-spec generation of the Meta Marketing API dies at the 4 GB default heap — ⬜ Open
+
+**Symptom:** `node ./dist/cli/oas tests/resources/oas/meta-ads.json -n` (all 129 ops, default
+heap) is killed after 65 s with "Ineffective mark-compacts near heap limit ... JavaScript heap out
+of memory"; the last GC line reads 4089.6 MB of a 4096 MB limit. No SDL is written. Before dying,
+stderr carries 18,867 identical `[factory] items in array have types that declare no fields -
+returning JSON type` lines. Same result with `--sparse-fieldsets-param fields` (67 s). The spec is
+863 KB; a single self-contained edge (`get:/act_{ad_account_id}/activities>**`, pinned as
+`test_corpus_meta_ads`) generates and composes in under a second. This is the docusign class
+(#178, #180, #203): a modest spec whose references fan out combinatorially per position.
+
+**OAS** (Graph API node types reference each other densely; three AdAccount fields open the same
+24-field Business, which opens Page, which opens more):
+```json
+"AdAccount": { "properties": {
+  "business":          { "$ref": "#/components/schemas/Business" },
+  "owner_business":    { "$ref": "#/components/schemas/Business" },
+  "viewable_business": { "$ref": "#/components/schemas/Business" } } },
+"Business": { "properties": {
+  "primary_page": { "$ref": "#/components/schemas/Page" },
+  "collaborative_ads_managed_partner_business_info": { "$ref": "#/components/schemas/ManagedPartnerBusiness" } } },
+"User": { "properties": {
+  "hometown": { "$ref": "#/components/schemas/Page" },
+  "location": { "$ref": "#/components/schemas/Page" } } }
+```
+Business reaches 136 of the spec's 347 schemas; 41 of the 80 GETs reach Business. An independent
+tree walk of the same spec (service-factory's `spans obligations`, which cuts cycles but not depth)
+counts 84,003 leaf paths under `get:/act_{ad_account_id}`, 27,918 under each of the three Business
+fields, nesting 12 levels deep — the size of tree a per-position expansion faces.
+
+**Before:** OOM, no output. **After:** the whole spec generates under the default heap, or the
+generator stops with a named, bounded failure instead of an OOM.
+
+**First step is measurement, not a fix:** which op peaks (`COV_TRACE=1` on a per-op sweep,
+`node tools/coverage-spec.mts --spec meta-ads.json`), and whether the peak is the
+`collector.expanded` path list #180 measured on docusign or the response-side nodes #203 targets.
+Not yet measured: the per-op cost of the 41 Business-reaching GETs.
+
+**AST:** no change yet.
+
+**Refs:** #180, #203, `docs/DEFERRED.md` #178 and #139 (granularity mode), `TEST_CORPUS.md`
+(Meta Marketing API), `tests/resources/oas/meta-ads.json` (local, gitignored).
