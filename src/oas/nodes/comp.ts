@@ -98,7 +98,7 @@ export class Composed extends Type {
       writer.write(Naming.genTypeName(this.name));
     } else if (this.schema.allOf != null) {
       const keep = context.generateOptions?.keepFieldNames === true;
-      const selected = this.selectedProps(selection, keep);
+      const selected = this.selectedProps(selection, keep, this.path());
 
       if (selected.length > 0) {
         // Definition and reference must agree: references emit genTypeName(name), so the definition
@@ -133,16 +133,16 @@ export class Composed extends Type {
   }
 
   // the selected props, once the allOf members are folded in (same shape select writes)
-  dependencies(context: OasContext, selection: string[]): IType[] {
+  dependencies(context: OasContext, selection: string[], path: string): IType[] {
     if (this.schema.allOf != null && !this.consolidated) {
       this.consolidate(selection);
     }
     const overrides = context.propOverrides.get(this.id);
     const keep = context.generateOptions?.keepFieldNames === true;
-    return this.selectedProps(selection, keep).map((prop) => overrides?.get(prop.name) ?? prop);
+    return this.selectedProps(selection, keep, path).map((prop) => overrides?.get(prop.name) ?? prop);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [comp::select]', `-> in: ${this.name}`);
     if (!this.consolidated) {
       this.consolidate(selection);
@@ -153,14 +153,20 @@ export class Composed extends Type {
       // a route that kept the field writes the same comment as the routes where it was removed. #89
       const overrides = context.propOverrides.get(this.id);
       const keep = context.generateOptions?.keepFieldNames === true;
-      const selected = this.selectedProps(selection, keep);
+      const selected = this.selectedProps(selection, keep, path);
+      const pathsToMembers = this.findPathsToMembers();
 
       for (const prop of selected) {
-        (overrides?.get(prop.name) ?? prop).select(context, writer, selection);
+        (overrides?.get(prop.name) ?? prop).select(
+          context,
+          writer,
+          selection,
+          this.propPath(prop, path, pathsToMembers),
+        );
       }
     } else if (composedSchema.oneOf != null) {
       if (this.children.length === 1) {
-        this.children[0].select(context, writer, selection);
+        this.children[0].select(context, writer, selection, Naming.pathUnder(path, this.children[0].id));
       } else {
         throw new Error('Expected exactly one child for a oneOf schema');
       }
@@ -171,8 +177,8 @@ export class Composed extends Type {
 
   // allOf can fold two spellings of one field onto this type — number the later twin, as a plain
   // object does. e.g. (trello) boards: prefs/background + prefs_background. see docs/FIXED.md #113
-  public override selectedProps(selection: string[], keep: boolean) {
-    return T.numberTwinFields(super.selectedProps(selection, keep), keep);
+  public override selectedProps(selection: string[], keep: boolean, path: string) {
+    return T.numberTwinFields(super.selectedProps(selection, keep, path), keep);
   }
 
   public consolidate(selection: string[]): Set<string> {
@@ -181,6 +187,7 @@ export class Composed extends Type {
 
     const tree = T.print(this);
     const queue: IType[] = Array.from(this.children.values()).filter((child) => !(child instanceof Prop));
+    const pathsToMembers = this.findPathsToMembers();
 
     while (queue.length > 0) {
       const node = queue.shift()!;
@@ -190,7 +197,7 @@ export class Composed extends Type {
         // prefix-set membership, not a scan per prop — 55M path() rebuilds on hubspot lists. #10 #118
         const prefixes = selectionPrefixes(selection);
         node.props.forEach((prop) => {
-          if (prefixes.has(prop.path())) {
+          if (prefixes.has(this.propPath(prop, this.path(), pathsToMembers))) {
             props.set(prop.name, prop);
           }
         });

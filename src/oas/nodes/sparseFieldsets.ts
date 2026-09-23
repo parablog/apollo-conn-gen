@@ -46,7 +46,7 @@ export function applySparseFieldsets(context: OasContext, gen: OasGen, selection
 
     // Prop.name is the raw OAS wire name, e.g. "id" -- what the REST API's own fields= expects
     const fields = obj
-      .selectedProps(selection, keep)
+      .selectedProps(selection, keep, obj.path())
       .map((prop) => prop.name)
       .sort();
     if (fields.length === 0) {

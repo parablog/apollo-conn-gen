@@ -55,13 +55,13 @@ export class PropMap extends Prop {
     return '[' + Naming.genTypeName(this.map.name) + this.map.nameSuffix() + ']';
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [prop-map:select]', 'in ' + this.name + ', map: ' + this.map.name);
 
     // alwaysAlias: the local pre-release composer only accepts `->entries` behind `name: name`,
     // never a bare `name`; a field that already carries a real alias is unaffected. see docs/FIXED.md #42
     this.writeFieldHead(context, writer, { alwaysAlias: true });
-    this.map.selectEntries(context, writer, selection);
+    this.map.selectEntries(context, writer, selection, Naming.pathUnder(path, this.map.id));
 
     if (context.generateOptions.showParentInSelections) {
       writer.write(' # ').write(Naming.getRefName(this.parent!.name));

@@ -3,6 +3,7 @@ import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { Naming } from '../utils/naming.js';
 
 export class Res extends Type {
   public schema: SchemaObject;
@@ -57,19 +58,22 @@ export class Res extends Type {
     return this.response ? [this.response] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]): void {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string): void {
     trace(context, '-> [res:select]', `-> in: ${this.parent!.name}`);
 
     const response = this.response;
     if (response) {
       const keep = context.generateOptions?.keepFieldNames === true;
+      const responsePath = Naming.pathUnder(path, response.id);
       // a plain value, or a list of them — nothing to pick apart, so pass the answer through as is.
       // A union whose merge finds no fields answers JSON, passed through the same way. see docs/FIXED.md #47, #80, #120
       if (
         T.isScalar(response) ||
         response instanceof En ||
         (response instanceof Arr && response.itemsType instanceof Scalar) ||
-        (response instanceof Union && response.isFlat() && !response.hasSelectedProps(context, selection, keep))
+        (response instanceof Union &&
+          response.isFlat() &&
+          !response.hasSelectedProps(context, selection, keep, responsePath))
       ) {
         // best attempt to just copy the value that comes out of the service. most likely the
         // value will have to be replaced by a GQL type. In fact, we could potentially use SYN_ here but
@@ -79,9 +83,9 @@ export class Res extends Type {
         // the whole body is a dictionary, so there is no field name to hang the arrow off — take
         // the entries of the response itself. e.g. (map-response-root.yaml) `$->entries { … }`  see docs/FIXED.md #90
         writer.write(' '.repeat(context.indent)).write('$');
-        response.selectEntries(context, writer, selection);
+        response.selectEntries(context, writer, selection, responsePath);
         writer.write('\n');
-      } else response.select(context, writer, selection);
+      } else response.select(context, writer, selection, responsePath);
     }
 
     trace(context, '<- [res:select]', `-> out: ${this.parent!.name}`);

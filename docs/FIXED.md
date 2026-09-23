@@ -11944,7 +11944,7 @@ beside the plain-`$ref` #10 case); the former known-gap pin in
 **Refs:** `docs/FIXED.md` #10, #182. `src/oas/nodes/factory.ts` (`findSingleAllOfMember`,
 `findAllOfSchema`, `fromProp`); closes `docs/TASKS.md #238`.
 
-## 242 [BUG] [P3] · Step 1 of 3: the leaf walk builds each selection path from the walk itself · ✅ Step done
+## 242 [BUG] [P3] · Step 1 of 4: the leaf walk builds each selection path from the walk itself · ✅ Step done
 
 **Example** (confluence.json, `post:/wiki/rest/api/user/{userId}/property/{key}`, its body's free-form `value`):
 ```
@@ -11960,7 +11960,7 @@ Same string as before; it is now joined from what the walk passed through instea
 - The empty-side check (#32, #51) starts from the path above the side, so each id appears once.
 - `Type.path()` stays for the web tree ids, `OasGen.find`, saved-name recovery (#135) and `selectedProps`.
 
-**Why:** the next step shares one built type between many fields, and a shared type has no single
+**Why:** step 3 shares one built type between many fields, and a shared type has no single
 parent to read a path from. The walk knows where it is; the node will not.
 
 **Output:** unchanged. Checked before and after on 23 specs and fixtures:
@@ -11982,5 +11982,69 @@ parent to read a path from. The walk knows where it is; the node will not.
 | hubspot lists | 70.9 → 67.7 s, 71.3 → 70.3 s | 2.20 → 2.14 GB, 2.64 → 2.13 GB |
 | stripe | 153.7 → 148.2 s, 159.7 → 154.0 s | 0.81 → 0.81 GB, 0.86 → 0.81 GB |
 
-**Refs:** `docs/TASKS.md` #242 (steps 2 and 3 open). `src/oas/nodes/typeUtils.ts` (`traverse`),
+**Refs:** `docs/TASKS.md` #242 (steps 2 to 4 open). `src/oas/nodes/typeUtils.ts` (`traverse`),
 `src/oas/generator/typesCollector.ts` (`collectLeafPaths`, `pathFromWalk`).
+
+## 242 [BUG] [P3] · Step 2 of 4: a field is selected by the path of the route that reached it · ✅ Step done
+
+**Example** (cycle-on-some-routes.yaml, `get:/graph`): `Space` is reached on two routes, and the
+selection names `homepage` on the second one only.
+```
+route 1:   get:/graph>…>prop:obj:relation>…>prop:obj:source>…>prop:obj:space>obj:type:#/c/s/Space
+route 2:   get:/graph>…>prop:obj:relation>…>prop:obj:viewer>…>prop:obj:personalSpace>obj:type:#/c/s/Space
+selected:  route 2, then >prop:obj:homepage>obj:type:#/c/s/Content>prop:scalar:id
+```
+- Today each route builds its own `Space`, and `Space` asks its own node for its path: route 2.
+- Step 3 builds `Space` once. Its own path would then name one route, and `homepage` would not
+  match on the other.
+- Now the code that writes a selection, and the walks that find the kept types, pass down the path
+  of the route they are on. A field is selected when that path is in the selection.
+
+**What changed:**
+- `select` and `dependencies` take the path of the node they run on.
+- `Type.propPath` gives a field's path, seen from the node that reads it.
+- `Type.childPath` gives the path of each node `dependencies()` returns.
+- The reachable-types walk, the kept-and-removed walk and the entity-link walk keep a path per queued node.
+- `Naming.pathUnder` joins a path; `T.lastArrayItemPath` gives the path through a list of lists.
+- Calls that start from one type rather than from an operation still pass that type's own path:
+  writing a type, entity keys, sparse fieldsets, the op's field doc line, merging a union or allOf.
+  Step 3 replaces them.
+
+**Where a field's path is not its reader's path plus the field's id:**
+- A folded allOf field keeps its part: `…>comp:type:#/c/s/User>obj:type:#/c/s/Address>prop:scalar:city`
+  (simple-allOf-example.yaml).
+- A merged union reads its members' fields directly: the member's id, and a nested union's member id,
+  stay in the path (stripe `del:/v1/customers/{customer}/bank_accounts/{id}`).
+- A list of lists keeps each inner list's id (box.yaml `name_conflicts`).
+- A mixed-value clone (#208) keeps the path its member field had; it is returned as is.
+
+Found while building it:
+- A field swapped for its circular-reference comment (#89) can get the comment made for another
+  copy of its type; it takes the path of the field it replaced (cycle-on-some-routes.yaml,
+  `Space.homepage`, `Doc.folder`).
+- A union member's `$ref` base sits under its member (r2-interface-shared-base.yaml).
+- An entity link (#196) is shared by every copy of its type; its target is read at the target's own
+  path (entity-link.yaml).
+
+**Output:** unchanged. Checked before and after, each spec in its own process:
+- the plan 1 comparison on the same 23 specs and fixtures: whole-spec SDL byte for byte, and every
+  `expanded()` array element by element for `op>**`, every side and object field under it, the
+  empty-side check and the three saved mixed-value paths (#208). 2,195,227 paths, all equal.
+- the four cases above, the two comment cases and the twin names (keep-twin-fields.yaml, flag off
+  and on), each with its op roots and one deeper selection ending at the named field: SDL with
+  selections, `expanded()` and the collected types all equal. merge-object-refs.yaml
+  `get:/compatible` still keeps `detail: Basic` and reaches `summary`.
+- ten GET operations each on stripe, github and jira-platform, three explicit field paths per
+  operation: SDL and selections equal.
+- no run stopped on a field outside its reader.
+
+**Timing** (same comparison driver, two rounds, before → after; machine load 7 to 11, so within noise):
+| spec | wall time | peak RSS |
+|---|---|---|
+| hubspot lists | 73.6 → 77.2 s, 76.9 → 74.9 s | 2.13 → 2.14 GB, 2.23 → 2.12 GB |
+| stripe | 160.8 → 164.0 s, 169.5 → 156.5 s | 0.80 → 0.89 GB, 0.82 → 0.80 GB |
+
+**Refs:** `docs/TASKS.md` #242 (steps 3 and 4 open; the mixed-value clone path is open for step 3).
+`src/oas/nodes/type.ts` (`propPath`, `findPathsToMembers`,
+`childPath`), `src/oas/nodes/union.ts`, `src/oas/generator/typesCollector.ts`
+(`selectedRoots`, `writtenRoots`, `collectReachable`, `walkKeptAndRemoved`).

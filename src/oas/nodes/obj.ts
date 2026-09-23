@@ -129,7 +129,7 @@ export class Obj extends Type {
       writer.write(' {\n');
     }
 
-    const selected = this.selectedProps(selection, keep);
+    const selected = this.selectedProps(selection, keep, this.path());
     // a field cycle detection removed on another route is not written here either — the comment
     // takes its place. #89
     const overrides = context.propOverrides.get(this.id);
@@ -148,26 +148,36 @@ export class Obj extends Type {
 
   // siblings that clean to one field name write once — generate, select and dependencies all
   // read this list, so the three agree. e.g. (trello) prefs/background + prefs_background  #69
-  public override selectedProps(selection: string[], keep: boolean) {
-    return T.numberTwinFields([...super.selectedProps(selection, keep), ...this.entityLinkProps], keep);
+  public override selectedProps(selection: string[], keep: boolean, path: string) {
+    return T.numberTwinFields([...super.selectedProps(selection, keep, path), ...this.entityLinkProps], keep);
+  }
+
+  // Returns an entity link's path as a field of this copy: every copy of the type shares one link
+  // list, so the link's owner can be another copy and no route leads to it. Other fields go to Type.
+  //   e.g. (entity-link.yaml) GET and PATCH /cards/{card_ref} both write `thing: { id: thingId }`
+  public override propPath(prop: Prop, path: string, pathsToMembers?: Map<IType, string[]>): string {
+    return this.entityLinkProps.includes(prop)
+      ? Naming.pathUnder(path, prop.id)
+      : super.propPath(prop, path, pathsToMembers);
   }
 
   // the selected props (a field removed on another route swapped for its comment, like generate does — #89)
-  dependencies(context: OasContext, selection: string[]): IType[] {
+  dependencies(context: OasContext, selection: string[], path: string): IType[] {
     const overrides = context.propOverrides.get(this.id);
     const keep = context.generateOptions?.keepFieldNames === true;
-    return this.selectedProps(selection, keep).map((prop) => overrides?.get(prop.name) ?? prop);
+    return this.selectedProps(selection, keep, path).map((prop) => overrides?.get(prop.name) ?? prop);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [obj::select]', `-> in: ${this.name}`);
 
     // a route that kept the field writes the same comment as the routes where it was removed. #89
     const overrides = context.propOverrides.get(this.id);
     const keep = context.generateOptions?.keepFieldNames === true;
-    const selected = this.selectedProps(selection, keep);
+    const selected = this.selectedProps(selection, keep, path);
+    const pathsToMembers = this.findPathsToMembers();
     for (const prop of selected) {
-      (overrides?.get(prop.name) ?? prop).select(context, writer, selection);
+      (overrides?.get(prop.name) ?? prop).select(context, writer, selection, this.propPath(prop, path, pathsToMembers));
     }
 
     trace(context, '<- [obj::select]', `-> out: ${this.name}`);
@@ -232,7 +242,7 @@ export class Obj extends Type {
     // Base the selection at 6 spaces like a Query connector, 8 when wrapped in an envelope
     // field. `select` adds `context.stack.length` (this object is mid-generation), subtracted.
     context.indent = (resolver.envelopeField ? 8 : 6) - context.stack.length;
-    this.select(context, writer, selection);
+    this.select(context, writer, selection, this.path());
 
     if (resolver.envelopeField) {
       writer.write(i6).write('}\n');
@@ -281,7 +291,7 @@ export class Obj extends Type {
       writer.write(i6).write(`$.${batchSpec.wrapperKey} {\n`);
     }
     context.indent = (batchSpec.wrapperKey ? 8 : 6) - context.stack.length;
-    this.select(context, writer, selection);
+    this.select(context, writer, selection, this.path());
     if (batchSpec.wrapperKey) {
       writer.write(i6).write('}\n');
     }

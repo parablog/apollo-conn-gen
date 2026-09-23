@@ -35,7 +35,7 @@ export class CircularRef extends Type {
     trace(context, '<- [circular-ref:generate]', `-> out: ${this.name}`);
   }
 
-  public select(context: OasContext, writer: Writer): void {
+  public select(context: OasContext, writer: Writer, _selection: string[], _path: string): void {
     trace(context, '-> [circular-ref:select]', `-> in: ${this.name}`);
 
     writer

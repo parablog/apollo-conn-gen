@@ -128,7 +128,7 @@ export class Get extends Type implements Op {
     context.leave(this);
   }
 
-  public select(_context: OasContext, _writer: Writer, _selection: string[]) {
+  public select(_context: OasContext, _writer: Writer, _selection: string[], _path: string) {
     // do nothing
   }
 

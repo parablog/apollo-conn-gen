@@ -84,7 +84,7 @@ export class PropRef extends Prop {
     return `[prop] ${this.name}: ${Naming.getRefName(this.ref)} (Ref)`;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [prop-ref:select]', 'in ' + this.name + ', ref: ' + this.ref);
     const fieldName = this.name;
     const sanitised = Naming.sanitiseFieldForSelect(
@@ -105,7 +105,7 @@ export class PropRef extends Prop {
     }
 
     for (const child of this.children) {
-      child.select(context, writer, selection);
+      child.select(context, writer, selection, Naming.pathUnder(path, child.id));
     }
 
     if (this.refType && this.needsBrackets(this.refType)) {

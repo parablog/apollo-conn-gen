@@ -214,6 +214,18 @@ export class T {
     return inner;
   }
 
+  // Returns the selection path of what findLastArrayItemIn(node) finds, when `node` sits at
+  // `path`: each list skipped on the way down keeps its id in the path.
+  //   e.g. (box.yaml) name_conflicts, a list of lists: …>prop:array:#name_conflicts>array:NameConflictsItem
+  //   -> …>prop:array:#name_conflicts>array:NameConflictsItem>obj:type:NameConflictsItem
+  public static lastArrayItemPath(node: IType | undefined, path: string): string {
+    let innerPath = path;
+    for (let inner = node; inner instanceof Arr && inner.itemsType; inner = inner.itemsType) {
+      innerPath = Naming.pathUnder(innerPath, inner.itemsType.id);
+    }
+    return innerPath;
+  }
+
   // What the operation gives back, with the response wrapper removed. A list stays a list.
   // e.g. (petstore) get:/pet/findByStatus returns a list of pets:
   //   responses: { '200': { schema: { type: array, items: { $ref: '#/c/s/Pet' } } } }

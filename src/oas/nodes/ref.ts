@@ -79,10 +79,10 @@ export class Ref extends Type {
     context.leave(this);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [ref::select]', `-> in: ${this.name}`);
     if (this.refType) {
-      this.refType.select(context, writer, selection);
+      this.refType.select(context, writer, selection, Naming.pathUnder(path, this.refType.id));
     }
     trace(context, '<- [ref::select]', `-> out: ${this.name}`);
   }

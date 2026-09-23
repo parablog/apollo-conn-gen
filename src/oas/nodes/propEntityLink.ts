@@ -41,10 +41,17 @@ export class PropEntityLink extends Prop {
     return [this.target];
   }
 
+  // Returns the target's own path: the target is the entity's type as its own operation reached it,
+  // not a node below this link, so a path through the link would match no selected field.
+  //   e.g. (entity-link.yaml) Song.album -> Album at get:/albums/{album_id}'s own path
+  public override childPath(_context: OasContext, child: IType, _path: string): string {
+    return child.path();
+  }
+
   // a key-only stub, not real nested JSON -- hand-written instead of PropObj's recursive form.
   // e.g. Song.album_id -> `album: { albumId: album_id }`, letting the router complete the entity
   // via Album's own type-level resolver.
-  public select(context: OasContext, writer: Writer, _selection: string[]): void {
+  public select(context: OasContext, writer: Writer, _selection: string[], _path: string): void {
     const keep = context.generateOptions?.keepFieldNames === true;
     const base = context.indent + context.stack.length;
     const name = this.renamedTo ?? Naming.sanitiseField(this.name, keep);

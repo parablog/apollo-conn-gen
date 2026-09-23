@@ -1,6 +1,7 @@
 import _ from 'lodash';
 import { Composed } from '../nodes/comp.js';
 import {
+  QueuedNode,
   Arr,
   En,
   IType,
@@ -172,13 +173,17 @@ export class TypesCollector {
   }
 
   // The selected operations' result and body nodes — where the read-only walks start. #26 #89
-  private selectedRoots(expanded: string[]): IType[] {
+  private selectedRoots(expanded: string[]): QueuedNode[] {
     const opIds = new Set(expanded.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
-    const roots: IType[] = [];
+    const roots: QueuedNode[] = [];
     for (const op of this.gen.paths.values()) {
       if (opIds.has(op.id)) {
         const candidates = [_.get(op, 'resultType'), _.get(op, 'body')] as Array<IType | undefined>;
-        roots.push(...candidates.filter((n): n is IType => !!n));
+        roots.push(
+          ...candidates
+            .filter((n): n is IType => !!n)
+            .map((node) => ({ node, path: Naming.pathUnder(op.id, node.id) })),
+        );
       }
     }
     return roots;
@@ -188,15 +193,23 @@ export class TypesCollector {
   // configured to return a payload field reaches only that field's type, not the rest of the wrapper.
   //   e.g. (ashby) oneOf [{ success, results: Job }, { success, errors: [ErrorDetail] }] with
   //   payload "results" reaches Job, not the wrapper or ErrorDetail.
-  private writtenRoots(expanded: string[]): IType[] {
+  private writtenRoots(expanded: string[]): QueuedNode[] {
     const context = this.gen.context!;
     const opIds = new Set(expanded.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
-    const roots: IType[] = [];
+    const roots: QueuedNode[] = [];
     for (const op of this.gen.paths.values()) {
       if (opIds.has(op.id)) {
         const payload = T.isOp(op) ? findPayload(context, op) : undefined;
-        const candidates = [payload ?? _.get(op, 'resultType'), _.get(op, 'body')] as Array<IType | undefined>;
-        roots.push(...candidates.filter((n): n is IType => !!n));
+        const resultType = _.get(op, 'resultType') as IType | undefined;
+        const body = _.get(op, 'body') as IType | undefined;
+        if (payload) {
+          roots.push({ node: payload, path: op.propPath(payload, op.id) });
+        } else if (resultType) {
+          roots.push({ node: resultType, path: Naming.pathUnder(op.id, resultType.id) });
+        }
+        if (body) {
+          roots.push({ node: body, path: Naming.pathUnder(op.id, body.id) });
+        }
       }
     }
     return roots;
@@ -210,7 +223,7 @@ export class TypesCollector {
   //   Media: oneOf [Book, Movie], discriminator kind
   private resolveDivergentUnionForms(expanded: string[]): void {
     const byId = new Map<string, Union[]>();
-    for (const root of this.selectedRoots(expanded)) {
+    for (const { node: root } of this.selectedRoots(expanded)) {
       T.traverse(root, (node) => {
         if (node instanceof Union) {
           (byId.get(node.id) ?? byId.set(node.id, []).get(node.id)!).push(node);
@@ -232,7 +245,7 @@ export class TypesCollector {
     const queue = this.writtenRoots(expanded);
     const visited = new Set<IType>();
     while (queue.length > 0) {
-      const node = queue.pop()!;
+      const { node, path } = queue.pop()!;
       if (visited.has(node)) {
         continue;
       }
@@ -243,7 +256,11 @@ export class TypesCollector {
         throw new Error(`collectReachable: unvisited type ${node.id} — the collect walk missed a reference`);
       }
       visited.add(node);
-      queue.push(...node.dependencies(context, expanded));
+      queue.push(
+        ...node
+          .dependencies(context, expanded, path)
+          .map((child) => ({ node: child, path: node.childPath(context, child, path) })),
+      );
     }
 
     return new Set(Array.from(visited).filter(T.isEmittable));
@@ -285,7 +302,7 @@ export class TypesCollector {
       }
       // the type's own declared field names, skipping ones already commented out
       const declared = type
-        .dependencies(context, expanded)
+        .dependencies(context, expanded, type.path())
         .filter((dep): dep is Prop => dep instanceof Prop && !(dep instanceof PropCircRef));
       for (const prop of declared) {
         if (kept.get(type.id)?.has(prop.name)) {
@@ -328,12 +345,12 @@ export class TypesCollector {
     const queue = this.selectedRoots(expanded);
     const visited = new Set<IType>();
     while (queue.length > 0) {
-      const node = queue.pop()!;
+      const { node, path } = queue.pop()!;
       if (visited.has(node)) {
         continue;
       }
       visited.add(node);
-      const children = node.dependencies(context, expanded);
+      const children = node.dependencies(context, expanded, path);
       if (T.isFieldOwner(node)) {
         for (const child of children) {
           if (child instanceof Prop) {
@@ -355,7 +372,7 @@ export class TypesCollector {
               kept.set(node.id, byField);
             }
             // i.e.: "post:/referral.create"
-            const opId = child.path().split(Naming.PATH_SEPARATOR)[0];
+            const opId = path.split(Naming.PATH_SEPARATOR)[0];
             let ops = byField.get(child.name);
             if (!ops) {
               ops = new Set();
@@ -365,7 +382,7 @@ export class TypesCollector {
           }
         }
       }
-      queue.push(...children);
+      queue.push(...children.map((child) => ({ node: child, path: node.childPath(context, child, path) })));
     }
     return { kept, removed };
   }
@@ -385,7 +402,7 @@ export class TypesCollector {
       if (!byField) {
         continue;
       }
-      const declared = new Set(type.selectedProps(expanded, keep).map((prop) => prop.name));
+      const declared = new Set(type.selectedProps(expanded, keep, type.path()).map((prop) => prop.name));
       // pendingTypes keeps the first copy of a type per id (`collect()`'s main loop above) — that
       // copy's own path names the op whose selection the type is written from. see docs/FIXED.md #207
       const declaredOp = type.path().split(Naming.PATH_SEPARATOR)[0];
@@ -598,8 +615,7 @@ class PathsCollector {
   //   e.g. (cycles-by-route.yaml) prefix "", ancestors get:/nodes, res:r and Node, node prop:scalar:id
   //   -> get:/nodes>res:r>obj:type:#/c/s/Node>prop:scalar:id
   private pathFromWalk(prefix: string, ancestors: IType[], node: IType): string {
-    const ids = [prefix, ...ancestors.map((ancestor) => ancestor.id), node.id].filter(Boolean);
-    return Naming.abbreviateRef(ids.join(Naming.PATH_SEPARATOR));
+    return Naming.pathUnder(prefix, ...ancestors.map((ancestor) => ancestor.id), node.id);
   }
 
   public collectExpandedPaths(selection: string[]) {

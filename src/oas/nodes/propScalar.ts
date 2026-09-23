@@ -53,7 +53,7 @@ export class PropScalar extends Prop {
     return result;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '   [prop:select]', this.name);
 
     if (this.stringifiedNumber && this.parent?.kind !== 'input') {
@@ -70,7 +70,7 @@ export class PropScalar extends Prop {
         sanitised === this.name && this.propType instanceof Scalar && this.propType.coalescesDefault(context);
       if (writesDefaultFallback) {
         for (const child of this.children) {
-          child.select(context, writer, selection);
+          child.select(context, writer, selection, Naming.pathUnder(path, child.id));
         }
       } else if (this.isOptionalInSelection(context)) {
         // the default branch above already covers a missing key with `??` — no `?` on top

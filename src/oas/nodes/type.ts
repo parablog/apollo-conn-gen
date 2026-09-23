@@ -47,11 +47,11 @@ export abstract class Type implements IType {
 
   public abstract forPrompt(context: OasContext): string;
 
-  public abstract select(context: OasContext, writer: Writer, selection: string[]): void;
+  public abstract select(context: OasContext, writer: Writer, selection: string[], path: string): void;
 
   // The nodes this node's written output needs (a field's target type, a wrapper's payload, a
   // map's value …). Leaves return nothing. Overridden per class, next to the code it mirrors.
-  public dependencies(_context: OasContext, _selection: string[]): IType[] {
+  public dependencies(_context: OasContext, _selection: string[], _path: string): IType[] {
     return [];
   }
 
@@ -169,14 +169,61 @@ export abstract class Type implements IType {
 
   // `_keep` is unused here: the base filter never renumbers a twin, only Obj/Composed/Union's
   // overrides do. It stays required so every override (and every caller) carries it too. #162
-  public selectedProps(selection: string[], _keep: boolean) {
-    // A prop is selected when some selection entry starts with its path. Done naively
-    // (`selection.find(s => s.startsWith(prop.path()))`) this is O(props x selection) with a
-    // path() rebuild per entry, which blows up on large recursive type sets (2700+ types x 20k
-    // selection entries -> billions of ops; see docs/FIXED.md #10). Index the selection once into
-    // its set of `>`-boundary prefixes, then membership is O(1) per prop.
+  public selectedProps(selection: string[], _keep: boolean, path: string) {
+    // Keeps a prop when some selection entry starts with its path on the route that reached this node
+    // (propPath). Indexes the selection once into its `>`-boundary prefixes, so each check is one
+    // lookup; a scan per prop blew up on large recursive specs. see docs/FIXED.md #10, #242
     const prefixes = selectionPrefixes(selection);
-    return Array.from(this.props.values()).filter((prop) => prefixes.has(prop.path()));
+    const pathsToMembers = this.findPathsToMembers();
+    return Array.from(this.props.values()).filter((prop) => prefixes.has(this.propPath(prop, path, pathsToMembers)));
+  }
+
+  // Returns the selection path of `prop` when this node sits at `path`: the ids of the allOf or
+  // oneOf members between this node and the prop's owner stay in, since a folded field keeps its owner.
+  // Throws when the owner is not below this node. A filter loop passes findPathsToMembers() in once.
+  //   e.g. (simple-allOf-example.yaml) User's city -> …>comp:type:#/c/s/User>obj:type:#/c/s/Address>prop:scalar:city
+  public propPath(prop: Prop, path: string, pathsToMembers?: Map<IType, string[]>): string {
+    if (prop.pathInSelection) {
+      return prop.pathInSelection;
+    }
+    if (prop.parent === this) {
+      return Naming.pathUnder(path, prop.id);
+    }
+    const pathToMember = (pathsToMembers ?? this.findPathsToMembers()).get(prop.parent!);
+    if (!pathToMember) {
+      throw new Error(`propPath: ${prop.id} is not under ${this.id}`);
+    }
+    return Naming.pathUnder(path, ...pathToMember, prop.id);
+  }
+
+  // Returns each node below this one that is reached without passing a field, mapped to the ids on
+  // the way to it, its own last: the members and nested members whose fields this node reads.
+  //   e.g. (simple-allOf-example.yaml) User -> Address: [obj:type:#/components/schemas/Address]
+  public findPathsToMembers(): Map<IType, string[]> {
+    const pathsToMembers = new Map<IType, string[]>();
+    const queue: IType[] = [this];
+    while (queue.length > 0) {
+      const node = queue.shift()!;
+      const pathToMember = pathsToMembers.get(node) ?? [];
+      for (const child of node.children) {
+        if (child instanceof Prop || pathsToMembers.has(child)) continue;
+        pathsToMembers.set(child, [...pathToMember, child.id]);
+        queue.push(child);
+      }
+    }
+    return pathsToMembers;
+  }
+
+  // Returns the selection path of `child`, one of the nodes dependencies() returned, when this node
+  // sits at `path`. A field swapped for its circular-reference comment takes the path of the field
+  // it replaced: the comment is shared by type id, so it can belong to another copy of this type.
+  //   e.g. (cycle-on-some-routes.yaml) Space.homepage and Doc.folder
+  public childPath(context: OasContext, child: IType, path: string): string {
+    if (!(child instanceof Prop)) {
+      return Naming.pathUnder(path, child.id);
+    }
+    const replaced = context.propOverrides.get(this.id)?.get(child.name) === child;
+    return this.propPath(replaced ? this.props.get(child.name)! : child, path);
   }
 
   nameSuffix(): string {

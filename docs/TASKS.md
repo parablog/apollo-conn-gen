@@ -955,7 +955,7 @@ generator stops with a named, bounded failure instead of an OOM.
 `collector.expanded` path list #180 measured on docusign or the response-side nodes #203 targets.
 Not yet measured: the per-op cost of the 41 Business-reaching GETs.
 
-**2026-09-23, measured and split into three steps:**
+**2026-09-23, measured and split into four steps:**
 - Cause: every `$ref` occurrence builds its own copy of the referenced type, and the leaf walk keeps
   one path string per position; both grow with the number of positions, not the number of types.
 - The heaviest op, `post:/act_{ad_account_id}/ads`, builds 3.0 million nodes and 1.29 million paths
@@ -963,11 +963,92 @@ Not yet measured: the per-op cost of the 41 Business-reaching GETs.
 - The whole-spec run also dies at a 16 GB heap, after 739 s, between op 80 and op 90 of 129.
 - docusign's GET side dies at the 4 GB default heap too, after 66 s; it finishes only at 16 GB (9.2 GB RSS).
 - Step 1: the leaf walk builds each path from the ancestors it walked through, not from the node's
-  parents. Output unchanged. Done in the working tree, see `docs/FIXED.md` #242.
-- Step 2: one built type per schema and kind, with loop fields found once over the shared types.
-- Step 3: `>**` selections collected without expanding into one string per leaf.
+  parents. Output unchanged. Done in 3c826ef, see `docs/FIXED.md` #242.
+- Step 2 (2026-09-23): writing a selection and walking the kept types pass down the path of the
+  route they are on, and a field is selected when that path is in the selection, not its node's own
+  path. Output unchanged. Done in the working tree, see `docs/FIXED.md` #242.
+- Step 3: one built type per schema and kind, with loop fields found once over the shared types and
+  written through `propOverrides`.
+- Open for step 3: mixed-value clones (#208) still carry the path their member field had when the
+  union was merged (`pathInSelection`). A shared union is reached on many routes, so the clone's path
+  has to come from the route being walked.
+- Step 4: `>**` selections collected without expanding into one string per leaf.
 
 **AST:** no change yet.
 
 **Refs:** #180, #203, `docs/DEFERRED.md` #178 and #139 (granularity mode), `TEST_CORPUS.md`
 (Meta Marketing API), `tests/resources/oas/meta-ads.json` (local, gitignored).
+
+## 243 [BUG] [P3] · Selecting only an operation's response fails when its request body is a list of objects · ⬜ Open
+
+**Symptom:** with a selection file holding
+`["put:/files/{file_id}/metadata/global/boxSkillsCards>res:r>**"]`,
+`node ./dist/cli/oas -i -s sel.json tests/resources/oas/box.yaml` stops with:
+```
+Error: collectReachable: unvisited type obj:input:UpdateFilesByFileIdMetadataGlobalBoxSkillsCardsItem — the collect walk missed a reference
+```
+Selecting the whole operation (`put:/files/{file_id}/metadata/global/boxSkillsCards>**`) works.
+The same error comes up on 22 response-only selections across five specs, one op each:
+- box (14 selections): `put:/files/{file_id}/metadata/global/boxSkillsCards>res:r>**`
+- confluence (3): `post:/wiki/rest/api/space/{spaceKey}/label>res:r>**`, unvisited `obj:input:#/components/schemas/LabelCreate`
+- confluence-v2 (3): `post:/spaces/{id}/role-assignments>res:r>**`, unvisited `obj:input:CreateSpacesByIdRoleAssignmentsItem`
+- bitbucket (1): `post:/repositories/{workspace}/{repo_slug}/commit/{commit}/reports/{reportId}/annotations>res:r>**`, unvisited `comp:input:#/components/schemas/report_annotation`
+- jira-platform (1): `put:/rest/atlassian-connect/1/migration/properties/{entityType}>res:r>**`, unvisited `obj:input:#/components/schemas/EntityPropertyDetails`
+
+**OAS** (box.yaml, the request body of that `put`, trimmed):
+```yaml
+requestBody:
+  content:
+    application/json-patch+json:
+      schema:
+        type: array
+        items:
+          type: object
+          properties:
+            op: { type: string, enum: [replace] }
+            path: { type: string }
+```
+Every unvisited type in the list above is the operation's own request body type, or the item of a
+request body that is a list.
+
+**Cause:** not traced. The walk that collects the written types starts from each selected operation's
+response and its body alike, so it reaches the body's type even when the selection only names the
+response, and that type was never expanded.
+
+**Shape:** none yet.
+
+**Refs:** found during #242 step 2 (`docs/FIXED.md` #242); present on main at 3c826ef.
+`src/oas/generator/typesCollector.ts` (`writtenRoots`, `collectReachable`).
+
+## 244 [BUG] [P3] · A selection that stops at a field left out as a circular reference writes an invalid schema · ⬜ Open
+
+**Symptom:** with a selection file holding
+```json
+["get:/graph>res:r>obj:type:#/c/s/Graph>prop:obj:relation>obj:type:#/c/s/Relation>prop:obj:source>obj:type:#/c/s/Content>prop:obj:space>obj:type:#/c/s/Space>prop:circular-ref:#homepage"]
+```
+`node ./dist/cli/oas -i -s sel.json tests/resources/oas/cycle-on-some-routes.yaml` stops with:
+```
+Error: [gen] generated an invalid GraphQL schema: Syntax Error: Expected Name, found "}". (at 14:1)
+```
+The only field selected under `Space` is `homepage`, which on this route is written as a
+circular-reference comment, so `Space` is written with nothing but that comment between its braces.
+Selecting `get:/graph>**` works. The same happens for `Doc.folder` on the `link.author.home.front` route.
+
+**OAS** (cycle-on-some-routes.yaml):
+```yaml
+Content:
+  properties:
+    space: { $ref: '#/components/schemas/Space' }
+Space:
+  properties:
+    homepage: { $ref: '#/components/schemas/Content' }
+    key: { type: string }
+```
+
+**Cause:** not traced. #101's check (`T.everyFieldRemoved`) skips writing a type whose declared
+fields are all replaced by comments; whether it should also cover a type whose selected fields are
+all comments is the first thing to look at.
+
+**Shape:** none yet.
+
+**Refs:** found during #242 step 2 (`docs/FIXED.md` #242); present on main at 3c826ef. #10, #89, #101.

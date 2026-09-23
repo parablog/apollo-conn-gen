@@ -19,7 +19,7 @@ export class RefCircRef extends CircularRef {
     writer.write(`# ${Naming.getRefName(this.name)}: circular reference omitted\n`);
   }
 
-  public select(context: OasContext, writer: Writer): void {
+  public select(context: OasContext, writer: Writer, _selection: string[], _path: string): void {
     writer
       .write(' '.repeat(context.indent + context.stack.length))
       .write(`# ${Naming.getRefName(this.name)}: circular reference omitted\n`);

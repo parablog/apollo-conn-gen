@@ -162,7 +162,7 @@ export class Union extends Type {
       }
     } else if (context.inContextOf(Res, this)) {
       // a merge with no fields is never written — the field answers JSON instead  #80
-      if (this.isFlat() && !this.hasSelectedProps(context, selection, keep)) {
+      if (this.isFlat() && !this.hasSelectedProps(context, selection, keep, this.path())) {
         writer.write('JSON');
       } else {
         // R2: when promoted to an interface, the field returns the base interface, not the union name.
@@ -180,7 +180,7 @@ export class Union extends Type {
         this.consolidateMembers(context, selection);
 
         // an empty merge writes no type — its field was written as JSON  #80
-        if (!this.hasSelectedProps(context, selection, keep)) {
+        if (!this.hasSelectedProps(context, selection, keep, this.path())) {
           trace(context, '   [union::generate]', `[union] no fields to merge, skipping: ${this.name}`);
         }
         // FIXED #208: a mixed oneOf — every branch kept as a field, not merged away.
@@ -202,7 +202,7 @@ export class Union extends Type {
         // for allOf members (their folded props keep the inner part as parent -> `union X = `). #34
         // Members are listed under the name their own `type` line uses: a component named
         // `http_rule_response` is written as `HttpRuleResponse`. see docs/FIXED.md #43
-        const filtered = this.selectedMembers(selection);
+        const filtered = this.selectedMembers(selection, this.path());
 
         this.writeMemberJsonNote(context, writer);
         writer
@@ -248,7 +248,7 @@ export class Union extends Type {
       .write(name)
       .write('\n');
 
-    for (const prop of this.dedupedSelectedProps(context, selection, keep)) {
+    for (const prop of this.dedupedSelectedProps(context, selection, keep, this.path())) {
       trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
       prop.generate(context, writer, selection);
     }
@@ -256,8 +256,8 @@ export class Union extends Type {
     writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
   }
 
-  private dedupedSelectedProps(context: OasContext, selection: string[], keep: boolean): Prop[] {
-    return Union.dedupeByName(this.selectedProps(selection, keep), context, keep, this);
+  private dedupedSelectedProps(context: OasContext, selection: string[], keep: boolean, path: string): Prop[] {
+    return Union.dedupeByName(this.selectedProps(selection, keep, path), context, keep, this);
   }
 
   // Members can give the same field name three outcomes: the same written shape keeps the first, an
@@ -461,20 +461,21 @@ export class Union extends Type {
 
   // the members that carry at least one selected field — what the `union X = …` line lists and
   // what `->match` branches over. Composed members fold their allOf parts in first. see #34
-  private selectedMembers(selection: string[]): IType[] {
+  private selectedMembers(selection: string[], path: string): IType[] {
+    const pathsToMembers = this.findPathsToMembers();
     return this.children.filter((child) => {
       if (child instanceof Composed && child.schema.allOf != null && !child.consolidated) {
         child.consolidate(selection);
       }
       // prefix-set membership, not a scan per prop — 55M path() rebuilds on hubspot lists. #10 #118
       const prefixes = selectionPrefixes(selection);
-      return Array.from(child.props.values()).some((p) => prefixes.has(p.path()));
+      return Array.from(child.props.values()).some((p) => prefixes.has(this.propPath(p, path, pathsToMembers)));
     });
   }
 
   // a real `union X = Book | Movie` needs its members (and a member's shared $ref base, which
   // the writer may promote to an interface — R2); a merged one needs its flat fields instead
-  dependencies(context: OasContext, selection: string[]): IType[] {
+  dependencies(context: OasContext, selection: string[], path: string): IType[] {
     if (this.isFlat()) {
       // consolidate first, like generateMergedObject does: merging picks which member's copy of a
       // shared field is kept, so reading the fields before the merge can name a different type than
@@ -485,18 +486,27 @@ export class Union extends Type {
         return this.mixedValue.dependencies();
       }
       const keep = context.generateOptions?.keepFieldNames === true;
-      return this.dedupedSelectedProps(context, selection, keep);
+      return this.dedupedSelectedProps(context, selection, keep, path);
     }
     // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
     // $ref base it extends — `Book: allOf [$ref Product, …]` -> Product (r2-interface-shared-base.yaml).
-    return this.selectedMembers(selection).flatMap((member) => [
+    return this.selectedMembers(selection, path).flatMap((member) => [
       member,
       // expand the list with all those that are referenced by this type, so we can filter them too
       ...(member instanceof Composed ? T.containers(member).filter((c) => T.isRef(c.name)) : []),
     ]);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]): void {
+  // Returns the selection path of a node dependencies() returned: a member's $ref base sits under
+  // its member, not under this union, so its path keeps the member's id. Fields go to Type.
+  //   e.g. (r2-interface-shared-base.yaml) Book: allOf [$ref Product, …] ->
+  //   get:/item>res:r>union:type:#/c/s/ItemResponse>comp:type:#/c/s/Book>obj:type:#/c/s/Product
+  public override childPath(context: OasContext, child: IType, path: string): string {
+    const pathToMember = this.findPathsToMembers().get(child);
+    return pathToMember ? Naming.pathUnder(path, ...pathToMember) : super.childPath(context, child, path);
+  }
+
+  public select(context: OasContext, writer: Writer, selection: string[], path: string): void {
     trace(context, '-> [union::select]', `-> in: ${this.name}`);
     const keep = context.generateOptions?.keepFieldNames === true;
 
@@ -509,19 +519,20 @@ export class Union extends Type {
     // string-literal __typename per member. Merged-object unions (input position or no discriminator)
     // fall back to the flat selection below. see docs/FIXED.md #25, #36
     if (!this.isFlat()) {
-      this.selectAbstract(context, writer, selection);
+      this.selectAbstract(context, writer, selection, path);
       trace(context, '<- [union::select]', `-> out: ${this.name}`);
       return;
     }
 
     if (this.mixedValue) {
-      this.mixedValue.writeSelection(context, writer, selection);
+      this.mixedValue.writeSelection(context, writer, selection, path);
       trace(context, '<- [union::select]', `-> out: ${this.name}`);
       return;
     }
 
-    for (const prop of this.dedupedSelectedProps(context, selection, keep)) {
-      prop.select(context, writer, selection);
+    const pathsToMembers = this.findPathsToMembers();
+    for (const prop of this.dedupedSelectedProps(context, selection, keep, path)) {
+      prop.select(context, writer, selection, this.propPath(prop, path, pathsToMembers));
     }
 
     /* TODO: better selection for Unions
@@ -553,7 +564,7 @@ export class Union extends Type {
    * `__typename` is a string literal (required by the composer); per-member fields come from
    * each member's own `select`, scoped by the current selection.
    */
-  private selectAbstract(context: OasContext, writer: Writer, selection: string[]): void {
+  private selectAbstract(context: OasContext, writer: Writer, selection: string[], path: string): void {
     const base = context.indent;
     const pad = (n: number) => ' '.repeat(Math.max(n, 0));
 
@@ -564,7 +575,7 @@ export class Union extends Type {
       : `"${this.discriminator!}"`;
 
     // Only members with at least one selected prop participate.
-    const members = this.selectedMembers(selection);
+    const members = this.selectedMembers(selection, path);
 
     writer.write(pad(base)).write(`... ${field}->match(\n`);
 
@@ -583,7 +594,7 @@ export class Union extends Type {
       // `context.indent + stack.length`, so offset indent to land fields at base + 4.
       const savedIndent = context.indent;
       context.indent = base + 4 - context.stack.length;
-      child.select(context, writer, selection);
+      child.select(context, writer, selection, Naming.pathUnder(path, child.id));
       context.indent = savedIndent;
 
       writer
@@ -649,15 +660,18 @@ export class Union extends Type {
       const prefixes = selectionPrefixes(selection);
       const discriminator = this.discriminator;
 
+      const path = this.path();
+      const pathsToMembers = this.findPathsToMembers();
+
       this.children?.forEach((child) => {
         // go deeper to get the fields from those inner members, if needed, and only those selected
         if (child instanceof Union) {
-          props.push(...child.selectedProps(selection, keep));
+          props.push(...child.selectedProps(selection, keep, Naming.pathUnder(path, child.id)));
           return;
         }
 
         Array.from(child.props.values())
-          .filter((prop) => prefixes.has(prop.path()))
+          .filter((prop) => prefixes.has(this.propPath(prop, path, pathsToMembers)))
           .forEach((prop) => props.push(prop));
       });
 
@@ -726,11 +740,11 @@ export class Union extends Type {
   // False when merging finds no fields at all — such a union is written as JSON, not as an empty type.
   // Merged fields sit on this.props; the op line asks with no selection at hand, so read them first.
   // e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no fields  #80
-  public hasSelectedProps(context: OasContext, selection: string[], keep: boolean): boolean {
+  public hasSelectedProps(context: OasContext, selection: string[], keep: boolean, path: string): boolean {
     if (this.consolidated) {
       return this.props.size > 0;
     }
-    return this.dedupedSelectedProps(context, selection, keep).length > 0;
+    return this.dedupedSelectedProps(context, selection, keep, path).length > 0;
   }
 
   // Why generate() above writes JSON instead of a real return type, or undefined if it doesn't.
@@ -738,7 +752,7 @@ export class Union extends Type {
   //   e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no
   //   fields to merge, so the operation answers JSON instead of an empty type
   public emptyMergeReason(context: OasContext, selection: string[], keep: boolean): string | undefined {
-    return this.isFlat() && !this.hasSelectedProps(context, selection, keep)
+    return this.isFlat() && !this.hasSelectedProps(context, selection, keep, this.path())
       ? JsonDegradeReasons.emptyMerge()
       : undefined;
   }
@@ -748,19 +762,20 @@ export class Union extends Type {
     return this.mixedValue?.selectionSuffix();
   }
 
-  public selectedProps(selection: string[], keep: boolean) {
+  public selectedProps(selection: string[], keep: boolean, path: string) {
     const collected: Prop[] = [];
     const prefixes = selectionPrefixes(selection);
+    const pathsToMembers = this.findPathsToMembers();
 
     this.children.forEach((child) => {
       // a member that is itself a union has no fields of its own — take its members' fields.
       // e.g. (stripe) del bank_accounts answers anyOf [payment_source, deleted_payment_source], both anyOf too  #80
       if (child instanceof Union) {
-        collected.push(...child.selectedProps(selection, keep));
+        collected.push(...child.selectedProps(selection, keep, Naming.pathUnder(path, child.id)));
         return;
       }
       Array.from(child.props.values())
-        .filter((prop) => prefixes.has(prop.path()))
+        .filter((prop) => prefixes.has(this.propPath(prop, path, pathsToMembers)))
         .forEach((prop) => collected.push(prop));
     });
 

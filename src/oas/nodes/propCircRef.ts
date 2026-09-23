@@ -52,7 +52,7 @@ export class PropCircRef extends Prop {
       .write(' - circular reference omitted\n');
   }
 
-  public select(context: OasContext, writer: Writer, _selection: string[]) {
+  public select(context: OasContext, writer: Writer, _selection: string[], _path: string) {
     // Leaves the field out: emits a comment and does not recurse into the wrapped ref. Delegating
     // to `this.ref.select(...)` would re-expand the very cycle this node exists to break,
     // reintroducing the recursion into the connector selection (rover rejects it as CIRCULAR_REFERENCE). #10

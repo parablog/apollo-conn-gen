@@ -137,7 +137,7 @@ export class PropArray extends Prop {
     return this.items ? [this.items] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [prop-array:select]', 'in: ' + this.name);
 
     // When the item type reads itself through an expression (mixed value), wrap the list in
@@ -165,7 +165,7 @@ export class PropArray extends Prop {
 
     if (!wholeValue) {
       // now allow the items type to select its properties
-      this.items!.select(context, writer, selection);
+      this.items!.select(context, writer, selection, Naming.pathUnder(path, this.items!.id));
     }
 
     if (brackets) {

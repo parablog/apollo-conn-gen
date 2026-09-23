@@ -54,7 +54,7 @@ export class Scalar extends Type {
     return meetsMinimum(connect, 'v0.4') && meetsMinimum(federation, 'v2.14');
   }
 
-  public select(context: OasContext, writer: Writer, _selection: string[]) {
+  public select(context: OasContext, writer: Writer, _selection: string[], _path: string) {
     if (!this.coalescesDefault(context)) {
       // no default, or a real field below the gate with no safe literal-replacement form —
       // write nothing, same as a field with no default. see docs/FIXED.md #165

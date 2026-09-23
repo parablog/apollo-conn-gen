@@ -97,7 +97,7 @@ export class PropObj extends Prop {
     return T.everyFieldRemoved(this.obj, context) ? [] : [this.obj];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [prop-obj:select]', 'in ' + this.name + ', obj: ' + this.obj.name);
 
     this.writeFieldHead(context, writer, { suffix: this.obj.selectionSuffix(context) });
@@ -113,7 +113,7 @@ export class PropObj extends Prop {
 
     if (!wholeValue) {
       for (const child of this.children) {
-        child.select(context, writer, selection);
+        child.select(context, writer, selection, Naming.pathUnder(path, child.id));
       }
     }
 

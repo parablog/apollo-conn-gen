@@ -350,7 +350,7 @@ export class Schemas {
     }
 
     const names = response
-      .selectedProps(selection, keep)
+      .selectedProps(selection, keep, response.path())
       .map((prop) => prop.renamedTo ?? Naming.sanitiseField(prop.name, keep));
     if (names.length === 0) {
       return undefined;

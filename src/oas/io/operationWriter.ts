@@ -133,7 +133,7 @@ export class OperationWriter {
       if (typeof override?.body === 'string') {
         this.writeBodyOverride(writer, override.body);
       } else if (op.body) {
-        this.writeBodySelection(context, writer, op.body, selection);
+        this.writeBodySelection(context, writer, op.body, selection, Naming.pathUnder(op.id, op.body.id));
       }
     }
     writer.write(' '.repeat(6) + '}');
@@ -295,25 +295,38 @@ export class OperationWriter {
       warn(context, '[payload]', `"${op.id}" has no "${wanted}" property to return; response kept as is`);
     }
     if (payload) {
-      this.writePayloadSelection(context, writer, payload, selection);
+      this.writePayloadSelection(context, writer, op, payload, selection);
     } else {
-      op.resultType!.select(context, writer, selection);
+      op.resultType!.select(context, writer, selection, Naming.pathUnder(op.id, op.resultType!.id));
     }
   }
 
   // Writes the payload field at the root of the selection: `$.results` for a plain value, and
   // `$.results { ... }` around the fields of the object, or list of objects, it holds.
   //   e.g. Ashby: { success: true, results: Job } -> $.results { id title }
-  private writePayloadSelection(context: OasContext, writer: Writer, payload: Prop, selection: string[]): void {
+  private writePayloadSelection(
+    context: OasContext,
+    writer: Writer,
+    op: Op & IType,
+    payload: Prop,
+    selection: string[],
+  ): void {
     const indent = ' '.repeat(context.indent);
-    const value = T.findLastArrayItemIn(payload.dependencies(context, selection)[0]);
+    const payloadPath = op.propPath(payload, op.id);
+    const child = payload.dependencies(context, selection, payloadPath)[0];
+    const value = T.findLastArrayItemIn(child);
     writer.write(indent).write(`$.${payload.name}`);
     if (value instanceof MapNode) {
-      value.selectEntries(context, writer, selection);
+      value.selectEntries(
+        context,
+        writer,
+        selection,
+        T.lastArrayItemPath(child, Naming.pathUnder(payloadPath, child.id)),
+      );
     } else if (value && T.isContainer(value)) {
       writer.write(' {\n');
       context.enter(payload);
-      value.select(context, writer, selection);
+      value.select(context, writer, selection, T.lastArrayItemPath(child, Naming.pathUnder(payloadPath, child.id)));
       context.leave(payload);
       writer.write(indent).write('}');
     }
@@ -332,8 +345,8 @@ export class OperationWriter {
     writer.write(spacing + '"""\n');
   }
 
-  private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: string[]): void {
+  private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: string[], path: string): void {
     context.indent = 8;
-    body.select(context, writer, selection);
+    body.select(context, writer, selection, path);
   }
 }

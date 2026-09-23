@@ -71,11 +71,11 @@ export class Arr extends Type {
     return this.itemsType ? [this.itemsType] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [array::select]', `-> in: ${this.name}`);
 
     if (this.itemsType) {
-      this.itemsType.select(context, writer, selection);
+      this.itemsType.select(context, writer, selection, Naming.pathUnder(path, this.itemsType.id));
     }
 
     trace(context, '<- [array::select]', `-> out: ${this.name}`);

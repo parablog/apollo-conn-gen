@@ -62,7 +62,7 @@ export class Post extends Get {
     return `[post] ${this.name}`;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]): void {
+  public select(context: OasContext, writer: Writer, selection: string[], _path: string): void {
     throw new Error('select not implemented.');
   }
 

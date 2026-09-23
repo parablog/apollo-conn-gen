@@ -50,7 +50,7 @@ export class PropEn extends Prop {
     return Array.from(this.children.values());
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]): void {
+  public select(context: OasContext, writer: Writer, selection: string[], _path: string): void {
     trace(context, '   [prop:select]', this.name);
     const sanitised = this.fieldForSelect(context);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);

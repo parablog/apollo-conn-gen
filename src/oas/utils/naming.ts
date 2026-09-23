@@ -173,6 +173,14 @@ export class Naming {
     return path.replace(/#\/components\/schemas/g, '#/c/s');
   }
 
+  // Returns the selection path of the node `ids` lead to below `prefix`: the parts joined and
+  // abbreviated the way Type.path() builds one, with an empty prefix left out.
+  //   e.g. (cycles-by-route.yaml) prefix get:/nodes>res:r, id obj:type:#/components/schemas/Node
+  //   -> get:/nodes>res:r>obj:type:#/c/s/Node
+  public static pathUnder(prefix: string, ...ids: string[]): string {
+    return Naming.abbreviateRef([prefix, ...ids].filter(Boolean).join(Naming.PATH_SEPARATOR));
+  }
+
   public static expandRef(path: string): string {
     return path.replace(/#\/c\/s/g, '#/components/schemas');
   }

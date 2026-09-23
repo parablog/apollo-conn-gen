@@ -96,7 +96,7 @@ export class En extends Type {
     context.leave(this);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], _path: string) {
     trace(context, '-> [enum::select]', `-> in: ${this.name}`);
 
     // do nothing?

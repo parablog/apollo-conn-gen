@@ -147,13 +147,13 @@ export class Map extends Type {
     return value instanceof Obj && T.everyFieldRemoved(value, context) ? value : undefined;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     trace(context, '-> [map::select]', `-> in: ${this.name}`);
 
     // A map that is the whole response is read by Res.select, which owns the response root; here
     // the map is under a property, and PropMap has already written the field name and the arrow.
     if (this.valueType) {
-      this.valueType.select(context, writer, selection);
+      this.valueType.select(context, writer, selection, Naming.pathUnder(path, this.valueType.id));
     }
 
     trace(context, '<- [map::select]', `-> out: ${this.name}`);
@@ -161,7 +161,7 @@ export class Map extends Type {
 
   // The `->entries { key value { … } }` body; the caller writes what comes in front of the arrow.
   // e.g. (map-response-root.yaml) `$` for a whole-response map, `labels` for one under a property.
-  public selectEntries(context: OasContext, writer: Writer, selection: string[]): void {
+  public selectEntries(context: OasContext, writer: Writer, selection: string[], path: string): void {
     writer.write('->entries {').write('\n');
     context.enter(this);
 
@@ -182,11 +182,11 @@ export class Map extends Type {
       //   e.g. (motion) customFields: { additionalProperties: { additionalProperties: {…} } }
       //   -> customFields->entries { key value: value->entries { key value {…} } }
       writer.write(': value');
-      this.valueType.selectEntries(context, writer, selection);
+      this.valueType.selectEntries(context, writer, selection, Naming.pathUnder(path, this.valueType.id));
     } else if (this.needsValueSelection(context)) {
       writer.write(' {').write('\n');
       context.enter(this);
-      this.valueType!.select(context, writer, selection);
+      this.valueType!.select(context, writer, selection, Naming.pathUnder(path, this.valueType!.id));
       context.leave(this);
       writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
     }

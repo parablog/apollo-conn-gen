@@ -6,6 +6,7 @@ import { Writer } from '../io/writer.js';
 import { Schemas } from '../utils/schemas.js';
 import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 import _ from 'lodash';
+import { Naming } from '../utils/naming.js';
 
 export class Body extends Type {
   public schema: SchemaObject;
@@ -98,7 +99,7 @@ export class Body extends Type {
     return members.length === 0 || members.every((member) => member instanceof Scalar);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]): void {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string): void {
     trace(context, '-> [body:select]', `-> in: ${this.parent!.name}`);
 
     const spacing = ' '.repeat(8);
@@ -110,7 +111,7 @@ export class Body extends Type {
       writer.write(spacing + 'body: """\n').write(spacing + '$args.input {\n');
 
       context.indent += 2;
-      this.payload.select(context, writer, selection);
+      this.payload.select(context, writer, selection, Naming.pathUnder(path, this.payload.id));
       context.indent -= 2;
 
       writer.write(spacing + '}\n').write(spacing + '"""\n');

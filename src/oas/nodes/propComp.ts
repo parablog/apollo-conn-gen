@@ -54,7 +54,7 @@ export class PropComp extends Prop {
     return this.comp ? [this.comp] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[]) {
+  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
     const comp = this.comp!;
     trace(context, '-> [prop-comp:select]', 'in ' + this.name + ', obj: ' + comp.name);
 
@@ -66,7 +66,7 @@ export class PropComp extends Prop {
     }
 
     for (const child of this.children) {
-      child.select(context, writer, selection);
+      child.select(context, writer, selection, Naming.pathUnder(path, child.id));
     }
 
     if (this.needsBrackets(comp)) {

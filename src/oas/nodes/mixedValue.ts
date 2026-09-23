@@ -4,6 +4,7 @@ import { Obj, Prop, PropArray, PropObj, PropScalar, Scalar, Union, selectionPref
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { MixedValueShape } from '../utils/schemas.js';
+import { Naming } from '../utils/naming.js';
 
 // The fields a mixed value is split into: one for each shape the oneOf allows (text, number,
 // boolean, list, object), only when it allows it, plus `raw` for the value as it arrived. see docs/FIXED.md #208
@@ -73,10 +74,13 @@ export class MixedValue {
     const prefixes = selectionPrefixes(selection);
     const candidates: Prop[] = [];
     const pathByName = new Map<string, string>();
+    const unionPath = this.union.path();
+    const pathsToMembers = this.union.findPathsToMembers();
     for (const member of members) {
       for (const prop of member.props.values()) {
-        if (!prefixes.has(prop.path())) continue;
-        if (!pathByName.has(prop.name)) pathByName.set(prop.name, prop.path());
+        const path = this.union.propPath(prop, unionPath, pathsToMembers);
+        if (!prefixes.has(path)) continue;
+        if (!pathByName.has(prop.name)) pathByName.set(prop.name, path);
         candidates.push(prop);
       }
     }
@@ -120,7 +124,7 @@ export class MixedValue {
   // Writes the selection that sorts the value into its field: a match on the first character
   // of the JSON text, one branch per shape present, a catch-all last, then `raw` itself.
   //   e.g. (ashby) ... raw->jsonStringify->slice(0, 1)->match(["\"", { text: raw }], ["t", { boolean: raw }], …) raw
-  public writeSelection(context: OasContext, writer: Writer, selection: string[]): void {
+  public writeSelection(context: OasContext, writer: Writer, selection: string[], path: string): void {
     const fields = this.fields;
     const pad = (n: number) => ' '.repeat(Math.max(n, 0));
     const base = context.indent + context.stack.length;
@@ -147,7 +151,7 @@ export class MixedValue {
           writer.write('{ object: raw {\n');
           context.enter(fields.object);
           // each cloned field writes itself, so `?` follows the usual rule (skipOptionalMarkers, prop.ts)
-          objType.select(context, writer, selection);
+          objType.select(context, writer, selection, Naming.pathUnder(path, fields.object.id, objType.id));
           context.leave(fields.object);
           writer.write(pad(base + 2)).write('} }');
         },
