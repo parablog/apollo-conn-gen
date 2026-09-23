@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Cycle cut intersection
+  title: Route-dependent cycle intersection
   version: 1.0.0
 servers:
   - url: https://api.example.com
@@ -24,8 +24,8 @@ components:
           $ref: '#/components/schemas/Link'
         relation:
           $ref: '#/components/schemas/Relation'
-    # family A: the first-collected Content (under source) KEEPS space; the one under
-    # viewer.personalSpace.homepage loses it to the cycle cut — divergent
+    # family A: keeps space on the first-collected Content (under source); the one under
+    # viewer.personalSpace.homepage has it left out instead (circular reference omitted), so the two diverge
     Relation:
       type: object
       properties:
@@ -56,8 +56,8 @@ components:
           type: string
         personalSpace:
           $ref: '#/components/schemas/Space'
-    # family B: the first-collected Doc (under author.home.front) has folder CUT; the one
-    # under subject keeps it — the old #13 donation direction, also divergent
+    # family B: leaves folder out on the first-collected Doc (under author.home.front); the one
+    # under subject keeps it, the old #13 donation direction, also divergent
     Link:
       type: object
       properties:

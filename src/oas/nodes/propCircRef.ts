@@ -34,10 +34,11 @@ export class PropCircRef extends Prop {
 
   // Render the whole field commented in the SDL (override generate, not just generateValue: the base
   // Prop.generate writes the uncommented `  field: ` prefix + `!`). A commented field is inert, so the
-  // type carries no unresolved field (no CONNECTORS_UNRESOLVED_FIELD) while documenting the cut. #10
+  // type carries no unresolved field (no CONNECTORS_UNRESOLVED_FIELD) while documenting why the field is left out. #10
   public generate(context: OasContext, writer: Writer, _selection: string[]): void {
     // the wrapped value may carry a raw ref (`[#/components/schemas/User]`): reduce refs to their name.
-    // A cut object was never visited (no props), so getValue falls back to 'JSON' — name it instead.
+    // Names the value instead of 'JSON': a left-out object was never visited (no props), so
+    // getValue falls back to that generic name on its own.
     let value = this.ref.getValue(context).replace(/#\/[^\]\s]*\//g, '');
     const inner = (this.ref as { obj?: IType }).obj;
     if (value === 'JSON' && inner?.name) {
@@ -52,10 +53,9 @@ export class PropCircRef extends Prop {
   }
 
   public select(context: OasContext, writer: Writer, _selection: string[]) {
-    // Cut the cycle: emit a comment and DO NOT recurse into the wrapped ref. Delegating to
-    // `this.ref.select(...)` re-expands the very cycle this node exists to break, re-introducing the
-    // recursion into the connector selection (rover then rejects it as CIRCULAR_REFERENCE). Mirrors
-    // CircularRef.select. see docs/FIXED.md #10
+    // Leaves the field out: emits a comment and does not recurse into the wrapped ref. Delegating
+    // to `this.ref.select(...)` would re-expand the very cycle this node exists to break,
+    // reintroducing the recursion into the connector selection (rover rejects it as CIRCULAR_REFERENCE). #10
     writer
       .write(' '.repeat(context.indent + context.stack.length))
       .write(`# ${this.name}: circular reference omitted (re-visit schema and remove the reference)\n`);

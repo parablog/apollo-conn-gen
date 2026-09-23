@@ -23,7 +23,7 @@ components:
         id:
           type: string
         # direct self-cycle: prop name differs from any ancestor prop, so only the
-        # schema-identity cut catches it
+        # schema-identity check leaves it out
         parent:
           $ref: '#/components/schemas/Node'
         # array-items cycle: items $ref back to Node (bubbles up to the whole field)
@@ -32,7 +32,7 @@ components:
           items:
             $ref: '#/components/schemas/Node'
         # shared, non-recursive component referenced twice from sibling fields:
-        # must stay fully expanded under BOTH (no over-cutting)
+        # must stay fully expanded under BOTH, not wrongly left out either place
         meta:
           $ref: '#/components/schemas/Shared'
         extra:

@@ -9,7 +9,7 @@ import { Naming } from '../utils/naming.js';
  * is a *type* rather than a directly-wrapped property (that case uses {@link PropCircRef}).
  *
  * Unlike the legacy {@link CircularRef} (whose `generate` is a no-op, kept that way so v0.3 SDL stays
- * byte-identical), `RefCircRef` renders the cut **commented in BOTH artifacts**: an inert `#` line in the
+ * byte-identical), `RefCircRef` leaves the member out **commented in BOTH artifacts**: an inert `#` line in the
  * GraphQL SDL and a matching `#` line in the connector selection. A commented member is therefore absent
  * from the resolved schema (no `CONNECTORS_UNRESOLVED_FIELD`) yet self-documents where expansion stopped.
  * `visit`/`add`/`expand` are no-ops (inherited), so it terminates traversal. see docs/FIXED.md #10

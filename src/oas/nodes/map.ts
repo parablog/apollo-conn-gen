@@ -90,9 +90,9 @@ export class Map extends Type {
 
     // #132: same NEEDS ATTENTION note the rest of the schema gets when a field gives up on a real
     // type — here it sits above `value:` since a map's value has no field of its own to carry it.
-    const cutValue = this.everyFieldRemovedValue(context);
-    const valueReason = cutValue ? JsonDegradeReasons.everyFieldRemoved(cutValue) : this.valueJsonReason;
-    if (cutValue) {
+    const valueLeftOut = this.everyFieldRemovedValue(context);
+    const valueReason = valueLeftOut ? JsonDegradeReasons.everyFieldRemoved(valueLeftOut) : this.valueJsonReason;
+    if (valueLeftOut) {
       warn(context, '[map]', valueReason!);
     }
     const valueNote = valueReason ? Schemas.withJsonNote(context, {}, valueReason).description : undefined;
@@ -139,8 +139,8 @@ export class Map extends Type {
     return Naming.genTypeName(value.name) + (T.isContainer(value) ? (value as Type).nameSuffix() : '');
   }
 
-  // The Obj whose fields were all cut by a reference cycle, when the map's value (or an array
-  // value's item) names one — undefined otherwise. see docs/FIXED.md #201
+  // Finds the Obj whose fields are all left out, each with the circular reference omitted comment,
+  // when the map's value (or an array value's item) names one; undefined otherwise. see docs/FIXED.md #201
   //   e.g. (only-field-in-a-cycle) contributorsByKey: { additionalProperties: $ref Contributors }
   private everyFieldRemovedValue(context: OasContext): Obj | undefined {
     const value = this.valueType instanceof Arr ? this.valueType.itemsType : this.valueType;
@@ -196,8 +196,8 @@ export class Map extends Type {
     writer.write(' '.repeat(context.indent + context.stack.length)).write('}');
   }
 
-  // a value with fields opens a `value { … }` block; a plain value is read whole. #70
-  //   e.g. (only-field-in-a-cycle) contributorsByKey's cut value: `value`, not `value { … }`  #201
+  // Opens a `value { … }` block when the value has fields; reads a plain value whole. #70
+  //   e.g. (only-field-in-a-cycle) contributorsByKey's value left out: `value`, not `value { … }`  #201
   private needsValueSelection(context: OasContext): boolean {
     if (this.valueType instanceof Obj && T.everyFieldRemoved(this.valueType, context)) {
       return false;

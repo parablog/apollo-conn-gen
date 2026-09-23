@@ -69,11 +69,9 @@ export class Factory {
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
     Nullability.normalize(schemaObj);
 
-    // Cycle cut (see docs/FIXED.md #10): a recursive schema can only close through a component `$ref`,
-    // and `lookupRef` returns the same `SchemaObject` instance for a given ref. So if this resolved ref's
-    // schema is already on the expansion path (an ancestor was built from it), re-entering would recurse
-    // forever / emit a circular connector selection. Stop with a `RefCircRef` sentinel (commented in both
-    // SDL and selection, traversal-terminating) instead of building + lazily expanding the recursion.
+    // Stops a recursive schema at its first re-entry (see docs/FIXED.md #10): `lookupRef` returns
+    // the same `SchemaObject` instance per ref, so a resolved ref already on the expansion path
+    // would recurse forever. Returns a `RefCircRef` sentinel (commented in both SDL and selection).
     const cyclic = ref ? this.cyclicAncestor(parent, schemaObj) : undefined;
     if (cyclic) {
       return this.fromRefCircRef(parent, cyclic, ref!);
@@ -194,8 +192,8 @@ export class Factory {
       // none and writes an empty block (digitalocean's create-record body). see docs/FIXED.md #50
       //   schema: { anyOf: [ { allOf: [ … ] }, { … } ] }
       const members = schema.oneOf || schema.anyOf || [];
-      // re-entering the same member set on this path is the union form of a cycle — without this
-      // cut a mutually-recursive clique expands once per member ordering and never returns. #118
+      // Catches the union form of the same cycle: re-entering the same member set on this path means
+      // a mutually-recursive clique would otherwise expand once per member ordering, never returning. #118
       const cyclicUnion = this.cyclicUnionAncestor(parent, members as SchemaObject[]);
       if (cyclicUnion) {
         return this.fromRefCircRef(parent, cyclicUnion, ref ?? cyclicUnion.name);
@@ -424,9 +422,9 @@ export class Factory {
           array.setItems(itemsType);
           prop = array;
 
-          // Array items resolve eagerly here, so if the item ref re-entered a schema on the path
-          // (fromSchema returned the circular sentinel), bubble the cut up to the whole list field:
-          // render `# children: [Node] — circular reference omitted`. see docs/FIXED.md #10
+          // Leaves the whole list field out when its items hit a cycle: array items resolve eagerly
+          // here, so a circular sentinel from an item ref (fromSchema re-entering a schema on the
+          // path) bubbles up, rendering `# children: [Node] - circular reference omitted`. #10
           if (itemsType instanceof CircularRef) {
             return new PropCircRef(parent, array);
           }
@@ -677,8 +675,8 @@ export class Factory {
       prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
     }
 
-    // Cut only a real loop: a field pointing back to a type we already passed through. Compare the schema,
-    // not the field name — different types reuse field names (e.g. Adobe `extension_attributes`). docs/FIXED.md #36
+    // Leaves out only a real loop: a field pointing back to a type already passed through. Compares
+    // the schema, not the field name; different types reuse field names (e.g. Adobe `extension_attributes`). docs/FIXED.md #36
     const unionMembers = (schemaObj.oneOf ?? schemaObj.anyOf) as SchemaObject[] | undefined;
 
     // A map whose values point back to a type we already passed through is removed like any other loop.
@@ -758,13 +756,9 @@ export class Factory {
     return objectLike ? undefined : resolved;
   }
 
-  /**
-   * The nearest ancestor built from the same resolved component `$ref` (compared by `SchemaObject`
-   * identity — `lookupRef` returns the same instance per ref), or undefined. Scoped to the current
-   * expansion path (`ancestors()`), so a shared non-recursive component used by sibling fields is NOT
-   * cut — only a schema that is its own ancestor. `schema` is undefined for inline (non-`$ref`) nodes,
-   * which can never match an ancestor. see docs/FIXED.md #10
-   */
+  // Finds the nearest ancestor built from the same `$ref` (same `SchemaObject` instance, since
+  // `lookupRef` returns one per ref), or undefined. Only the current expansion path counts, so a
+  // shared component used by sibling fields matches nothing; an inline node has no schema and never matches. see docs/FIXED.md #10
   private static cyclicAncestor(parent: IType, schema?: SchemaObject): IType | undefined {
     if (!schema) return undefined;
     return parent.ancestors().find((a) => a.schema === schema);

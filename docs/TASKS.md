@@ -203,7 +203,7 @@ unhandled: `doubleNull: oneOf: [null, null]` ("two null choices cancel out... le
 `constrained: { type: string, oneOf: [string, null] }` ("`type: string` ANDs with it, so null is
 rejected... left alone"). Confirmed intentional — #57/#60 gave every other nullable-`oneOf` shape
 in the same fixture a real field or a documented `JSON` degrade; these two are the only ones with
-neither, and no comment marks them as cut.
+neither, and no comment marks them as left out.
 
 **Cause:** same family as #182 — a shape #60's nullable-`oneOf` handling recognizes as
 unbuildable is dropped silently rather than JSON-degraded (the way `nullOnly: oneOf: [null]`
@@ -765,7 +765,7 @@ already-built types, so a schema reachable from many branches or many array posi
 once per occurrence instead of once per run.
 
 **Shape:** a run-scoped registry of built types by `$ref`, reused instead of rebuilt, with the
-existing per-branch cycle cut kept. Once rebuilding is cheap, lift #220's `namedMembersAnyOf` guard
+existing per-branch cycle field left out kept. Once rebuilding is cheap, lift #220's `namedMembersAnyOf` guard
 at both call sites (`fromProp` and `fromArrayItems`) and revisit the `items.anyOf`-only restriction
 on the list-item guard at the same time — a named-ref `oneOf` list item would presumably get the
 same typed treatment once the rebuild cost is gone.

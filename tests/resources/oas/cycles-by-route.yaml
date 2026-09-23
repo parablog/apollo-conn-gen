@@ -4,10 +4,10 @@ info:
   version: 1.0.0
 servers:
   - url: https://api.example.com
-# Companion to same-name-fields.yaml (docs/FIXED.md #36): checks that REAL loops are still cut after the
-# fix, reached three ways — `parent` (direct ref), `children` (array), and `wrapper.back` (a ref inside an
-# inline object). `Shared` is reused but is not a loop, so it must stay. Each looping field sits next to a
-# normal field, so cutting the loop still leaves a usable type. See #36.
+# Companion to same-name-fields.yaml (docs/FIXED.md #36): checks that REAL loops are still left out after
+# the fix, reached three ways: `parent` (direct ref), `children` (array), and `wrapper.back` (a ref inside
+# an inline object). `Shared` is reused but is not a loop, so it must stay. Each looping field sits next to
+# a normal field, so leaving the loop out still leaves a usable type. See #36.
 paths:
   /nodes:
     get:
@@ -38,9 +38,9 @@ components:
             label:
               type: string                               # ... non-cyclic field (keeps Wrapper non-empty)
             back:
-              $ref: '#/components/schemas/Node'          # ... deep field re-enters Node -> cut
+              $ref: '#/components/schemas/Node'          # ... deep field re-enters Node -> left out
         meta:
-          $ref: '#/components/schemas/Shared'            # shared, non-recursive -> must NOT be cut
+          $ref: '#/components/schemas/Shared'            # shared, non-recursive -> must NOT be left out
         extra:
           $ref: '#/components/schemas/Shared'
     Shared:

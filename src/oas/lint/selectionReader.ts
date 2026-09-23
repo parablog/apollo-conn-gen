@@ -276,7 +276,7 @@ export class SelectionReader {
     return false;
   }
 
-  // Whitespace, commas, and `#` comments, which the generator writes where it cut a cycle:
+  // Skips whitespace, commas, and `#` comments, which the generator writes where a field is left out:
   //   # children: circular reference omitted (re-visit schema and remove the reference)
   //   extra { label }
   private skipBlanks(): void {

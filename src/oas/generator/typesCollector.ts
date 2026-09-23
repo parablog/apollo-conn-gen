@@ -515,8 +515,8 @@ class PathsCollector {
         // a no-object-member mixed-value property, e.g. (ashby) valueLabel: anyOf [string, array]. #221
         into.add(child.path());
       } else if (child instanceof PropCircRef) {
-        // a cut cycle is a leaf: include its path so the commented field is emitted (in both the
-        // SDL and the selection) instead of silently dropped. see docs/FIXED.md #10
+        // Includes a left-out cycle's path as a leaf, so the commented field is emitted (in both
+        // the SDL and the selection) instead of silently dropped. see docs/FIXED.md #10
         into.add(child.path());
       } else if (child instanceof Scalar && child.parent instanceof Res) {
         // a response that is just a value, no object around it — a write answering `true` (adobe
@@ -547,7 +547,7 @@ class PathsCollector {
         // whether it hangs off a property (#70) or is the whole response (#92).
         //   e.g. (map-input-suffix.yaml) labels: { additionalProperties: { type: string } }  #70
         //   e.g. (github) get:/emojis: { additionalProperties: string }  #92
-        // (whole values only — a cycle-cut value would select bare against a composite SDL type  #76, #182)
+        // (whole values only: a value left out to break a cycle would select with no fields against a composite SDL type  #76, #182)
         const mapUnderProp = child instanceof PropMap ? child.map : undefined;
         const mapAsResponse = child instanceof MapNode && child.parent instanceof Res ? child : undefined;
         // a map nested inside another map's value fits neither case above, so a map of maps of

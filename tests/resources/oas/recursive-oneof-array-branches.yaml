@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   # Reproduces issue #118 as committed: each branch names its array differently, so no
-  # name-based cut ever matches and expansion enumerates every ordering of the 7-clique.
+  # name-based check ever leaves a branch out and expansion enumerates every ordering of the 7-clique.
   title: mutually-recursive oneOf branches behind per-branch-named arrays (hubspot lists shape)
   version: "1.0.0"
 servers:

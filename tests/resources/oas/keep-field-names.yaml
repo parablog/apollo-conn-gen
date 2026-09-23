@@ -81,7 +81,7 @@ components:
         # reads as the literal `null` inside a connector selection — stays camelCased (#82)
         null_sort:
           type: string
-        # a direct self-cycle: cut and commented out, same as with the flag off (#10)
+        # a direct self-cycle: left out and commented, same as with the flag off (#10)
         parent_item:
           $ref: '#/components/schemas/Item'
     Label:

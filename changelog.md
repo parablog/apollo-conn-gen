@@ -306,8 +306,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - An object stamped with `items` beside it is now repaired on the property route too — the
   nested field keeps its items' shape instead of vanishing from type and selection. Issue #114.
 - A mutually-recursive `oneOf` reached through arrays no longer expands forever — hubspot's
-  lists filter tree generates in seconds instead of never returning (a union member-set cycle
-  cut, plus the #10 prefix-set fix applied to four missed selection filters). Issue #118.
+  lists filter tree generates in seconds instead of never returning (a union member-set left out,
+  plus the #10 prefix-set fix applied to four missed selection filters). Issue #118.
 
 - A by-id operation now takes its name from its path tokens — github's `GET /gists/{gist_id}`
   becomes `gistsByGistId` instead of colliding with `GET /gists` — so a whole-spec github
@@ -544,9 +544,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `MetadataQueryIndices.…fields`) no longer reaches the emit loop nameless and crashes generation.
   The `Composed` type is now named at its construction site; the writer fails fast on any nameless
   type that still slips through, and `isRef` is null-safe (B2).
-- Cycle detection now compares the resolved schema, not the field name: a field was wrongly cut as
-  circular when a same-named field sat above it on the path, even for unrelated types (Adobe
-  `extension_attributes`), emptying the type and failing compose. Both legacy name-based cut sites
+- Cycle detection now compares the resolved schema, not the field name: a field was wrongly left out
+  as circular when a same-named field sat above it on the path, even for unrelated types (Adobe
+  `extension_attributes`), emptying the type and failing compose. Both legacy name-based sites
   are now schema-identity (#36).
 - An inline wrapper whose key matches the component it lists (Confluence `subjects.group` listing
   `Group`) no longer emits a second `type Group` that rover reads as circular. The wrapper is
@@ -709,7 +709,7 @@ Details per id in `docs/issues.md`:
 - #23 OAS 3.1 type arrays (`type: [string, 'null']`) collapse to their first non-null entry
 - #24 enum fields were silently dropped from `>**` expansion; non-identifier enum values
   degrade to scalars, `+1`/`-1` fields disambiguate to `plus1`/`minus1`
-- #13 fields cut by cycle detection on one route are emitted from a sibling route's version
+- #13 fields left out by cycle detection on one route are emitted from a sibling route's version
 - #25 discriminator-less `oneOf` no longer emits a `union` its selection cannot satisfy (v0.4)
 - #26 the collector keeps exactly the types the written schema references — orphaned
   definitions dropped, over-deleted ones restored (driven by per-node `dependencies()`)
@@ -742,7 +742,7 @@ Details per id in `docs/issues.md`:
 - #6 leading-digit type names prefixed
 - #7 inline `allOf`-property composed types named from the property key
 - #9/#12 inline type-name collisions (same-shape and vs-component) split/renamed
-- #10 recursive schema cycles cut and commented instead of looping
+- #10 recursive schema cycles left out and commented instead of looping
 - #11 `anyOf`/`oneOf` params coerced to `String`
 - #15 Composed/Union definition vs reference names converge via `genTypeName`
 - #17 boolean param defaults rendered (no dangling `= `)

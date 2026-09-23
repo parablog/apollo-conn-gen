@@ -69,8 +69,8 @@ export class T {
     return empty;
   }
 
-  // A map value the selection reads whole (scalar, enum, or empty object degraded to JSON).
-  // A cycle-cut ref is not one — its SDL type is a composite that would need a sub-selection.
+  // True when the selection reads the map value whole: a scalar, enum, or empty object sent as
+  // JSON. A reference left out to break a cycle is not one: its SDL type is a composite that needs a sub-selection.
   // e.g. (ccs) alternatives: { additionalProperties: $ref Amount } inside Amount itself  #76, #182
   public static isWholeMapValue(value: IType): boolean {
     return T.isLeaf(value) && !T.isCircular(value);
@@ -143,8 +143,8 @@ export class T {
       .map((child) => child);
   }
 
-  // emitted as its own definition in the schema (`type X` / `enum X`), unlike props, wrappers,
-  // scalars and cycle cuts which only appear inside other definitions
+  // True when the node is written as its own definition in the schema (`type X` / `enum X`),
+  // unlike props, wrappers, scalars, and cycle members left out, which only appear inside other definitions
   public static isEmittable(node: IType): boolean {
     return T.isContainer(node) || node.id.startsWith('enum:');
   }

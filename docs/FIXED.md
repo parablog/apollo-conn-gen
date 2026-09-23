@@ -255,7 +255,7 @@ pass. Default v0.3 path was fine.
      (path multiplicity: `User` reached via `createdBy`, `contributors`, `version.by`, …).
    - `selectedProps` re-ran `prop.path()` (rebuild `ancestors()` + join + regex) once per selection
      entry, per prop → O(types × props × 20k). Finite, but hours.
-2. **Recursion never cut.**
+2. **Recursion never left out.**
    - True cycles (`User → personalSpace → Space → … → results: [User]`) were only caught when the
      *property name* coincidentally repeated (`results` under `results`).
    - The existing checks compare node ids (name-derived), and the recursion mints distinct synthesized
@@ -270,8 +270,8 @@ pass. Default v0.3 path was fine.
    - a recursive schema can only close through a component `$ref`, and `lookupRef` returns the *same
      `SchemaObject` instance* per ref → compare `a.schema === resolvedSchema` along `ancestors()`;
    - scoped to the current expansion path (never a global seen-set), so a shared non-recursive
-     component used by sibling fields is *not* cut;
-   - the cut renders **commented in both artifacts** (SDL + selection) — node structure below.
+     component used by sibling fields is *not* left out;
+   - the left-out field renders **commented in both artifacts** (SDL + selection) — node structure below.
 
 ### Circular-reference nodes (AST structure)
 A detected cycle becomes a *node* in the type tree (see the hierarchy in "Node model" above), not a
@@ -280,8 +280,8 @@ the renders flip in one place with zero change to detection. Three node kinds:
 
 | Node | Created by | When | Renders as |
 |---|---|---|---|
-| `CircularRef` (`circularRef.ts`) | `Type.add` (`type.ts`) | legacy id-based cut: a *type* child whose id is already in `ancestors()` (e.g. `$ref` member of a union/allOf re-entering) | SDL: nothing (no-op `generate`); selection: `# Circular reference to '<name>' detected!` |
-| `PropCircRef` (`propCircRef.ts`) | `Factory.fromProp` | a *property* re-enters: legacy prop-id repeat, the new `cyclicAncestor` schema-identity match on a direct `$ref` prop, or an array field whose items were cut (the sentinel bubbles up to the whole field) | SDL: `# <field>: <Type> - circular reference omitted`; selection: `# <field>: circular reference omitted …` |
+| `CircularRef` (`circularRef.ts`) | `Type.add` (`type.ts`) | legacy id-based check: leaves out a *type* child whose id is already in `ancestors()` (e.g. `$ref` member of a union/allOf re-entering) | SDL: nothing (no-op `generate`); selection: `# Circular reference to '<name>' detected!` |
+| `PropCircRef` (`propCircRef.ts`) | `Factory.fromProp` | a *property* re-enters: legacy prop-id repeat, the new `cyclicAncestor` schema-identity match on a direct `$ref` prop, or an array field whose items were left out (the sentinel bubbles up to the whole field) | SDL: `# <field>: <Type> - circular reference omitted`; selection: `# <field>: circular reference omitted …` |
 | `RefCircRef` (`refCircRef.ts`, extends `CircularRef`) | `Factory.fromSchema` (via `fromRefCircRef`) | a `$ref` resolved anywhere *below* a property (array items, union/allOf members, map values) re-enters a schema on the path — returned *instead of* constructing the recursive container | SDL: `# <Member>: circular reference omitted`; selection: same comment. Legacy `CircularRef.generate` stays a no-op so v0.3 output is byte-identical |
 
 All three are traversal-terminating (`visit`/`add`/`expand` are no-ops / yield no children). The collector
@@ -298,14 +298,14 @@ Node:
     children:
       type: array
       items: { $ref: '#/components/schemas/Node' }     # cycle through array items
-    meta:     { $ref: '#/components/schemas/Shared' }  # shared, NOT recursive -> must not be cut
+    meta:     { $ref: '#/components/schemas/Shared' }  # shared, NOT recursive -> must not be left out
     extra:    { $ref: '#/components/schemas/Shared' }
 ```
 
 **AST before → after** — `Node.children: { type: array, items: { $ref: Node } }` (and a direct
 `parent: { $ref: Node }`):
 ```
-before: each re-entry rebuilds Node            after: cut at the FIRST re-entry of a schema
+before: each re-entry rebuilds Node            after: left out at the FIRST re-entry of a schema
 (fresh copies per depth, unbounded)            already on the ancestor path
 Obj(Node)                                      Obj(Node)
 ├─ PropObj(parent)                             ├─ PropCircRef(parent)        ← wraps the PropObj; leaf
@@ -313,7 +313,7 @@ Obj(Node)                                      Obj(Node)
 │     └─ PropObj(parent)…                      │    (its items resolved to a RefCircRef sentinel)
 ├─ PropArray(children)                         ├─ PropObj(meta)
 │  └─ Obj(Node)            ← re-entry          │  └─ Obj(Shared)             ← shared non-recursive ref:
-│     └─ PropArray(children)…                  │       NOT cut (not its own ancestor)
+│     └─ PropArray(children)…                  │       kept, not its own ancestor
 └─ …                                           └─ PropObj(extra) → Obj(Shared)
 ```
 
@@ -325,7 +325,7 @@ nodes: Node @connect(… selection: """
   children { children { children { … } } }
 """)
 
-# ✓ after — cut commented in BOTH artifacts (inert, composes):
+# ✓ after — left out, commented in BOTH artifacts (inert, composes):
 type Node {
   # children: [Node] - circular reference omitted
   extra: Shared
@@ -344,8 +344,8 @@ nodes: Node @connect(… selection: """
 **Refs:** `src/oas/nodes/type.ts` (`selectionPrefixes`/`selectedProps`), `factory.ts`
 (`cyclicAncestor`/`fromRefCircRef`), `propCircRef.ts`, `refCircRef.ts` (new), `iType.ts` (`schema` declared
 on the interface), `typesCollector.ts`. Fixture `recursive-cycle.yaml`, test
-`test_recursive_schema_cut_composes_abstract_pass`. Note: the Confluence abstract pass now terminates in
-seconds and cuts correctly, but still fails compose on a *name* collision — tracked as #12.
+`test_recursive_schema_field_left_out_composes_abstract_pass`. Note: the Confluence abstract pass now
+terminates in seconds and leaves fields out correctly, but still fails compose on a *name* collision — tracked as #12.
 
 ## 11 · `anyOf`/`oneOf` param emits an empty arg type — ✅ Fixed (`985bc97`)
 **Symptom:** `INTERNAL_ERROR` — an arg emitted with no type: `sshKeyIdentifier: !` (DigitalOcean
@@ -376,7 +376,7 @@ sshKeyIdentifier: String!    # ✓ after
 
 ## 12 · Inline object collides with a component's *emitted* name — ✅ Fixed (`cf19247`)
 **Symptom:** Confluence abstract pass: `CIRCULAR_REFERENCE: type User appears more than once in
-…subjects.user` — even after the real recursion is cut (#10).
+…subjects.user` — even after the real recursion is left out (#10).
 
 **OAS** (Confluence — an *inline* pagination wrapper whose property key is `user`):
 ```yaml
@@ -755,8 +755,8 @@ type InlineSharedLinkPermissions2 { canDownload: Boolean }  # ✗ orphan
 remaining 14 compose-fails are different sub-causes — #22 (`/files/{file_id}` INTERNAL_ERROR ×9)
 and `R-options-pairing` (`/metadata_templates` UNRESOLVED ×5) in ROADMAP.
 **Care:** dedup requires BOTH the same name-derived id and deep schema equality — schema equality
-alone produced `type StepsItem` *defined twice* on DO (caught mid-fix). #13 (path-dependent cycle
-cuts diverging same-named instances) is unchanged by this.
+alone produced `type StepsItem` *defined twice* on DO (caught mid-fix). #13 (path-dependent left-out
+fields diverging same-named instances) is unchanged by this.
 **AST:** identity-only — identical twins keep the shared name/id (no rename); different shapes
 rename as before, but convergently. Tree shape unchanged.
 **Refs:** `src/oas/nodes/obj.ts` (`collidesWithStoredType` / `isSameInlineDefinition` /
@@ -923,8 +923,8 @@ type is of a DIFFERENT node class:
 **Measured (box, default):** the duplicate definitions are gone (all 6 ops a static scan finds);
 ok stays 85 — the 9 INTERNAL_ERROR ops have a second, separate bug that the duplicate was hiding,
 and they now fail on that one: `PathCollection.entries: [FolderMini]` is selected down to its
-scalar fields, but `#/c/s/Folder--Mini` itself is never emitted (a #13-family cycle cut, not this
-bug).
+scalar fields, but `#/c/s/Folder--Mini` itself is never emitted (a #13-family field left out, not
+this bug).
 **Care:** do NOT extend the `Composed` rename to same-class clashes unless the schema comparison
 learns to ignore `description` — see the regression above. `Map`/`Union` still skip the check
 (same presumed gap).
@@ -1073,16 +1073,16 @@ fixture `oneof-no-discriminator.yaml`, test `test_R2_union_without_discriminator
 ## 26 · Collector keeps types the output never references, drops ones it does — ✅ Fixed
 **Symptom:** two mirror failures, both passes, ~76 ops corpus-wide:
 - emitted-but-unreferenced: `type Label { id … }` written, but every route to it renders as a
-  cycle-cut comment → v0.4 `CONNECTORS_UNRESOLVED_FIELD` (confluence 9, github 17 abstract);
+  left-out-field comment → v0.4 `CONNECTORS_UNRESOLVED_FIELD` (confluence 9, github 17 abstract);
 - referenced-but-dropped: `entries: [FolderMini]` written, `Folder--Mini` deleted with its
   consolidated parent → `cannot find type` / `INTERNAL_ERROR` (box 11-15, asana 11 per pass).
 
-**OAS** (confluence — the only route to `Label` closes a cycle, so its field is cut):
+**OAS** (confluence — the only route to `Label` closes a cycle, so its field is left out):
 ```yaml
 LabelArray:
   properties:
     results:
-      items: { $ref: '#/components/schemas/Label' }   # cut: re-enters the Label cycle
+      items: { $ref: '#/components/schemas/Label' }   # left out: re-enters the Label cycle
 ```
 
 **Example** (before → after):
@@ -1512,26 +1512,26 @@ is `<kind>:<name>` — the field name only, blind to the type:
 - `src/oas/nodes/factory.ts` (`fromProp`) — where a property is built.
 - `src/oas/nodes/type.ts` (`Type.add`) — where a built node is attached to its parent.
 
-Both now cut only when the matched ancestor is the *same schema instance*. Fixing only `fromProp` is not
-enough: the inner `extension_attributes` is then re-cut by `Type.add` on the same id collision — and a
-`Type.add` cut renders nothing in the SDL, so the field just vanishes (that is what produced the
-`SELECTED_FIELD_NOT_FOUND ... on QuoteDataCartItemInterface` seen mid-fix; it was the false cut moving,
-not a real divergence). With both sites on object identity, `get:/V1/carts/mine` expands fully (32 types)
-and composes. (Schema-less structural nodes — arrays, unions — keep the name behaviour in `Type.add`;
+Both now leave a field out only when the matched ancestor is the *same schema instance*. Fixing only
+`fromProp` is not enough: the inner `extension_attributes` is then left out again by `Type.add` on the same
+id collision, and a `Type.add` omission renders nothing in the SDL, so the field just vanishes (that is
+what produced the `SELECTED_FIELD_NOT_FOUND ... on QuoteDataCartItemInterface` seen mid-fix; it was the
+false omission moving, not a real divergence). With both sites on object identity, `get:/V1/carts/mine`
+expands fully (32 types) and composes. (Schema-less structural nodes — arrays, unions — keep the name behaviour in `Type.add`;
 they cannot be the same-name/different-type case this targets.)
 
 **Aliases:** a YAML anchor reused in two *sibling* places survives loading as one shared `SchemaObject`
 (so identity is the right comparison there too), but a *self*-nested anchor is rejected at load (stack
 overflow in `OASNormalize.convert()`). So no inline self-cycle ever reaches the generator: inline fields
-never falsely cut, and identity still guards the (unreachable-in-practice) self-alias.
+never falsely left out, and identity still guards the (unreachable-in-practice) self-alias.
 
 **Separate — was still open, now fixed as #101:** a type whose *only* field is a *genuine* cycle
 degraded to an empty type (e.g. an inline `{ back: $ref Self }`); the field now reads as JSON.
 
 **Tests:** `tests/resources/oas/same-name-fields.yaml` (false positive, exercises both sites — fails
-before, composes after) and `cycles-by-route.yaml` (a genuine cycle per route, each still cut), both
+before, composes after) and `cycles-by-route.yaml` (a genuine cycle per route, each still left out), both
 wired in `tests/all/oas-core.test.ts`. The CCS `additionalProperties` tests gained one legitimately
-un-cut type (`Ingredient`, 22→23).
+kept-in type (`Ingredient`, 22→23).
 
 **Files:** `src/oas/nodes/factory.ts` (`fromProp`), `src/oas/nodes/type.ts` (`Type.add`); ids are
 name-based (`src/oas/nodes/propObj.ts` etc.). Related: #10, #13.
@@ -1562,7 +1562,7 @@ contain their own component, so they are a different, non-cyclic collision class
 **Why #12's fix stopped firing:** #12 renames an inline collider only when the colliding component is
 *already* stored (`collidesWithStoredType` reads point-in-time occupancy — #12's own stated Limitation).
 Here the component `Group` is reached *only* through the wrapper's own `results`, and arrays expand
-**lazily** — so `Group` is not stored when the wrapper is checked. #36 changed visit/cut order and removed
+**lazily** — so `Group` is not stored when the wrapper is checked. #36 changed visit/leave-out order and removed
 the incidental sibling ordering that used to store such a component early. So the wrapper keeps `group` →
 emits a second `type Group` → rover reads `group.results` as `Group → Group` → circular.
 
@@ -3541,7 +3541,7 @@ tree keeps its `paths`/`context` objects untouched. `reset()` is no longer neede
 
 **Refs:** `src/oas/oasContext.ts` (`reset`), `src/oas/oasGen.ts` (`isolatedRun`, `buildForest`),
 `tools/coverage-spec.mts` (the fresh-instance workaround this replaces), #12/#22 (the renames that
-make stale `context.types` visible), #13 (cycle-cut divergence, same shared-node mutation family).
+make stale `context.types` visible), #13 (left-out-field divergence, same shared-node mutation family).
 Tests `tests/all/regen.test.ts`.
 
 ## 72 · A selection path minted while browsing may not resolve against generation's forest — ✅ Fixed
@@ -3712,17 +3712,17 @@ alternatives: alternatives?->entries {
 Expansion then trims `Amount` to zero fields, and composition rejects the empty type.
 
 **Cause:**
-- Deep in a walk, the map's value node is a `CircularRef` (the cycle cut — `Amount` is already on
-  the path).
+- Deep in a walk, the map's value node is a `CircularRef` (the field is left out: `Amount` is
+  already on the path).
 - Before #70 such a map field produced no selection path at all, so it silently vanished — and
   everything composed.
 - #70's expansion clause used `T.isLeaf` to spot maps of plain values, and `T.isLeaf` counts
-  `CircularRef` as a leaf — so the cycle-cut fields came back, half-formed:
+  `CircularRef` as a leaf — so the left-out fields came back, half-formed:
   - selection: `PropMap.needsValueSelection()` (also `T.isLeaf`) → bare `value`;
   - SDL: `Map.valueTypeName()` keeps the referenced name → `value: Amount`.
 
 **Fix:** the expansion clause asks `T.isWholeMapValue` instead — `T.isLeaf` minus `CircularRef` —
-so a cycle-cut map value drops the field again (the pre-#70 behaviour for exactly this shape).
+so a map value left out by a cycle drops the field again (the pre-#70 behaviour for exactly this shape).
 Maps of plain values (#70's point) still stay. Dropping is deliberate: keeping the field would
 need either `value: JSON` in the SDL (divergent twin definitions of the same entry type within
 one op — the #15 family) or expanding through the cycle (unbounded).
@@ -3730,7 +3730,7 @@ one op — the #15 family) or expanding through the cycle (unbounded).
 **AST:** untouched — the change is which map fields the `>**` expansion selects.
 **Refs:** `src/oas/nodes/typeUtils.ts` (`isWholeMapValue`), `src/oas/generator/typesCollector.ts`
 (the #70 clause). Fixture `map-recursive-value.yaml`, test
-`test_76_cycle_cut_map_value_drops_the_field`. Verified per-op on ccs
+`test_76_cycle_in_map_value_drops_the_field`. Verified per-op on ccs
 `get:/api/v1/vehicles/{vehicleId}/alternatives` (fails at `c282f31`, composes with the fix); the
 sweep re-run (2026-08-12) confirms: ccs 43/43, GET corpus 2300 → 2322 of 2339 (99.3%), the
 `GRAPH_QL_ERROR` bucket 25 → 3. The 3 left (stripe `get:/v1/promotion_codes` ×2,
@@ -4823,7 +4823,7 @@ test `test_94_union_body_with_an_array_member_keeps_its_input_type`. See #57 for
 consolidates before reading the merged fields.
 
 
-## 89 · A field cut on some routes but kept on others is declared and never provided — ✅ Fixed
+## 89 · A field left out on some routes but kept on others is declared and never provided — ✅ Fixed
 **Symptom:** confluence's three relation GETs (`/wiki/rest/api/relation/...`) fail compose, each
 with the same single error:
 `CONNECTORS_UNRESOLVED_FIELD: [test_spec] No connector resolves field `Content.space`.`
@@ -4842,7 +4842,7 @@ User:
 ```
 
 **Example** — the op reaches `Content` at six selection positions; two kept `space`, four lost it
-to the cycle cut. The SDL declared the field because some route kept it (#13's donation):
+to the cycle leaving it out. The SDL declared the field because some route kept it (#13's donation):
 ```graphql
 # before — declared once, provided at two of six positions: rover rejects it
 type Content {
@@ -4885,8 +4885,8 @@ removed-and-kept field surfacing through an allOf would need the same lookup in 
 
 **Refs:** `src/oas/generator/typesCollector.ts` (`consolidateRemovedFields`), `src/oas/oasContext.ts`
 (`propOverrides`), `src/oas/nodes/obj.ts` (generate/select/dependencies). Fixture
-`cycle-cut-on-some-routes.yaml`, test `test_89_field_removed_on_any_route_is_removed_everywhere`.
-Supersedes #13's donation; see #10 for the cycle cut itself and #26 for the reachability walk.
+`cycle-on-some-routes.yaml`, test `test_89_field_removed_on_any_route_is_removed_everywhere`.
+Supersedes #13's donation; see #10 for the field being left out itself and #26 for the reachability walk.
 
 
 ## 96 · A list of lists of plain values under a property has no leaf — ✅ Fixed
@@ -5534,7 +5534,7 @@ OrBranch:
 
 **Cause** — two independent defects, one entry (mirrors #10's pair exactly):
 
-1. **No union-level cycle cut.** The #10 cut (`Factory.cyclicAncestor`) compares one resolved
+1. **No union-level check leaves fields out.** The #10 check (`Factory.cyclicAncestor`) compares one resolved
    `SchemaObject` along `ancestors()` — but mutual recursion through a `oneOf` clique closes
    through the member LIST, which a `Union` carries as raw `$ref`s (`Union.schemas`; it never sets
    `.schema`). So no path ever matched, and the tree enumerated every simple ordering of the
@@ -5542,7 +5542,7 @@ OrBranch:
    to bound it at 56 branch objects (vacuous `schema === schema` on undefined); with per-branch
    array prop names (the common AND/OR filter-group spelling) even that never fires and expansion
    is genuinely factorial.
-2. **Quadratic selection matching, again.** Post-cut, the op still yields a 38,300-entry
+2. **Quadratic selection matching, again.** After that fix, the op still yields a 38,300-entry
    selection, and four sites missed by #10's `selectionPrefixes` fix re-ran
    `selection.find((s) => s.startsWith(prop.path()))` per prop — 55.7M `path()` rebuilds, ~94s of
    a 97.6s run (`Union.selectedMembers`/`consolidate`/`selectedProps`, `Composed.consolidate`).
@@ -5553,13 +5553,13 @@ OrBranch:
 
 **Fix:**
 
-1. Union member-set signature cut (`src/oas/nodes/factory.ts`): `unionRefSignature` (sorted
+1. Leaves out by union member-set signature (`src/oas/nodes/factory.ts`): `unionRefSignature` (sorted
    member-`$ref` set; undefined when any non-null member is inline or <2 refs — keeps stripe's
    `anyOf [string, $ref]` out) + `cyclicUnionAncestor` (first ancestor `Union` with the same
-   signature, path-scoped like #10 — sibling reuse is never cut). Applied at
+   signature, path-scoped like #10 — sibling reuse is never left out). Applied at
    `createContainerType`'s union branch (returns the #10 `RefCircRef` sentinel) and `fromProp`'s
    epilogue (wraps in `PropCircRef`, covering the inline-oneOf `PropComp` constructions). The
-   instance cut stays checked first at both sites.
+   single-instance check still runs first at both sites.
 2. The four missed sites use `selectionPrefixes(selection)` membership instead of the scan
    (`src/oas/nodes/union.ts`, `src/oas/nodes/comp.ts`; re-exported through `internal.ts`).
 
@@ -5568,10 +5568,10 @@ OrBranch:
 18.9s exit 0 (confirmed independently at 19.4s). Whole suite byte-identical (371 pass / 0 fail /
 7 pre-existing todos).
 
-**AST** — shape change only where the new cut fires (deep duplicate branches become the existing
+**AST** — shape change only where the new check fires (deep duplicate branches become the existing
 #10 sentinel nodes); an instrumented sweep of every union-heavy green fixture (TMF632/637/666/717,
 box, github, omni, quickbooks, stripe-curated at 4M nodes, union-shared) found zero chains where
-the new cut fires — existing outputs untouched, `id`/`path()` semantics untouched.
+the new check fires — existing outputs untouched, `id`/`path()` semantics untouched.
 
 **Residuals** deferred to #119 (trace-arg cost, a `.some` path() hoist, dead `T.print` calls, a
 path→node map for the collect walk — none needed for the bound).
@@ -5580,7 +5580,7 @@ path→node map for the collect walk — none needed for the bound).
 `src/oas/nodes/union.ts` / `src/oas/nodes/comp.ts` (prefix sets), `src/oas/nodes/type.ts`
 (`selectionPrefixes`, #10). Fixture `recursive-oneof-array-branches.yaml`; tests
 `test_118_recursive_oneof_clique_terminates` (spawnSync 60s canary),
-`test_118_recursive_oneof_clique_cut_output`, `test_118_prefix_set` (deterministic `path()` call
+`test_118_recursive_oneof_clique_output_with_fields_left_out`, `test_118_prefix_set` (deterministic `path()` call
 counter: 123 fixed vs 578 with the scans, bound 250). See #10 (both halves are its direct
 descendants), #119 (residuals). Found via `graphos-service-factory/scripts/gen-ts.mjs` against
 `service-catalog/hubspot/lists.json`; note that wrapper cannot run the hubspot service end-to-end
@@ -6266,7 +6266,7 @@ pre-2.15 incompatibilities.
 both had this gap — real composition at `2.14.0` failed for real (confluence: 322
 `CONNECTORS_UNRESOLVED_FIELD`, the same #14/#16 mechanism #109 hit; pagerduty: a `nom` parser error
 on `??` default-coalesce syntax, a different specific gap in the same category). A third,
-`test_recursive_schema_cut_composes_abstract_pass`, failed the same way at `2.14.3` on
+`test_recursive_schema_field_left_out_composes_abstract_pass`, failed the same way at `2.14.3` on
 `CONNECTORS_UNRESOLVED_FIELD: No connector resolves field 'Shared.label'` (the #16
 optional-marker-on-nested-object gap via a different fixture). All three fixed the same way:
 `forceRover: true` + bump `composeFederationVersion` to `2.15.1`.
@@ -6793,8 +6793,8 @@ undecided between two candidates (the 134 KB body selection, or the size of the 
 itself, 87 types / 104 references) and stopped at a bisection plan. Before that bisection ran, #89
 landed for an unrelated symptom (`CONNECTORS_UNRESOLVED_FIELD` on confluence's relation GETs) and
 fixed the same underlying divergence from a different angle: cycle detection (#10) works per
-selection *path*, so two instances of the same node could disagree on whether a field survived the
-cut — one route's `Content.space` kept, another's cut. For a tightly-connected clique like
+selection *path*, so two instances of the same node could disagree on whether a field was left out:
+one route's `Content.space` kept, another's left out. For a tightly-connected clique like
 `Content`/`Version`/`Space`/`User`, that divergence multiplied the number of distinct container
 instances the walk had to build. #89 made a field removed on any route removed on every route
 (`context.propOverrides`, keyed by node id), which collapses that divergence and, incidentally,
@@ -6815,11 +6815,11 @@ not read from a cached artifact:
 selection size vs. input-type graph size) were never isolated from each other, because the bug
 stopped reproducing before that work started. #89's fix narrows but does not eliminate the
 underlying risk — `Factory.cyclicAncestor` is still path-scoped by design, so a clique large enough
-to blow up the walk even with consistent cycle-cuts remains possible in principle.
+to blow up the walk even with consistent left-out fields remains possible in principle.
 
 **Refs:** `docs/FIXED.md #89` (the actual fix: `src/oas/generator/typesCollector.ts`
-`consolidateRemovedFields`, `src/oas/oasContext.ts` `propOverrides`), `#10` (the cycle cuts #89 made
-consistent), `#48` (ruled out in the original investigation as this op's trigger). `ROADMAP.md` R15
+`consolidateRemovedFields`, `src/oas/oasContext.ts` `propOverrides`), `#10` (the left-out fields #89
+made consistent), `#48` (ruled out in the original investigation as this op's trigger). `ROADMAP.md` R15
 (Selection externalisation) remains relevant future work for selection/tree size in general,
 independent of this entry closing. `tools/coverage-spec.mts` keeps its 30s compose deadline and
 big-schema serialization as defense in depth, not because this op still needs them.
@@ -7159,9 +7159,9 @@ recovery this interacts with). `#111` (the safety net that surfaced this), `#134
 fixed in the same investigation), `#72` (the drift-rename mechanism this reuses as its repro).
 
 
-## 13 · Path-dependent cycle cuts make same-named instances diverge — ✅ Fixed, superseded by #89
+## 13 · Path-dependent left-out fields make same-named instances diverge — ✅ Fixed, superseded by #89
 
-**Symptom:** with #10's per-route cycle cut in place, Confluence abstract fails compose with
+**Symptom:** with #10's per-route field left-out check in place, Confluence abstract fails compose with
 `SELECTED_FIELD_NOT_FOUND: selection contains field 'history', which does not exist on 'Space'`
 (later, same mechanism, on `homepage` instead).
 
@@ -7169,25 +7169,25 @@ fixed in the same investigation), `#72` (the drift-rename mechanism this reuses 
 ```yaml
 Space:
   properties:
-    homepage: { $ref: '#/components/schemas/Content' }   # cut when Space sits under Content
+    homepage: { $ref: '#/components/schemas/Content' }   # left out when Space sits under Content
     history:
       type: object
       properties:
-        createdBy: { $ref: '#/components/schemas/User' } # cut when Space sits under User
+        createdBy: { $ref: '#/components/schemas/User' } # left out when Space sits under User
 ```
 
-**Cause:** #10's cycle cut runs per expansion path, so two `Space` instances built on different
-routes can disagree on which fields survive; the writer emits only one `type Space`, and an op's
-selection is the union of every route it reaches — a selection built from an un-cut instance can
-name a field the emitted (cut) instance already commented out.
+**Cause:** #10's field-left-out check runs per expansion path, so two `Space` instances built on
+different routes can disagree on which fields survive; the writer emits only one `type Space`, and
+an op's selection is the union of every route it reaches — a selection built from an instance that
+kept the field can name a field the emitted (left-out) instance already commented out.
 
 **First attempt (reverted 2026-06-10):** mutate `props` on the kept instance directly, merging in
-whichever route still had the field. This leaked the field into the *cut* position's own selection
-too — rover then rejected it with `CIRCULAR_REFERENCE`, since that position's selection now asked
-for a field its own SDL comment says was removed.
+whichever route still had the field. This leaked the field into the *left-out* position's own
+selection too — rover then rejected it with `CIRCULAR_REFERENCE`, since that position's selection now
+asked for a field its own SDL comment says was removed.
 
 **Fix that shipped (2026-06-11):** stay selection-guarded and SDL-only instead of touching `props`.
-For each field a node lost to a cycle cut, find a selection path that already carries the real
+For each field a node lost to being left out on a cycle, find a selection path that already carries the real
 field under the same type id and walk it there with the existing `collectPaths`; stash the found
 node in `context.sdlPropOverrides` (`Map<writtenInstance, Map<fieldName, node>>`), read by
 `Obj.generate` only. Every route's own selection keeps its own "field removed" comment — only the
@@ -7208,7 +7208,7 @@ the field, which now just means removing it everywhere instead of donating it ba
 **Verified:** no dedicated fixture of its own — tracked via Confluence corpus pass-rate sweeps
 (`SELECTED_FIELD_NOT_FOUND` 8 → 1 when this landed, net pass-rate held at 69.2% until the R2
 discriminator-less-union wall blocking the unblocked ops was separately fixed, later 93.8%). The
-mechanism itself is exercised by #89's fixture and test instead: `cycle-cut-on-some-routes.yaml`,
+mechanism itself is exercised by #89's fixture and test instead: `cycle-on-some-routes.yaml`,
 `test_89_field_removed_on_any_route_is_removed_everywhere`.
 
 **AST:** no new node shape at either stage — a collect-time SDL prop override here, replaced by
@@ -7216,8 +7216,8 @@ mechanism itself is exercised by #89's fixture and test instead: `cycle-cut-on-s
 
 **Refs:** `src/oas/generator/typesCollector.ts` (`consolidateRemovedFields`, #89's replacement for
 this entry's `findSelectedFieldNode`), `src/oas/oasContext.ts` (`propOverrides`, replacing
-`sdlPropOverrides`). See docs/FIXED.md #89 (the fix that actually landed), #10 (the cycle cut this
-reacts to).
+`sdlPropOverrides`). See docs/FIXED.md #89 (the fix that actually landed), #10 (the field being left
+out that this reacts to).
 
 ## 137 · A Swagger 2.0 `formData` request body is dropped entirely — ✅ Fixed
 
@@ -7319,7 +7319,7 @@ Box:
     emptyBox: { type: object, properties: {} }   # D1: declares no properties of its own
 ContentHistory:
   properties:
-    contributors: { $ref: '#/components/schemas/Contributors' }   # D2: every field cycle-cut away
+    contributors: { $ref: '#/components/schemas/Contributors' }   # D2: every field left out by the cycle
 ```
 
 **Example:**
@@ -7347,7 +7347,7 @@ apart, the same guarantee `#133`'s shared-variable design gave its 4 sites. Reus
 `Schemas.withDegradeNote` from `#133`, no new plumbing there.
 
 **Verified:** fixture `only-field-in-a-cycle.yaml` gained a `/box` op (`Box.emptyBox`, D1's
-empty-properties trigger — the pre-existing `/history` op already covered D2's cycle-cut trigger for
+empty-properties trigger — the pre-existing `/history` op already covered D2's left-out-by-cycle trigger for
 `ContentHistory.contributors`). Tests `test_145_prop_obj_with_no_properties_of_its_own_becomes_json`
 (new) and `test_101_type_with_every_field_removed_becomes_json` (extended with the docstring +
 `warn()` assertions). Both assert the exact `NEEDS ATTENTION: <reason>` text lands immediately above
@@ -7473,7 +7473,7 @@ Same rover, same mechanism, same class of generated doc comment.
 ```yaml
 ContentHistory:
   properties:
-    contributors: { $ref: '#/components/schemas/Contributors' }   # every field cycle-cut away
+    contributors: { $ref: '#/components/schemas/Contributors' }   # every field left out by the cycle
 ```
 
 **Example** — before, and after:
@@ -7930,7 +7930,7 @@ expanded leaves at all.
 **Verified:** fixture `recursive-oneof-array-branches.yaml`,
 test `test_153_whole_op_wildcard_selection_stays_compact` — `gen.selections` goes from 15 expanded
 field paths to the 1 original wildcard; the generated schema's content (merged union type, per-
-branch cut comments, kept tag field) is asserted unchanged from before the fix; feeding the
+branch left-out comments, kept tag field) is asserted unchanged from before the fix; feeding the
 compacted `gen.selections` back into a second `generateSchema` call regenerates an identical
 schema. Shared-type regression, fixture `paths-ref-shared-create-and-update.yaml`, test
 `test_153_shared_type_wildcard_selection_stays_labeled_by_its_own_op` — both operations' wildcards
@@ -9666,7 +9666,7 @@ generator itself reads — and walks it against the selection's fields, recursin
 blocks:
 - `RESPONSE_NOT_READ` (error): a top-level selection reads none of the spec's declared keys.
 - `RESPONSE_FIELD_NOT_READ` (warning): one individual declared key is missing, at any depth.
-- **Excused, not reported:** a field cut to break a reference cycle — read from the
+- **Excused, not reported:** a field left out to break a reference cycle — read from the
   `# key: circular reference omitted (...)` comment the generator already writes for it — and a
   bare `$` passthrough (a plain scalar, an enum list, or a whole-response JSON degrade), which
   reads the whole response as one value by design, not by loss.
@@ -9683,7 +9683,7 @@ entry is the check itself, not the gaps it found.
 
 **Tests:** six tests in `tests/all/r11-lint.test.ts` — the stub-response error, a clean petstore
 sweep, a dropped top-level field, a dropped nested field, cycle-comment scoping (a sibling field
-must not be excused by another field's cut comment), and 18 fixture/op combinations of
+must not be excused by another field's left-out comment), and 18 fixture/op combinations of
 documented degrades that must stay silent. Revert-check: stubbing `ResponseCoverageCheck.run` to
 return `[]` fails the four negative tests on their own assertions; restored, all six pass. Full
 suite: 520 tests, 516 pass, 4 pre-existing todo, 0 fail. `npm run lint` clean.
@@ -9769,7 +9769,7 @@ type emitted).
 **Tests:** `wildcard-keeps-every-property.yaml`, one fixture covering three of the four shapes
 plus a scalar sibling and a control map (#70), asserted by `test_182_wildcard_keeps_every_property`
 (`tests/all/oas-core.test.ts`). The map-loop shape is covered by flipping
-`test_76_cycle_cut_map_value_drops_the_field` (`map-recursive-value.yaml`) from "the field
+`test_76_cycle_in_map_value_drops_the_field` (`map-recursive-value.yaml`) from "the field
 vanishes" to "the field is commented, not gone". Both new fixtures also added to
 `test_176_documented_degrades_are_accounted_for` (`tests/all/r11-lint.test.ts`) — confirms #176
 now excuses all four instead of flagging them. Landed red-first, one shape at a time (Codex
@@ -10268,7 +10268,7 @@ off.
 `docs/FIXED.md #88`, `docs/FIXED.md #116`.
 
 
-## 201 · A list or map of a type whose every field was cut still names the uncut type — ✅ Fixed
+## 201 · A list or map of a type whose every field is left out still names that same type — ✅ Fixed
 **Symptom:** docusign's `put:/v2.1/accounts/{accountId}/templates/{templateId}/documents/{documentId}`
 fails compose with `cannot find type`: the SDL references `DocGenFormFieldRowValue` and
 `DocGenFormFieldRowValueInput` but never declares either.
@@ -10280,7 +10280,7 @@ docGenFormField:
     rowValues: { type: array, items: { $ref: '#/definitions/docGenFormFieldRowValue' } }
 docGenFormFieldRowValue:
   properties:
-    docGenFormFieldList: { type: array, items: { $ref: '#/definitions/docGenFormField' } }  # re-enters the parent -> cut
+    docGenFormFieldList: { type: array, items: { $ref: '#/definitions/docGenFormField' } }  # re-enters the parent -> left out
 ```
 
 **Example**:
@@ -10925,7 +10925,7 @@ The remaining nine unknown-shape occurrences are five `value`, two `submittedVal
 Both add `ValueUnion`, `ValueUnionObject`, `CustomFieldValueUnion`, and `CustomFieldValueUnionObject`; neither removes a type.
 
 **Verification:** `npm run lint` and `npx tsc --noEmit` pass.
-The mapping file passes 65 tests, including both choice keywords, the matching container cycle cut, and the named-members guard at both the property and list-item position.
+The mapping file passes 65 tests, including both choice keywords, the matching container field left out by a cycle, and the named-members guard at both the property and list-item position.
 The runtime file passes all 64 cases through `test-connectors`, with no skips.
 The corpus files pass 19 and 12 tests respectively.
 The whole `oas-core.test.ts` file now completes and passes, 236 tests, 57.3s wall time — before the named-members guard landed, a Stripe curated-selection run was stopped by hand after two and a half minutes of continuous CPU work with no result, and the whole file could not be run at all.

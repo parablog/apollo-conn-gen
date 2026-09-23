@@ -510,15 +510,15 @@ measurement (no rover) shows why: `get:/v2.1/accounts/{accountId}/templates` alo
 28.7MB SDL file — 157 unique types, but a `selection: """ … """` block over 1,000,000 lines. 22 of
 DocuSign's 167 GET ops produce ≥200KB schemas (`BIG_SCHEMA_BYTES`).
 
-**First hypothesis, ruled out: a missed cycle.** The cycle cutter (`Factory.cyclicAncestor`,
+**First hypothesis, ruled out: a missed cycle.** The cycle check (`Factory.cyclicAncestor`,
 `src/oas/nodes/factory.ts:554`, `docs/FIXED.md #10`) compares schema-object identity only along the
-current straight-line ancestor path, so it deliberately does not cut a shared, non-recursive
+current straight-line ancestor path, so it deliberately does not leave out a shared, non-recursive
 component reached via sibling branches. Traced the deepest occurrence of the repeated `rights?`/
 `options?` leaf (the `settingsMetadata` wrapper DocuSign attaches to almost every field): max
 nesting depth 20, no field/type name repeats along that path (`envelopeTemplates → powerForm →
 envelopes → folders → folderItems → recipients → inPersonSigners → notaryHost → tabs →
 prefillTabs → radioGroupTabs → radios → extensionData → connectedFieldsData → propertyName`). No
-self-referential loop — the cutter is working correctly here.
+self-referential loop — the check is working correctly here.
 
 **Actual cause: genuine combinatorial breadth in DocuSign's real schema.** Within `templates`'
 selection, `recipients?` opens 12 times (DocuSign's ~10-12 recipient-role sub-objects — signers,
@@ -547,7 +547,7 @@ No capping was attempted here.
 (example: `get:/v2.1/accounts/{accountId}/bulk_send_lists/{bulkSendListId}`) — a different bug,
 found in the same sweep, not investigated yet.
 
-**Refs:** `src/oas/nodes/factory.ts` (`cyclicAncestor`), `docs/FIXED.md #10` (the cycle-cut design +
+**Refs:** `src/oas/nodes/factory.ts` (`cyclicAncestor`), `docs/FIXED.md #10` (the left-out-cycle design +
 Confluence's matching path-multiplicity precedent), `docs/DEFERRED.md #139` (selectable granularity
 mode — the likely real fix), `tools/coverage-spec.mts` (`BIG_SCHEMA_BYTES`, `COV_COMPOSE_TIMEOUT`),
 `COVERAGE.md` (docusign.json row).

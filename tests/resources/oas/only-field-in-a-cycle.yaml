@@ -49,7 +49,7 @@ components:
           $ref: '#/components/schemas/Contributors'
         createdDate:
           type: string
-        # a list (or map) of a type whose every field was cut still named the uncut type -> a
+        # a list (or map) of a type whose every field is left out still named that same type -> a
         # dangling SDL reference, composition failed with "cannot find type"  #201
         contributorGroups:
           type: array

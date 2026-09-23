@@ -11,7 +11,7 @@ import './_setup.js';
 const PATHS_SIZE = 3;
 
 // GET /items — owner_id/created_at/item_id are safe to keep; content-type/__meta/null_sort are
-// not; parent_item is a self-reference that gets cut and commented out (docs/FIXED.md #10).
+// not; parent_item is a self-reference that gets left out and commented (docs/FIXED.md #10).
 const ITEMS_LIST_PATHS = [
   'get:/items>res:r>array:#/c/s/Item>obj:type:#/c/s/Item>prop:scalar:__meta',
   'get:/items>res:r>array:#/c/s/Item>obj:type:#/c/s/Item>prop:scalar:content-type',

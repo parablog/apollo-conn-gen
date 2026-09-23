@@ -21,7 +21,7 @@ import _ from 'lodash';
  * the spec's own response document (not the generated GraphQL type — that would just agree with
  * itself) and complains when the spec offered fields the selection never asked for.
  *
- * Not one of the CHECKS in index.ts: it needs the raw SDL text to read the cycle-cut comments
+ * Not one of the CHECKS in index.ts: it needs the raw SDL text to read the circular-reference comments
  * (`# label: circular reference omitted (...)`), and it is only meaningful when the selection was
  * written to take everything under an operation, which is true of the corpus sweep in
  * tools/lint-corpus.mts but not of a hand-written selection in the schema editor.
@@ -111,16 +111,15 @@ export class ResponseCoverageCheck {
     }
 
     const ownText = ResponseCoverageCheck.blank(sdl, span, fields);
-    // A field the generator cut to break a reference cycle leaves a comment behind instead of a
-    // field, e.g. (recursive-cycle.yaml) `Node.parent` pointing back to `Node` itself:
+    // Excuses a field the generator left out to break a reference cycle: its comment stands in for
+    // the field, so the key is accounted for, not lost. e.g. (recursive-cycle.yaml) `Node.parent` -> `Node`:
     //   # parent: circular reference omitted (re-visit schema and remove the reference)
-    // That key is accounted for, not lost, so it is excused rather than reported.
     const excused = new Set<string>();
     for (const match of ownText.matchAll(/# ([A-Za-z_][A-Za-z0-9_]*): circular reference omitted \(/g)) {
       excused.add(match[1]);
     }
-    // Two other comments mean the generator gave up on this whole level, not just one field of it
-    // (a type with every field cut, or a raw `$ref` cycle) — nothing at this level can be judged.
+    // Treats two other comments as the generator giving up on this whole level, not one field of it
+    // (a type with every field left out, or a raw `$ref` cycle): nothing here can be judged.
     if (
       /# [A-Za-z_][A-Za-z0-9_]*: circular reference omitted(?!\s\()/.test(ownText) ||
       ownText.includes("# Circular reference to '")

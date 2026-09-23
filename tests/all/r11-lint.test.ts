@@ -387,7 +387,7 @@ type Query { pet: Pet @connect(selection: "id friend: friend->Animal") }`;
 // it. Found by the corpus sweep's "fields read" count, not by anything failing.
 
 test('test_R11_a_comment_is_skipped', () => {
-  // what the generator writes where it cut a cycle, e.g. (recursive-cycle.yaml)
+  // what the generator writes where a field is left out to break a cycle, e.g. (recursive-cycle.yaml)
   const sdl = connectSchema('# children: circular reference omitted (re-visit schema)\nid\nname->nope');
   const found = lintSelections(sdl);
   assert.equal(found.length, 1, 'the field after the comment must still be checked');
@@ -448,7 +448,7 @@ test('test_R11_escaped_quoted_keys_resolve_to_their_json_key', async () => {
 // --- #176: every spec-declared response field is read or accounted for --------------------
 // Unlike PATH_NOT_IN_RESPONSE above (selection -> spec: "is this a real key?"), this check goes
 // the other way, spec -> selection: "did the selection ask for everything the spec offered?" It
-// needs the raw SDL text (to read cycle-cut comments), so it is not one of the CHECKS lintSelections
+// needs the raw SDL text (to read the circular-reference comments), so it is not one of the CHECKS lintSelections
 // runs on every keystroke -- it is called directly, the way tools/lint-corpus.mts calls it.
 
 test('test_176_a_stubbed_response_is_an_error', async () => {
@@ -509,10 +509,9 @@ test('test_176_a_dropped_nested_field_is_reported', async () => {
 });
 
 test('test_176_a_cycle_comment_excuses_only_its_own_key', async () => {
-  // (recursive-cycle.yaml) Node has two cycle cuts (parent, children) and two identical, non-cyclic
-  // fields (meta, extra) that both point at Shared { label }. The generated selection carries a
-  // cut comment for parent and for children; dropping a field from meta or extra must still be
-  // reported -- their sibling's comment must not excuse them too.
+  // Carries a circular-reference comment for parent and for children (recursive-cycle.yaml Node has
+  // two fields left out, plus two identical non-cyclic fields meta/extra that both point at Shared
+  // { label }); dropping a field from meta or extra must still be reported, not excused by that comment.
   const gen = await OasGen.fromFile(`${oasBasePath}/recursive-cycle.yaml`, {
     skipValidation: false,
     showParentInSelections: false,
@@ -557,7 +556,7 @@ test('test_176_documented_degrades_are_accounted_for', async () => {
   // raw JSON, a shapeless object, a lone 201, a composed oneOf/allOf response (unjudged, silently),
   // and twin field renames with and without --keep-field-names. None of them is a real loss.
   const cases: [string, string, Record<string, unknown>?][] = [
-    ['cycle-cut-on-some-routes.yaml', 'get:/graph'],
+    ['cycle-on-some-routes.yaml', 'get:/graph'],
     ['map-key-aliasing.yaml', 'get:/coupons'],
     ['map-response-root.yaml', 'get:/restrictions'],
     ['map-response-root.yaml', 'get:/pages'],

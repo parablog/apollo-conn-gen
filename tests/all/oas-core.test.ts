@@ -948,7 +948,7 @@ test('test_no_duplicate_type_definitions_launch_library', async () => {
   const typeNames = [...sdl.matchAll(/^type (\w+)/gm)].map((m) => m[1]);
   const duplicates = [...new Set(typeNames.filter((n, i, a) => a.indexOf(n) !== i))];
   assert.deepStrictEqual(duplicates, [], `every named type must be emitted once; duplicated: ${duplicates.join(', ')}`);
-  // the surviving node must be complete (guard against keeping a cycle-cut twin)
+  // Guards against keeping the wrong twin: the surviving node must be the complete one, not one left out
   assert.match(sdl, /type AgencyMini \{[^}]*type: AgencyType!/s);
 });
 
@@ -1389,14 +1389,13 @@ test('test_same_key_wrapper_co_emits_safely_across_input_output', async () => {
   assert.strictEqual(new Set(defs).size, defs.length, 'no duplicate type/input definitions: ' + defs.join(', '));
 });
 
-test('test_recursive_schema_cut_composes_abstract_pass', async () => {
-  // A recursive schema (Node.parent -> Node, Node.children -> [Node]) must terminate on the
-  // non-consolidating v0.4 path and compose: the re-entering field is cut at the first repeat of a
-  // schema already on the expansion path and emitted as a comment in BOTH the SDL and the selection.
-  // A shared non-recursive component (Shared, referenced twice from sibling fields) must NOT be cut.
-  // see docs/FIXED.md #10. runOasTest composes via rover.
-  // forceRover + 2.15.1: extra?/meta? both open a nested-object block ("extra? { label? }") —
-  // the #16 optional-marker gap below composition 2.15, same as #73/#108/#109/#110. Without
+test('test_recursive_schema_field_left_out_composes_abstract_pass', async () => {
+  // Terminates a recursive schema (Node.parent -> Node, Node.children -> [Node]) on the
+  // non-consolidating v0.4 path and composes: the re-entering field is left out at the first repeat
+  // of a schema already on the expansion path, commented in BOTH the SDL and the selection. A shared
+  // non-recursive component (Shared, referenced twice from sibling fields) must stay in. see docs/FIXED.md #10
+  // forceRover + 2.15.1: extra?/meta? both open a nested-object block ("extra? { label? }"), the
+  // #16 optional-marker gap below composition 2.15, same as #73/#108/#109/#110. Without
   // forceRover this silently composed via the local patched binary instead. See #128.
   const schema = await runOasTest(
     'recursive-cycle.yaml',
@@ -1407,20 +1406,20 @@ test('test_recursive_schema_cut_composes_abstract_pass', async () => {
       composeFederationVersion: '2.15.1',
       forceRover: true });
   assert.ok(schema !== undefined);
-  assert.ok(schema!.includes('# children: [Node] - circular reference omitted'), 'array-items cycle cut in SDL');
-  assert.ok(schema!.includes('# parent: Node - circular reference omitted'), 'direct self-cycle cut in SDL');
-  assert.ok(/# children: circular reference omitted/.test(schema!), 'array cut commented in selection');
-  assert.ok(/# parent: circular reference omitted/.test(schema!), 'self-cycle cut commented in selection');
-  // shared non-recursive type expands fully under BOTH referencing fields (no over-cutting)
+  assert.ok(schema!.includes('# children: [Node] - circular reference omitted'), 'array-items field left out in SDL');
+  assert.ok(schema!.includes('# parent: Node - circular reference omitted'), 'direct self-cycle field left out in SDL');
+  assert.ok(/# children: circular reference omitted/.test(schema!), 'array field left out commented in selection');
+  assert.ok(/# parent: circular reference omitted/.test(schema!), 'self-cycle field left out commented in selection');
+  // Expands a shared non-recursive type fully under BOTH referencing fields, kept in both, not left out
   assert.ok(/\bmeta: Shared\b/.test(schema!) && /\bextra: Shared\b/.test(schema!), 'both Shared refs kept');
   assert.ok((schema!.match(/label/g) || []).length >= 3, 'Shared.label selected under both fields');
 });
 
 test('test_118_recursive_oneof_clique_terminates', () => {
-  // #118: 7 mutually-recursive oneOf members reached through per-branch-named arrays. The
-  // instance cut (#10) never fires (recursion closes through the member LIST, not one schema),
-  // so expansion enumerates every ordering of the clique and effectively never returns. A sync
-  // busy loop ignores node:test timeouts, so run it in a child process spawnSync can SIGTERM.
+  // Reaches 7 mutually-recursive oneOf members through per-branch-named arrays (#118): the usual
+  // left-out-instance check (#10) never fires, since recursion closes through the member LIST, not
+  // one schema, so expansion enumerates every ordering and never returns. A sync busy loop ignores
+  // node:test timeouts, so this runs in a child process spawnSync can SIGTERM.
   const script = `
     import { OasGen } from './src/index.js';
     const gen = await OasGen.fromFile('tests/resources/oas/recursive-oneof-array-branches.yaml',
@@ -1437,10 +1436,10 @@ test('test_118_recursive_oneof_clique_terminates', () => {
   assert.ok(count > 0 && count < 5_000, `expanded selection stays bounded, got ${count}`);
 });
 
-test('test_118_recursive_oneof_clique_cut_output', async () => {
-  // #118, output side: the no-discriminator union degrades to one merged object, and every
-  // branch's re-entry of the same 7-way member set is cut — commented in BOTH SDL and selection,
-  // like #10's instance cuts.
+test('test_118_recursive_oneof_clique_output_with_fields_left_out', async () => {
+  // #118, output side: the no-discriminator union merges into one object, and every branch's
+  // re-entry of the same 7-way member set is left out, commented in BOTH SDL and selection,
+  // like #10's left-out instances.
   // 2, not 3: the shared tag field is a real enum with a different single value per branch
   // (OrBranch's is "or", AndBranch's is "and", …) — dedupeByName sends it to JSON.
   // 3, not 2: the seven branches' single-value enums merge into one enum holding all seven values
@@ -1451,11 +1450,11 @@ test('test_118_recursive_oneof_clique_cut_output', async () => {
   for (const branch of ['or', 'and', 'notAll', 'notAny', 'restricted', 'unifiedEvents', 'association']) {
     assert.ok(
       schema!.includes(`# ${branch}Branches: [filterBranchUnion] - circular reference omitted`),
-      `${branch}Branches cut in SDL`,
+      `${branch}Branches left out in SDL`,
     );
     assert.ok(
       schema!.includes(`# ${branch}Branches: circular reference omitted`),
-      `${branch}Branches cut commented in selection`,
+      `${branch}Branches left out commented in selection`,
     );
   }
   assert.ok(/\bfilterBranchType: FilterBranchUnionFilterBranchType\b/.test(schema!), 'the tag field is typed again');
@@ -1507,16 +1506,16 @@ test('test_153_whole_op_wildcard_selection_stays_compact', async () => {
 
   assert.deepStrictEqual(gen.selections, ['get:/lists/{id}>**'], 'wildcard handed back as typed, not expanded');
 
-  // same output-equivalence checks as test_118_recursive_oneof_clique_cut_output: the schema text
-  // is unaffected by this change, only the returned selection list is smaller.
+  // Runs the same output-equivalence checks as test_118_recursive_oneof_clique_output_with_fields_left_out:
+  // the schema text is unaffected by this change, only the returned selection list is smaller.
   assert.ok(schema.includes('type FilterBranchUnion'), 'merged union object still emitted');
   for (const branch of ['or', 'and', 'notAll', 'notAny', 'restricted', 'unifiedEvents', 'association']) {
     assert.ok(
       schema.includes(`# ${branch}Branches: [filterBranchUnion] - circular reference omitted`),
-      `${branch}Branches still cut in SDL`,
+      `${branch}Branches still left out in SDL`,
     );
   }
-  // Same merged enum as test_118_recursive_oneof_clique_cut_output.
+  // Same merged enum as test_118_recursive_oneof_clique_output_with_fields_left_out.
   assert.ok(/\bfilterBranchType: FilterBranchUnionFilterBranchType\b/.test(schema), 'tag field still typed on the merge');
 
   // round trip: what --load-selections does with a saved file. Feeding the compacted list straight
@@ -1978,26 +1977,26 @@ test('test_99_dangling_ref_response_degrades_to_json', async (t) => {
   );
 });
 
-test('test_same_name_fields_not_cut_as_circular', async () => {
+test('test_same_name_fields_not_left_out_as_circular', async () => {
   // docs/FIXED.md #36: two `extension` fields of DIFFERENT types on one path must NOT be treated as a
-  // cycle. Before the object-identity fix the inner `extension` was cut by name (emptying Inner, failing
-  // composition); now it is kept. Exercises BOTH fromProp and Type.add. Composes via rover.
+  // cycle. Before the object-identity fix the inner `extension` was left out by name (emptying Inner,
+  // failing composition); now it is kept. Exercises BOTH fromProp and Type.add. Composes via rover.
   const schema = await runOasTest('same-name-fields.yaml', ['get:/thing>**'], 1, 4, { skipValidation: true });
   assert.ok(schema !== undefined);
-  assert.ok(/\bextension: InnerExtension\b/.test(schema!), 'inner same-named field kept (not cut)');
+  assert.ok(/\bextension: InnerExtension\b/.test(schema!), 'inner same-named field kept (not left out)');
   assert.ok(/^type InnerExtension /m.test(schema!), 'InnerExtension emitted');
   assert.ok(/^type Inner /m.test(schema!), 'Inner emitted, not empty');
 });
 
-test('test_genuine_cycles_cut_by_route', async () => {
-  // docs/FIXED.md #36 companion: a genuine Node self-cycle reached via each route must STILL be cut by
-  // object identity, while the shared non-recursive Shared stays expanded under both referencing fields.
-  // Composes via rover (default v0.4 / fed 2.14).
+test('test_genuine_cycles_left_out_by_route', async () => {
+  // docs/FIXED.md #36 companion: a genuine Node self-cycle reached via each route must STILL be left
+  // out by object identity, while the shared non-recursive Shared stays expanded under both
+  // referencing fields. Composes via rover (default v0.4 / fed 2.14).
   const schema = await runOasTest('cycles-by-route.yaml', ['get:/nodes>**'], 1, 3, { skipValidation: true });
   assert.ok(schema !== undefined);
-  assert.ok(/# parent: Node - circular reference omitted/.test(schema!), 'direct $ref cycle cut');
-  assert.ok(/# children: \[Node\] - circular reference omitted/.test(schema!), 'array-items cycle cut');
-  assert.ok(/# back: Node - circular reference omitted/.test(schema!), 'inline deep $ref cycle cut');
+  assert.ok(/# parent: Node - circular reference omitted/.test(schema!), 'direct $ref cycle left out');
+  assert.ok(/# children: \[Node\] - circular reference omitted/.test(schema!), 'array-items cycle left out');
+  assert.ok(/# back: Node - circular reference omitted/.test(schema!), 'inline deep $ref cycle left out');
   assert.ok(/\bwrapper: Wrapper\b/.test(schema!) && /\blabel: String\b/.test(schema!), 'Wrapper kept non-empty');
   assert.ok(
     /\bmeta: Shared\b/.test(schema!) && /\bextra: Shared\b/.test(schema!),
@@ -2010,7 +2009,7 @@ test('test_89_field_removed_on_any_route_is_removed_everywhere', async () => {
   // (#13's donation) while the removed routes' selections provided nothing — rover wants a declared
   // field provided at every position the type appears (confluence's relation GETs, `Content.space`).
   // A field removed on any route is now removed on every route and in the SDL, a comment in its place.
-  const schema = await runOasTest('cycle-cut-on-some-routes.yaml', ['get:/graph>**'], 1, 9);
+  const schema = await runOasTest('cycle-on-some-routes.yaml', ['get:/graph>**'], 1, 9);
   assert.ok(schema !== undefined);
   // family A: the written Content kept `space`; removed here because homepage's Content lost it
   assert.ok(/# space: Space - circular reference omitted/.test(schema!), 'space commented in the SDL');
@@ -2064,9 +2063,9 @@ test('test_101_type_with_every_field_removed_becomes_json', async (t) => {
 });
 
 test('test_201_list_and_map_of_type_with_every_field_removed_become_json', async (t) => {
-  // #201: a list item or map value of a type whose every field was cut still named the uncut
-  // type, a dangling SDL reference — docusign's rowValues: [DocGenFormFieldRowValue], never
-  // declared. PropArray and Map now ask the same everyFieldRemoved question PropObj (#101) does.
+  // Names a list item or map value type even when every field is left out (#201): a dangling SDL
+  // reference, docusign's rowValues: [DocGenFormFieldRowValue], never declared. PropArray and Map
+  // now ask the same everyFieldRemoved question PropObj (#101) does.
   const errSpy = t.mock.method(console, 'error');
   const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/history>**', 'post:/history>**'], 3, 3);
   assert.ok(schema !== undefined);
@@ -2185,7 +2184,7 @@ test('test_207_matching_selections_no_warning', async (t) => {
 test('test_145_prop_obj_with_no_properties_of_its_own_becomes_json', async (t) => {
   // #145: an object property that declares `properties: {}` (unlike a shapeless `{}` value, which
   // takes a different, Scalar-only path — see factory.ts's isShapelessObject) has nothing to write
-  // either, and gets the same JSON-and-note treatment as #101's cycle-cut case above.
+  // either, and gets the same JSON-and-note treatment as #101's left-out-field case above.
   const errSpy = t.mock.method(console, 'error');
   const schema = await runOasTest('only-field-in-a-cycle.yaml', ['get:/box>**'], 3, 2);
   assert.ok(schema !== undefined);
@@ -2820,7 +2819,7 @@ test('test_70_scalar_valued_maps_stay', async () => {
   assert.ok(/value: Manifest\n/.test(schema!), 'a map of objects keeps the object as its value');
 });
 
-test('test_76_cycle_cut_map_value_drops_the_field', async () => {
+test('test_76_cycle_in_map_value_drops_the_field', async () => {
   // #76: a map value pointing back to a type above it (ccs: Amount.alternatives -> Amount) wrote
   // `value` with no fields under it, and composing failed. The field is dropped instead; maps of
   // plain values (#70) stay.
