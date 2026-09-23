@@ -94,15 +94,24 @@ export class T {
     return type instanceof Get;
   }
 
-  // Visits each node once, with an optional callback after its children are complete.
-  // e.g. two fields sharing an expanded Address visit that Address once.
-  public static traverse(node: IType, callback: (node: IType) => void, after?: (node: IType) => void): void {
+  // Visits each node once and passes the callback the ancestors the walk went through, walk root
+  // first, so a caller can build a leaf's path from the walk instead of the node's parents.
+  //   e.g. (cycles-by-route.yaml) the wrapper's label field under get:/nodes has five ancestors:
+  //   the op, its response, Node, the wrapper field and the wrapper object, in that order
+  public static traverse(
+    node: IType,
+    callback: (node: IType, ancestors: IType[]) => void,
+    after?: (node: IType) => void,
+  ): void {
     const visited = new Set<IType>();
+    const ancestors: IType[] = [];
     const traverseNode = (current: IType): void => {
       if (visited.has(current)) return;
       visited.add(current);
-      callback(current);
+      callback(current, ancestors);
+      ancestors.push(current);
       for (const child of current.children) traverseNode(child);
+      ancestors.pop();
       after?.(current);
     };
     traverseNode(node);

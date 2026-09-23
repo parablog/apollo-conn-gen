@@ -11943,3 +11943,44 @@ beside the plain-`$ref` #10 case); the former known-gap pin in
 
 **Refs:** `docs/FIXED.md` #10, #182. `src/oas/nodes/factory.ts` (`findSingleAllOfMember`,
 `findAllOfSchema`, `fromProp`); closes `docs/TASKS.md #238`.
+
+## 242 [BUG] [P3] · Step 1 of 3: the leaf walk builds each selection path from the walk itself · ✅ Step done
+
+**Example** (confluence.json, `post:/wiki/rest/api/user/{userId}/property/{key}`, its body's free-form `value`):
+```
+walk from the body side:  ancestors [body:b, obj:input:#/c/s/UserPropertyCreate], leaf prop:obj:value
+path above the side:      post:/wiki/rest/api/user/{userId}/property/{key}
+selection path:           post:/wiki/rest/api/user/{userId}/property/{key}>body:b>obj:input:#/c/s/UserPropertyCreate>prop:obj:value
+```
+Same string as before; it is now joined from what the walk passed through instead of read back from the node.
+
+**What changed:**
+- `T.traverse` hands its callback the ancestors it walked through, walk root first.
+- `collectLeafPaths` takes the path above its root and builds every leaf path from that path plus the ancestors.
+- The empty-side check (#32, #51) starts from the path above the side, so each id appears once.
+- `Type.path()` stays for the web tree ids, `OasGen.find`, saved-name recovery (#135) and `selectedProps`.
+
+**Why:** the next step shares one built type between many fields, and a shared type has no single
+parent to read a path from. The walk knows where it is; the node will not.
+
+**Output:** unchanged. Checked before and after on 23 specs and fixtures:
+- whole-spec SDL byte for byte;
+- every `expanded()` array element by element, in order, for four selection sets: each op's
+  `op>**`, every op side and every object field under it (`op>side>**`, `op>side>type>field>**`),
+  the empty-side check, and three saved mixed-value paths (#208);
+- specs: hubspot lists, stripe, github, adobe, ashby, jira-platform, bitbucket, confluence,
+  confluence-v2, jira-software, box, profound, asana, and the fixtures recursive-cycle,
+  cycles-by-route, cycle-on-some-routes, same-name-fields, recursive-oneof-array-branches,
+  only-field-in-a-cycle, keep-field-names, nested-oneof-branch-loss, mixed-value-list-items,
+  mixed-value-map-values;
+- 2,195,227 expanded paths compared; all equal. The empty-side check added 73 leaves (confluence 12,
+  box 12, profound 8, stripe 38, github 1, adobe 2); the mixed-value recovery ran on its three fixtures.
+
+**Timing** (same comparison driver, two rounds, before → after):
+| spec | wall time | peak RSS |
+|---|---|---|
+| hubspot lists | 70.9 → 67.7 s, 71.3 → 70.3 s | 2.20 → 2.14 GB, 2.64 → 2.13 GB |
+| stripe | 153.7 → 148.2 s, 159.7 → 154.0 s | 0.81 → 0.81 GB, 0.86 → 0.81 GB |
+
+**Refs:** `docs/TASKS.md` #242 (steps 2 and 3 open). `src/oas/nodes/typeUtils.ts` (`traverse`),
+`src/oas/generator/typesCollector.ts` (`collectLeafPaths`, `pathFromWalk`).

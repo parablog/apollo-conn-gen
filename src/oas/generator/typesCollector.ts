@@ -102,7 +102,7 @@ export class TypesCollector {
             const op = this.gen.paths.get(path.split(Naming.PATH_SEPARATOR)[0]) as IType & Op;
             const memberLeaves = new Set<string>();
             shape.objectMemberIndexes.forEach((i) =>
-              pathsCollector.collectLeafPaths(union.children[i], memberLeaves, op),
+              pathsCollector.collectLeafPaths(union.children[i], union.path(), memberLeaves, op),
             );
             memberLeaves.forEach((p) => {
               if (!expanded.includes(p)) expanded.push(p);
@@ -472,9 +472,10 @@ class PathsCollector {
     return stack;
   }
 
-  // Every leaf path under `root`, expanding along the way — the same walk `>**` already uses.
-  //   e.g. (confluence) a union's object member, reused by TypesCollector.collect below.
-  public collectLeafPaths(root: IType, into: Set<string>, op: IType & Op): void {
+  // Collects every leaf path under `root`, expanding along the way. `prefix` is the path above
+  // `root`, so each leaf's path is built from the ancestors the walk went through, not its parents.
+  //   e.g. (cycles-by-route.yaml) root get:/nodes, prefix "" -> get:/nodes>res:r>obj:type:#/c/s/Node>prop:scalar:id
+  public collectLeafPaths(root: IType, prefix: string, into: Set<string>, op: IType & Op): void {
     const context = this.gen.getContext();
     const envelope = envelopeContext(context, op);
     // True for a union with no object member that still types as { text, list, raw } -- the
@@ -484,7 +485,7 @@ class PathsCollector {
       const shape = union.analyzeMixedValue(context, true);
       return shape != null && shape.objectMemberIndexes.length === 0;
     };
-    T.traverse(root, (child) => {
+    T.traverse(root, (child, ancestors) => {
       // A field the overrides file reads through isSuccess or errors, or anything inside it, is not selected;
       // the @connect already handles it. see docs/FIXED.md #232
       //   e.g. (ashby) application.list: errors and ErrorDetail.message are skipped, nextCursor is selected.
@@ -506,34 +507,34 @@ class PathsCollector {
       const listOfPlainOrList =
         child instanceof PropArray && child.items instanceof Union && isPlainOrListUnion(child.items);
       if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues || listOfPlainOrList) {
-        into.add(child.path());
+        into.add(this.pathFromWalk(prefix, ancestors, child));
       } else if (child instanceof PropEn) {
         // enum props are leaves too — without this, `>**` silently drops every enum field
         // (slack's `ok`-only stubs collapsed to zero types). see docs/FIXED.md #24
-        into.add(child.path());
+        into.add(this.pathFromWalk(prefix, ancestors, child));
       } else if (child instanceof PropComp && child.comp instanceof Union && isPlainOrListUnion(child.comp)) {
         // a no-object-member mixed-value property, e.g. (ashby) valueLabel: anyOf [string, array]. #221
-        into.add(child.path());
+        into.add(this.pathFromWalk(prefix, ancestors, child));
       } else if (child instanceof PropCircRef) {
         // Includes a left-out cycle's path as a leaf, so the commented field is emitted (in both
         // the SDL and the selection) instead of silently dropped. see docs/FIXED.md #10
-        into.add(child.path());
+        into.add(this.pathFromWalk(prefix, ancestors, child));
       } else if (child instanceof Scalar && child.parent instanceof Res) {
         // a response that is just a value, no object around it — a write answering `true` (adobe
         // commerce), or a token string (petstore `/user/login`):
         //   responses: { '200': { schema: { type: boolean } } }
         // Nothing to pick apart, so the value itself is the leaf. see docs/FIXED.md #32
-        into.add(child.path());
+        into.add(this.pathFromWalk(prefix, ancestors, child));
       } else if (child instanceof En && child.parent instanceof Res) {
         // a response that is just an enum value, no object around it — same shape as #32's bare
         // scalar, just enum-typed. see docs/FIXED.md #120
-        into.add(child.path());
+        into.add(this.pathFromWalk(prefix, ancestors, child));
       } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
         // the case above with a list around it — a response that is just an array of values,
         // no object around it (spotify's "check saved" endpoints answer `[true, false]`):
         //   responses: { '200': { schema: { type: array, items: { type: boolean } } } }
         // Nothing to pick apart, so the array itself is the leaf. see docs/FIXED.md #47
-        into.add(child.path());
+        into.add(this.pathFromWalk(prefix, ancestors, child));
       } else {
         // the value type is only known once the node is expanded, so the map check comes after
         this.gen.expand(child);
@@ -541,7 +542,7 @@ class PathsCollector {
         // e.g. (stripe) payment_method_amazon_pay: { type: object } -> amazonPay: JSON
         // Response side only, the check below still owns the body side. see docs/FIXED.md #182
         if (child instanceof PropObj && _.isEmpty(child.obj.props) && child.kind !== 'input') {
-          into.add(child.path());
+          into.add(this.pathFromWalk(prefix, ancestors, child));
         }
         // A map of plain values has nothing below it to select — the map itself is the leaf,
         // whether it hangs off a property (#70) or is the whole response (#92).
@@ -561,7 +562,7 @@ class PathsCollector {
           (T.isWholeMapValue(map.valueType) ||
             (map.valueType instanceof Union && isPlainOrListUnion(map.valueType)))
         ) {
-          into.add(child.path());
+          into.add(this.pathFromWalk(prefix, ancestors, child));
         }
       }
     });
@@ -572,18 +573,33 @@ class PathsCollector {
     // Per side, not per op: a write whose body is selectable can still answer with an empty
     // object, and checking the op as a whole never fires for it. see docs/FIXED.md #32, #51
     const sides = T.isOp(root) ? root.children : [root];
+    // Starts from the path above the side: a walk from the side lists the side and what lies
+    // below it among the ancestors, never the op, so the op's own path goes in front.
+    //   e.g. (confluence.json) post:/wiki/rest/api/user/{userId}/property/{key} in front of
+    //   body:b>obj:input:#/c/s/UserPropertyCreate>prop:obj:value
+    const aboveSide = T.isOp(root) ? this.pathFromWalk(prefix, [], root) : prefix;
     for (const side of sides) {
-      if (Array.from(into).some((p) => p.startsWith(side.path()))) {
+      const sidePath = this.pathFromWalk(aboveSide, [], side);
+      if (Array.from(into).some((p) => p.startsWith(sidePath))) {
         continue;
       }
       // scoped to an otherwise-empty side on purpose: doing it everywhere diverged the
       // selections of types shared across connectors. see docs/FIXED.md #32
-      T.traverse(side, (child) => {
+      T.traverse(side, (child, ancestors) => {
         if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
-          into.add(child.path());
+          into.add(this.pathFromWalk(aboveSide, ancestors, child));
         }
       });
     }
+  }
+
+  // Returns the selection path of `node`: the path above the walk root, then the ids of the
+  // ancestors the walk went through, then the node's own id, joined the way Type.path() joins them.
+  //   e.g. (cycles-by-route.yaml) prefix "", ancestors get:/nodes, res:r and Node, node prop:scalar:id
+  //   -> get:/nodes>res:r>obj:type:#/c/s/Node>prop:scalar:id
+  private pathFromWalk(prefix: string, ancestors: IType[], node: IType): string {
+    const ids = [prefix, ...ancestors.map((ancestor) => ancestor.id), node.id].filter(Boolean);
+    return Naming.abbreviateRef(ids.join(Naming.PATH_SEPARATOR));
   }
 
   public collectExpandedPaths(selection: string[]) {
@@ -601,7 +617,7 @@ class PathsCollector {
 
     nodes.forEach((stack) => {
       const root = _.last(stack)!;
-      this.collectLeafPaths(root, newSelection, stack[0] as IType & Op);
+      this.collectLeafPaths(root, root.parent?.path() ?? '', newSelection, stack[0] as IType & Op);
     });
 
     // a saved selection or an explicit CLI path can still name an envelope field directly; drop it

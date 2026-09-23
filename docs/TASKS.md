@@ -955,6 +955,18 @@ generator stops with a named, bounded failure instead of an OOM.
 `collector.expanded` path list #180 measured on docusign or the response-side nodes #203 targets.
 Not yet measured: the per-op cost of the 41 Business-reaching GETs.
 
+**2026-09-23, measured and split into three steps:**
+- Cause: every `$ref` occurrence builds its own copy of the referenced type, and the leaf walk keeps
+  one path string per position; both grow with the number of positions, not the number of types.
+- The heaviest op, `post:/act_{ad_account_id}/ads`, builds 3.0 million nodes and 1.29 million paths
+  to write 268 types and 500 KB of SDL.
+- The whole-spec run also dies at a 16 GB heap, after 739 s, between op 80 and op 90 of 129.
+- docusign's GET side dies at the 4 GB default heap too, after 66 s; it finishes only at 16 GB (9.2 GB RSS).
+- Step 1: the leaf walk builds each path from the ancestors it walked through, not from the node's
+  parents. Output unchanged. Done in the working tree, see `docs/FIXED.md` #242.
+- Step 2: one built type per schema and kind, with loop fields found once over the shared types.
+- Step 3: `>**` selections collected without expanding into one string per leaf.
+
 **AST:** no change yet.
 
 **Refs:** #180, #203, `docs/DEFERRED.md` #178 and #139 (granularity mode), `TEST_CORPUS.md`
