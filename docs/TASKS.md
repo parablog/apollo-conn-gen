@@ -893,47 +893,4 @@ input unions. So the field gets built, then never selected, and vanishes with no
 
 **Refs:** `docs/FIXED.md` #221, #216.
 
-## 238 [BUG] [P3] · A one-member allOf wrapping a $ref back to its own type vanishes with no omission comment — ⬜ Open
-
-**Symptom:** `templateEvent` on jira-platform's `NotificationEvent` — a one-member `allOf` around a
-`$ref` back to `NotificationEvent` itself — vanishes from both the type and the selection. Unlike a
-plain `$ref` back to the same ancestor, which gets a "circular reference omitted" comment, this one
-gets nothing: `ResponseCoverageCheck` reports it as a real, unexplained field drop.
-
-**OAS** (jira-platform, trimmed):
-```yaml
-NotificationEvent:
-  type: object
-  properties:
-    name: { type: string }
-    templateEvent:
-      allOf: [{ $ref: '#/components/schemas/NotificationEvent' }]
-```
-
-**Repro:** `node ./dist/cli/oas <fixture> --skip-selection -n` prints a selection with only
-`name?` — `templateEvent` is gone.
-
-**Cause:** `Factory.fromProp` keeps the wrapper because `findAllOfSchema` (`factory.ts`, around
-line 744) resolves the `$ref` inside and finds an object-shaped target, so it declines to unwrap it
-and the field takes the generic `PropComp` + `Composed` path (`factory.ts`, around lines 654-655).
-The cycle check that would otherwise catch this (`factory.ts`, around line 691) looks at the wrapper
-schema, not the `$ref` inside it, so it never fires. `Composed.visitAllOfNode` then calls
-`Factory.fromSchema` (`comp.ts:232`, `factory.ts:79`) for the member, which does catch the cycle and
-returns the circular-reference marker — but only for that one member, not the field itself.
-`PathsCollector.collectLeafPaths` (`typesCollector.ts:517`) only treats `PropCircRef` as a leaf, so
-the wrapping `PropComp` is filtered out with nothing said about why (`type.ts`).
-
-A plain `$ref` straight back to the ancestor is caught by the same cycle check and gets the usual
-"circular reference omitted" comment; this allOf-wrapped form of the identical cycle gets none.
-
-**Shape:** the cycle check reached from `Factory.fromProp` should look through a one-member allOf
-to the `$ref` inside, the same way `cyclicUnionAncestor` already looks through union members, so the
-field lands as `PropCircRef` with the usual omission comment instead of silently vanishing.
-
-**Refs:** `docs/FIXED.md` #10 (the plain-`$ref` cycle cut this shape falls outside of).
-`src/oas/nodes/factory.ts` (`fromProp`, `findAllOfSchema`, `cyclicAncestor`, `cyclicUnionAncestor`),
-`src/oas/nodes/comp.ts` (`visitAllOfNode`), `src/oas/generator/typesCollector.ts`
-(`collectLeafPaths`). Pinned by fixture `allof-wrapping-recursive-ref.yaml` and test
-`test_gap_238_allof_wrapping_recursive_ref_vanishes` (`tests/all/lint-known-gaps.test.ts`).
-
 

@@ -536,6 +536,21 @@ test('test_176_a_cycle_comment_excuses_only_its_own_key', async () => {
   assert.equal(droppedExtraLabel.slice(foundExtra[0].from, foundExtra[0].to), 'extra', 'not meta, whose comment sits at the top level');
 });
 
+test('test_238_allof_wrapping_recursive_ref_gets_the_cycle_comment', async () => {
+  // Leaves a wrapped reference back to the owner out with the circular-reference comment, #238:
+  // (allof-wrapping-recursive-ref.yaml) NotificationEvent.templateEvent: allOf [ $ref NotificationEvent ]
+  // gets the same comment a plain $ref back to the owner gets (docs/FIXED.md #10), not a silent drop.
+  const gen = await OasGen.fromFile(`${oasBasePath}/allof-wrapping-recursive-ref.yaml`, {
+    skipValidation: true,
+    showParentInSelections: false,
+  });
+  await gen.visit();
+  const sdl = gen.generateSchema(['get:/event>**']);
+  assert.deepEqual(ResponseCoverageCheck.run(sdl, SchemaReader.read(sdl), gen), [], 'the generated selection is clean');
+  assert.ok(sdl.includes('# templateEvent: NotificationEvent - circular reference omitted'), 'circular-reference comment present in the SDL');
+  assert.ok(/# templateEvent: circular reference omitted/.test(sdl), 'circular-reference comment present in the selection');
+});
+
 test('test_176_documented_degrades_are_accounted_for', async () => {
   // Every one of these is a field move this check was told, on purpose, not to have a rule for:
   // map entries, a whole-response map root, an unknown scalar type, an undescribed body read as

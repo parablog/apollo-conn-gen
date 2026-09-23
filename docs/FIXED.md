@@ -11909,3 +11909,37 @@ mapping through `test-connectors` end to end).
 
 **Refs:** `docs/FIXED.md` #67, #84, #133. `src/oas/nodes/body.ts` (`visitBody`), `src/oas/nodes/post.ts`
 (`bodyJsonReason`, `generate`); closes `docs/TASKS.md #241`.
+
+## 238 [BUG] [P3] · A one-member allOf wrapping a $ref back to its own type vanished with no omission comment — ✅ Fixed
+
+**OAS** (jira-platform) `NotificationEvent`:
+```yaml
+NotificationEvent:
+  type: object
+  properties:
+    name: { type: string }
+    templateEvent:
+      allOf: [{ $ref: '#/components/schemas/NotificationEvent' }]
+```
+
+**Before:** `templateEvent` vanished from both the SDL and the selection with nothing said;
+`ResponseCoverageCheck` reported it as an unexplained field drop (`RESPONSE_FIELD_NOT_READ`).
+
+**After:** `# templateEvent: NotificationEvent - circular reference omitted`, same as a plain `$ref`
+back to the owning type gets (docs/FIXED.md #10).
+
+**Cause:** the field-level cycle check in `Factory.fromProp` compares the *wrapper* schema
+(`{ allOf: [ $ref ] }`) against the ancestor chain, never the `$ref` inside it, so it never matched.
+
+**Fix:** `Factory.findAllOfSchema` split into a private `findSingleAllOfMember` (the "exactly one
+non-empty allOf member, resolved" lookup) plus its own object-shape exclusion. `fromProp`'s cycle
+check gained a fourth source: the resolved single allOf member, checked with the same
+`cyclicAncestor` the plain-`$ref` case uses.
+
+**Tests:** `tests/resources/oas/allof-wrapping-recursive-ref.yaml`,
+`tests/all/r11-lint.test.ts` (`test_238_allof_wrapping_recursive_ref_gets_the_cycle_comment`,
+beside the plain-`$ref` #10 case); the former known-gap pin in
+`tests/all/lint-known-gaps.test.ts` removed.
+
+**Refs:** `docs/FIXED.md` #10, #182. `src/oas/nodes/factory.ts` (`findSingleAllOfMember`,
+`findAllOfSchema`, `fromProp`); closes `docs/TASKS.md #238`.

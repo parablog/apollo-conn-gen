@@ -687,11 +687,17 @@ export class Factory {
     const mapValueRef =
       prop instanceof PropMap ? (schemaObj.additionalProperties as ReferenceObject | undefined)?.$ref : undefined;
 
+    // Look through a one-member allOf to the $ref inside. A wrapped reference back to a type already
+    // being built is left out with the "circular reference omitted" comment, the same as a plain $ref.
+    // e.g. (jira-platform) NotificationEvent.templateEvent: allOf [ $ref NotificationEvent ]
+    const allOfMember = schemaObj.allOf ? this.findSingleAllOfMember(context, schemaObj) : undefined;
+
     // the union-set form of the same loop: PropComp builds its Union without createContainerType. #118
     const cyclic =
       this.cyclicAncestor(parent, schemaObj) ??
       (unionMembers ? this.cyclicUnionAncestor(parent, unionMembers) : undefined) ??
-      (mapValueRef ? this.cyclicAncestor(parent, context.resolvePointer(mapValueRef) as SchemaObject) : undefined);
+      (mapValueRef ? this.cyclicAncestor(parent, context.resolvePointer(mapValueRef) as SchemaObject) : undefined) ??
+      (allOfMember ? this.cyclicAncestor(parent, allOfMember) : undefined);
     if (cyclic) {
       prop = new PropCircRef(parent, prop);
     }
@@ -717,9 +723,9 @@ export class Factory {
     return new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
   }
 
-  // Discards all the empty schemas from an allOf and finds the real target schema. Resolves the ref if needed.
-  // e.g. (allof-array-body.yaml) tags: { allOf: [ $ref -> array of string, { description: … } ] }  #67
-  private static findAllOfSchema(context: OasContext, schema: SchemaObject): SchemaObject | undefined {
+  // Finds the allOf's single non-empty member, resolved. e.g. (jira-platform)
+  // NotificationEvent.templateEvent: allOf [ $ref NotificationEvent ] -> resolves to NotificationEvent.
+  private static findSingleAllOfMember(context: OasContext, schema: SchemaObject): SchemaObject | undefined {
     if (!schema.allOf) {
       return undefined;
     }
@@ -732,9 +738,16 @@ export class Factory {
     const target = targets[0] as SchemaObject | ReferenceObject;
     const resolved =
       '$ref' in target
-        ? (context.resolvePointer(target.$ref as string) as SchemaObject | null)
+        ? (context.resolvePointer(target.$ref as string) as SchemaObject | undefined)
         : (target as SchemaObject);
 
+    return resolved;
+  }
+
+  // Discards all the empty schemas from an allOf and finds the real target schema. Resolves the ref if needed.
+  // e.g. (allof-array-body.yaml) tags: { allOf: [ $ref -> array of string, { description: … } ] }  #67
+  private static findAllOfSchema(context: OasContext, schema: SchemaObject): SchemaObject | undefined {
+    const resolved = this.findSingleAllOfMember(context, schema);
     if (!resolved) {
       return undefined;
     }

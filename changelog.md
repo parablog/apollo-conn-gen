@@ -29,6 +29,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   $ref UpdateFieldAssociationsRequestItem } }` types `input: JSON!` with `body: "$args.input"`,
   instead of an `UpdateAssociationsInput { key value }` type whose selection read non-existent
   fields. Issue #241.
+- A one-member `allOf` wrapping a `$ref` back to the field's own owning type gets the
+  circular-reference comment instead of vanishing. E.g. (jira-platform)
+  `NotificationEvent.templateEvent: allOf [ $ref NotificationEvent ]` types
+  `# templateEvent: NotificationEvent - circular reference omitted`, instead of dropping the field
+  with no comment and no explanation. Issue #238.
 
 ## [0.31.0]
 
