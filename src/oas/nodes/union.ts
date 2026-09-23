@@ -18,7 +18,6 @@ import {
   Scalar,
   T,
   Type,
-  selectionPrefixes,
 } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace, warn } from '../log/trace.js';
@@ -28,6 +27,7 @@ import { GqlUtils } from '../utils/gql.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas, MixedValueShape } from '../utils/schemas.js';
 import { JsonDegradeReasons } from '../utils/jsonReasons.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Union extends Type {
   public schemas: SchemaObject[];
@@ -148,7 +148,7 @@ export class Union extends Type {
     return this.forcedFlat || this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     context.enter(this);
     const schemas = this.schemas.map((s) => s.type);
     const keep = context.generateOptions?.keepFieldNames === true;
@@ -224,7 +224,7 @@ export class Union extends Type {
   private generateMergedObject(
     context: OasContext,
     writer: Writer,
-    selection: string[],
+    selection: ExpandedSelection,
     name: string,
     headline: string,
   ): void {
@@ -256,7 +256,7 @@ export class Union extends Type {
     writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
   }
 
-  private dedupedSelectedProps(context: OasContext, selection: string[], keep: boolean, path: string): Prop[] {
+  private dedupedSelectedProps(context: OasContext, selection: ExpandedSelection, keep: boolean, path: string): Prop[] {
     return Union.dedupeByName(this.selectedProps(selection, keep, path), context, keep, this);
   }
 
@@ -461,21 +461,20 @@ export class Union extends Type {
 
   // the members that carry at least one selected field — what the `union X = …` line lists and
   // what `->match` branches over. Composed members fold their allOf parts in first. see #34
-  private selectedMembers(selection: string[], path: string): IType[] {
+  private selectedMembers(selection: ExpandedSelection, path: string): IType[] {
     const pathsToMembers = this.findPathsToMembers();
     return this.children.filter((child) => {
       if (child instanceof Composed && child.schema.allOf != null && !child.consolidated) {
         child.consolidate(selection);
       }
-      // prefix-set membership, not a scan per prop — 55M path() rebuilds on hubspot lists. #10 #118
-      const prefixes = selectionPrefixes(selection);
-      return Array.from(child.props.values()).some((p) => prefixes.has(this.propPath(p, path, pathsToMembers)));
+      // Checks each prop once with isSelected; a scan per prop rebuilt path() 55M times on hubspot lists. #10 #118
+      return Array.from(child.props.values()).some((p) => selection.isSelected(p, this.propPath(p, path, pathsToMembers)));
     });
   }
 
   // a real `union X = Book | Movie` needs its members (and a member's shared $ref base, which
   // the writer may promote to an interface — R2); a merged one needs its flat fields instead
-  dependencies(context: OasContext, selection: string[], path: string): IType[] {
+  dependencies(context: OasContext, selection: ExpandedSelection, path: string): IType[] {
     if (this.isFlat()) {
       // consolidate first, like generateMergedObject does: merging picks which member's copy of a
       // shared field is kept, so reading the fields before the merge can name a different type than
@@ -506,7 +505,7 @@ export class Union extends Type {
     return pathToMember ? Naming.pathUnder(path, ...pathToMember) : super.childPath(context, child, path);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string): void {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void {
     trace(context, '-> [union::select]', `-> in: ${this.name}`);
     const keep = context.generateOptions?.keepFieldNames === true;
 
@@ -564,7 +563,7 @@ export class Union extends Type {
    * `__typename` is a string literal (required by the composer); per-member fields come from
    * each member's own `select`, scoped by the current selection.
    */
-  private selectAbstract(context: OasContext, writer: Writer, selection: string[], path: string): void {
+  private selectAbstract(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void {
     const base = context.indent;
     const pad = (n: number) => ' '.repeat(Math.max(n, 0));
 
@@ -630,7 +629,7 @@ export class Union extends Type {
   // Merging inlines the members' fields, so each loses one reference of its own — but a member can
   // carry the union's own name, and zeroing that skips the type the body still asks for. #94
   //   e.g. (confluence) ContentRestrictionAddOrUpdateArray: oneOf [ {object}, {array of $ref} ]
-  private consolidateMembers(context: OasContext, selection: string[]): void {
+  private consolidateMembers(context: OasContext, selection: ExpandedSelection): void {
     if (this.consolidated) {
       return;
     }
@@ -642,7 +641,7 @@ export class Union extends Type {
     }
   }
 
-  public consolidate(context: OasContext, selection: string[], keep: boolean): Set<IType> {
+  public consolidate(context: OasContext, selection: ExpandedSelection, keep: boolean): Set<IType> {
     T.composables(this).forEach((child) => {
       (child as Composed).consolidate(selection);
     });
@@ -657,7 +656,6 @@ export class Union extends Type {
       this.mixedValue.dependencies().forEach((prop) => this.props.set(prop.name, prop));
     } else {
       const props: Prop[] = [];
-      const prefixes = selectionPrefixes(selection);
       const discriminator = this.discriminator;
 
       const path = this.path();
@@ -671,7 +669,7 @@ export class Union extends Type {
         }
 
         Array.from(child.props.values())
-          .filter((prop) => prefixes.has(this.propPath(prop, path, pathsToMembers)))
+          .filter((prop) => selection.isSelected(prop, this.propPath(prop, path, pathsToMembers)))
           .forEach((prop) => props.push(prop));
       });
 
@@ -740,7 +738,7 @@ export class Union extends Type {
   // False when merging finds no fields at all — such a union is written as JSON, not as an empty type.
   // Merged fields sit on this.props; the op line asks with no selection at hand, so read them first.
   // e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no fields  #80
-  public hasSelectedProps(context: OasContext, selection: string[], keep: boolean, path: string): boolean {
+  public hasSelectedProps(context: OasContext, selection: ExpandedSelection, keep: boolean, path: string): boolean {
     if (this.consolidated) {
       return this.props.size > 0;
     }
@@ -751,7 +749,7 @@ export class Union extends Type {
   // The op's own docstring (get.ts/post.ts) reads this before this union writes anything. #132
   //   e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no
   //   fields to merge, so the operation answers JSON instead of an empty type
-  public emptyMergeReason(context: OasContext, selection: string[], keep: boolean): string | undefined {
+  public emptyMergeReason(context: OasContext, selection: ExpandedSelection, keep: boolean): string | undefined {
     return this.isFlat() && !this.hasSelectedProps(context, selection, keep, this.path())
       ? JsonDegradeReasons.emptyMerge()
       : undefined;
@@ -762,9 +760,8 @@ export class Union extends Type {
     return this.mixedValue?.selectionSuffix();
   }
 
-  public selectedProps(selection: string[], keep: boolean, path: string) {
+  public selectedProps(selection: ExpandedSelection, keep: boolean, path: string) {
     const collected: Prop[] = [];
-    const prefixes = selectionPrefixes(selection);
     const pathsToMembers = this.findPathsToMembers();
 
     this.children.forEach((child) => {
@@ -775,7 +772,7 @@ export class Union extends Type {
         return;
       }
       Array.from(child.props.values())
-        .filter((prop) => prefixes.has(this.propPath(prop, path, pathsToMembers)))
+        .filter((prop) => selection.isSelected(prop, this.propPath(prop, path, pathsToMembers)))
         .forEach((prop) => collected.push(prop));
     });
 

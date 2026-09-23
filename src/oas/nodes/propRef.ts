@@ -5,6 +5,7 @@ import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 /**
  * @deprecated No longer used
@@ -84,7 +85,7 @@ export class PropRef extends Prop {
     return `[prop] ${this.name}: ${Naming.getRefName(this.ref)} (Ref)`;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [prop-ref:select]', 'in ' + this.name + ', ref: ' + this.ref);
     const fieldName = this.name;
     const sanitised = Naming.sanitiseFieldForSelect(

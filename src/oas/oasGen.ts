@@ -236,7 +236,7 @@ export class OasGen {
   public expanded(paths: string[]): string[] {
     return this.isolatedRun(() => {
       this.collector.collect(paths);
-      return this.collector.expanded;
+      return this.collector.expanded.entries;
     });
   }
 

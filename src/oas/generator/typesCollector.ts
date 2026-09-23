@@ -26,11 +26,12 @@ import { trace, warn } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { SelectionPath } from '../utils/selectionPath.js';
+import { ExpandedSelection, LeafTarget } from '../utils/expandedSelection.js';
 import { EnvelopeContext, envelopeContext, findPayload, isEnvelopeNode } from '../utils/payload.js';
 
 export class TypesCollector {
   types: Map<string, IType> = new Map();
-  expanded: string[] = [];
+  expanded: ExpandedSelection = new ExpandedSelection([]);
 
   constructor(private gen: OasGen) {}
 
@@ -38,9 +39,21 @@ export class TypesCollector {
     const context = this.gen.getContext();
     const pendingTypes: Map<string, IType> = new Map();
     const pathsCollector = new PathsCollector(this.gen);
-    let expanded: string[] = pathsCollector.collectExpandedPaths(selection);
+    const expanded = pathsCollector.collectExpandedPaths(selection);
 
-    for (const path of expanded) {
+    // Expands each leaf the `>**` walks found, in walk order, then queues its types, as the string
+    // loop below did for one path per leaf; that loop now reads only the explicit entries.
+    //   e.g. (nested-choice-plain-and-list.yaml) the leaf `flat` is expanded here, building its union
+    for (const leaf of expanded.leaves) {
+      this.gen.expand(leaf);
+      this.enqueueOwnerAndContainerAncestors(pendingTypes, leaf);
+    }
+
+    for (const path of expanded.entries) {
+      // Skips a `>**` root: its leaves went through the loop above.
+      if (path.endsWith('>**')) {
+        continue;
+      }
       let collection = Array.from(this.gen.paths.values());
       let current: IType | undefined;
       let last: IType | undefined;
@@ -53,7 +66,7 @@ export class TypesCollector {
         if (part === '*') {
           hitWildcard = true;
           // remove the current path from the expanded array
-          expanded = expanded.filter((s) => s !== path);
+          expanded.entries = expanded.entries.filter((s) => s !== path);
 
           if (current && current instanceof Composed) {
             current!.consolidate(expanded);
@@ -62,7 +75,7 @@ export class TypesCollector {
           // add all the props from the current node and exit loop
           current?.props.forEach((child) => {
             if (T.isLeaf(child)) {
-              expanded.push(child.path());
+              expanded.entries.push(child.path());
             }
           });
           break;
@@ -90,8 +103,8 @@ export class TypesCollector {
       // ActiveDeployment.cause, renamed to inlinev2AppsByAppIdDeploymentsResponseActiveDeployment after
       // browsing /v2/apps first (test_72). The walk above finds the field anyway; keep `expanded` in sync.
       if (!hitWildcard && current && current.path() !== path) {
-        const idx = expanded.indexOf(path);
-        if (idx !== -1) expanded[idx] = current.path();
+        const idx = expanded.entries.indexOf(path);
+        if (idx !== -1) expanded.entries[idx] = current.path();
 
         // A saved path from before this union became a mixed value names a field directly on it;
         // collect every leaf field of its object members instead, nested ones included.
@@ -101,31 +114,24 @@ export class TypesCollector {
           const shape = union.analyzeMixedValue(context, true);
           if (shape) {
             const op = this.gen.paths.get(path.split(Naming.PATH_SEPARATOR)[0]) as IType & Op;
+            const unionPath = union.path();
             const memberLeaves = new Set<string>();
-            shape.objectMemberIndexes.forEach((i) =>
-              pathsCollector.collectLeafPaths(union.children[i], union.path(), memberLeaves, op),
-            );
+            const memberLeafTarget: LeafTarget = {
+              add: (leaf, ancestors) => memberLeaves.add(pathsCollector.pathFromWalk(unionPath, ancestors, leaf)),
+              hasLeafUnder: (side) => {
+                const sidePath = pathsCollector.pathFromWalk(unionPath, [], side);
+                return Array.from(memberLeaves).some((p) => p.startsWith(sidePath));
+              },
+            };
+            shape.objectMemberIndexes.forEach((i) => pathsCollector.collectLeafPaths(union.children[i], op, memberLeafTarget));
             memberLeaves.forEach((p) => {
-              if (!expanded.includes(p)) expanded.push(p);
+              if (!expanded.entries.includes(p)) expanded.entries.push(p);
             });
           }
         }
       }
 
-      if (current && !(current instanceof Scalar)) {
-        const parentType = T.findNonPropParent(current as IType);
-        if (!pendingTypes.has(parentType.id)) {
-          pendingTypes.set(parentType.id, parentType);
-        }
-
-        // add all ancestors (of the parent of the prop) that are containers so they are generated accordingly
-        parentType
-          .ancestors()
-          .filter((t) => !pendingTypes.has(t.id) && T.isContainer(t))
-          .forEach((dep) => {
-            pendingTypes.set(dep.id, dep);
-          });
-      }
+      this.enqueueOwnerAndContainerAncestors(pendingTypes, current);
     }
 
     // a component reached both top-level and nested by the selected ops must pick one form before
@@ -172,9 +178,31 @@ export class TypesCollector {
     this.expanded = expanded;
   }
 
+  // Queues a selected node's owner in pendingTypes, then the owner's container ancestors up to the
+  // op, so each is written; a plain value queues nothing. The first node queued per id is the one written.
+  //   e.g. (same-name-fields.yaml) the leaf InnerExtension.value queues InnerExtension, then Outer,
+  //   OuterExtension, Inner
+  private enqueueOwnerAndContainerAncestors(pendingTypes: Map<string, IType>, node: IType | undefined): void {
+    if (!node || node instanceof Scalar) {
+      return;
+    }
+    const parentType = T.findNonPropParent(node);
+    if (!pendingTypes.has(parentType.id)) {
+      pendingTypes.set(parentType.id, parentType);
+    }
+
+    // add all ancestors (of the parent of the prop) that are containers so they are generated accordingly
+    parentType
+      .ancestors()
+      .filter((t) => !pendingTypes.has(t.id) && T.isContainer(t))
+      .forEach((dep) => {
+        pendingTypes.set(dep.id, dep);
+      });
+  }
+
   // The selected operations' result and body nodes — where the read-only walks start. #26 #89
-  private selectedRoots(expanded: string[]): QueuedNode[] {
-    const opIds = new Set(expanded.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
+  private selectedRoots(expanded: ExpandedSelection): QueuedNode[] {
+    const opIds = new Set(expanded.entries.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
     const roots: QueuedNode[] = [];
     for (const op of this.gen.paths.values()) {
       if (opIds.has(op.id)) {
@@ -193,9 +221,9 @@ export class TypesCollector {
   // configured to return a payload field reaches only that field's type, not the rest of the wrapper.
   //   e.g. (ashby) oneOf [{ success, results: Job }, { success, errors: [ErrorDetail] }] with
   //   payload "results" reaches Job, not the wrapper or ErrorDetail.
-  private writtenRoots(expanded: string[]): QueuedNode[] {
+  private writtenRoots(expanded: ExpandedSelection): QueuedNode[] {
     const context = this.gen.context!;
-    const opIds = new Set(expanded.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
+    const opIds = new Set(expanded.entries.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
     const roots: QueuedNode[] = [];
     for (const op of this.gen.paths.values()) {
       if (opIds.has(op.id)) {
@@ -221,7 +249,7 @@ export class TypesCollector {
   //   /media: get -> $ref Media                    # top level: real union, ->match selection
   //   /shelf: get -> { featured: $ref Media, ... }  # nested: merged/flat object
   //   Media: oneOf [Book, Movie], discriminator kind
-  private resolveDivergentUnionForms(expanded: string[]): void {
+  private resolveDivergentUnionForms(expanded: ExpandedSelection): void {
     const byId = new Map<string, Union[]>();
     for (const { node: root } of this.selectedRoots(expanded)) {
       T.traverse(root, (node) => {
@@ -240,7 +268,7 @@ export class TypesCollector {
   // Every type the written schema will point at, walked over each node's own dependencies()
   // from the selected operations' result/body. e.g. `getUser: User` + `User.address: Address`
   // reaches { User, Address }. see #26
-  private collectReachable(expanded: string[]): Set<IType> {
+  private collectReachable(expanded: ExpandedSelection): Set<IType> {
     const context = this.gen.context!;
     const queue = this.writtenRoots(expanded);
     const visited = new Set<IType>();
@@ -271,7 +299,7 @@ export class TypesCollector {
   // type appears. see docs/FIXED.md #89 (and #13 for the donation this replaces)
   //   e.g. (confluence) results.source: Content { space: Space }
   //                     results.source.homepage: Content { # space — removed }  -> removed on both
-  private consolidateRemovedFields(pendingTypes: Map<string, IType>, expanded: string[]): void {
+  private consolidateRemovedFields(pendingTypes: Map<string, IType>, expanded: ExpandedSelection): void {
     const context = this.gen.context!;
     // this generation's selection only — no leftovers from an earlier one
     context.propOverrides.clear();
@@ -292,7 +320,7 @@ export class TypesCollector {
   // #125: extends #89 to a field that no route ever lost to a cycle — it just never appears in
   // any route's own selection, e.g. `Customer.sources` declared but no connector selects it.
   // Same fix as #89: comment it out everywhere. Returns how many fields this pass commented out.
-  private removeFieldsNeverSelected(pendingTypes: Map<string, IType>, expanded: string[]): number {
+  private removeFieldsNeverSelected(pendingTypes: Map<string, IType>, expanded: ExpandedSelection): number {
     const context = this.gen.context!;
     const { kept } = this.walkKeptAndRemoved(expanded);
     let removedCount = 0;
@@ -331,7 +359,7 @@ export class TypesCollector {
   // same walk as collectReachable, but records what each visited type's own fields are: e.g.
   // (confluence) Content is reached at 6 positions, kept "space" at 2 (naming those two ops) and
   // lost it to a cycle at the other 4 -> removed.get('Content') has "space" too. see #207
-  private walkKeptAndRemoved(expanded: string[]): {
+  private walkKeptAndRemoved(expanded: ExpandedSelection): {
     kept: Map<string, Map<string, Set<string>>>;
     removed: Map<string, Set<string>>;
   } {
@@ -390,7 +418,7 @@ export class TypesCollector {
   // two ops sharing one component can select different fields of it — the type is written from
   // the first op's selection only. e.g. (ashby) application.create selects results { id },
   // referral.create also selects createdAt on the same #/c/s/Application. see docs/FIXED.md #207
-  private warnMismatchedSelections(pendingTypes: Map<string, IType>, expanded: string[]): void {
+  private warnMismatchedSelections(pendingTypes: Map<string, IType>, expanded: ExpandedSelection): void {
     const context = this.gen.context!;
     const keep = context.generateOptions?.keepFieldNames === true;
     const { kept } = this.walkKeptAndRemoved(expanded);
@@ -489,11 +517,16 @@ class PathsCollector {
     return stack;
   }
 
-  // Collects every leaf path under `root`, expanding along the way. `prefix` is the path above
-  // `root`, so each leaf's path is built from the ancestors the walk went through, not its parents.
-  //   e.g. (cycles-by-route.yaml) root get:/nodes, prefix "" -> get:/nodes>res:r>obj:type:#/c/s/Node>prop:scalar:id
-  public collectLeafPaths(root: IType, prefix: string, into: Set<string>, op: IType & Op): void {
+  // Reports every leaf under `root` to `target` with the ancestors the walk went through, expanding
+  // along the way; returns how many leaves it reported. Nothing below a leaf is expanded.
+  //   e.g. (cycles-by-route.yaml) root get:/nodes reports Node.id with get:/nodes, res:r and Node
+  public collectLeafPaths(root: IType, op: IType & Op, target: LeafTarget): number {
     const context = this.gen.getContext();
+    let reported = 0;
+    const report = (leaf: IType, ancestors: IType[]): void => {
+      target.add(leaf, ancestors);
+      reported++;
+    };
     const envelope = envelopeContext(context, op);
     // True for a union with no object member that still types as { text, list, raw } -- the
     // property/list-item/map-value leaf checks below all call this. #221
@@ -524,34 +557,34 @@ class PathsCollector {
       const listOfPlainOrList =
         child instanceof PropArray && child.items instanceof Union && isPlainOrListUnion(child.items);
       if (T.isPropScalar(child) || listOfValues || nestedListOfValues || listOfEnumValues || listOfPlainOrList) {
-        into.add(this.pathFromWalk(prefix, ancestors, child));
+        report(child, ancestors);
       } else if (child instanceof PropEn) {
         // enum props are leaves too — without this, `>**` silently drops every enum field
         // (slack's `ok`-only stubs collapsed to zero types). see docs/FIXED.md #24
-        into.add(this.pathFromWalk(prefix, ancestors, child));
+        report(child, ancestors);
       } else if (child instanceof PropComp && child.comp instanceof Union && isPlainOrListUnion(child.comp)) {
         // a no-object-member mixed-value property, e.g. (ashby) valueLabel: anyOf [string, array]. #221
-        into.add(this.pathFromWalk(prefix, ancestors, child));
+        report(child, ancestors);
       } else if (child instanceof PropCircRef) {
         // Includes a left-out cycle's path as a leaf, so the commented field is emitted (in both
         // the SDL and the selection) instead of silently dropped. see docs/FIXED.md #10
-        into.add(this.pathFromWalk(prefix, ancestors, child));
+        report(child, ancestors);
       } else if (child instanceof Scalar && child.parent instanceof Res) {
         // a response that is just a value, no object around it — a write answering `true` (adobe
         // commerce), or a token string (petstore `/user/login`):
         //   responses: { '200': { schema: { type: boolean } } }
         // Nothing to pick apart, so the value itself is the leaf. see docs/FIXED.md #32
-        into.add(this.pathFromWalk(prefix, ancestors, child));
+        report(child, ancestors);
       } else if (child instanceof En && child.parent instanceof Res) {
         // a response that is just an enum value, no object around it — same shape as #32's bare
         // scalar, just enum-typed. see docs/FIXED.md #120
-        into.add(this.pathFromWalk(prefix, ancestors, child));
+        report(child, ancestors);
       } else if (child instanceof Arr && child.parent instanceof Res && child.itemsType instanceof Scalar) {
         // the case above with a list around it — a response that is just an array of values,
         // no object around it (spotify's "check saved" endpoints answer `[true, false]`):
         //   responses: { '200': { schema: { type: array, items: { type: boolean } } } }
         // Nothing to pick apart, so the array itself is the leaf. see docs/FIXED.md #47
-        into.add(this.pathFromWalk(prefix, ancestors, child));
+        report(child, ancestors);
       } else {
         // the value type is only known once the node is expanded, so the map check comes after
         this.gen.expand(child);
@@ -559,7 +592,7 @@ class PathsCollector {
         // e.g. (stripe) payment_method_amazon_pay: { type: object } -> amazonPay: JSON
         // Response side only, the check below still owns the body side. see docs/FIXED.md #182
         if (child instanceof PropObj && _.isEmpty(child.obj.props) && child.kind !== 'input') {
-          into.add(this.pathFromWalk(prefix, ancestors, child));
+          report(child, ancestors);
         }
         // A map of plain values has nothing below it to select — the map itself is the leaf,
         // whether it hangs off a property (#70) or is the whole response (#92).
@@ -579,7 +612,7 @@ class PathsCollector {
           (T.isWholeMapValue(map.valueType) ||
             (map.valueType instanceof Union && isPlainOrListUnion(map.valueType)))
         ) {
-          into.add(this.pathFromWalk(prefix, ancestors, child));
+          report(child, ancestors);
         }
       }
     });
@@ -590,37 +623,32 @@ class PathsCollector {
     // Per side, not per op: a write whose body is selectable can still answer with an empty
     // object, and checking the op as a whole never fires for it. see docs/FIXED.md #32, #51
     const sides = T.isOp(root) ? root.children : [root];
-    // Starts from the path above the side: a walk from the side lists the side and what lies
-    // below it among the ancestors, never the op, so the op's own path goes in front.
-    //   e.g. (confluence.json) post:/wiki/rest/api/user/{userId}/property/{key} in front of
-    //   body:b>obj:input:#/c/s/UserPropertyCreate>prop:obj:value
-    const aboveSide = T.isOp(root) ? this.pathFromWalk(prefix, [], root) : prefix;
     for (const side of sides) {
-      const sidePath = this.pathFromWalk(aboveSide, [], side);
-      if (Array.from(into).some((p) => p.startsWith(sidePath))) {
+      if (target.hasLeafUnder(side)) {
         continue;
       }
       // scoped to an otherwise-empty side on purpose: doing it everywhere diverged the
       // selections of types shared across connectors. see docs/FIXED.md #32
       T.traverse(side, (child, ancestors) => {
         if (child instanceof PropObj && _.isEmpty(child.obj?.props)) {
-          into.add(this.pathFromWalk(aboveSide, ancestors, child));
+          report(child, ancestors);
         }
       });
     }
+    return reported;
   }
 
   // Returns the selection path of `node`: the path above the walk root, then the ids of the
   // ancestors the walk went through, then the node's own id, joined the way Type.path() joins them.
   //   e.g. (cycles-by-route.yaml) prefix "", ancestors get:/nodes, res:r and Node, node prop:scalar:id
   //   -> get:/nodes>res:r>obj:type:#/c/s/Node>prop:scalar:id
-  private pathFromWalk(prefix: string, ancestors: IType[], node: IType): string {
+  public pathFromWalk(prefix: string, ancestors: IType[], node: IType): string {
     return Naming.pathUnder(prefix, ...ancestors.map((ancestor) => ancestor.id), node.id);
   }
 
-  public collectExpandedPaths(selection: string[]) {
+  public collectExpandedPaths(selection: string[]): ExpandedSelection {
     const context = this.gen.getContext();
-    const newSelection = new Set<string>();
+    const newSelection = new ExpandedSelection([]);
     // A bare op (no path segments) never gets walked past the op node itself, so its response/body
     // silently never visits. Treat it as `<op>>**`, the same full-subtree walk every other op gets.
     //   e.g. ['get:/widgets/{id}'] -> walked as 'get:/widgets/{id}>**'. see docs/FIXED.md #136
@@ -631,9 +659,14 @@ class PathsCollector {
     const paths = Array.from(this.gen.paths.values());
     const nodes = filtered.map((p) => this.collectPaths(p, paths));
 
+    // Leaves out a root that found no leaf, so it selects nothing and its op is not written.
+    //   e.g. (allof-two-plain-members.yaml) get:/actions>…>prop:comp:region_slug>** has no leaf
     nodes.forEach((stack) => {
       const root = _.last(stack)!;
-      this.collectLeafPaths(root, root.parent?.path() ?? '', newSelection, stack[0] as IType & Op);
+      if (this.collectLeafPaths(root, stack[0] as IType & Op, newSelection) > 0) {
+        stack.forEach((node) => newSelection.nodesWithLeaves.add(node));
+        newSelection.entries.push(SelectionPath.everythingUnder(Naming.pathUnder('', ...stack.map((node) => node.id))));
+      }
     });
 
     // a saved selection or an explicit CLI path can still name an envelope field directly; drop it
@@ -656,6 +689,7 @@ class PathsCollector {
         return !isEnvelopeNode(_.last(stack)!, op, envelope);
       });
 
-    return [...newSelection, ...passThrough];
+    newSelection.entries.push(...passThrough);
+    return newSelection;
   }
 }

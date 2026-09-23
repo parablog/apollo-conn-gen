@@ -5,6 +5,7 @@ import type { IType, ReferenceObject } from '../nodes/internal.js';
 import { Arr, Obj, Res } from '../nodes/internal.js';
 import { GqlUtils } from './gql.js';
 import { Naming } from './naming.js';
+import { ExpandedSelection } from './expandedSelection.js';
 
 // Keywords that give a schema a renderable GraphQL shape; a schema with none is metadata-only. #5
 const SHAPE_KEYWORDS = ['$ref', 'type', 'enum', 'items', 'allOf', 'oneOf', 'anyOf', 'additionalProperties'];
@@ -331,7 +332,7 @@ export class Schemas {
   //   object -> 'Returns: createdAt, id, name'
   public static describeResponseFields(
     resultType: IType | undefined,
-    selection: string[],
+    selection: ExpandedSelection,
     keep: boolean,
   ): string | undefined {
     // every response is wrapped one level deep; step past that wrapper to the actual answer

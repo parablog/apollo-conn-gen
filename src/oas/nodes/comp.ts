@@ -9,7 +9,6 @@ import {
   Res,
   T,
   Type,
-  selectionPrefixes,
 } from './internal.js';
 import { SchemaObject } from 'oas/types';
 
@@ -19,6 +18,7 @@ import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import _ from 'lodash';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Composed extends Type {
   // R2: GraphQL interface this member implements (a shared allOf base of a discriminated
@@ -90,7 +90,7 @@ export class Composed extends Type {
     context.leave(this);
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     context.enter(this);
     trace(context, '-> [comp::generate]', `-> in: ${this.name}`);
 
@@ -133,7 +133,7 @@ export class Composed extends Type {
   }
 
   // the selected props, once the allOf members are folded in (same shape select writes)
-  dependencies(context: OasContext, selection: string[], path: string): IType[] {
+  dependencies(context: OasContext, selection: ExpandedSelection, path: string): IType[] {
     if (this.schema.allOf != null && !this.consolidated) {
       this.consolidate(selection);
     }
@@ -142,7 +142,7 @@ export class Composed extends Type {
     return this.selectedProps(selection, keep, path).map((prop) => overrides?.get(prop.name) ?? prop);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [comp::select]', `-> in: ${this.name}`);
     if (!this.consolidated) {
       this.consolidate(selection);
@@ -177,11 +177,11 @@ export class Composed extends Type {
 
   // allOf can fold two spellings of one field onto this type — number the later twin, as a plain
   // object does. e.g. (trello) boards: prefs/background + prefs_background. see docs/FIXED.md #113
-  public override selectedProps(selection: string[], keep: boolean, path: string) {
+  public override selectedProps(selection: ExpandedSelection, keep: boolean, path: string) {
     return T.numberTwinFields(super.selectedProps(selection, keep, path), keep);
   }
 
-  public consolidate(selection: string[]): Set<string> {
+  public consolidate(selection: ExpandedSelection): Set<string> {
     const ids: Set<string> = new Set();
     let props: Map<string, Prop> = new Map();
 
@@ -193,11 +193,10 @@ export class Composed extends Type {
       const node = queue.shift()!;
       ids.add(node.id);
 
-      if (selection.length > 0) {
-        // prefix-set membership, not a scan per prop — 55M path() rebuilds on hubspot lists. #10 #118
-        const prefixes = selectionPrefixes(selection);
+      if (selection.entries.length > 0) {
+        // Checks each prop once with isSelected; a scan per prop rebuilt path() 55M times on hubspot lists. #10 #118
         node.props.forEach((prop) => {
-          if (prefixes.has(this.propPath(prop, this.path(), pathsToMembers))) {
+          if (selection.isSelected(prop, this.propPath(prop, this.path(), pathsToMembers))) {
             props.set(prop.name, prop);
           }
         });

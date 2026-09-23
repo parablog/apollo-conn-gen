@@ -6,6 +6,7 @@ import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Param extends Type {
   public resultType!: IType;
@@ -64,7 +65,7 @@ export class Param extends Type {
     return this.resultType instanceof Scalar ? this.resultType.jsonReason : undefined;
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     context.enter(this);
     trace(context, '-> [param::generate]', `-> in: ${this.name}`);
 
@@ -106,7 +107,7 @@ export class Param extends Type {
     return `Param{ name=${this.name}, required=${this.required}, defaultValue=${this.defaultValue}, props=${this.props}, resultType=${this.resultType} }`;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], _path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, _path: string) {
     // do nothing
   }
 

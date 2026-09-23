@@ -8,6 +8,7 @@ import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import { JsonDegradeReasons } from '../utils/jsonReasons.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class PropObj extends Prop {
   constructor(
@@ -97,7 +98,7 @@ export class PropObj extends Prop {
     return T.everyFieldRemoved(this.obj, context) ? [] : [this.obj];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [prop-obj:select]', 'in ' + this.name + ', obj: ' + this.obj.name);
 
     this.writeFieldHead(context, writer, { suffix: this.obj.selectionSuffix(context) });

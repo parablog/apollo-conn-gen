@@ -2,6 +2,7 @@ import { Prop, ReferenceObject } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { SchemaObject } from 'oas/types';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export type Kind = 'input' | 'type';
 
@@ -55,7 +56,7 @@ export interface IType {
 
   visit(context: OasContext): void;
 
-  generate(context: OasContext, writer: Writer, selection: string[]): void;
+  generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void;
 
   pathToRoot(): string;
 
@@ -65,9 +66,9 @@ export interface IType {
 
   find(path: string, collection: IType[]): IType | boolean;
 
-  select(context: OasContext, writer: Writer, selection: string[], path: string): void;
+  select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void;
 
-  dependencies(context: OasContext, selection: string[], path: string): IType[];
+  dependencies(context: OasContext, selection: ExpandedSelection, path: string): IType[];
 
   propPath(prop: Prop, path: string, pathsToMembers?: Map<IType, string[]>): string;
 

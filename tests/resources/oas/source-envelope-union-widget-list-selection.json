@@ -1,0 +1,10 @@
+[
+  "post:/widget.list>body:b>obj:input:WidgetList>prop:scalar:cursor",
+  "post:/widget.list>res:r>union:type:widgetListResponse>obj:type:#/c/s/WidgetListSuccessResponse>prop:scalar:moreDataAvailable",
+  "post:/widget.list>res:r>union:type:widgetListResponse>obj:type:#/c/s/WidgetListSuccessResponse>prop:scalar:nextCursor",
+  "post:/widget.list>res:r>union:type:widgetListResponse>obj:type:#/c/s/WidgetListSuccessResponse>prop:array:#results>obj:type:#/c/s/Widget>prop:scalar:id",
+  "post:/widget.list>res:r>union:type:widgetListResponse>obj:type:#/c/s/WidgetListSuccessResponse>prop:array:#results>obj:type:#/c/s/Widget>prop:scalar:title",
+  "post:/widget.list>res:r>union:type:widgetListResponse>obj:type:#/c/s/WidgetListSuccessResponse>prop:scalar:success",
+  "post:/widget.list>res:r>union:type:widgetListResponse>obj:type:#/c/s/ErrorResponse>prop:array:#errors>obj:type:#/c/s/ErrorDetail>prop:scalar:message",
+  "post:/widget.list>res:r>union:type:widgetListResponse>obj:type:#/c/s/ErrorResponse>prop:scalar:success"
+]

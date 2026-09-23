@@ -5,6 +5,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class PropMap extends Prop {
   constructor(
@@ -55,7 +56,7 @@ export class PropMap extends Prop {
     return '[' + Naming.genTypeName(this.map.name) + this.map.nameSuffix() + ']';
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [prop-map:select]', 'in ' + this.name + ', map: ' + this.map.name);
 
     // alwaysAlias: the local pre-release composer only accepts `->entries` behind `name: name`,

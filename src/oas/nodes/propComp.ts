@@ -6,6 +6,7 @@ import { Composed } from './comp.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class PropComp extends Prop {
   public comp?: IType;
@@ -54,7 +55,7 @@ export class PropComp extends Prop {
     return this.comp ? [this.comp] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     const comp = this.comp!;
     trace(context, '-> [prop-comp:select]', 'in ' + this.name + ', obj: ' + comp.name);
 

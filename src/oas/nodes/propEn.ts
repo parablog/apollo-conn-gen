@@ -4,6 +4,7 @@ import { Writer } from '../io/writer.js';
 import { OasContext } from '../oasContext.js';
 import { Naming } from '../utils/naming.js';
 import { trace } from '../log/trace.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class PropEn extends Prop {
   // the enum definition itself, so a rename before store (#57) is seen here at write time too
@@ -20,7 +21,7 @@ export class PropEn extends Prop {
     return 'prop:enum:' + this.name;
   }
 
-  generate(context: OasContext, writer: Writer, _selection: string[]) {
+  generate(context: OasContext, writer: Writer, _selection: ExpandedSelection) {
     super.generate(context, writer, _selection);
   }
 
@@ -50,7 +51,7 @@ export class PropEn extends Prop {
     return Array.from(this.children.values());
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], _path: string): void {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, _path: string): void {
     trace(context, '   [prop:select]', this.name);
     const sanitised = this.fieldForSelect(context);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);

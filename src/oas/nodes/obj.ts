@@ -8,6 +8,7 @@ import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 
 import _ from 'lodash';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Obj extends Type {
   // R1: type-level entity resolvers discovered for this type (empty unless inferred).
@@ -74,7 +75,7 @@ export class Obj extends Type {
     context.leave(this);
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     if (_.isEmpty(this.props)) {
       return;
     }
@@ -148,7 +149,7 @@ export class Obj extends Type {
 
   // siblings that clean to one field name write once — generate, select and dependencies all
   // read this list, so the three agree. e.g. (trello) prefs/background + prefs_background  #69
-  public override selectedProps(selection: string[], keep: boolean, path: string) {
+  public override selectedProps(selection: ExpandedSelection, keep: boolean, path: string) {
     return T.numberTwinFields([...super.selectedProps(selection, keep, path), ...this.entityLinkProps], keep);
   }
 
@@ -162,13 +163,13 @@ export class Obj extends Type {
   }
 
   // the selected props (a field removed on another route swapped for its comment, like generate does — #89)
-  dependencies(context: OasContext, selection: string[], path: string): IType[] {
+  dependencies(context: OasContext, selection: ExpandedSelection, path: string): IType[] {
     const overrides = context.propOverrides.get(this.id);
     const keep = context.generateOptions?.keepFieldNames === true;
     return this.selectedProps(selection, keep, path).map((prop) => overrides?.get(prop.name) ?? prop);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [obj::select]', `-> in: ${this.name}`);
 
     // a route that kept the field writes the same comment as the routes where it was removed. #89
@@ -190,7 +191,7 @@ export class Obj extends Type {
     context: OasContext,
     writer: Writer,
     resolver: EntityResolver,
-    selection: string[],
+    selection: ExpandedSelection,
   ): void {
     const i4 = ' '.repeat(4);
     const i6 = ' '.repeat(6);
@@ -256,7 +257,7 @@ export class Obj extends Type {
     context: OasContext,
     writer: Writer,
     resolver: EntityResolver,
-    selection: string[],
+    selection: ExpandedSelection,
   ): void {
     const i4 = ' '.repeat(4);
     const i6 = ' '.repeat(6);

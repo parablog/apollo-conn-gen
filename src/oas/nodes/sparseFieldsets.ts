@@ -2,11 +2,12 @@ import { Arr, IType, Obj, Op, PropArray, Res, Scalar, T } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { warn } from '../log/trace.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 // #151: some REST APIs only send back a few fields unless a query parameter (often `fields`)
 // widens the request. GET /products/{id} -> { id }, but ?fields=id,name,price -> { id, name, price }.
 // A caller who selects `name` in GraphQL but never sends `fields` gets a `null` that looks empty.
-export function applySparseFieldsets(context: OasContext, gen: OasGen, selection: string[]): void {
+export function applySparseFieldsets(context: OasContext, gen: OasGen, selection: ExpandedSelection): void {
   const paramName = context.generateOptions.sparseFieldsetsParam;
   if (!paramName) {
     return;

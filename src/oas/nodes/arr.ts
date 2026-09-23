@@ -7,6 +7,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Arr extends Type {
   public itemsType?: IType;
@@ -39,7 +40,7 @@ export class Arr extends Type {
     return `[array] ${Naming.getRefName(this.name)}`;
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     context.enter(this);
     trace(context, '-> [array::generate]', `-> in: ${this.name}`);
 
@@ -71,7 +72,7 @@ export class Arr extends Type {
     return this.itemsType ? [this.itemsType] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [array::select]', `-> in: ${this.name}`);
 
     if (this.itemsType) {

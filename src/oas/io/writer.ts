@@ -10,6 +10,7 @@ import { SecurityPlan } from './security.js';
 import { TypesCollector } from '../generator/typesCollector.js';
 import { Naming } from '../utils/naming.js';
 import _ from 'lodash';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Writer {
   private schemaWriter: SchemaWriter;
@@ -39,19 +40,19 @@ export class Writer {
     return this.buffer.join('');
   }
 
-  public generate(paths: string[]): string[] {
+  public generate(paths: string[]): ExpandedSelection {
     const collector = new TypesCollector(this.gen);
     collector.collect(paths);
 
     return this.generateWith(collector.types, collector.expanded);
   }
 
-  public generateWith(types: Map<string, IType>, selection: string[]) {
+  public generateWith(types: Map<string, IType>, selection: ExpandedSelection) {
     this.writeSchema(this, types, selection);
     return selection;
   }
 
-  public writeSchema(writer: Writer, types: Map<string, IType>, selection: string[]): void {
+  public writeSchema(writer: Writer, types: Map<string, IType>, selection: ExpandedSelection): void {
     const context = this.gen.context!;
     const generatedSet = context.generatedSet;
 
@@ -77,7 +78,7 @@ export class Writer {
 
     // R2: promote discriminated oneOf-with-shared-allOf-base to a GraphQL interface (id-neutral;
     // no-op unless a qualifying discriminated output union exists). Same `types` map.
-    promoteAllOfBase(context, this.gen, types, selection);
+    promoteAllOfBase(context, this.gen, types, selection.entries);
 
     this.schemaWriter.writeDirectives(writer);
     this.schemaWriter.writeJSONScalar(writer);

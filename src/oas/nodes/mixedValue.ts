@@ -1,10 +1,11 @@
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
-import { Obj, Prop, PropArray, PropObj, PropScalar, Scalar, Union, selectionPrefixes } from './internal.js';
+import { Obj, Prop, PropArray, PropObj, PropScalar, Scalar, Union } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { MixedValueShape } from '../utils/schemas.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 // The fields a mixed value is split into: one for each shape the oneOf allows (text, number,
 // boolean, list, object), only when it allows it, plus `raw` for the value as it arrived. see docs/FIXED.md #208
@@ -29,7 +30,7 @@ export class MixedValue {
     private readonly union: Union,
     shape: MixedValueShape,
     context: OasContext,
-    selection: string[],
+    selection: ExpandedSelection,
   ) {
     this.hasObjectMember = shape.objectMemberIndexes.length > 0;
     this.fields = { raw: new PropScalar(union, 'raw', 'JSON', {}) };
@@ -66,12 +67,11 @@ export class MixedValue {
 
   // Registered exactly like any other object (name-collision check included, #208). Each clone is
   // owned by the object type but keeps its member field's own path (Type.pathInSelection).
-  private buildObjectType(context: OasContext, shape: MixedValueShape, selection: string[]): Obj {
+  private buildObjectType(context: OasContext, shape: MixedValueShape, selection: ExpandedSelection): Obj {
     const objectType = new Obj(this.union, `${this.union.name}Object`, { type: 'object', properties: {} });
     objectType.visit(context);
 
     const members = shape.objectMemberIndexes.map((i) => this.union.children[i]);
-    const prefixes = selectionPrefixes(selection);
     const candidates: Prop[] = [];
     const pathByName = new Map<string, string>();
     const unionPath = this.union.path();
@@ -79,7 +79,7 @@ export class MixedValue {
     for (const member of members) {
       for (const prop of member.props.values()) {
         const path = this.union.propPath(prop, unionPath, pathsToMembers);
-        if (!prefixes.has(path)) continue;
+        if (!selection.isSelected(prop, path)) continue;
         if (!pathByName.has(prop.name)) pathByName.set(prop.name, path);
         candidates.push(prop);
       }
@@ -92,6 +92,9 @@ export class MixedValue {
       clone.required = false;
       clone.parent = objectType;
       clone.pathInSelection = pathByName.get(prop.name);
+      // Marks the clone selected when a selected member field carries its name: the walk never
+      // passed the clone, and a merged field is a new prop. e.g. (nested-oneof-branch-loss.yaml) currencyCode
+      if (clone.pathInSelection) selection.nodesWithLeaves.add(clone);
       objectType.props.set(clone.name, clone);
       objectType.add(clone);
     }
@@ -116,7 +119,7 @@ export class MixedValue {
       this.fields.object,
       this.fields.raw,
     ]) {
-      if (prop) prop.generate(context, writer, []);
+      if (prop) prop.generate(context, writer, new ExpandedSelection([]));
     }
     writer.write('}\n\n');
   }
@@ -124,7 +127,7 @@ export class MixedValue {
   // Writes the selection that sorts the value into its field: a match on the first character
   // of the JSON text, one branch per shape present, a catch-all last, then `raw` itself.
   //   e.g. (ashby) ... raw->jsonStringify->slice(0, 1)->match(["\"", { text: raw }], ["t", { boolean: raw }], …) raw
-  public writeSelection(context: OasContext, writer: Writer, selection: string[], path: string): void {
+  public writeSelection(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void {
     const fields = this.fields;
     const pad = (n: number) => ' '.repeat(Math.max(n, 0));
     const base = context.indent + context.stack.length;

@@ -18,6 +18,7 @@ import type { NameValue, SecurityPlan } from '../io/security.js';
 import { Naming } from '../utils/naming.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 /**
  * A type-level entity resolver discovered by {@link inferEntityResolvers} (R1): a
@@ -196,7 +197,7 @@ interface ResolverCandidate {
 
 // Today's GET-by-key rule, unchanged: every path param resolves to a selected scalar field.
 //   e.g. (entity-resolver) GET /widgets/{id} -> Widget @key(fields: "id")
-function getResolverCandidate(op: IType & Op, selection: string[], keep: boolean): ResolverCandidate | undefined {
+function getResolverCandidate(op: IType & Op, selection: ExpandedSelection, keep: boolean): ResolverCandidate | undefined {
   const obj = unwrapToObj(op.resultType);
   if (!obj) {
     return undefined;
@@ -233,7 +234,7 @@ function getResolverCandidate(op: IType & Op, selection: string[], keep: boolean
 function postResolverCandidate(
   op: IType & Op,
   context: OasContext,
-  selection: string[],
+  selection: ExpandedSelection,
   keep: boolean,
 ): ResolverCandidate | undefined {
   if (!isPostCandidateOp(op, context)) {
@@ -267,7 +268,7 @@ export function inferEntityResolvers(
   context: OasContext,
   gen: OasGen,
   types: Map<string, IType>,
-  selection: string[],
+  selection: ExpandedSelection,
   security?: SecurityPlan,
 ): void {
   // Reset on the canonical (generated) type instances so a re-run can't leak resolvers.
@@ -283,7 +284,7 @@ export function inferEntityResolvers(
 
   const keep = context.generateOptions.keepFieldNames === true;
   // The root id of every selected path (matches how the writers pick query fields).
-  const selectionRoots = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
+  const selectionRoots = new Set<string>(selection.entries.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
   for (const op of gen.paths.values()) {
     if (!T.isOp(op) || !selectionRoots.has(op.id)) {
@@ -339,7 +340,7 @@ export function inferEntityLinks(
   context: OasContext,
   gen: OasGen,
   types: Map<string, IType>,
-  selection: string[],
+  selection: ExpandedSelection,
 ): void {
   for (const type of types.values()) {
     if (type instanceof Obj) {
@@ -352,7 +353,7 @@ export function inferEntityLinks(
   }
 
   const keep = context.generateOptions.keepFieldNames === true;
-  const selectionRoots = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
+  const selectionRoots = new Set<string>(selection.entries.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
   const candidates: EntityLinkCandidate[] = [];
 
@@ -450,7 +451,7 @@ export function inferEntityLinks(
 
 // Every node reachable from `from` via dependencies(), the same idiom
 // typesCollector.collectReachable uses. e.g. (entity-link) from Album, reaches Song via Song.album. #161
-function descendants(context: OasContext, selection: string[], from: IType): Set<IType> {
+function descendants(context: OasContext, selection: ExpandedSelection, from: IType): Set<IType> {
   const visited = new Set<IType>();
   const queue: QueuedNode[] = [{ node: from, path: from.path() }];
   while (queue.length > 0) {
@@ -470,7 +471,7 @@ function descendants(context: OasContext, selection: string[], from: IType): Set
 
 // Whether `from` can already reach `to` -- blocks a link that would close a cycle.
 // e.g. (entity-link) albums<->songs: the second direction is skipped once the first links.
-function reaches(context: OasContext, selection: string[], from: IType, to: IType): boolean {
+function reaches(context: OasContext, selection: ExpandedSelection, from: IType, to: IType): boolean {
   return descendants(context, selection, from).has(to);
 }
 

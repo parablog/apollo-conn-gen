@@ -1,0 +1,8 @@
+[
+  "post:/widget.info>body:b>obj:input:WidgetInfo>prop:scalar:id",
+  "post:/widget.info>res:r>union:type:widgetInfoResponse>obj:type:#/c/s/WidgetInfoSuccessResponse>prop:obj:results>obj:type:#/c/s/Widget>prop:scalar:id",
+  "post:/widget.info>res:r>union:type:widgetInfoResponse>obj:type:#/c/s/WidgetInfoSuccessResponse>prop:obj:results>obj:type:#/c/s/Widget>prop:scalar:title",
+  "post:/widget.info>res:r>union:type:widgetInfoResponse>obj:type:#/c/s/WidgetInfoSuccessResponse>prop:scalar:success",
+  "post:/widget.info>res:r>union:type:widgetInfoResponse>obj:type:#/c/s/ErrorResponse>prop:array:#errors>obj:type:#/c/s/ErrorDetail>prop:scalar:message",
+  "post:/widget.info>res:r>union:type:widgetInfoResponse>obj:type:#/c/s/ErrorResponse>prop:scalar:success"
+]

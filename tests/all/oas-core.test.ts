@@ -5,7 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { DirectivesConfig, OasGen } from '../../src/index.js';
-import { Arr, Prop, T, Union } from '../../src/oas/nodes/internal.js';
+import { Arr, IType, Prop, T, Union } from '../../src/oas/nodes/internal.js';
+import { TypesCollector } from '../../src/oas/generator/typesCollector.js';
 import './_setup.js';
 
 /// OAS TESTS
@@ -3269,6 +3270,21 @@ test('test_149_structured_syntax_json_body_keeps_its_declared_content_type', asy
   );
 });
 
+// Collects `order` on a fresh OasGen and returns the path of `op`'s `field` in the built tree,
+// asserting the selection holds it: a `>**` root keeps nodes, not one path string per leaf (#242).
+async function selectedFieldPath(spec: string, order: string[], op: string, field: string): Promise<string | undefined> {
+  const gen = await OasGen.fromFile(spec, { showParentInSelections: false });
+  await gen.visit();
+  const collector = new TypesCollector(gen);
+  collector.collect(order);
+  let found: IType | undefined;
+  T.traverse(gen.paths.get(op)!, (node) => {
+    if (!found && node instanceof Prop && node.name === field) found = node;
+  });
+  assert.ok(found && collector.expanded.isSelected(found, found.path()), `${op}'s ${field} is selected`);
+  return found?.path();
+}
+
 test('test_73_reversed_op_order_keeps_same_inline_shape_field_path_stable', async () => {
   // docs/DEFERRED.md #73, step 0: does reading operations in a different order change where a
   // field ends up? /a and /b each write out the same "pagination: { cursor, hasMore }" block by
@@ -3278,26 +3294,19 @@ test('test_73_reversed_op_order_keeps_same_inline_shape_field_path_stable', asyn
   const orderAThenB = ['get:/a>**', 'get:/b>**'];
   const orderBThenA = ['get:/b>**', 'get:/a>**'];
 
-  // a fresh OasGen per run, so nothing one run names carries over into the other
-  const genAThenB = await OasGen.fromFile(`${oasBasePath}/same-inline-shape-two-ops.yaml`, {
-    showParentInSelections: false,
-  });
-  await genAThenB.visit();
-  const pathsAThenB = genAThenB.expanded(orderAThenB);
+  // a fresh OasGen per run, so nothing one run names carries over into the other; the field is
+  // looked up in the built tree and must be one the selection holds (#242: no leaf strings)
+  const bCursorPath = async (order: string[]) =>
+    selectedFieldPath(`${oasBasePath}/same-inline-shape-two-ops.yaml`, order, 'get:/b', 'cursor');
 
-  const genBThenA = await OasGen.fromFile(`${oasBasePath}/same-inline-shape-two-ops.yaml`, {
-    showParentInSelections: false,
-  });
-  await genBThenA.visit();
-  const pathsBThenA = genBThenA.expanded(orderBThenA);
+  const pathAThenB = await bCursorPath(orderAThenB);
+  const pathBThenA = await bCursorPath(orderBThenA);
 
-  const bCursorPath = (paths: string[]) => paths.find((p) => p.startsWith('get:/b') && p.endsWith('prop:scalar:cursor'));
-
-  assert.ok(bCursorPath(pathsAThenB), "finds /b's cursor field when /a is read first");
-  assert.ok(bCursorPath(pathsBThenA), "finds /b's cursor field when /b is read first");
+  assert.ok(pathAThenB, "finds /b's cursor field when /a is read first");
+  assert.ok(pathBThenA, "finds /b's cursor field when /b is read first");
   assert.strictEqual(
-    bCursorPath(pathsAThenB),
-    bCursorPath(pathsBThenA),
+    pathAThenB,
+    pathBThenA,
     "/b's cursor field lands on the same path either way -- see docs/DEFERRED.md #73's step 0 result",
   );
 });
@@ -3314,21 +3323,11 @@ test('test_73_ref_member_under_colliding_allof_wrapper_path_fails_to_resolve_aft
   const orderAThenB = ['get:/a>**', 'get:/b>**'];
   const orderBThenA = ['get:/b>**', 'get:/a>**'];
 
-  const genAThenB = await OasGen.fromFile(`${oasBasePath}/ref-member-under-colliding-allof-wrapper.yaml`, {
-    showParentInSelections: false,
-  });
-  await genAThenB.visit();
-  const pathsAThenB = genAThenB.expanded(orderAThenB);
-
-  const genBThenA = await OasGen.fromFile(`${oasBasePath}/ref-member-under-colliding-allof-wrapper.yaml`, {
-    showParentInSelections: false,
-  });
-  await genBThenA.visit();
-  const pathsBThenA = genBThenA.expanded(orderBThenA);
-
+  const aOnlyInOrder = async (order: string[]) =>
+    selectedFieldPath(`${oasBasePath}/ref-member-under-colliding-allof-wrapper.yaml`, order, 'get:/a', 'aOnly');
   const aOnlyPath = (paths: string[]) => paths.find((p) => p.startsWith('get:/a') && p.endsWith('prop:scalar:aOnly'));
-  const savedFromOrderA = aOnlyPath(pathsAThenB);
-  const actualInOrderB = aOnlyPath(pathsBThenA);
+  const savedFromOrderA = await aOnlyInOrder(orderAThenB);
+  const actualInOrderB = await aOnlyInOrder(orderBThenA);
 
   assert.ok(savedFromOrderA, "finds /a's aOnly field when /a is read first");
   assert.ok(actualInOrderB, "finds /a's aOnly field when /b is read first");

@@ -4,6 +4,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class PropScalar extends Prop {
   private propType?: IType;
@@ -53,7 +54,7 @@ export class PropScalar extends Prop {
     return result;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '   [prop:select]', this.name);
 
     if (this.stringifiedNumber && this.parent?.kind !== 'input') {

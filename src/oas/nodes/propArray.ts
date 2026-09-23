@@ -5,6 +5,7 @@ import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import { JsonDegradeReasons } from '../utils/jsonReasons.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class PropArray extends Prop {
   public items?: IType;
@@ -41,7 +42,7 @@ export class PropArray extends Prop {
       const arr: Arr = this.items as Arr;
 
       writer.write('[');
-      arr.generate(context, writer, []);
+      arr.generate(context, writer, new ExpandedSelection([]));
       // no newline: the caller writes `!` for a required field and ends the line. #59
       writer.write(']');
 
@@ -137,7 +138,7 @@ export class PropArray extends Prop {
     return this.items ? [this.items] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [prop-array:select]', 'in: ' + this.name);
 
     // When the item type reads itself through an expression (mixed value), wrap the list in

@@ -3,6 +3,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class CircularRef extends Type {
   public ref?: IType;
@@ -35,7 +36,7 @@ export class CircularRef extends Type {
     trace(context, '<- [circular-ref:generate]', `-> out: ${this.name}`);
   }
 
-  public select(context: OasContext, writer: Writer, _selection: string[], _path: string): void {
+  public select(context: OasContext, writer: Writer, _selection: ExpandedSelection, _path: string): void {
     trace(context, '-> [circular-ref:select]', `-> in: ${this.name}`);
 
     writer

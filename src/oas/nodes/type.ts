@@ -4,25 +4,7 @@ import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Factory } from './factory.js';
 import { Naming } from '../utils/naming.js';
-
-// Build (once per selection array, cached by identity) the set of all `>`-boundary prefixes of every
-// selection entry. `someEntry.startsWith(path)` for a `>`-joined `path` is then exactly
-// `prefixes.has(path)`, turning per-prop membership from O(selection) into O(1). The same expanded
-// selection array is threaded through generation, so the WeakMap is built once and reused. see #10
-const selectionPrefixCache = new WeakMap<string[], Set<string>>();
-export function selectionPrefixes(selection: string[]): Set<string> {
-  let prefixes = selectionPrefixCache.get(selection);
-  if (prefixes) return prefixes;
-  prefixes = new Set<string>();
-  for (const entry of selection) {
-    prefixes.add(entry);
-    for (let i = entry.indexOf(Naming.PATH_SEPARATOR); i !== -1; i = entry.indexOf(Naming.PATH_SEPARATOR, i + 1)) {
-      prefixes.add(entry.slice(0, i));
-    }
-  }
-  selectionPrefixCache.set(selection, prefixes);
-  return prefixes;
-}
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export abstract class Type implements IType {
   public parent?: IType;
@@ -47,11 +29,11 @@ export abstract class Type implements IType {
 
   public abstract forPrompt(context: OasContext): string;
 
-  public abstract select(context: OasContext, writer: Writer, selection: string[], path: string): void;
+  public abstract select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void;
 
   // The nodes this node's written output needs (a field's target type, a wrapper's payload, a
   // map's value …). Leaves return nothing. Overridden per class, next to the code it mirrors.
-  public dependencies(_context: OasContext, _selection: string[], _path: string): IType[] {
+  public dependencies(_context: OasContext, _selection: ExpandedSelection, _path: string): IType[] {
     return [];
   }
 
@@ -113,7 +95,7 @@ export abstract class Type implements IType {
     // }
   }
 
-  public abstract generate(context: OasContext, writer: Writer, selection: string[]): void;
+  public abstract generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void;
 
   get id() {
     return this.name;
@@ -169,13 +151,14 @@ export abstract class Type implements IType {
 
   // `_keep` is unused here: the base filter never renumbers a twin, only Obj/Composed/Union's
   // overrides do. It stays required so every override (and every caller) carries it too. #162
-  public selectedProps(selection: string[], _keep: boolean, path: string) {
-    // Keeps a prop when some selection entry starts with its path on the route that reached this node
-    // (propPath). Indexes the selection once into its `>`-boundary prefixes, so each check is one
-    // lookup; a scan per prop blew up on large recursive specs. see docs/FIXED.md #10, #242
-    const prefixes = selectionPrefixes(selection);
+  public selectedProps(selection: ExpandedSelection, _keep: boolean, path: string) {
+    // Keeps a prop when the selection holds it at its path on the route that reached this node
+    // (propPath), one isSelected check each; a scan per prop blew up on large recursive specs.
+    // see docs/FIXED.md #10, #242
     const pathsToMembers = this.findPathsToMembers();
-    return Array.from(this.props.values()).filter((prop) => prefixes.has(this.propPath(prop, path, pathsToMembers)));
+    return Array.from(this.props.values()).filter((prop) =>
+      selection.isSelected(prop, this.propPath(prop, path, pathsToMembers)),
+    );
   }
 
   // Returns the selection path of `prop` when this node sits at `path`: the ids of the allOf or

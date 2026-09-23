@@ -13,6 +13,7 @@ import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 import { SYN_SUCCESS_RESPONSE } from '../schemas/index.js';
 import { findPayload } from '../utils/payload.js';
 import _ from 'lodash';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 // statuses that, per the HTTP spec itself, never carry a body -- these are the only ones where
 // inventing a plain "it worked" answer is safe. any other 2xx with no described content might
@@ -74,7 +75,7 @@ export class Get extends Type implements Op {
     return `[get] ${this.name}`;
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     context.enter(this);
     trace(context, '-> [get::generate]', `-> in: ${this.name}`);
 
@@ -128,14 +129,14 @@ export class Get extends Type implements Op {
     context.leave(this);
   }
 
-  public select(_context: OasContext, _writer: Writer, _selection: string[], _path: string) {
+  public select(_context: OasContext, _writer: Writer, _selection: ExpandedSelection, _path: string) {
     // do nothing
   }
 
   // Writes the root field's return type: the payload field's own type when the overrides name
   // one, otherwise the response type.
   //   e.g. Ashby: { success: true, results: Job } with payload "results" -> Job
-  protected writeReturnType(context: OasContext, writer: Writer, selection: string[]): void {
+  protected writeReturnType(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     const payload = findPayload(context, this);
     if (payload) {
       writer.write(payload.getValue(context)).write(payload.required ? '!' : '');
@@ -148,7 +149,7 @@ export class Get extends Type implements Op {
   // always a Res wrapper (see res.ts); the real answer is one step in, at Res.response. #132
   //   e.g. (github) get:/watchers answers anyOf [array of user, array of watcher] — no shared
   //   fields, so getWatchers(): JSON gains a "NEEDS ATTENTION" note explaining why
-  protected resultJsonReason(context: OasContext, selection: string[], keep: boolean): string | undefined {
+  protected resultJsonReason(context: OasContext, selection: ExpandedSelection, keep: boolean): string | undefined {
     const response = this.resultType instanceof Res ? this.resultType.response : this.resultType;
     if (response instanceof Union) return response.emptyMergeReason(context, selection, keep);
 
@@ -203,7 +204,7 @@ export class Get extends Type implements Op {
   // the top-level fields of its response, when the flag is on. see docs/FIXED.md #160
   //   e.g. (doc-response-fields.yaml) get:/items answers a list of { id, name, created_at }
   //   objects -> "Returns a list of items with: createdAt, id, name"
-  protected responseFieldsDocLine(context: OasContext, selection: string[]): string | undefined {
+  protected responseFieldsDocLine(context: OasContext, selection: ExpandedSelection): string | undefined {
     if (!context.generateOptions?.docResponseFields) {
       return undefined;
     }
@@ -441,7 +442,7 @@ export class Get extends Type implements Op {
 
   // one argument list for the whole operation; mutations pass their body as the last arg
   // (`(id: ID!, input: PetInput!)`) — a second parenthesised list is not valid GraphQL. #27
-  protected generateParameters(context: OasContext, writer: Writer, selection: string[], bodyArg?: string): void {
+  protected generateParameters(context: OasContext, writer: Writer, selection: ExpandedSelection, bodyArg?: string): void {
     const sorted = this.params.sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0));
 
     if (sorted.length === 0 && !bodyArg) {

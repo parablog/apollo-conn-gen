@@ -4,6 +4,7 @@ import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Res extends Type {
   public schema: SchemaObject;
@@ -42,7 +43,7 @@ export class Res extends Type {
     return 'Response';
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     context.enter(this);
     trace(context, '-> [res:generate]', `-> in: ${this.parent!.name}`);
 
@@ -58,7 +59,7 @@ export class Res extends Type {
     return this.response ? [this.response] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string): void {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void {
     trace(context, '-> [res:select]', `-> in: ${this.parent!.name}`);
 
     const response = this.response;

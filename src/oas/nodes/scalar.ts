@@ -5,6 +5,7 @@ import { DEFAULT_VERSIONS, meetsMinimum } from '../../versions.js';
 import { APOLLO_SYNTHETIC_OBJ } from '../schemas/index.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Scalar extends Type {
   constructor(
@@ -29,7 +30,7 @@ export class Scalar extends Type {
     return String(this.schema.type);
   }
 
-  public generate(context: OasContext, writer: Writer, _selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, _selection: ExpandedSelection): void {
     context.enter(this);
     trace(context, '-> [scalar::generate]', `-> in: ${this.name}`);
     writer.write(this.name);
@@ -54,7 +55,7 @@ export class Scalar extends Type {
     return meetsMinimum(connect, 'v0.4') && meetsMinimum(federation, 'v2.14');
   }
 
-  public select(context: OasContext, writer: Writer, _selection: string[], _path: string) {
+  public select(context: OasContext, writer: Writer, _selection: ExpandedSelection, _path: string) {
     if (!this.coalescesDefault(context)) {
       // no default, or a real field below the gate with no safe literal-replacement form —
       // write nothing, same as a field with no default. see docs/FIXED.md #165

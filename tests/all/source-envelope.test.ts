@@ -196,13 +196,8 @@ test('source-envelope flag: configured isSuccess/errors leaves both root fields 
 });
 
 test('source-envelope union: a selection path saved before the config resolves to the same nodes with it', async () => {
-  const before = await OasGen.fromFile(`${oasBasePath}/source-envelope-union.yaml`, {
-    showParentInSelections: false,
-    useOperationIds: true,
-  });
-  await before.visit();
-  const saved = before.expanded(['post:/widget.info>**']);
-  assert.ok(saved.length > 0);
+  // a selection saved before the source-envelope config existed, so it still names success and the error branch
+  const saved = JSON.parse(fs.readFileSync(`${oasBasePath}/source-envelope-union-widget-info-selection.json`, 'utf-8'));
 
   const after = await OasGen.fromFile(`${oasBasePath}/source-envelope-union.yaml`, {
     showParentInSelections: false,
@@ -215,14 +210,8 @@ test('source-envelope union: a selection path saved before the config resolves t
 });
 
 test('source-envelope union: a selection saved before the config still drops success/errors once the config applies', async () => {
-  const before = await OasGen.fromFile(`${oasBasePath}/source-envelope-union.yaml`, {
-    showParentInSelections: false,
-    useOperationIds: true,
-  });
-  await before.visit();
-  const saved = before.expanded(['post:/widget.list>**']);
-  assert.ok(saved.some((p) => p.endsWith('prop:scalar:success')), 'the unconfigured saved list still names success directly');
-  assert.ok(saved.some((p) => p.includes('ErrorResponse')), 'the unconfigured saved list still names the error branch directly');
+  // a selection saved before the source-envelope config existed, so it still names success and the error branch
+  const saved = JSON.parse(fs.readFileSync(`${oasBasePath}/source-envelope-union-widget-list-selection.json`, 'utf-8'));
 
   const after = await OasGen.fromFile(`${oasBasePath}/source-envelope-union.yaml`, {
     showParentInSelections: false,

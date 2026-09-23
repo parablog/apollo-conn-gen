@@ -967,12 +967,16 @@ Not yet measured: the per-op cost of the 41 Business-reaching GETs.
 - Step 2 (2026-09-23): writing a selection and walking the kept types pass down the path of the
   route they are on, and a field is selected when that path is in the selection, not its node's own
   path. Output unchanged. Done in the working tree, see `docs/FIXED.md` #242.
-- Step 3: one built type per schema and kind, with loop fields found once over the shared types and
+- 2026-09-23: the last two steps swapped places. With one built type per schema, the leaf walk
+  passes a shared type once and would write leaf paths for its first route only, so the strings go first.
+- Step 3 (2026-09-23): a `>**` selection stays one entry; the leaf walk marks the nodes on the way to
+  each leaf instead of writing one path string per leaf. Output unchanged. Done in the working tree,
+  see `docs/FIXED.md` #242.
+- Step 4: one built type per schema and kind, with loop fields found once over the shared types and
   written through `propOverrides`.
-- Open for step 3: mixed-value clones (#208) still carry the path their member field had when the
+- Open for step 4: mixed-value clones (#208) still carry the path their member field had when the
   union was merged (`pathInSelection`). A shared union is reached on many routes, so the clone's path
   has to come from the route being walked.
-- Step 4: `>**` selections collected without expanding into one string per leaf.
 
 **AST:** no change yet.
 
@@ -1052,3 +1056,36 @@ all comments is the first thing to look at.
 **Shape:** none yet.
 
 **Refs:** found during #242 step 2 (`docs/FIXED.md` #242); present on main at 3c826ef. #10, #89, #101.
+
+## 245 [BUG] [P3] · Three selection quirks kept on purpose by #242 step 3 · ⬜ Open
+
+**Symptom:** each gives an answer that depends on order, not on what was selected.
+- The selection's prefix set is built once per entries array
+  (`ExpandedSelection.entryPrefixes`). An entry pushed onto the same array after the first
+  membership check is not seen by later checks.
+- A literal `>*` entry makes `collect()` replace the entries array. Entries the saved-path recovery
+  (#208) pushes after that land in the new array, which the loop is no longer reading, so they are
+  never expanded or queued.
+- The empty-side fallback (#32, #51) asks whether a side already has a leaf by id prefix, with no
+  `>` boundary. On a body with two empty objects `a` and `ab`, the selection `…>prop:obj:ab>**` then
+  `…>prop:obj:a>**` writes only `ab`; the other order writes both.
+
+**OAS** (a body holding two empty objects, as used to check step 3):
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          a: { type: object }
+          ab: { type: object }
+```
+
+**Cause:** kept as they were so step 3's output stayed byte-identical: the old per-array prefix
+cache, the `>*` branch's `filter` reassignment, and the old `startsWith(sidePath)` check.
+
+**Shape:** none yet.
+
+**Refs:** #242 step 3 (`docs/FIXED.md` #242). `src/oas/utils/expandedSelection.ts` (`entryPrefixes`,
+`hasLeafUnder`), `src/oas/generator/typesCollector.ts` (`collect`, `collectLeafPaths`).

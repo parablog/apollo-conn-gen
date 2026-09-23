@@ -11,6 +11,7 @@ import { Params } from '../utils/params.js';
 import { ErrorsWriter } from './errorsWriter.js';
 import { Writer } from './writer.js';
 import { NameValue, SecurityPlan } from './security.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class OperationWriter {
   private errorsWriter: ErrorsWriter;
@@ -22,8 +23,8 @@ export class OperationWriter {
     this.errorsWriter = new ErrorsWriter(gen);
   }
 
-  public writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-    const selectionSet = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
+  public writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: ExpandedSelection): void {
+    const selectionSet = new Set<string>(selection.entries.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
     if (_.isEmpty(paths)) return;
@@ -37,7 +38,7 @@ export class OperationWriter {
       // flag off this stays [] exactly as before. see docs/FIXED.md #160
       //   e.g. (doc-response-fields.yaml) GET /items/{item_id} keeping { id, name, created_at }
       //   gains the description line "Returns: createdAt, id, name"; without the flag, nothing changes here
-      path.generate(context, writer, context.generateOptions?.docResponseFields ? selection : []);
+      path.generate(context, writer, context.generateOptions?.docResponseFields ? selection : new ExpandedSelection([]));
       this.writeConnector(context, writer, path, selection);
       context.generatedSet.add(path.id);
     }
@@ -45,8 +46,8 @@ export class OperationWriter {
     writer.write('}\n\n');
   }
 
-  public writeMutations(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: string[]): void {
-    const selectionSet = new Set<string>(selection.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
+  public writeMutations(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: ExpandedSelection): void {
+    const selectionSet = new Set<string>(selection.entries.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
     if (_.isEmpty(paths)) return;
@@ -60,7 +61,7 @@ export class OperationWriter {
       // flag off this stays [] exactly as before. see docs/FIXED.md #160
       //   e.g. (doc-response-fields.yaml) GET /items/{item_id} keeping { id, name, created_at }
       //   gains the description line "Returns: createdAt, id, name"; without the flag, nothing changes here
-      path.generate(context, writer, context.generateOptions?.docResponseFields ? selection : []);
+      path.generate(context, writer, context.generateOptions?.docResponseFields ? selection : new ExpandedSelection([]));
       this.writeConnector(context, writer, path, selection);
       context.generatedSet.add(path.id);
     }
@@ -68,7 +69,7 @@ export class OperationWriter {
     writer.write('}\n\n');
   }
 
-  public writeConnector(context: OasContext, writer: Writer, type: IType, selection: string[]): void {
+  public writeConnector(context: OasContext, writer: Writer, type: IType, selection: ExpandedSelection): void {
     if (!T.isOp(type)) {
       throw new Error(`expected an operation node, got ${type.id}`);
     }
@@ -98,7 +99,7 @@ export class OperationWriter {
     writer.write(spacing).write(')\n');
   }
 
-  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: string[], _indent: number): void {
+  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: ExpandedSelection, _indent: number): void {
     const override = findOverride(op.id, context.generateOptions.overrides);
 
     // R5: this op's resolved auth, split by placement. A header lives on @connect only in per-op
@@ -287,7 +288,7 @@ export class OperationWriter {
     return Params.arrayJoin(p.parameter);
   }
 
-  private writeSelection(context: OasContext, writer: Writer, op: Op & IType, selection: string[]): void {
+  private writeSelection(context: OasContext, writer: Writer, op: Op & IType, selection: ExpandedSelection): void {
     context.indent = 6;
     const payload = findPayload(context, op);
     const wanted = payloadField(op.id, context.generateOptions.overrides);
@@ -309,7 +310,7 @@ export class OperationWriter {
     writer: Writer,
     op: Op & IType,
     payload: Prop,
-    selection: string[],
+    selection: ExpandedSelection,
   ): void {
     const indent = ' '.repeat(context.indent);
     const payloadPath = op.propPath(payload, op.id);
@@ -345,7 +346,7 @@ export class OperationWriter {
     writer.write(spacing + '"""\n');
   }
 
-  private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: string[], path: string): void {
+  private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: ExpandedSelection, path: string): void {
     context.indent = 8;
     body.select(context, writer, selection, path);
   }

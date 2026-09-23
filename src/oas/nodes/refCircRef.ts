@@ -2,6 +2,7 @@ import { CircularRef } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 /**
  * Construction-time circular-reference sentinel for cycles that close through `Factory.fromSchema`
@@ -19,7 +20,7 @@ export class RefCircRef extends CircularRef {
     writer.write(`# ${Naming.getRefName(this.name)}: circular reference omitted\n`);
   }
 
-  public select(context: OasContext, writer: Writer, _selection: string[], _path: string): void {
+  public select(context: OasContext, writer: Writer, _selection: ExpandedSelection, _path: string): void {
     writer
       .write(' '.repeat(context.indent + context.stack.length))
       .write(`# ${Naming.getRefName(this.name)}: circular reference omitted\n`);

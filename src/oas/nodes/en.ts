@@ -5,6 +5,7 @@ import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { GqlUtils } from '../utils/gql.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class En extends Type {
   // true only when built with no name at all, not whenever the name happens to spell "enum".
@@ -61,7 +62,7 @@ export class En extends Type {
     return `[enum] ${Naming.getRefName(this.name)}: ${this.items.join(', ')}`;
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     // reached as a bare response (no object wrapper) — the definition itself is written
     // separately by the top-level types walk; here just reference it by name, same as Obj's own
     // in-Res case. see docs/FIXED.md #120
@@ -96,7 +97,7 @@ export class En extends Type {
     context.leave(this);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], _path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, _path: string) {
     trace(context, '-> [enum::select]', `-> in: ${this.name}`);
 
     // do nothing?

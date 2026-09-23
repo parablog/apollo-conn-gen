@@ -2,6 +2,7 @@
 import fs from 'fs';
 import { Type, IType, Composed } from '../../oas/nodes/internal.js';
 import { OasGen } from '../../oas/oasGen.js';
+import { ExpandedSelection } from '../../oas/utils/expandedSelection.js';
 import { typesPrompt } from '../../oas/prompts/prompt.js';
 import { OptionValues } from 'commander';
 
@@ -29,7 +30,7 @@ export async function promptForSelection(gen: OasGen, opts: any, types: IType[])
 
     if (type instanceof Composed) {
       // make sure we gather all the props
-      (type as Composed).consolidate([]);
+      (type as Composed).consolidate(new ExpandedSelection([]));
       result = Array.from(type.props.values());
     } else {
       // top level paths

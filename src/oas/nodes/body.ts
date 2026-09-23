@@ -7,6 +7,7 @@ import { Schemas } from '../utils/schemas.js';
 import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 import _ from 'lodash';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Body extends Type {
   public schema: SchemaObject;
@@ -52,7 +53,7 @@ export class Body extends Type {
     return 'Body';
   }
 
-  public generate(_context: OasContext, _writer: Writer, _selection: string[]): void {
+  public generate(_context: OasContext, _writer: Writer, _selection: ExpandedSelection): void {
     // do nothing for body, it will be added automatically
   }
 
@@ -99,7 +100,7 @@ export class Body extends Type {
     return members.length === 0 || members.every((member) => member instanceof Scalar);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string): void {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void {
     trace(context, '-> [body:select]', `-> in: ${this.parent!.name}`);
 
     const spacing = ' '.repeat(8);

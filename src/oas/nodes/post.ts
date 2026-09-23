@@ -8,6 +8,7 @@ import { Media } from '../utils/media.js';
 import { Naming } from '../utils/naming.js';
 import { Schemas } from '../utils/schemas.js';
 import _ from 'lodash';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 // container for the schema and media types, so we can
 // include www-encoded bodies
@@ -62,11 +63,11 @@ export class Post extends Get {
     return `[post] ${this.name}`;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], _path: string): void {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, _path: string): void {
     throw new Error('select not implemented.');
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     context.enter(this);
     trace(context, '-> [post::generate]', `-> in: ${this.name}`);
 

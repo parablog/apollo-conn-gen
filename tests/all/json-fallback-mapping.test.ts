@@ -5,6 +5,7 @@ import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { captureErrors } from './_setup.js';
 import { Factory, IType, PropArray, PropComp, Union } from '../../src/oas/nodes/internal.js';
 import { Schemas } from '../../src/oas/utils/schemas.js';
+import { ExpandedSelection } from '../../src/oas/utils/expandedSelection.js';
 import { SchemaObject } from 'oas/types';
 
 // --- FIXED #208: one field per kind, for a nested oneOf mixing object and non-object members ---
@@ -756,7 +757,7 @@ test('test_208_object_branch_clone_owned_by_object_type_keeps_member_path', asyn
   const shape = union.analyzeMixedValue(context)!;
   const currency = union.children[shape.objectMemberIndexes[0]];
   const originalCurrencyCode = currency.props.get('currencyCode')!;
-  const selection = [originalCurrencyCode.path(), currency.props.get('value')!.path()];
+  const selection = new ExpandedSelection([originalCurrencyCode.path(), currency.props.get('value')!.path()]);
   union.consolidate(context, selection, false);
 
   const objectType = union.mixedValue!.objectType!;

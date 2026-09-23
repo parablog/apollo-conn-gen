@@ -8,6 +8,7 @@ import { Schemas } from '../utils/schemas.js';
 import { GqlUtils } from '../utils/gql.js';
 import { JsonDegradeReasons } from '../utils/jsonReasons.js';
 import { Nullability } from '../utils/nullability.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Map extends Type {
   public valueType?: IType;
@@ -61,7 +62,7 @@ export class Map extends Type {
     context.leave(this);
   }
 
-  public generate(context: OasContext, writer: Writer, selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
     if (!this.valueType) {
       return;
     }
@@ -147,7 +148,7 @@ export class Map extends Type {
     return value instanceof Obj && T.everyFieldRemoved(value, context) ? value : undefined;
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [map::select]', `-> in: ${this.name}`);
 
     // A map that is the whole response is read by Res.select, which owns the response root; here
@@ -161,7 +162,7 @@ export class Map extends Type {
 
   // The `->entries { key value { … } }` body; the caller writes what comes in front of the arrow.
   // e.g. (map-response-root.yaml) `$` for a whole-response map, `labels` for one under a property.
-  public selectEntries(context: OasContext, writer: Writer, selection: string[], path: string): void {
+  public selectEntries(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void {
     writer.write('->entries {').write('\n');
     context.enter(this);
 

@@ -12048,3 +12048,53 @@ Found while building it:
 `src/oas/nodes/type.ts` (`propPath`, `findPathsToMembers`,
 `childPath`), `src/oas/nodes/union.ts`, `src/oas/generator/typesCollector.ts`
 (`selectedRoots`, `writtenRoots`, `collectReachable`, `walkKeptAndRemoved`).
+
+## 242 [BUG] [P3] · Step 3 of 4: a `>**` selection stays one entry; the leaf walk marks nodes · ✅ Step done
+
+**Example** (quickbooks-online.yaml, `post:/v3/company/{realm-id}/bill>**`):
+```
+BillCreateObject.CurrencyRef:  { type: object }   an empty input object, no leaf below it
+under the root post:/v3/company/{realm-id}/bill>**:  yes
+selected:                                             no, today and now
+```
+- A rule "a field under a `>**` root is selected" would select it and change the SDL.
+- The leaf walk decides what is selected; it now marks the nodes on the way to each leaf instead of
+  writing a path string per leaf.
+
+**What changed:**
+- `ExpandedSelection` holds the selection after the walk: the entries (each `>**` root kept as one
+  string, then the explicit paths), the leaves in walk order, and the nodes that lead to a leaf.
+- `isSelected(node, path)` answers whether a field is selected, at every place that checked the
+  prefix set before: `Type.selectedProps`, Composed and union merging, union members, mixed-value clones.
+- `collectLeafPaths` reports each leaf to a target; the empty-side check (#32, #51) asks the target.
+- `collect()` expands each leaf and queues its types, in walk order, before its loop over the explicit entries.
+- A root that finds no leaf adds no entry, so it selects nothing and its op is not written.
+- A mixed-value clone (#208) is marked selected when a selected member field carries its name.
+- `OasGen.expanded()` now returns the entries: roots stay `op>**`, explicit paths as given.
+- An empty selection is `new ExpandedSelection([])`; `Composed.consolidate` reads it as "every field".
+
+**Output:** unchanged. Checked before and after, each spec in its own process:
+- premise: every leaf string the old walk wrote named the node the walk passed, and that node's
+  path was the string; 42 specs and fixtures, every leaf.
+- generated SDL with selections for each op's `op>**`, every side and object field under it,
+  and three saved mixed-value paths; 49 specs and fixtures, 19,654 selections, all byte-identical.
+- the empty-side check across two roots, sibling ids sharing a prefix, a root with no leaf, a
+  root below a type (same-name-fields.yaml keeps its type order), saved mixed-value paths
+  followed by explicit ones, twin names with `--keep-field-names` off and on, a stale root
+  (inline-body-input-names.yaml): all identical.
+- ten operations each on stripe, github and jira-platform, three explicit field paths each: identical.
+
+**Timing** (one run per spec, before → after):
+| spec | wall time | peak RSS | path strings kept |
+|---|---|---|---|
+| meta-ads `post:/act_{ad_account_id}/ads` | 167 → 47 s | 3.26 → 2.78 GB | 1,289,302 → 1 |
+| hubspot lists | 26 → 10 s | 0.82 → 0.57 GB | 306,598 → 30 |
+| stripe | 47 → 42 s | 0.58 → 0.56 GB | 103,093 → 589 |
+
+- meta-ads live heap after the build: 2.19 → 1.44 GB. The peak comes later, from the path strings
+  the kept-and-removed walk builds for each route (step 2), and is freed after it.
+
+**Refs:** `docs/TASKS.md` #242 (step 4 open), #245 (three order quirks kept here).
+`src/oas/utils/expandedSelection.ts`, `src/oas/generator/typesCollector.ts` (`collect`,
+`collectLeafPaths`, `collectExpandedPaths`, `LeafTarget`).
+

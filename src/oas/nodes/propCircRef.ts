@@ -2,6 +2,7 @@ import { OasContext } from '../oasContext.js';
 import { IType, Prop } from './internal.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class PropCircRef extends Prop {
   private ref: Prop;
@@ -35,7 +36,7 @@ export class PropCircRef extends Prop {
   // Render the whole field commented in the SDL (override generate, not just generateValue: the base
   // Prop.generate writes the uncommented `  field: ` prefix + `!`). A commented field is inert, so the
   // type carries no unresolved field (no CONNECTORS_UNRESOLVED_FIELD) while documenting why the field is left out. #10
-  public generate(context: OasContext, writer: Writer, _selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, _selection: ExpandedSelection): void {
     // the wrapped value may carry a raw ref (`[#/components/schemas/User]`): reduce refs to their name.
     // Names the value instead of 'JSON': a left-out object was never visited (no props), so
     // getValue falls back to that generic name on its own.
@@ -52,7 +53,7 @@ export class PropCircRef extends Prop {
       .write(' - circular reference omitted\n');
   }
 
-  public select(context: OasContext, writer: Writer, _selection: string[], _path: string) {
+  public select(context: OasContext, writer: Writer, _selection: ExpandedSelection, _path: string) {
     // Leaves the field out: emits a comment and does not recurse into the wrapped ref. Delegating
     // to `this.ref.select(...)` would re-expand the very cycle this node exists to break,
     // reintroducing the recursion into the connector selection (rover rejects it as CIRCULAR_REFERENCE). #10

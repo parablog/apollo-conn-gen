@@ -2,6 +2,7 @@ import { IType, Obj, Prop } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 // A key-only reference field discovered by inferEntityLinks: any other selected type carrying a
 // matching scalar field gains this. e.g. (entity-link) Song.album_id -> Song.album: Album. see docs/FIXED.md #161
@@ -51,7 +52,7 @@ export class PropEntityLink extends Prop {
   // a key-only stub, not real nested JSON -- hand-written instead of PropObj's recursive form.
   // e.g. Song.album_id -> `album: { albumId: album_id }`, letting the router complete the entity
   // via Album's own type-level resolver.
-  public select(context: OasContext, writer: Writer, _selection: string[], _path: string): void {
+  public select(context: OasContext, writer: Writer, _selection: ExpandedSelection, _path: string): void {
     const keep = context.generateOptions?.keepFieldNames === true;
     const base = context.indent + context.stack.length;
     const name = this.renamedTo ?? Naming.sanitiseField(this.name, keep);

@@ -6,6 +6,7 @@ import { Writer } from '../io/writer.js';
 import { Naming } from '../utils/naming.js';
 
 import { ReferenceObject } from './referenceObject.js';
+import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 /**
  * @deprecated This class is deprecated and should not be used in new code.
@@ -60,7 +61,7 @@ export class Ref extends Type {
     context.leave(this);
   }
 
-  public generate(context: OasContext, writer: Writer, _selection: string[]): void {
+  public generate(context: OasContext, writer: Writer, _selection: ExpandedSelection): void {
     context.enter(this);
     trace(context, '-> [ref::generate]', `-> in: ${this.name}`);
 
@@ -79,7 +80,7 @@ export class Ref extends Type {
     context.leave(this);
   }
 
-  public select(context: OasContext, writer: Writer, selection: string[], path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [ref::select]', `-> in: ${this.name}`);
     if (this.refType) {
       this.refType.select(context, writer, selection, Naming.pathUnder(path, this.refType.id));
