@@ -731,12 +731,24 @@ generation run shows a third of the time inside three functions: `Type.ancestors
 `TypesCollector.collect()` 12%, `Type.path()` 9%.
 
 **Cause:** `ancestors()` (`type.ts`) is `return this.parent ? [...this.parent.ancestors(), this] :
-[this]` — unmemoised, it rebuilds the whole parent chain from scratch on every call. `path()`
-(`type.ts`) calls `this.ancestors()` three separate times internally, so building one path costs
-three full chain walks instead of one.
+[this]` — unmemoised, it rebuilds the whole parent chain from scratch on every call.
 
-**Shape:** build the path from a single walk instead of `path()`'s three separate `ancestors()`
+**Shape:** build the path from a single walk instead of `path()`'s separate `ancestors()`
 calls, or memoise the chain while a node's parent is fixed.
+
+**Measured 2026-09-23:** a memoised chain behind a parent accessor with cascading invalidation was
+built and measured (one process, whole stripe spec, `OasGen.fromFile` -> `visit()` ->
+`generateSchema()`):
+
+| | before | after |
+|---|---|---|
+| `ancestors()` chain builds | 111,905,559 | 181,135 |
+| `ancestors()` invocations | 111,905,559 | 47,822,352 |
+| total wall time | 39.0 s | 37.3 s |
+| peak RSS | 644 MB | 705 MB |
+
+Rejected for the memory cost: about 60 MB more peak RSS for roughly 4% off total wall time. The
+wall-time floor of `generateSchema()` sits elsewhere and needs a CPU profile before the next attempt.
 
 **Refs:** `src/oas/nodes/type.ts` (`ancestors`, `path`), `src/oas/generator/typesCollector.ts`
 (`collect`).
@@ -756,19 +768,29 @@ The increase comes from the newly emitted custom-field object members, all four 
 
 **Symptom:** Stripe's `Customer.default_source: anyOf [string, Card]` and `Card.customer: anyOf
 [string, Customer]` rebuild `Card`/`Customer` from scratch on every branch instead of reusing the
-shared schema — an isolated two-schema repro (`file` 1416 copies, `address` 1411, `links` 1416,
-`Type.ancestors()` called 40 million times) takes 45 seconds without finishing. The same referenced
-types recur through the array position too: `customer.sources.data` and `account.external_accounts.data`.
+shared schema. The isolated two-schema repro this entry used to cite no longer shows the hang
+directly: #220's guard now sends a named-ref `anyOf` straight to `JSON`, so that same fixture runs
+in 17 ms with 57 `Type.ancestors()` calls today, not the 45 seconds and 40 million calls this entry
+used to report. The underlying problem is unchanged and untouched by that guard: a plain `$ref` to
+the same schema, not wrapped in `anyOf`, still builds a fresh `Obj` on every occurrence. The same
+referenced types recur through the array position too: `customer.sources.data` and
+`account.external_accounts.data`.
 
 **Cause:** every `$ref` occurrence builds a fresh `Obj` — there is no run-scoped registry of
 already-built types, so a schema reachable from many branches or many array positions is rebuilt
 once per occurrence instead of once per run.
 
-**Shape:** a run-scoped registry of built types by `$ref`, reused instead of rebuilt, with the
-existing per-branch cycle field left out kept. Once rebuilding is cheap, lift #220's `namedMembersAnyOf` guard
-at both call sites (`fromProp` and `fromArrayItems`) and revisit the `items.anyOf`-only restriction
-on the list-item guard at the same time — a named-ref `oneOf` list item would presumably get the
-same typed treatment once the rebuild cost is gone.
+**Shape:** a plain registry keyed by `$ref` alone does not work, for three reasons found while
+scoping this: a reused node keeps the parent chain of whichever occurrence built it first, so its
+cycle handling would differ depending on which site got there first; a node's `kind` (input or
+output) is fixed at construction from its parent, so a component used by both a request body and a
+response body needs the pair `$ref` + `kind` as the registry's real key, not `$ref` alone; and a
+node's name only settles once `visit()` resolves collisions, so nothing can be registered under a
+final name before that pass runs. A memoised ancestor chain (#219) was built and measured first and
+rejected for its memory cost; the numbers are in that entry. Once rebuilding is cheap, lift #220's
+`namedMembersAnyOf` guard at both call sites (`fromProp` and `fromArrayItems`) and revisit the
+`items.anyOf`-only restriction on the list-item guard at the same time — a named-ref `oneOf` list
+item would presumably get the same typed treatment once the rebuild cost is gone.
 
 One more gap the same fix should close: `map.ts`'s `arrayValueJsonReason()` re-derives a list
 item's JSON reason the same stale way `propArray.ts` did before #220 — a map whose value is a list
