@@ -1,0 +1,195 @@
+# Links named in the overrides file ("$links"): Salesforce-shaped records whose key is `Id` and whose
+# id fields are named after the relationship (OwnerId -> User), which plain inference cannot link.
+# Queue's by-id op also needs a required `mode`, so it is not fetched from its key alone. #249
+# Member and Task are the plain-inference shape: Task.MemberId -> Task.member: Member with no entry.
+openapi: 3.0.3
+info:
+  title: Records Service
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /sobjects/Account/{Id}:
+    get:
+      operationId: getAccount
+      summary: Get one Account by id
+      parameters:
+        - name: Id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One Account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+  /sobjects/User/{Id}:
+    get:
+      operationId: getUser
+      summary: Get one User by id
+      parameters:
+        - name: Id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+  /sobjects/Group/{Id}:
+    get:
+      operationId: getGroup
+      summary: Get one Group by id
+      parameters:
+        - name: Id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One Group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+  /sobjects/Queue/{Id}:
+    get:
+      operationId: getQueue
+      summary: Get one Queue by id
+      parameters:
+        - name: Id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: mode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One Queue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Queue'
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: List accounts
+      responses:
+        '200':
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Account'
+  /members/{id}:
+    get:
+      operationId: getMember
+      summary: Get one member by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+  /sobjects/Task/{Id}:
+    get:
+      operationId: getTask
+      summary: Get one Task by id
+      parameters:
+        - name: Id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One Task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+components:
+  schemas:
+    Account:
+      type: object
+      required: [Id]
+      properties:
+        Id:
+          type: string
+        Name:
+          type: string
+        OwnerId:
+          type: string
+        ParentId:
+          type: string
+        QueueId:
+          type: string
+        Users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+    User:
+      type: object
+      required: [Id]
+      properties:
+        Id:
+          type: string
+        Name:
+          type: string
+        AccountId:
+          type: string
+        GroupId:
+          type: string
+    Group:
+      type: object
+      required: [Id]
+      properties:
+        Id:
+          type: string
+        Name:
+          type: string
+    Queue:
+      type: object
+      required: [Id]
+      properties:
+        Id:
+          type: string
+        Name:
+          type: string
+    Member:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    Task:
+      type: object
+      required: [Id]
+      properties:
+        Id:
+          type: string
+        MemberId:
+          type: string

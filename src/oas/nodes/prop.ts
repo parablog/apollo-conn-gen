@@ -52,8 +52,26 @@ export abstract class Prop extends Type {
   // The docstring text written above this field. Default: just the field's own OAS description.
   // A subclass that only decides inside getValue() to give up and write JSON overrides this to
   // explain why. e.g. (confluence) PropObj adds a reason here when contributors becomes JSON.
-  protected effectiveDescription(_context: OasContext): string | undefined {
-    return this.schema.description;
+  protected effectiveDescription(context: OasContext): string | undefined {
+    const note = this.findLinkTargetsNote(context);
+    const own = this.schema.description;
+    return note && own ? `${own} ${note}` : (note ?? own);
+  }
+
+  // Returns the sentence a "$links" target list adds, so a reader knows where the id points when
+  // no single link can be written (no union under a field). see docs/FIXED.md #249
+  //   e.g. (entity-link-overrides) Task.MemberId -> ["Group", "Member"]: "Links to Group or Member."
+  private findLinkTargetsNote(context: OasContext): string | undefined {
+    const owner = this.parent;
+    if (!context.generateOptions?.inferEntityResolvers || !(owner instanceof Obj) || owner.kind === 'input') {
+      return undefined;
+    }
+    const targets =
+      context.generateOptions.overrides?.$links?.[`${Naming.getRefName(owner.name)}.${this.name}`]?.target;
+    if (!Array.isArray(targets)) {
+      return undefined;
+    }
+    return `Links to ${targets.slice(0, -1).join(', ')} or ${targets[targets.length - 1]}.`;
   }
 
   // the `?` symbol marks a field the API may leave out, so the router stops warning when it does.
