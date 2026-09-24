@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   (meta-ads) all 129 operations generate in 6 s at 0.4 GB, and `AdAccount.business: Business` is now
   a field; only the field that closes a loop on an operation's walk is left out as a comment.
   Issues #242, #89.
+- A query param the overrides file sets to a fixed value, e.g. `"api-version": $("2024-01")`, is
+  sent even when the operation is called with no arguments. Issue #248.
 - A field that can be a plain scalar or a list of that scalar, spelled `anyOf`/`oneOf`, nested or
   flat, types as `{ text, list, raw }` instead of `JSON`. E.g. (ashby) `valueLabel: anyOf [anyOf
   [string, [string]], null]` types as `CustomFieldValueLabelUnion { text: String list: [String]

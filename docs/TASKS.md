@@ -1067,80 +1067,6 @@ union takes; it was left as it is.
 **Refs:** found during #242 step 4 (`docs/FIXED.md` #242). `src/oas/nodes/propScalar.ts`.
 
 
-## 248 [BUG] [P2] · A query param added through the overrides file is not sent when the caller passes no arguments · ⬜ Open
-
-**Symptom:** an overrides-file entry that adds a fixed query param is written inside the
-`$args { … }` block. When the caller passes no arguments, that block writes nothing, so the param is
-dropped and the request goes out without it. A Salesforce list operation called with no arguments
-sends a bare `GET /query`, and Salesforce rejects it because the SOQL query `q` is missing.
-
-**Overrides file:**
-```json
-{
-  "get:/query/Account": {
-    "path": "/query",
-    "queryParams": { "q": "$(\"SELECT Id, Name FROM Account\")" }
-  }
-}
-```
-
-**before → after:**
-```graphql
-# before: q sits inside $args { }, and nothing is sent when no argument is passed
-queryAccount: AccountList
-  @connect(
-    source: "api"
-    http: {
-      GET: "/query"
-      queryParams: """
-        $args {
-          "q": $("SELECT Id, Name FROM Account")
-        }
-      """
-    }
-    ...
-  )
-
-# after: a value that starts with $ is written beside the block, so it is always sent
-queryAccount: AccountList
-  @connect(
-    source: "api"
-    http: {
-      GET: "/query"
-      queryParams: """
-        "q": $("SELECT Id, Name FROM Account")
-      """
-    }
-    ...
-  )
-```
-
-**Runtime:** checked offline with `supergraph-v2.15.1 test-connectors` against the Salesforce
-subset schema (sample body, no call to Salesforce):
-- the before form sends `GET /query` whether the args are empty or unset;
-- the after form sends `GET /query?q=SELECT%20Id%2C%20Name%20FROM%20Account`;
-- the before form does send the param when the caller passes at least one argument, which is
-  why the one test on these overrides never caught it;
-- when the same name is both an argument and a fixed value, the fixed value wins silently;
-- `$($args.q ?? "…")` written beside the block sends the argument when given and the fixed
-  value otherwise.
-
-**Cause:** `src/oas/io/operationWriter.ts:187-195` (`queryParamsBlock`) puts every entry from
-`mergeOverrides` inside `$args { … }`. That is right for a value read from the arguments, like
-`ids->joinNotNull(";")`, but wrong for a value that doesn't depend on them, like `$("…")` or
-`$config.x`. The API key in the query string (line 197) is already written beside the block, which
-is the form this fix follows.
-
-**Shape:** none yet. An override value that starts with `$` goes beside the block. Anything else
-stays inside it, because it reads from `$args`.
-
-**Refs:** found measuring a Salesforce subset spec (`output/salesforce/`, not in the repo). The
-overrides file's query params came with R8 in ROADMAP.md, and pattern entries with #225. Test to
-extend: `test_overrides_rewire_path_and_query_params` (`tests/all/oas-core.test.ts:2449`, fixture
-`r7r8-selection.yaml`), whose `api-version` param is the same case: it only checks the text,
-not where it sits.
-
-
 ## 249 [FEAT] [P3] · Links to other records named in the overrides file · ⬜ Open
 
 **Symptom:** a field holding another record's id becomes a link to that record's type only when
@@ -1185,6 +1111,29 @@ object's by-id lookup made an entity by naming its path param `{Id}`:
 **Refs:** `src/oas/nodes/entity.ts` (`isIdKey`, `inferEntityLinks`, `reaches`). The overrides
 format is `OverrideEntry` in `src/oas/oasContext.ts`. Measurement notes are in
 `output/salesforce/summary.md` (not in the repo).
+
+## 250 [BUG] [P3] · An override query param that reads only named variables is not sent when the caller passes no arguments · ⬜ Open
+
+**Symptom:** #248 moved only `$( <JSON literal> )` values out of the `$args { … }` block. A value
+such as `$config.apiVersion` or `$($args.q ?? "SELECT Id FROM Account")` reads no argument by
+bare name either, but it stays inside the block, so it is still dropped when the caller passes
+no arguments.
+
+**Overrides file:**
+```json
+{ "get:/things": { "queryParams": { "api-version": "$config.apiVersion" } } }
+```
+Called with no arguments, the request has no `api-version`.
+
+**Cause:** inside the block, a bare `$` or a bare name reads the arguments; outside it, the top
+level. Telling `$config.x` (safe to move) from `$(page ?? 1)` (reads the argument `page`) needs a
+real JSONSelection parser, which gen does not have, so #248 leaves every such value inside.
+
+**Shape:** none yet. The question is whether the overrides file should let an entry say it
+belongs outside the block, instead of the writer guessing.
+
+**Refs:** `docs/FIXED.md` #248. `src/oas/io/operationWriter.ts` (`queryParamsBlock`,
+`isFixedValue`).
 
 ## 251 [PERF] [P3] · A restored field writes its whole subtree at every place it is selected · ⬜ Open
 

@@ -12280,3 +12280,60 @@ kept.
 - Left: an inline schema, and one reached through a `#/paths` pointer, is still built at every position.
 
 **Refs:** `docs/FIXED.md` #242, `docs/TASKS.md` #180.
+
+## 248 [BUG] [P2] · A fixed query param from the overrides file was not sent when the caller passed no arguments — ✅ Fixed
+
+**Example:** r7r8-selection.yaml, `get:/things`, with this overrides entry:
+```json
+{ "get:/things": { "queryParams": { "ids": "ids->joinNotNull(\";\")", "api-version": "$(\"2024-01\")" } } }
+```
+Before, every query param was written inside the `$args { … }` block:
+```
+        queryParams: """
+          $args {
+            "ids": ids->joinNotNull(";")
+            "tags": tags
+            "api-version": $("2024-01")
+          }
+        """
+```
+After, the fixed value is written after the block:
+```
+        queryParams: """
+          $args {
+            "ids": ids->joinNotNull(";")
+            "tags": tags
+          }
+          "api-version": $("2024-01")
+        """
+```
+
+**Symptom:**
+- A `$args { … }` block sends nothing when the caller passes no arguments.
+- So `things` called with no arguments went out as `GET /things`, with no `api-version`.
+- A Salesforce list operation with a fixed `"q": $("SELECT … FROM Account")` went out as a bare
+  `GET /query`, and Salesforce rejects that.
+- The one test on these overrides matched text only, so it passed with the bug in it.
+
+**Rule:**
+- Only a value whose whole text is `$( <JSON literal> )` moves after the block.
+- Anything that reads a value stays inside, because moving it changes what it reads: inside the
+  block `$.page` and `page` read the arguments, outside it they read the top level.
+- Spaces around the value don't matter: `  $("2024-01")` moves too.
+- The `$args { … }` block is written only when something stays inside it.
+- The fixed values and the query-string API key are written after the block, the same way.
+
+**Fix:** `src/oas/io/operationWriter.ts`: `queryParamsBlock` splits the entries with
+`isFixedValue`, which trims the value and checks it is `$(` + text `JSON.parse` accepts + `)`.
+
+**Tests:**
+- `test_overrides_rewire_path_and_query_params` (`tests/all/oas-core.test.ts`) now checks that
+  `api-version` sits after the block and `ids` inside it.
+- `test_overrides_fixed_query_params_sent_without_arguments` runs
+  `tests/resources/connectors/override-fixed-query-params/things.connector.yaml` through
+  `test-connectors`, with a plain and a space-padded literal, `$.page` and `$(page ?? 1)`:
+  - no arguments: `?api-version=2024-01&api-release=2024-01`, nothing else;
+  - `page: 3`: both page keys carry `3`, not the fallback.
+
+**Refs:** found measuring a Salesforce subset spec. Follow-up for values that read only named
+variables, like `$config.x`: `docs/TASKS.md` #250.

@@ -184,21 +184,45 @@ export class OperationWriter {
       return null;
     }
 
+    const argEntries = entries.filter(({ value }) => !this.isFixedValue(value));
+    const besideEntries = entries.filter(({ value }) => this.isFixedValue(value));
+    if (auth) {
+      besideEntries.push(auth);
+    }
+
     const lines: string[] = ['        queryParams: """'];
-    // the `$args { … }` block only when there are arg-derived params (skipped for auth-only ops)
-    if (entries.length > 0) {
+    // Writes the `$args { … }` block only when an entry reads the arguments, so a fixed value
+    // alone is sent without an empty block. e.g. (r7r8-selection) `ids` and `tags` stay inside it.
+    if (argEntries.length > 0) {
       lines.push('          $args {');
-      for (const { name, value } of entries) {
+      for (const { name, value } of argEntries) {
         lines.push(`            "${name}": ${value}`);
       }
       lines.push('          }');
     }
-    // e.g. `"api_key": $config.apiKey` — key quoted so non-identifier names like `api-key` are safe
-    if (auth) {
-      lines.push(`          "${auth.name}": ${auth.value}`);
+    // Writes fixed values and the query-string API key beside the block, keys quoted so names like
+    // `api-version` are safe. e.g. `"api-version": $("2024-01")`, `"api_key": $config.apiKey`
+    for (const { name, value } of besideEntries) {
+      lines.push(`          "${name}": ${value}`);
     }
     lines.push('        """');
     return lines.join('\n') + '\n';
+  }
+
+  // Answers whether a value is `$( <JSON literal> )`: `$args { … }` sends nothing without arguments
+  // and only a literal reads no scope, so only a literal moves beside it. see docs/FIXED.md #248
+  //   e.g. (r7r8-selection) `$("2024-01")` moves, `ids->joinNotNull(";")` stays
+  private isFixedValue(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('$(') || !trimmed.endsWith(')')) {
+      return false;
+    }
+    try {
+      JSON.parse(trimmed.slice(2, -1));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // the op's headers block (a self-contained string ending in a newline), or null when there are
