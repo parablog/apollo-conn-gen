@@ -23,7 +23,12 @@ export class OperationWriter {
     this.errorsWriter = new ErrorsWriter(gen);
   }
 
-  public writeQuery(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: ExpandedSelection): void {
+  public writeQuery(
+    context: OasContext,
+    writer: Writer,
+    collected: Map<string, IType>,
+    selection: ExpandedSelection,
+  ): void {
     const selectionSet = new Set<string>(selection.entries.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
@@ -38,7 +43,11 @@ export class OperationWriter {
       // flag off this stays [] exactly as before. see docs/FIXED.md #160
       //   e.g. (doc-response-fields.yaml) GET /items/{item_id} keeping { id, name, created_at }
       //   gains the description line "Returns: createdAt, id, name"; without the flag, nothing changes here
-      path.generate(context, writer, context.generateOptions?.docResponseFields ? selection : new ExpandedSelection([]));
+      path.generate(
+        context,
+        writer,
+        context.generateOptions?.docResponseFields ? selection : new ExpandedSelection([]),
+      );
       this.writeConnector(context, writer, path, selection);
       context.generatedSet.add(path.id);
     }
@@ -46,7 +55,12 @@ export class OperationWriter {
     writer.write('}\n\n');
   }
 
-  public writeMutations(context: OasContext, writer: Writer, collected: Map<string, IType>, selection: ExpandedSelection): void {
+  public writeMutations(
+    context: OasContext,
+    writer: Writer,
+    collected: Map<string, IType>,
+    selection: ExpandedSelection,
+  ): void {
     const selectionSet = new Set<string>(selection.entries.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
     const paths = Array.from(collected.values()).filter((path) => selectionSet.has(path.id));
@@ -61,7 +75,11 @@ export class OperationWriter {
       // flag off this stays [] exactly as before. see docs/FIXED.md #160
       //   e.g. (doc-response-fields.yaml) GET /items/{item_id} keeping { id, name, created_at }
       //   gains the description line "Returns: createdAt, id, name"; without the flag, nothing changes here
-      path.generate(context, writer, context.generateOptions?.docResponseFields ? selection : new ExpandedSelection([]));
+      path.generate(
+        context,
+        writer,
+        context.generateOptions?.docResponseFields ? selection : new ExpandedSelection([]),
+      );
       this.writeConnector(context, writer, path, selection);
       context.generatedSet.add(path.id);
     }
@@ -99,7 +117,13 @@ export class OperationWriter {
     writer.write(spacing).write(')\n');
   }
 
-  private requestMethod(context: OasContext, writer: Writer, op: Op, selection: ExpandedSelection, _indent: number): void {
+  private requestMethod(
+    context: OasContext,
+    writer: Writer,
+    op: Op,
+    selection: ExpandedSelection,
+    _indent: number,
+  ): void {
     const override = findOverride(op.id, context.generateOptions.overrides);
 
     // R5: this op's resolved auth, split by placement. A header lives on @connect only in per-op
@@ -370,7 +394,13 @@ export class OperationWriter {
     writer.write(spacing + '"""\n');
   }
 
-  private writeBodySelection(context: OasContext, writer: Writer, body: Body, selection: ExpandedSelection, path: string): void {
+  private writeBodySelection(
+    context: OasContext,
+    writer: Writer,
+    body: Body,
+    selection: ExpandedSelection,
+    path: string,
+  ): void {
     context.indent = 8;
     body.select(context, writer, selection, path);
   }

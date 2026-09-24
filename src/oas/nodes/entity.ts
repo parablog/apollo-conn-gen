@@ -198,7 +198,11 @@ interface ResolverCandidate {
 
 // Today's GET-by-key rule, unchanged: every path param resolves to a selected scalar field.
 //   e.g. (entity-resolver) GET /widgets/{id} -> Widget @key(fields: "id")
-function getResolverCandidate(op: IType & Op, selection: ExpandedSelection, keep: boolean): ResolverCandidate | undefined {
+function getResolverCandidate(
+  op: IType & Op,
+  selection: ExpandedSelection,
+  keep: boolean,
+): ResolverCandidate | undefined {
   const obj = unwrapToObj(op.resultType);
   if (!obj) {
     return undefined;

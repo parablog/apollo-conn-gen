@@ -175,7 +175,9 @@ export class TypesCollector {
                 return Array.from(memberLeaves).some((p) => p.startsWith(sidePath));
               },
             };
-            shape.objectMemberIndexes.forEach((i) => pathsCollector.collectLeafPaths(union.children[i], op, memberLeafTarget));
+            shape.objectMemberIndexes.forEach((i) =>
+              pathsCollector.collectLeafPaths(union.children[i], op, memberLeafTarget),
+            );
             memberLeaves.forEach((p) => {
               if (!expanded.entries.includes(p)) expanded.entries.push(p);
             });

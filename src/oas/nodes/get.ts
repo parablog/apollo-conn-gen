@@ -442,7 +442,12 @@ export class Get extends Type implements Op {
 
   // one argument list for the whole operation; mutations pass their body as the last arg
   // (`(id: ID!, input: PetInput!)`) — a second parenthesised list is not valid GraphQL. #27
-  protected generateParameters(context: OasContext, writer: Writer, selection: ExpandedSelection, bodyArg?: string): void {
+  protected generateParameters(
+    context: OasContext,
+    writer: Writer,
+    selection: ExpandedSelection,
+    bodyArg?: string,
+  ): void {
     const sorted = this.params.sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0));
 
     if (sorted.length === 0 && !bodyArg) {
