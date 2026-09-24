@@ -1089,3 +1089,27 @@ cache, the `>*` branch's `filter` reassignment, and the old `startsWith(sidePath
 
 **Refs:** #242 step 3 (`docs/FIXED.md` #242). `src/oas/utils/expandedSelection.ts` (`entryPrefixes`,
 `hasLeafUnder`), `src/oas/generator/typesCollector.ts` (`collect`, `collectLeafPaths`).
+
+
+## 250 [BUG] [P3] · An override query param that reads only named variables is not sent when the caller passes no arguments · ⬜ Open
+
+**Symptom:** #248 moved only `$( <JSON literal> )` values out of the `$args { … }` block. A value
+such as `$config.apiVersion` or `$($args.q ?? "SELECT Id FROM Account")` reads no argument by
+bare name either, but it stays inside the block, so it is still dropped when the caller passes
+no arguments.
+
+**Overrides file:**
+```json
+{ "get:/things": { "queryParams": { "api-version": "$config.apiVersion" } } }
+```
+Called with no arguments, the request has no `api-version`.
+
+**Cause:** inside the block, a bare `$` or a bare name reads the arguments; outside it, the top
+level. Telling `$config.x` (safe to move) from `$(page ?? 1)` (reads the argument `page`) needs a
+real JSONSelection parser, which gen does not have, so #248 leaves every such value inside.
+
+**Shape:** none yet. The question is whether the overrides file should let an entry say it
+belongs outside the block, instead of the writer guessing.
+
+**Refs:** `docs/FIXED.md` #248. `src/oas/io/operationWriter.ts` (`queryParamsBlock`,
+`isFixedValue`).

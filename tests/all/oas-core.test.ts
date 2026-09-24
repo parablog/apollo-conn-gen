@@ -4,6 +4,7 @@ import { spawnSync } from 'child_process';
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
+import { runConnectorTest } from '../../src/tests/connectors.js';
 import { DirectivesConfig, OasGen } from '../../src/index.js';
 import { Arr, IType, Prop, T, Union } from '../../src/oas/nodes/internal.js';
 import { TypesCollector } from '../../src/oas/generator/typesCollector.js';
@@ -2456,9 +2457,37 @@ test('test_overrides_rewire_path_and_query_params', async () => {
   assert.ok(/"ids": ids->joinNotNull\(";"\)/.test(schema!), 'param value replaced');
   assert.ok(!/"page"/.test(schema!), 'null drops the param');
   assert.ok(/"api-version": \$\("2024-01"\)/.test(schema!), 'unknown key appended');
+  // Checks a fixed value sits after the `$args { … }` block and a value reading the arguments inside it. #248
+  assert.ok(/\$args \{[^}]*"ids": ids->joinNotNull\(";"\)[^}]*\}/.test(schema!), 'argument value inside the block');
+  assert.ok(/\$args \{[^}]*\}\s*"api-version": \$\("2024-01"\)/.test(schema!), 'fixed value after the block');
   assert.ok(/\{ name: "X-Version", value: "\{\$config\.version\}" \}/.test(schema!), 'header value replaced');
   assert.ok(!/X-Trace/.test(schema!), 'null drops the header');
   assert.ok(/\{ name: "X-Api-Key", value: "\{\$config\.apiKey\}" \}/.test(schema!), 'unknown header appended');
+});
+
+test('test_overrides_fixed_query_params_sent_without_arguments', async (t) => {
+  // Checks a fixed value, padded or not, is sent with no arguments, while `$.page` and
+  // `$(page ?? 1)` stay in the $args block and carry the caller's page, never the fallback. #248
+  const result = await runConnectorTest(
+    'r7r8-selection.yaml',
+    ['get:/things>**'],
+    'tests/resources/connectors/override-fixed-query-params/things.connector.yaml',
+    {
+      skipValidation: true,
+      overrides: {
+        'get:/things': {
+          queryParams: {
+            'api-version': '$("2024-01")',
+            'api-release': '  $("2024-01")',
+            'page-dollar': '$.page',
+            'page-fallback': '$(page ?? 1)',
+          },
+        },
+      },
+    },
+  );
+  if (result.skipped) return t.skip(result.output);
+  assert.ok(result.success, result.output);
 });
 
 test('test_overrides_replace_or_drop_body', async () => {
