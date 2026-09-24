@@ -4,49 +4,48 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.32.0] - 2026-09-24
 
 ### Added
 
-- The overrides file can name a field's link to another record, `"$links": { "Account.OwnerId":
-  { "target": "User", "name": "Owner" } }`, for specs whose names do not say where an id points.
-  Needs `--infer-entity-resolvers`. Issue #249.
+- The overrides file can say which record an id field points at. Before, a link was made only when
+  the field's name said so (`<Target>Id` with a target key spelled `id`), so Salesforce's
+  `Account.OwnerId` stayed a plain id. Now `"$links": { "Account.OwnerId": { "target": "User",
+  "name": "Owner" } }` with `--infer-entity-resolvers` writes `owner: User` on `Account`, fetched
+  through the User's own GET. Issue #249.
 
 ### Fixed
 
-- Specs whose schemas reference each other densely generate at the default heap instead of running
-  out of memory, and a field that only leads into a loop is written instead of left out. E.g.
-  (meta-ads) all 129 operations generate in 6 s at 0.4 GB, and `AdAccount.business: Business` is now
-  a field; only the field that closes a loop on an operation's walk is left out as a comment.
-  Issues #242, #89.
-- A query param the overrides file sets to a fixed value, e.g. `"api-version": $("2024-01")`, is
-  sent even when the operation is called with no arguments. Issue #248.
-- A field that can be a plain scalar or a list of that scalar, spelled `anyOf`/`oneOf`, nested or
-  flat, types as `{ text, list, raw }` instead of `JSON`. E.g. (ashby) `valueLabel: anyOf [anyOf
-  [string, [string]], null]` types as `CustomFieldValueLabelUnion { text: String list: [String]
-  raw: JSON }`. Issue #221.
-- A flat union merge where one branch's enum value is not a legal GraphQL name types the merged
-  field `String` instead of `JSON`. E.g. (omni) `fieldSelection.mode: oneOf [full-model, auto,
-  specific]` — `full-model` has a hyphen — types `mode: String!` instead of `mode: JSON`. Issue #234.
-- A response whose `content` key has no `schema`, only an `example`, reads as `JSON` instead of
-  throwing. E.g. (jira-platform) `get:/rest/api/3/screens/tabs` 200 declares only
-  `content: { application/json: { example: ... } } }` — types the field `JSON` with a note, instead
-  of stopping the whole run. Issue #239.
-- A boolean parameter or field named `id`/`*Id`/`*ID` stays `Boolean` instead of promoting to `ID`.
-  E.g. (jira-platform) `get:/rest/api/3/plans/plan/{planId}` query param `useGroupId: { type:
-  boolean, default: false }` types `useGroupId: Boolean = false` instead of the invalid
-  `useGroupId: ID = false`. Issue #240.
-- A request body that is itself a map (no wrapping object) types as `JSON` instead of a key/value
-  input type whose fields the selection then reads wrong. E.g. (jira-platform)
-  `put:/rest/api/3/config/fieldschemes/fields` body `{ additionalProperties: { type: array, items:
-  $ref UpdateFieldAssociationsRequestItem } }` types `input: JSON!` with `body: "$args.input"`,
-  instead of an `UpdateAssociationsInput { key value }` type whose selection read non-existent
-  fields. Issue #241.
-- A one-member `allOf` wrapping a `$ref` back to the field's own owning type gets the
-  circular-reference comment instead of vanishing. E.g. (jira-platform)
-  `NotificationEvent.templateEvent: allOf [ $ref NotificationEvent ]` types
-  `# templateEvent: NotificationEvent - circular reference omitted`, instead of dropping the field
-  with no comment and no explanation. Issue #238.
+- Specs whose schemas point at each other many times over generate at the default heap. Before,
+  every `$ref` built its own copy of the type it named, so meta-ads' 129 operations ran out of memory;
+  now each type is built once, and all 129 operations generate in 6 s at 0.4 GB. A field that only
+  leads into a loop is now written too, e.g. `AdAccount.business: Business`, where before it was left
+  out as a comment; only the field that closes the loop is left out. Issues #242, #89.
+- A query param the overrides file sets to a fixed value is sent even when the operation is called
+  with no arguments. Before, `"api-version": $("2024-01")` sat inside the `$args { … }` block, which
+  sends nothing without arguments, so the request went out as a bare `GET /things`; now it is written
+  after the block and always sent. Issue #248.
+- A field that is either a plain value or a list of that value types as `{ text, list, raw }`
+  instead of `JSON`. E.g. (ashby) `valueLabel: anyOf [anyOf [string, [string]], null]` was `JSON`
+  and now types as `CustomFieldValueLabelUnion { text: String list: [String] raw: JSON }`, nested or
+  flat. Issue #221.
+- A merged enum field with one value that is not a legal GraphQL name types as `String` instead of
+  `JSON`. E.g. (omni) `fieldSelection.mode: oneOf [full-model, auto, specific]` was `mode: JSON`
+  because `full-model` has a hyphen; it is now `mode: String!`. Issue #234.
+- A response whose content has only an example and no schema types as `JSON` instead of stopping
+  the run. E.g. (jira-platform) `get:/rest/api/3/screens/tabs` made the generator throw; the field
+  is now `JSON`, with a note saying why. Issue #239.
+- A boolean parameter or field whose name ends in `Id` stays `Boolean`. Before, it was promoted to
+  `ID` and kept its boolean default, which is invalid: (jira-platform) `useGroupId` was written
+  `useGroupId: ID = false` and is now `useGroupId: Boolean = false`. Issue #240.
+- A request body that is itself a map is sent whole as `JSON`. Before, it became a key/value input
+  type whose mapping read fields the body does not have: (jira-platform)
+  `put:/rest/api/3/config/fieldschemes/fields` wrote `UpdateAssociationsInput { key value }`; it now
+  takes `input: JSON!` and sends `$args.input`. Issue #241.
+- A one-member `allOf` that points back at its own type is written as a circular-reference comment.
+  Before, the field disappeared without a trace: (jira-platform) `NotificationEvent.templateEvent:
+  allOf [ $ref NotificationEvent ]` is now `# templateEvent: NotificationEvent - circular reference
+  omitted`. Issue #238.
 
 ## [0.31.0]
 
