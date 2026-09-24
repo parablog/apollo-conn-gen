@@ -12280,3 +12280,80 @@ kept.
 - Left: an inline schema, and one reached through a `#/paths` pointer, is still built at every position.
 
 **Refs:** `docs/FIXED.md` #242, `docs/TASKS.md` #180.
+
+## 249 [FEAT] [P3] · Links to other records named in the overrides file — ✅ Fixed
+
+**Example** (Salesforce, `Account.OwnerId` holds a `User` id):
+```json
+{ "$links": { "Account.OwnerId": { "target": "User", "name": "Owner" } } }
+```
+With `--infer-entity-resolvers`, `Account` gains a link and its connectors write a key-only stub:
+```graphql
+type Account @key(fields: "id") @connect(... GET: "/sobjects/Account/{$this.id}" ... selection: """
+  ...
+  owner: {
+    id: OwnerId
+  }
+""") {
+  ...
+  owner: User
+}
+```
+
+**What inference could not know:**
+- It links a field only when the name says where it points: `<Target>Id`, and a target key spelled `id`.
+- Salesforce spells the key `Id`, and names id fields after the relationship: `OwnerId` → `User`,
+  `ParentId` → `Account`.
+- Some fields point at several object types: `Case.OwnerId` → `Group` or `User`.
+- Measured on a six-object Salesforce subset before this: 0 of 51 id fields became links.
+
+**The entry:**
+- The key is `Host.field`, spelled as in the spec: `Account.OwnerId`.
+- `target` is the type the id points at. `name` is the link's name; without it, the target's name
+  (`user`).
+- A key that is not `Host.field`, an empty target, or a one-entry target list stops the run.
+- Without `--infer-entity-resolvers`, one warning and no link.
+
+**Rules, and why:**
+- An entry owns its field. Inference never links a field an entry names, even when the entry is
+  skipped: `Task.MemberId -> Group` writes `group: Group` and not also the inferred `member: Member`.
+- The target must be fetchable from its key alone: a GET in the selection, one path param that ends
+  the path, no other required param, and a result that is an entity. Inference applies the same check,
+  now in one function (`findByIdTarget`). Otherwise: `no by-id operation for Queue that takes only its key`.
+- A self-link (`Account.ParentId -> Account`) stays an id: the composer rejects a type inside its own
+  selection, even as a field-level connector.
+- A link is skipped when its target holds the host by value: with `Account.Users: [User]` selected,
+  `User.AccountId -> Account` would put `Account` inside `Account`'s own selection. Warning:
+  `Account.users nests User, so User.account would put Account inside its own selection; left as id`.
+- A two-way pair of stubs is fine: `Account.owner: User` and `User.account: Account` compose, since
+  each stub sits in its own type's connector.
+- A target list writes no link (no union under a field). The field keeps its id and its description
+  gains `Links to Group or User.`
+- A name the host already writes, a host type or field that is not selected: a warning, and the id stays.
+
+**Fix:**
+- `src/oas/oasContext.ts`: `LinkOverride`, and `$links` on `OverridesConfig`.
+- `src/oas/oasGen.ts`: the shape checks, and `$links` skipped by the "no operation matches" guard.
+- `src/oas/nodes/entity.ts`: `findByIdTarget` shared by inference and `$links`; the `$links` pass in
+  `inferEntityLinks`; `descendants` can stay out of link stubs for the nesting check. `reaches()` and
+  inference are unchanged.
+- `src/oas/nodes/prop.ts`: the target-list sentence on the field's description.
+
+**Tests:** `tests/resources/oas/entity-link-overrides.yaml` (Account, User, Group, Queue with a
+required `mode`, Member and Task for plain inference). `tests/all/entity-link.test.ts`: 11 cases, each
+composed on stock rover, plus one runtime test on the suite
+`tests/resources/connectors/entity-link-overrides/account-owner.connector.yaml`:
+- `Account[0]` turns `"OwnerId": "005A"` into `owner: { id: "005A" }`;
+- `User[0]` with `$this.id = "005A"` requests `/sobjects/User/005A`.
+The router joining the two is federation's entity fetch; this repo has no router harness, so the
+end-to-end fetch is covered by composition, not run.
+
+**Measured:**
+- The Salesforce subset (Account, Contact, Opportunity, Lead, Case, User): 23 of 51 id fields link,
+  and the schema composes.
+- The other 28 stay ids: 10 self-links, 4 fields with several targets (they get the note), 14 targets
+  outside the subset.
+- Whole-spec output with `--infer-entity-resolvers` is byte-identical on ashby (with its overrides
+  file), r9-body (with its overrides file), entity-link, petstore and github.
+
+**Refs:** `docs/TASKS.md` #252 (a key spelled `Id` under plain inference).

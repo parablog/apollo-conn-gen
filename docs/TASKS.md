@@ -1141,51 +1141,6 @@ extend: `test_overrides_rewire_path_and_query_params` (`tests/all/oas-core.test.
 not where it sits.
 
 
-## 249 [FEAT] [P3] · Links to other records named in the overrides file · ⬜ Open
-
-**Symptom:** a field holding another record's id becomes a link to that record's type only when
-gen can guess the target from the names:
-- the field must be named `<Target>Id`;
-- the target's own key must be named exactly `id`.
-
-Salesforce breaks both rules:
-- its key is `Id`, so even `Contact.AccountId` is not linked;
-- most of its links have other names: `Opportunity.OwnerId` → `User`, `Account.ParentId` →
-  `Account`, `User.ManagerId` → `User`, `Contact.ReportsToId` → `Contact`.
-
-**Measured:** Salesforce subset of Account, Contact, Opportunity, Lead, Case and User, with each
-object's by-id lookup made an entity by naming its path param `{Id}`:
-- The six types get `@key(fields: "id")` and a type-level `@connect`, and it composes.
-- **0 of 51 id fields become links.**
-- 33 of the 51 are links to a single object type that is in the subset. The other 18 are:
-  - 4 that point to more than one object type, e.g. `OwnerId` → `User` or `Group`;
-  - 14 that point to an object outside the subset.
-
-**Shape:** a `$links` key in the overrides file, mapping a field to its target:
-```json
-{ "$links": { "Opportunity.OwnerId": "User", "Account.ParentId": "Account", "User.ManagerId": "User" } }
-```
-- Gen adds a link field on the owning type and resolves it through the target's by-id entity,
-  the same way it resolves a guessed link today.
-- The link field is named from the relationship, e.g. `owner` for `OwnerId`.
-- Salesforce's object descriptions list every such field with its target, so the file can be
-  written from them.
-- A field that points to more than one type stays an id string with a comment; unions are
-  parked.
-
-**Rules that change:**
-- The target's key compare should accept `Id` as well as `id`. On its own, that links the 7
-  fields named `<Target>Id` in the subset.
-- Today a type never links to itself, and a link that would close a loop is skipped. 10 of the 33
-  point back to their own type: `ParentId`, `MasterRecordId`, `ManagerId`, `ReportsToId`, and
-  `CreatedById`/`LastModifiedById` on `User`.
-- Links named in the file are entity references, not nested objects, so nothing loops. They should
-  be exempt from both rules. Why the rules exist needs checking first.
-
-**Refs:** `src/oas/nodes/entity.ts` (`isIdKey`, `inferEntityLinks`, `reaches`). The overrides
-format is `OverrideEntry` in `src/oas/oasContext.ts`. Measurement notes are in
-`output/salesforce/summary.md` (not in the repo).
-
 ## 251 [PERF] [P3] · A restored field writes its whole subtree at every place it is selected · ⬜ Open
 
 **Symptom:** since #242 step 4 writes fields that were left out as circular references before, the
@@ -1220,3 +1175,25 @@ places is written again at each one.
 specs, not enough alone. A cap on repeated subtrees, or on the restored fields, would need its own rule.
 
 **Refs:** `docs/FIXED.md` #242 (step 4, timing and compose table).
+
+## 252 [FEAT] [P4] · Plain entity-link inference does not accept a key spelled `Id` · ⬜ Open
+
+**Symptom:** inference links `Contact.AccountId` to `Account` only when `Account`'s key is spelled
+exactly `id`. Salesforce spells it `Id`, so even the fields named `<Target>Id` are not linked
+without a `$links` entry (#249).
+
+**OAS:**
+```yaml
+/sobjects/Account/{Id}:
+  get: { responses: { '200': { content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } } } }
+Account: { properties: { Id: { type: string }, Name: { type: string } } }
+Contact: { properties: { Id: { type: string }, AccountId: { type: string } } }
+```
+
+**Measured:** on the six-object Salesforce subset, accepting `Id` would link 7 of 51 fields.
+
+**Shape:** one line in `src/oas/nodes/entity.ts` (`isIdKey`): compare the key's name
+case-insensitively. Open question first: which corpus specs have a key spelled `Id` or `ID`, and what
+they would gain under `--infer-entity-resolvers`; measure before changing.
+
+**Refs:** `docs/FIXED.md` #249.

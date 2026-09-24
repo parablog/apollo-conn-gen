@@ -166,7 +166,10 @@ program
   .option('--federation-version <version>', 'Federation version to use', DEFAULT_VERSIONS.federationVersion)
   .option('--connector-spec-version <version>', 'Connector spec version to use', DEFAULT_VERSIONS.connectorSpecVersion)
   .option('--base-url <url>', 'Override the @source base URL (default: servers[0] from the spec)')
-  .option('--overrides <file>', 'Load per-operation path/queryParams overrides from a JSON file')
+  .option(
+    '--overrides <file>',
+    'Load per-operation path/queryParams overrides from a JSON file; "$links" names a field\'s link to another record',
+  )
   .option('--batch <file>', 'Load batch endpoints (op id -> { maxSize? }) from a JSON file')
   .option('--directives <file>', 'Load directives (Type or Type.field -> ["@…"]) from a JSON file')
   .option('--skip-optional-args', 'Skip optional arguments in queries', false)

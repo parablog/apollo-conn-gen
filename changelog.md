@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- The overrides file can name a field's link to another record, `"$links": { "Account.OwnerId":
+  { "target": "User", "name": "Owner" } }`, for specs whose names do not say where an id points.
+  Needs `--infer-entity-resolvers`. Issue #249.
+
 ### Fixed
 
 - Specs whose schemas reference each other densely generate at the default heap instead of running

@@ -19,6 +19,7 @@ import { Naming } from '../utils/naming.js';
 import { OasContext } from '../oasContext.js';
 import { OasGen } from '../oasGen.js';
 import { ExpandedSelection } from '../utils/expandedSelection.js';
+import { warn } from '../log/trace.js';
 
 /**
  * A type-level entity resolver discovered by {@link inferEntityResolvers} (R1): a
@@ -324,6 +325,15 @@ export function inferEntityResolvers(
   }
 }
 
+// Holds a GET that fetches `target` from its key alone, as findByIdTarget finds it. #249
+//   e.g. (entity-link-overrides) get:/sobjects/User/{Id} -> { target: User, keyProp: Id, param: Id }
+interface ByIdTarget {
+  op: IType & Op;
+  target: Obj;
+  keyProp: Prop;
+  param: Param;
+}
+
 // A candidate link source: a root GET-by-id op ending in its one path param, resolving to an
 // id-keyed R1-resolved type (its own key is "id" or a "<TypeName>Id" alias). #191
 interface EntityLinkCandidate {
@@ -348,48 +358,95 @@ export function inferEntityLinks(
     }
   }
 
+  const links = context.generateOptions.overrides?.$links ?? {};
   if (!context.generateOptions.inferEntityResolvers) {
+    if (Object.keys(links).length > 0) {
+      warn(null, '[entity-link]', '"$links" needs --infer-entity-resolvers; no link written');
+    }
     return;
   }
 
   const keep = context.generateOptions.keepFieldNames === true;
   const selectionRoots = new Set<string>(selection.entries.map((s) => s.split(Naming.PATH_SEPARATOR)[0]));
 
+  // Lists every GET that fetches an entity from its key alone, in op order so a "$links" target
+  // picks the same op on every run. e.g. (entity-link-overrides) get:/sobjects/User/{Id} -> User by Id
+  const byIdTargets = Array.from(gen.paths.values())
+    .map((op) => findByIdTarget(op, types, selection, keep, selectionRoots))
+    .filter((byId): byId is ByIdTarget => byId !== undefined)
+    .sort((a, b) => a.op.id.localeCompare(b.op.id));
+
+  // Places each "$links" entry with one target before inference, so the entry wins its field and
+  // its name. A target list writes no link: Prop adds its note instead. see docs/FIXED.md #249
+  //   e.g. "Account.OwnerId": { "target": "User", "name": "Owner" } -> Account.owner: User
+  const linkedFields = new Set(Object.keys(links));
+  for (const [key, link] of Object.entries(links)) {
+    const [hostName, fieldName] = key.split('.');
+    if (Array.isArray(link.target)) {
+      continue;
+    }
+    const targetName = link.target;
+    const skip = (reason: string) => warn(null, '[entity-link]', `"$links" "${key}": ${reason}`);
+
+    if (targetName === hostName) {
+      skip('self-link left as id: the composer rejects a type inside its own selection');
+      continue;
+    }
+    const host = Array.from(types.values()).find(
+      (type): type is Obj => type instanceof Obj && type.kind !== 'input' && Naming.getRefName(type.name) === hostName,
+    );
+    if (!host) {
+      skip(`no selected output type ${hostName}`);
+      continue;
+    }
+    const sourceProp = host
+      .selectedProps(selection, keep, selection.writtenPath(host))
+      .find((prop) => T.isPropScalar(prop) && prop.name === fieldName);
+    if (!sourceProp) {
+      skip(`${hostName} has no selected field ${fieldName}`);
+      continue;
+    }
+    const byId = byIdTargets.find(({ target }) => Naming.getRefName(target.name) === targetName);
+    if (!byId) {
+      skip(`no by-id operation for ${targetName} that takes only its key`);
+      continue;
+    }
+    const linkName = Naming.sanitiseField(link.name ?? targetName, keep);
+    // Compares GraphQL names: `Account.Name` and a link named "Name" would both write `name`.
+    const writtenNames = [...host.props.values(), ...host.entityLinkProps].map((prop) =>
+      host.findFieldName(prop, keep),
+    );
+    if (writtenNames.includes(linkName)) {
+      skip(`${hostName} already has a field ${linkName}`);
+      continue;
+    }
+    // Names the field that holds the host from the node right above it, built where it sits: the
+    // host itself is built once, so its own parents name its first route, not this one. #242
+    //   e.g. (entity-link-overrides) Account.Users' list holds User -> "Account.users"
+    const heldByValue = Array.from(descendants(context, selection, byId.target, false));
+    if (heldByValue.some((node) => node !== byId.target && node.id === host.id)) {
+      const wrapper = heldByValue.find((node) => node.children.some((child) => child.id === host.id));
+      const holder = wrapper
+        ?.ancestors()
+        .reverse()
+        .find((node) => node instanceof Prop);
+      const holderName = holder
+        ? `${Naming.getRefName(holder.parent!.name)}.${Naming.sanitiseField(holder.name, keep)}`
+        : targetName;
+      skip(
+        `${holderName} nests ${hostName}, so ${hostName}.${linkName} would put ${targetName} inside its own selection; left as id`,
+      );
+      continue;
+    }
+    host.entityLinkProps.push(new PropEntityLink(host, linkName, byId.target, byId.keyProp, sourceProp));
+  }
+
   const candidates: EntityLinkCandidate[] = [];
 
-  for (const op of gen.paths.values()) {
-    if (!T.isOp(op) || op.verb !== 'GET' || !selectionRoots.has(op.id)) {
+  for (const { op, target, keyProp: targetKeyProp, param } of byIdTargets) {
+    if (!isIdKey(Naming.getRefName(target.name), targetKeyProp)) {
       continue;
     }
-
-    const pathParams = op.params.filter((p) => p.parameter.in && p.parameter.in.toLowerCase() === 'path');
-    if (pathParams.length !== 1 || op.params.some((p) => p !== pathParams[0] && p.required)) {
-      continue;
-    }
-
-    const param = pathParams[0];
-    if (op.operation.path.split('/').pop() !== `{${param.name}}`) {
-      continue;
-    }
-
-    const obj = unwrapToObj(op.resultType);
-    const target = obj && types.get(obj.id);
-    if (!(target instanceof Obj) || target.entityResolvers.length === 0) {
-      continue;
-    }
-
-    const refName = Naming.getRefName(target.name);
-    const keyField = findKeyField(
-      target,
-      param,
-      pathParams,
-      target.selectedProps(selection, keep, selection.writtenPath(target)),
-    );
-    const resolver = keyField && target.entityResolvers.find((r) => r.keyFields === keyField.name);
-    if (!resolver || !keyField || !isIdKey(refName, keyField)) {
-      continue;
-    }
-    const targetKeyProp = keyField;
 
     const staticSegments = op.operation.path.split('/').filter((s) => s && s !== `{${param.name}}`);
     const lastStaticSegment = staticSegments[staticSegments.length - 1];
@@ -412,9 +469,11 @@ export function inferEntityLinks(
 
       // #168 twin case: Loop carries both beat_Id (optional) and beat_id (required) -- both name
       // Beat, so prefer the one spelled exactly like the target's own key, Loop.beat_id.
+      // Leaves out a field a "$links" entry names: the entry is its answer, even when skipped. #249
       const idAliases = host
         .selectedProps(selection, keep, selection.writtenPath(host))
-        .filter((prop) => T.isPropScalar(prop) && isIdAlias(refName, prop.name));
+        .filter((prop) => T.isPropScalar(prop) && isIdAlias(refName, prop.name))
+        .filter((prop) => !linkedFields.has(`${Naming.getRefName(host.name)}.${prop.name}`));
       const sourceProp = idAliases.find((prop) => prop.name === targetKeyProp.name) ?? idAliases[0];
       if (!sourceProp) {
         continue;
@@ -456,18 +515,61 @@ export function inferEntityLinks(
 
 // Every node reachable from `from` via dependencies(), the same idiom
 // typesCollector.collectReachable uses. e.g. (entity-link) from Album, reaches Song via Song.album. #161
-function descendants(context: OasContext, selection: ExpandedSelection, from: IType): Set<IType> {
+// Stays out of link stubs when `followLinks` is false, finding only what `from` holds by value. #249
+//   e.g. (entity-link-overrides) from Account, reaches User through Account.Users, not Account.owner
+function descendants(context: OasContext, selection: ExpandedSelection, from: IType, followLinks = true): Set<IType> {
   const visited = new Set<IType>();
   const queue: QueuedNode[] = [{ node: from, path: selection.writtenPath(from) }];
   while (queue.length > 0) {
     const { node, path } = queue.pop()!;
-    if (visited.has(node)) {
+    if (visited.has(node) || (!followLinks && node instanceof PropEntityLink)) {
       continue;
     }
     visited.add(node);
     queue.push(...node.findDependencies(context, selection, path));
   }
   return visited;
+}
+
+// Returns the entity a GET fetches from its key alone, with the key field its resolver uses: one
+// path param that ends the path, no other required param, a result that is an entity. Inference
+// and "$links" both call it. see docs/FIXED.md #249
+//   e.g. (entity-link-overrides) get:/sobjects/User/{Id} -> User by Id; Queue's required `mode` -> none
+function findByIdTarget(
+  op: IType,
+  types: Map<string, IType>,
+  selection: ExpandedSelection,
+  keep: boolean,
+  selectionRoots: Set<string>,
+): ByIdTarget | undefined {
+  if (!T.isOp(op) || op.verb !== 'GET' || !selectionRoots.has(op.id)) {
+    return undefined;
+  }
+
+  const pathParams = op.params.filter((p) => p.parameter.in && p.parameter.in.toLowerCase() === 'path');
+  if (pathParams.length !== 1 || op.params.some((p) => p !== pathParams[0] && p.required)) {
+    return undefined;
+  }
+
+  const param = pathParams[0];
+  if (op.operation.path.split('/').pop() !== `{${param.name}}`) {
+    return undefined;
+  }
+
+  const obj = unwrapToObj(op.resultType);
+  const target = obj && types.get(obj.id);
+  if (!(target instanceof Obj) || target.entityResolvers.length === 0) {
+    return undefined;
+  }
+
+  const keyProp = findKeyField(
+    target,
+    param,
+    pathParams,
+    target.selectedProps(selection, keep, selection.writtenPath(target)),
+  );
+  const resolver = keyProp && target.entityResolvers.find((r) => r.keyFields === keyProp.name);
+  return resolver && keyProp ? { op, target, keyProp, param } : undefined;
 }
 
 // Whether `from` can already reach `to` -- blocks a link that would close a cycle.

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { runOasTest } from '../../src/tests/runners.js';
+import { runConnectorTest } from '../../src/tests/connectors.js';
+import { captureErrors } from './_setup.js';
 import './_setup.js';
 
 // --- #161: entity-link inference (inferEntityLinks) -- the reference half of R1: a key-only
@@ -301,4 +303,208 @@ test('test_196_two_gets_both_write_the_stub', async () => {
   assert.ok(schema !== undefined);
   const stubCount = (schema!.match(/thing: \{\s*\n\s*id: thingId/g) ?? []).length;
   assert.strictEqual(stubCount, 2, `expected both GETs' connectors to carry the stub, got ${stubCount}`);
+});
+
+// --- #249: links named in the overrides file ("$links"), for records whose names do not say
+// where an id points: a key spelled `Id`, and fields named after the relationship (OwnerId -> User). ---
+
+const LINKS_FIXTURE = 'entity-link-overrides.yaml';
+const LINKS_PATHS_SIZE = 7; // total ops declared in entity-link-overrides.yaml
+const ACCOUNT = 'get:/sobjects/Account/{Id}>**';
+const USER = 'get:/sobjects/User/{Id}>**';
+const GROUP = 'get:/sobjects/Group/{Id}>**';
+const QUEUE = 'get:/sobjects/Queue/{Id}>**';
+const TASK = 'get:/sobjects/Task/{Id}>**';
+const MEMBER = 'get:/members/{id}>**';
+const ACCOUNT_FIELD = 'get:/sobjects/Account/{Id}>res:r>obj:type:#/c/s/Account>prop:scalar:';
+const OWNER_TO_USER = { 'Account.OwnerId': { target: 'User', name: 'Owner' } };
+const TWO_WAY = { ...OWNER_TO_USER, 'User.AccountId': { target: 'Account', name: 'Account' } };
+
+test('test_249_fixture_infers_task_member_without_links', async () => {
+  // Checks the fixture's plain-inference case first, so the tests that suppress it mean something.
+  const schema = await runOasTest(LINKS_FIXTURE, [TASK, MEMBER], LINKS_PATHS_SIZE, 2, {
+    inferEntityResolvers: true,
+    forceRover: true,
+  });
+  assert.ok(schema!.includes('member: Member'), 'plain inference links Task.MemberId to Member');
+});
+
+test('test_249_named_link_writes_owner_stub', async () => {
+  // Checks Account.OwnerId -> User writes `owner: User` and the key-only stub in every selection
+  // that writes Account: the GraphQL key name `id`, the REST source field `OwnerId`.
+  const schema = await runOasTest(LINKS_FIXTURE, [ACCOUNT, USER], LINKS_PATHS_SIZE, 2, {
+    inferEntityResolvers: true,
+    overrides: { $links: OWNER_TO_USER },
+    forceRover: true,
+  });
+  assert.ok(schema!.includes('  owner: User\n'), 'Account gains owner: User');
+  const stubs = (schema!.match(/owner: \{\s*\n\s*id: OwnerId/g) ?? []).length;
+  assert.strictEqual(stubs, 2, `expected the stub in Account's connector and the Query field, got ${stubs}`);
+});
+
+test('test_249_named_link_without_name_uses_target', async () => {
+  // Checks an entry with no name writes the link under the target's name, `user`.
+  const schema = await runOasTest(LINKS_FIXTURE, [ACCOUNT, USER], LINKS_PATHS_SIZE, 2, {
+    inferEntityResolvers: true,
+    overrides: { $links: { 'Account.OwnerId': { target: 'User' } } },
+    forceRover: true,
+  });
+  assert.ok(schema!.includes('  user: User\n'), 'Account gains user: User');
+  assert.ok(/user: \{\s*\n\s*id: OwnerId/.test(schema!), 'the stub reads OwnerId');
+});
+
+test('test_249_two_way_pair_links_both_and_composes', async () => {
+  // Checks Account.owner and User.account both link when neither type holds the other by value:
+  // each stub sits in its own type's connector, and the composer accepts the pair.
+  const paths = [`${ACCOUNT_FIELD}Id`, `${ACCOUNT_FIELD}Name`, `${ACCOUNT_FIELD}OwnerId`, USER];
+  const schema = await runOasTest(LINKS_FIXTURE, paths, LINKS_PATHS_SIZE, 2, {
+    inferEntityResolvers: true,
+    overrides: { $links: TWO_WAY },
+    forceRover: true,
+  });
+  assert.ok(schema!.includes('  owner: User\n'), 'Account gains owner: User');
+  assert.ok(schema!.includes('  account: Account\n'), 'User gains account: Account');
+});
+
+test('test_249_nested_back_link_left_as_id', async () => {
+  // Checks User.account is skipped when Account holds User by value (Account.Users): the stub
+  // would put Account inside Account's own selection. Account.owner is still written.
+  let schema: string | undefined;
+  const warnings = await captureErrors(async () => {
+    schema = await runOasTest(LINKS_FIXTURE, [ACCOUNT, USER], LINKS_PATHS_SIZE, 2, {
+      inferEntityResolvers: true,
+      overrides: { $links: TWO_WAY },
+      forceRover: true,
+    });
+  });
+  assert.ok(schema!.includes('  owner: User\n'), 'Account.owner is still written');
+  assert.ok(!schema!.includes('account: Account'), 'User.account is left out');
+  assert.ok(schema!.includes('  accountId: ID\n'), 'User.AccountId stays an id');
+  assert.ok(
+    warnings.some((w) =>
+      w.includes('Account.users nests User, so User.account would put Account inside its own selection; left as id'),
+    ),
+    `expected the nesting warning, got: ${warnings.join(' | ')}`,
+  );
+});
+
+test('test_249_self_link_left_as_id', async () => {
+  // Checks Account.ParentId -> Account warns and stays an id: the composer rejects a type
+  // inside its own selection.
+  let schema: string | undefined;
+  const warnings = await captureErrors(async () => {
+    schema = await runOasTest(LINKS_FIXTURE, [ACCOUNT], LINKS_PATHS_SIZE, 2, {
+      inferEntityResolvers: true,
+      overrides: { $links: { 'Account.ParentId': { target: 'Account', name: 'Parent' } } },
+      forceRover: true,
+    });
+  });
+  assert.ok(!schema!.includes('parent: Account'), 'no self-link written');
+  assert.ok(
+    warnings.some((w) => w.includes('self-link left as id: the composer rejects a type inside its own selection')),
+    `expected the self-link warning, got: ${warnings.join(' | ')}`,
+  );
+});
+
+test('test_249_target_needing_another_param_left_as_id', async () => {
+  // Checks Account.QueueId -> Queue warns: Queue's by-id op also needs a required `mode`, so
+  // Queue cannot be fetched from its key alone.
+  let schema: string | undefined;
+  const warnings = await captureErrors(async () => {
+    schema = await runOasTest(LINKS_FIXTURE, [ACCOUNT, QUEUE], LINKS_PATHS_SIZE, 3, {
+      inferEntityResolvers: true,
+      overrides: { $links: { 'Account.QueueId': { target: 'Queue', name: 'Queue' } } },
+      forceRover: true,
+    });
+  });
+  assert.ok(!schema!.includes('queue: Queue'), 'no link to Queue');
+  assert.ok(
+    warnings.some((w) => w.includes('no by-id operation for Queue that takes only its key')),
+    `expected the by-id warning, got: ${warnings.join(' | ')}`,
+  );
+});
+
+test('test_249_target_list_writes_note_not_link', async () => {
+  // Checks Task.MemberId -> ["Group", "Member"] writes no link, not even the member: Member that
+  // plain inference would, and notes the targets on the field.
+  const schema = await runOasTest(LINKS_FIXTURE, [TASK, MEMBER, GROUP], LINKS_PATHS_SIZE, 3, {
+    inferEntityResolvers: true,
+    overrides: { $links: { 'Task.MemberId': { target: ['Group', 'Member'] } } },
+    forceRover: true,
+  });
+  assert.ok(!schema!.includes('member: Member'), 'the entry owns MemberId over inference');
+  assert.ok(schema!.includes('"Links to Group or Member."\n  memberId: ID'), 'the note sits on the id field');
+});
+
+test('test_249_single_target_overrides_inference', async () => {
+  // Checks Task.MemberId -> Group writes group: Group and not also the inferred member: Member.
+  const schema = await runOasTest(LINKS_FIXTURE, [TASK, MEMBER, GROUP], LINKS_PATHS_SIZE, 3, {
+    inferEntityResolvers: true,
+    overrides: { $links: { 'Task.MemberId': { target: 'Group' } } },
+    forceRover: true,
+  });
+  assert.ok(schema!.includes('  group: Group\n'), 'Task gains group: Group');
+  assert.ok(!schema!.includes('member: Member'), 'no inferred member link');
+});
+
+test('test_249_missing_target_host_field_or_free_name_warn', async () => {
+  // Checks each entry that cannot be placed warns and writes nothing: a target with no by-id op,
+  // a field the host does not have, and a name the host already writes (`name`).
+  let schema: string | undefined;
+  const warnings = await captureErrors(async () => {
+    schema = await runOasTest(LINKS_FIXTURE, [ACCOUNT, USER], LINKS_PATHS_SIZE, 2, {
+      inferEntityResolvers: true,
+      overrides: {
+        $links: {
+          'Account.OwnerId': { target: 'Contact' },
+          'Account.Missing': { target: 'User' },
+          'User.AccountId': { target: 'Account', name: 'Name' },
+        },
+      },
+      forceRover: true,
+    });
+  });
+  assert.ok(!schema!.includes('contact: Contact'), 'no link to Contact');
+  assert.ok(!schema!.includes('user: User'), 'no link from Account.Missing');
+  assert.ok(!schema!.includes('account: Account'), 'no link from User.AccountId');
+  for (const expected of [
+    'no by-id operation for Contact that takes only its key',
+    'Account has no selected field Missing',
+    'User already has a field name',
+  ]) {
+    assert.ok(
+      warnings.some((w) => w.includes(expected)),
+      `expected "${expected}", got: ${warnings.join(' | ')}`,
+    );
+  }
+});
+
+test('test_249_flag_off_warns_once', async () => {
+  // Checks a "$links" entry without --infer-entity-resolvers warns once and writes nothing.
+  let schema: string | undefined;
+  const warnings = await captureErrors(async () => {
+    schema = await runOasTest(LINKS_FIXTURE, [ACCOUNT, USER], LINKS_PATHS_SIZE, 2, {
+      overrides: { $links: OWNER_TO_USER },
+      forceRover: true,
+    });
+  });
+  assert.ok(!schema!.includes('owner: User'), 'no link written');
+  const flagWarnings = warnings.filter((w) => w.includes('"$links" needs --infer-entity-resolvers; no link written'));
+  assert.strictEqual(flagWarnings.length, 1, `expected one warning, got: ${warnings.join(' | ')}`);
+});
+
+test('test_249_runtime_stub_hands_the_key_to_user', async (t) => {
+  // Checks both halves the router joins: Account's connector turns OwnerId "005A" into the stub
+  // owner { id: "005A" }, and User's connector fetches /sobjects/User/005A from that key.
+  const result = await runConnectorTest(
+    LINKS_FIXTURE,
+    [ACCOUNT, USER],
+    'tests/resources/connectors/entity-link-overrides/account-owner.connector.yaml',
+    { inferEntityResolvers: true, overrides: { $links: OWNER_TO_USER } },
+  );
+  if (result.skipped) {
+    t.skip(result.output);
+    return;
+  }
+  assert.ok(result.success, result.output);
 });

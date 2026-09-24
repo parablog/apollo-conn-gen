@@ -49,13 +49,23 @@ export type SourceOverride = {
 //   e.g. { "pattern": "^post:/.*\\.list$", "root": "query" } applies to post:/widgets.list
 export type MatchOverride = OverrideEntry & { pattern: string };
 
-// request overrides, keyed by op id, plus "$source" (source-wide defaults, above) and "$match"
-// (pattern entries applied before the exact key — see findOverride in utils/overrides.ts).
+// Names the record a "$links" field points at, since the spec's names cannot say it.
+// A list of targets writes no link, only a note. see docs/FIXED.md #249
+//   e.g. "Account.OwnerId": { "target": "User", "name": "Owner" } writes Account.owner: User
+export interface LinkOverride {
+  target: string | string[];
+  name?: string;
+}
+
+// Holds request overrides, keyed by op id, plus "$source" (source-wide defaults, above), "$match"
+// (pattern entries applied before the exact key — see findOverride in utils/overrides.ts) and
+// "$links" (links keyed by `Host.field`, see LinkOverride).
 //   e.g. { "get:/pets/{id}": { path: "/v2/pets/{id}" }, "$match": [{ "pattern": "^get:/pets", "root": "query" }] }
 export type OverridesConfig = {
-  [key: string]: OverrideEntry | SourceOverride | MatchOverride[] | undefined;
+  [key: string]: OverrideEntry | SourceOverride | MatchOverride[] | Record<string, LinkOverride> | undefined;
   $source?: SourceOverride;
   $match?: MatchOverride[];
+  $links?: Record<string, LinkOverride>;
 };
 
 // R6: per-batch-endpoint settings. The only knob is the size cap; everything else

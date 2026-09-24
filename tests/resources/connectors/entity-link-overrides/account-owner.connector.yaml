@@ -1,0 +1,32 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "account-owner-stub",
+      "connector": "Account[0]",
+      "variables": { "$this": { "id": "001A" } },
+      "apiResponseBody": "{\"Id\": \"001A\", \"Name\": \"Acme\", \"OwnerId\": \"005A\"}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/sobjects/Account/001A",
+          "method": "GET"
+        },
+        "connectorResponse": "{\"id\": \"001A\", \"name\": \"Acme\", \"ownerId\": \"005A\", \"owner\": {\"id\": \"005A\"}}"
+      }
+    },
+    {
+      "name": "user-by-stub-key",
+      "connector": "User[0]",
+      "variables": { "$this": { "id": "005A" } },
+      "apiResponseBody": "{\"Id\": \"005A\", \"Name\": \"Ada\"}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://api.example.com/sobjects/User/005A",
+          "method": "GET"
+        }
+      }
+    }
+  ]
+}

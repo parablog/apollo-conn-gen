@@ -222,6 +222,21 @@ export class OasGen {
       }
     }
 
+    // Stops the run on a "$links" entry no link could come from, the way a bad "$match" pattern
+    // does: a key that is not `Host.field`, an empty target, or a one-entry target list. #249
+    //   e.g. "Account.OwnerId": { "target": ["User"] } -> write "target": "User" instead
+    for (const [key, link] of Object.entries(options.overrides?.$links ?? {})) {
+      if (key.split('.').length !== 2 || key.split('.').some((part) => part === '')) {
+        throw new Error(`[overrides] "$links" key "${key}" must be Host.field, e.g. "Account.OwnerId".`);
+      }
+      if (link.target.length === 0) {
+        throw new Error(`[overrides] "$links" "${key}".target is empty.`);
+      }
+      if (Array.isArray(link.target) && link.target.length === 1) {
+        throw new Error(`[overrides] "$links" "${key}".target lists one type; write it as a string.`);
+      }
+    }
+
     this.collector = new TypesCollector(this);
   }
 
@@ -251,9 +266,9 @@ export class OasGen {
     return this.isolatedRun(() => {
       // typo guard: an override key that matches no operation would silently do nothing. A root
       // value other than "query"/"mutation" (e.g. "Mutation", capitalized) is caught here too.
-      // "$source" and "$match" are the two keys that name no operation. see docs/FIXED.md #226 #225
+      // "$source", "$match" and "$links" are the keys that name no operation. see docs/FIXED.md #226 #225 #249
       for (const [key, entry] of Object.entries(this.options.overrides ?? {})) {
-        if (key === '$source' || key === '$match') {
+        if (key === '$source' || key === '$match' || key === '$links') {
           continue;
         }
         const override = entry as OverrideEntry | undefined;
