@@ -138,7 +138,7 @@ export class PropArray extends Prop {
     return this.items ? [this.items] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string, fieldName?: string) {
     trace(context, '-> [prop-array:select]', 'in: ' + this.name);
 
     // When the item type reads itself through an expression (mixed value), wrap the list in
@@ -151,6 +151,7 @@ export class PropArray extends Prop {
     this.writeFieldHead(context, writer, {
       suffix: itemSuffix ? `->map(@${itemSuffix})` : undefined,
       optional: !itemsHaveDefault && this.isOptionalInSelection(context),
+      fieldName,
     });
 
     // items whose every field was removed to break a cycle are read whole, no block opens. #201

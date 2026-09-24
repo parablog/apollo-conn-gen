@@ -7,8 +7,6 @@ import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export abstract class Prop extends Type {
   public required: boolean = false;
-  // the numbered field name when a sibling sanitises to the same one; unset for everyone else. #69
-  public renamedTo?: string;
 
   constructor(
     parent: IType | undefined,
@@ -18,7 +16,9 @@ export abstract class Prop extends Type {
     super(parent, name);
   }
 
-  public generate(context: OasContext, writer: Writer, _selection: ExpandedSelection): void {
+  // `fieldName` is the name the writing type gives this field, a twin's number included. #69 #242
+  //   e.g. (confluence) LookAndFeel.links -> links, never a number another type gave it
+  public generate(context: OasContext, writer: Writer, _selection: ExpandedSelection, fieldName?: string): void {
     const description = this.effectiveDescription(context);
     if (description != null) {
       if (
@@ -35,7 +35,7 @@ export abstract class Prop extends Type {
 
     writer
       .write('  ')
-      .write(this.renamedTo ?? Naming.sanitiseField(this.name, context.generateOptions?.keepFieldNames === true))
+      .write(fieldName ?? Naming.sanitiseField(this.name, context.generateOptions?.keepFieldNames === true))
       .write(': ');
 
     this.generateValue(context, writer);
@@ -83,11 +83,11 @@ export abstract class Prop extends Type {
 
   // The field as the selection writes it: the JSON key aliased to the written name when they differ.
   //   e.g. (trello) foo_bar renamed to fooBar2 -> body `foo_bar: fooBar2`, response `fooBar2: foo_bar`
-  protected fieldForSelect(context: OasContext): string {
+  protected fieldForSelect(context: OasContext, fieldName?: string): string {
     return Naming.sanitiseFieldForSelect(
       this.name,
       this.parent?.kind === 'input',
-      this.renamedTo,
+      fieldName,
       context.generateOptions?.keepFieldNames === true,
     );
   }
@@ -98,9 +98,9 @@ export abstract class Prop extends Type {
   protected writeFieldHead(
     context: OasContext,
     writer: Writer,
-    options: { suffix?: string; alwaysAlias?: boolean; optional?: boolean } = {},
+    options: { suffix?: string; alwaysAlias?: boolean; optional?: boolean; fieldName?: string } = {},
   ): void {
-    const sanitised = this.fieldForSelect(context);
+    const sanitised = this.fieldForSelect(context, options.fieldName);
     const optional = options.optional ?? this.isOptionalInSelection(context);
 
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);

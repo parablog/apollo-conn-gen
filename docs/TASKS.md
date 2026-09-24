@@ -429,28 +429,6 @@ instead of an old-walk Composed/Union member.
 (`collectExpandedPaths`), `src/oas/io/writer.ts` (the shared `generatedSet` dedup) — all on branch
 `issue-180-shared-input-shapes`, #180.
 
-## 203 [FEAT] [P3] · Response-side type sharing, for the docusign memory bar — ⬜ Open
-
-**Why:** #180 shares only request-body input types; response types still build a fresh subtree
-per position. Measured on all 247 docusign mutations combined in one `generateSchema` call: peak
-5.2 GB RSS at an 8 GiB cap, still over the 2 GiB bar #180 was measured against. A heap snapshot at
-the heaviest quarter (62 of the 247 ops) found the two dominant node types are `Scalar`
-(1,003,176 instances) and `PropScalar` (745,171 instances), 99.98%+ of them read `kind: 'type'`
-(response), not `kind: 'input'` — the shape objects #180 built held only 176 instances,
-negligible next to those. #180's fix does not touch this.
-
-**OAS:** any schema reused across many operations' responses — docusign has hundreds of
-mutations returning overlapping shapes.
-
-**Shape:** the design #180 built for request bodies (one representative node per schema
-identity, memoised once, walking only the real selection instead of every position) is the
-starting point, not something to reuse outright — a response has no `>**`-or-explicit split the
-way a body does, and #180's fix only ever looked at `kind: 'input'` nodes.
-
-**Refs:** `src/oas/nodes/inputShape.ts` (branch `issue-180-shared-input-shapes`), `docs/TASKS.md
-#180` (the parked branch and its measured numbers), `docs/FIXED.md #47`, `docs/FIXED.md #120`
-(existing response-side leaf rules a fix here would need to keep).
-
 ## 205 [FEAT] [P3] · All-POST RPC-style specs get no Query root — ⬜ Open
 
 **Why:** every Ashby op is POST — 197 ops, 0 GET. `writeOpName`'s method check
@@ -917,72 +895,6 @@ input unions. So the field gets built, then never selected, and vanishes with no
 
 
 
-## 242 [BUG] [P3] · Whole-spec generation of the Meta Marketing API dies at the 4 GB default heap — ⬜ Open
-
-**Symptom:** `node ./dist/cli/oas tests/resources/oas/meta-ads.json -n` (all 129 ops, default
-heap) is killed after 65 s with "Ineffective mark-compacts near heap limit ... JavaScript heap out
-of memory"; the last GC line reads 4089.6 MB of a 4096 MB limit. No SDL is written. Before dying,
-stderr carries 18,867 identical `[factory] items in array have types that declare no fields -
-returning JSON type` lines. Same result with `--sparse-fieldsets-param fields` (67 s). The spec is
-863 KB; a single self-contained edge (`get:/act_{ad_account_id}/activities>**`, pinned as
-`test_corpus_meta_ads`) generates and composes in under a second. This is the docusign class
-(#178, #180, #203): a modest spec whose references fan out combinatorially per position.
-
-**OAS** (Graph API node types reference each other densely; three AdAccount fields open the same
-24-field Business, which opens Page, which opens more):
-```json
-"AdAccount": { "properties": {
-  "business":          { "$ref": "#/components/schemas/Business" },
-  "owner_business":    { "$ref": "#/components/schemas/Business" },
-  "viewable_business": { "$ref": "#/components/schemas/Business" } } },
-"Business": { "properties": {
-  "primary_page": { "$ref": "#/components/schemas/Page" },
-  "collaborative_ads_managed_partner_business_info": { "$ref": "#/components/schemas/ManagedPartnerBusiness" } } },
-"User": { "properties": {
-  "hometown": { "$ref": "#/components/schemas/Page" },
-  "location": { "$ref": "#/components/schemas/Page" } } }
-```
-Business reaches 136 of the spec's 347 schemas; 41 of the 80 GETs reach Business. An independent
-tree walk of the same spec (service-factory's `spans obligations`, which cuts cycles but not depth)
-counts 84,003 leaf paths under `get:/act_{ad_account_id}`, 27,918 under each of the three Business
-fields, nesting 12 levels deep — the size of tree a per-position expansion faces.
-
-**Before:** OOM, no output. **After:** the whole spec generates under the default heap, or the
-generator stops with a named, bounded failure instead of an OOM.
-
-**First step is measurement, not a fix:** which op peaks (`COV_TRACE=1` on a per-op sweep,
-`node tools/coverage-spec.mts --spec meta-ads.json`), and whether the peak is the
-`collector.expanded` path list #180 measured on docusign or the response-side nodes #203 targets.
-Not yet measured: the per-op cost of the 41 Business-reaching GETs.
-
-**2026-09-23, measured and split into four steps:**
-- Cause: every `$ref` occurrence builds its own copy of the referenced type, and the leaf walk keeps
-  one path string per position; both grow with the number of positions, not the number of types.
-- The heaviest op, `post:/act_{ad_account_id}/ads`, builds 3.0 million nodes and 1.29 million paths
-  to write 268 types and 500 KB of SDL.
-- The whole-spec run also dies at a 16 GB heap, after 739 s, between op 80 and op 90 of 129.
-- docusign's GET side dies at the 4 GB default heap too, after 66 s; it finishes only at 16 GB (9.2 GB RSS).
-- Step 1: the leaf walk builds each path from the ancestors it walked through, not from the node's
-  parents. Output unchanged. Done in 3c826ef, see `docs/FIXED.md` #242.
-- Step 2 (2026-09-23): writing a selection and walking the kept types pass down the path of the
-  route they are on, and a field is selected when that path is in the selection, not its node's own
-  path. Output unchanged. Done in the working tree, see `docs/FIXED.md` #242.
-- 2026-09-23: the last two steps swapped places. With one built type per schema, the leaf walk
-  passes a shared type once and would write leaf paths for its first route only, so the strings go first.
-- Step 3 (2026-09-23): a `>**` selection stays one entry; the leaf walk marks the nodes on the way to
-  each leaf instead of writing one path string per leaf. Output unchanged. Done in the working tree,
-  see `docs/FIXED.md` #242.
-- Step 4: one built type per schema and kind, with loop fields found once over the shared types and
-  written through `propOverrides`.
-- Open for step 4: mixed-value clones (#208) still carry the path their member field had when the
-  union was merged (`pathInSelection`). A shared union is reached on many routes, so the clone's path
-  has to come from the route being walked.
-
-**AST:** no change yet.
-
-**Refs:** #180, #203, `docs/DEFERRED.md` #178 and #139 (granularity mode), `TEST_CORPUS.md`
-(Meta Marketing API), `tests/resources/oas/meta-ads.json` (local, gitignored).
-
 ## 243 [BUG] [P3] · Selecting only an operation's response fails when its request body is a list of objects · ⬜ Open
 
 **Symptom:** with a selection file holding
@@ -1024,6 +936,8 @@ response, and that type was never expanded.
 **Refs:** found during #242 step 2 (`docs/FIXED.md` #242); present on main at 3c826ef.
 `src/oas/generator/typesCollector.ts` (`writtenRoots`, `collectReachable`).
 
+**2026-09-24:** rechecked after #242 step 4: the same error on all five specs, same unvisited types.
+
 ## 244 [BUG] [P3] · A selection that stops at a field left out as a circular reference writes an invalid schema · ⬜ Open
 
 **Symptom:** with a selection file holding
@@ -1057,6 +971,9 @@ all comments is the first thing to look at.
 
 **Refs:** found during #242 step 2 (`docs/FIXED.md` #242); present on main at 3c826ef. #10, #89, #101.
 
+**2026-09-24:** rechecked after #242 step 4: the same syntax error at 14:1, with the saved
+`prop:circular-ref:#homepage` segment and with the field's new id `prop:obj:homepage`.
+
 ## 245 [BUG] [P3] · Three selection quirks kept on purpose by #242 step 3 · ⬜ Open
 
 **Symptom:** each gives an answer that depends on order, not on what was selected.
@@ -1085,7 +1002,221 @@ requestBody:
 **Cause:** kept as they were so step 3's output stayed byte-identical: the old per-array prefix
 cache, the `>*` branch's `filter` reassignment, and the old `startsWith(sidePath)` check.
 
+**2026-09-24, rechecked on the #242 step 4 tree:** all three are still there; step 4 changed none of them.
+- The prefix set is still rebuilt only when the entries array changes identity
+  (`expandedSelection.ts`, `entryPrefixes`).
+- The `>*` branch still replaces the entries array (`typesCollector.ts` `collect`, the
+  `expanded.entries.filter` line). The saved-path recovery (#208) still pushes onto the entries array afterwards.
+- The empty-side check still compares ids with no `>` boundary (`hasLeafUnder`, `startsWith(sideId)`; the
+  mixed-value branch in `collect` still uses `startsWith(sidePath)`).
+- Reproduced with the OAS above plus a response, selecting the response and both fields:
+  `ab` then `a` writes `input CreateThingsInput { ab: JSON }`; `a` then `ab` writes both `a` and `ab`.
+- The first two were checked by reading the code, not run.
+
 **Shape:** none yet.
 
 **Refs:** #242 step 3 (`docs/FIXED.md` #242). `src/oas/utils/expandedSelection.ts` (`entryPrefixes`,
 `hasLeafUnder`), `src/oas/generator/typesCollector.ts` (`collect`, `collectLeafPaths`).
+
+## 246 [BUG] [P4] · Distinct nested PagerDuty inline unions share one id and emitted name — ⬜ Open
+
+**Symptom:** on `PUT /services/{id}/custom_fields/values`, two different inline `value: oneOf`
+schemas become distinct Union objects with the same id, `union:input:valueUnion`, and emitted
+name, `ValueUnionInput`. The outer union has six object branches; the String branch contains the
+second union, which chooses a string or an array of strings. This is an identity/name collision,
+not a recursive schema edge.
+
+**OAS:** `tests/resources/oas/pagerduty-full.json:14446` and `:14493`:
+```text
+#/components/schemas/ServiceCustomFieldsFieldValueUpdateModel/oneOf/0/properties/value
+#/components/schemas/ServiceCustomFieldsFieldValueUpdateModel/oneOf/0/properties/value/oneOf/4/properties/value
+```
+The operation's request body references this model at `pagerduty-full.json:47479`.
+
+**Measured:** a probe against the #242 baseline snapshot observes the outer union's
+`[inline:valueUnion]:4` member pointing to the inner union: equal ids, `sameNode: false`,
+`sameSchema: false`. Evidence: `/private/tmp/242-pd-collision-result.json:36`.
+The name-keyed DFS projection mistook this for a self-edge and proposed cutting `value: JSON`.
+The planned node-identity walk does not cut it; the accepted #242 result remains 34 restored
+fields. No new composition failure is claimed from this identity check.
+
+**Cause:** Union ids contain kind and name, and unnamed nested unions derive their name from
+the enclosing field (`src/oas/nodes/union.ts:69`, `:782` at `11281ed`). Why the collision-resolution
+path leaves these two different inline shapes with the same name remains to be traced.
+
+**Shape:** fix and pin the inline identity/name collision separately from component sharing.
+Graph traversal must distinguish the two node objects regardless of their current names.
+
+**Refs:** #242 review (`docs/242-sharing-review.md`); related naming work #104/#112 in
+`docs/FIXED.md`, general name-derived-id issue #73 in `docs/DEFERRED.md`.
+
+## 247 [BUG] [P4] · A scalar field builds a node from its schema that nothing reads · ⬜ Open
+
+**Symptom:** `PropScalar.visit` (`src/oas/nodes/propScalar.ts:28-41`) builds a node from the field's
+own schema and adds it as the field's child. When that schema is an inline union, the union is
+built, named and kept in the tree, and never written.
+
+**OAS** (ashby, a custom field's `value`): an inline `oneOf` under a field typed as a scalar
+builds `valueUnion` this way.
+
+**Cause:** not traced. #242 step 4 checked that this node does not change which form a shared
+union takes; it was left as it is.
+
+**Shape:** none yet.
+
+**Refs:** found during #242 step 4 (`docs/FIXED.md` #242). `src/oas/nodes/propScalar.ts`.
+
+
+## 248 [BUG] [P2] · A query param added through the overrides file is not sent when the caller passes no arguments · ⬜ Open
+
+**Symptom:** an overrides-file entry that adds a fixed query param is written inside the
+`$args { … }` block. When the caller passes no arguments, that block writes nothing, so the param is
+dropped and the request goes out without it. A Salesforce list operation called with no arguments
+sends a bare `GET /query`, and Salesforce rejects it because the SOQL query `q` is missing.
+
+**Overrides file:**
+```json
+{
+  "get:/query/Account": {
+    "path": "/query",
+    "queryParams": { "q": "$(\"SELECT Id, Name FROM Account\")" }
+  }
+}
+```
+
+**before → after:**
+```graphql
+# before: q sits inside $args { }, and nothing is sent when no argument is passed
+queryAccount: AccountList
+  @connect(
+    source: "api"
+    http: {
+      GET: "/query"
+      queryParams: """
+        $args {
+          "q": $("SELECT Id, Name FROM Account")
+        }
+      """
+    }
+    ...
+  )
+
+# after: a value that starts with $ is written beside the block, so it is always sent
+queryAccount: AccountList
+  @connect(
+    source: "api"
+    http: {
+      GET: "/query"
+      queryParams: """
+        "q": $("SELECT Id, Name FROM Account")
+      """
+    }
+    ...
+  )
+```
+
+**Runtime:** checked offline with `supergraph-v2.15.1 test-connectors` against the Salesforce
+subset schema (sample body, no call to Salesforce):
+- the before form sends `GET /query` whether the args are empty or unset;
+- the after form sends `GET /query?q=SELECT%20Id%2C%20Name%20FROM%20Account`;
+- the before form does send the param when the caller passes at least one argument, which is
+  why the one test on these overrides never caught it;
+- when the same name is both an argument and a fixed value, the fixed value wins silently;
+- `$($args.q ?? "…")` written beside the block sends the argument when given and the fixed
+  value otherwise.
+
+**Cause:** `src/oas/io/operationWriter.ts:187-195` (`queryParamsBlock`) puts every entry from
+`mergeOverrides` inside `$args { … }`. That is right for a value read from the arguments, like
+`ids->joinNotNull(";")`, but wrong for a value that doesn't depend on them, like `$("…")` or
+`$config.x`. The API key in the query string (line 197) is already written beside the block, which
+is the form this fix follows.
+
+**Shape:** none yet. An override value that starts with `$` goes beside the block. Anything else
+stays inside it, because it reads from `$args`.
+
+**Refs:** found measuring a Salesforce subset spec (`output/salesforce/`, not in the repo). The
+overrides file's query params came with R8 in ROADMAP.md, and pattern entries with #225. Test to
+extend: `test_overrides_rewire_path_and_query_params` (`tests/all/oas-core.test.ts:2449`, fixture
+`r7r8-selection.yaml`), whose `api-version` param is the same case: it only checks the text,
+not where it sits.
+
+
+## 249 [FEAT] [P3] · Links to other records named in the overrides file · ⬜ Open
+
+**Symptom:** a field holding another record's id becomes a link to that record's type only when
+gen can guess the target from the names:
+- the field must be named `<Target>Id`;
+- the target's own key must be named exactly `id`.
+
+Salesforce breaks both rules:
+- its key is `Id`, so even `Contact.AccountId` is not linked;
+- most of its links have other names: `Opportunity.OwnerId` → `User`, `Account.ParentId` →
+  `Account`, `User.ManagerId` → `User`, `Contact.ReportsToId` → `Contact`.
+
+**Measured:** Salesforce subset of Account, Contact, Opportunity, Lead, Case and User, with each
+object's by-id lookup made an entity by naming its path param `{Id}`:
+- The six types get `@key(fields: "id")` and a type-level `@connect`, and it composes.
+- **0 of 51 id fields become links.**
+- 33 of the 51 are links to a single object type that is in the subset. The other 18 are:
+  - 4 that point to more than one object type, e.g. `OwnerId` → `User` or `Group`;
+  - 14 that point to an object outside the subset.
+
+**Shape:** a `$links` key in the overrides file, mapping a field to its target:
+```json
+{ "$links": { "Opportunity.OwnerId": "User", "Account.ParentId": "Account", "User.ManagerId": "User" } }
+```
+- Gen adds a link field on the owning type and resolves it through the target's by-id entity,
+  the same way it resolves a guessed link today.
+- The link field is named from the relationship, e.g. `owner` for `OwnerId`.
+- Salesforce's object descriptions list every such field with its target, so the file can be
+  written from them.
+- A field that points to more than one type stays an id string with a comment; unions are
+  parked.
+
+**Rules that change:**
+- The target's key compare should accept `Id` as well as `id`. On its own, that links the 7
+  fields named `<Target>Id` in the subset.
+- Today a type never links to itself, and a link that would close a loop is skipped. 10 of the 33
+  point back to their own type: `ParentId`, `MasterRecordId`, `ManagerId`, `ReportsToId`, and
+  `CreatedById`/`LastModifiedById` on `User`.
+- Links named in the file are entity references, not nested objects, so nothing loops. They should
+  be exempt from both rules. Why the rules exist needs checking first.
+
+**Refs:** `src/oas/nodes/entity.ts` (`isIdKey`, `inferEntityLinks`, `reaches`). The overrides
+format is `OverrideEntry` in `src/oas/oasContext.ts`. Measurement notes are in
+`output/salesforce/summary.md` (not in the repo).
+
+## 251 [PERF] [P3] · A restored field writes its whole subtree at every place it is selected · ⬜ Open
+
+**Symptom:** since #242 step 4 writes fields that were left out as circular references before, the
+body mappings and selections repeat each such field's whole subtree at every place it is reached.
+- meta-ads `post:/act_{ad_account_id}/ads`: SDL 0.5 MB → 10.2 MB (body mapping 173 KB → 5.74 MB,
+  selection 207 KB → 4.33 MB). rover compose 11 s, 0.14 GB → 37 min, 2.28 GB; it still composes.
+- meta-ads, all 129 ops: 6.2 MB SDL, composes in 12.7 min at 0.83 GB.
+- confluence: SDL +22% (1.48 → 1.82 MB); compose 11.1 → 15.4 s.
+- TMF632: SDL +14% (0.34 → 0.39 MB).
+
+**OAS** (meta-ads.json; each field now opens Business, which opens Page, and more):
+```json
+"AdAccount": { "properties": {
+  "business":          { "$ref": "#/components/schemas/Business" },
+  "owner_business":    { "$ref": "#/components/schemas/Business" },
+  "viewable_business": { "$ref": "#/components/schemas/Business" } } }
+```
+
+**Measured** (text under each field, body and selection, every op; nested fields overlap):
+- meta-ads op: CampaignInput.adlabels 1.37 MB; AdAccount.business, ownerBusiness and viewableBusiness
+  1.36 MB each (2 places each); AdAccountInput.business, ownerBusiness and viewableBusiness 1.33 MB
+  each (3 places each); AdSetInput.adlabels 1.33 MB; AdSet.campaign 0.78 MB (25 places).
+- confluence: SourceUnion.ancestors and TargetUnion.ancestors, 158 KB each (4 places each), 95% of
+  the growth.
+- TMF632: Party's taxExemptionCertificate, partyCharacteristic and creditRating on
+  PartyOrPartyRole and its input forms, 8 ops each.
+
+**Cause:** a mapping is written inline at every place a type is selected; a type reached in many
+places is written again at each one.
+
+**Shape:** reusable mappings are the known lever: about a third off the SDL, measured on whole
+specs, not enough alone. A cap on repeated subtrees, or on the restored fields, would need its own rule.
+
+**Refs:** `docs/FIXED.md` #242 (step 4, timing and compose table).

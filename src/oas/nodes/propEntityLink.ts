@@ -52,14 +52,20 @@ export class PropEntityLink extends Prop {
   // a key-only stub, not real nested JSON -- hand-written instead of PropObj's recursive form.
   // e.g. Song.album_id -> `album: { albumId: album_id }`, letting the router complete the entity
   // via Album's own type-level resolver.
-  public select(context: OasContext, writer: Writer, _selection: ExpandedSelection, _path: string): void {
+  public select(
+    context: OasContext,
+    writer: Writer,
+    _selection: ExpandedSelection,
+    _path: string,
+    fieldName?: string,
+  ): void {
     const keep = context.generateOptions?.keepFieldNames === true;
     const base = context.indent + context.stack.length;
-    const name = this.renamedTo ?? Naming.sanitiseField(this.name, keep);
+    const name = fieldName ?? Naming.sanitiseField(this.name, keep);
     // the key must match the target's @key, which now honors a twin rename too. see docs/FIXED.md #168
     // #191: written name falls back to the target key's own sanitised name (Thing.id has no
     // rename), not the source's -- Shelf.thingId -> Thing.id must read `thing: { id: thingId }`.
-    const keyName = this.targetKeyProp.renamedTo ?? Naming.sanitiseField(this.targetKeyProp.name, keep);
+    const keyName = this.target.findFieldName(this.targetKeyProp, keep);
     const sourceRef = Naming.sanitiseFieldForSelect(this.sourceProp.name, false, keyName, keep);
 
     writer

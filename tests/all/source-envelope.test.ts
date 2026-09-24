@@ -722,3 +722,59 @@ test('source-envelope ashby runtime: application.list (list payload through the 
     applicationList: { results: [{ id: 'e9ed20fd-d45f-4aad-8a00-a19bfba0083e' }], nextCursor: 'n1', moreDataAvailable: true },
   });
 });
+
+// --- #242: one envelope two ops share, built once ---
+
+const SHARED_ENVELOPE: OverridesConfig = {
+  $source: { isSuccess: '$.success', errors: { message: '$.errors' } },
+  'get:/x': { payload: 'results' },
+  'get:/z': { payload: 'results' },
+};
+
+// Generates shared-envelope.yaml for `paths`, with the [collector] messages it logged.
+async function generateSharedEnvelope(paths: string[]): Promise<{ schema: string; messages: string[] }> {
+  const gen = await OasGen.fromFile(`${oasBasePath}/shared-envelope.yaml`, {
+    showParentInSelections: false,
+    overrides: SHARED_ENVELOPE,
+  } as never);
+  await gen.visit();
+  let schema = '';
+  const messages = await captureErrors(async () => {
+    schema = gen.generateSchema(paths);
+  });
+  return { schema, messages: messages.filter((message) => message.includes('[collector]')) };
+}
+
+test('source-envelope shared: the op with a payload drops success, the other keeps it, in either order', async () => {
+  const withSuccess = 'cursor?\n      results? {\n       id?\n      }\n      success?\n';
+  const withoutSuccess = 'cursor?\n      results? {\n       id?\n      }\n      """';
+
+  const xFirst = await generateSharedEnvelope(['get:/x>**', 'get:/y>**']);
+  assert.ok(
+    xFirst.schema.includes('type Envelope {\n  cursor: String\n  results: Detail\n}'),
+    'Envelope from /x, no success',
+  );
+  assert.ok(xFirst.schema.includes(withoutSuccess), "/x's selection has no success");
+  assert.ok(xFirst.schema.includes(withSuccess), "/y's selection has it");
+  assert.ok(
+    xFirst.messages.some(
+      (m) => m.includes('`Envelope` is written from get:/x') && m.includes('get:/y also selects success'),
+    ),
+    '#207 names get:/y and success',
+  );
+
+  const yFirst = await generateSharedEnvelope(['get:/y>**', 'get:/x>**']);
+  assert.ok(
+    yFirst.schema.includes('type Envelope {\n  cursor: String\n  results: Detail\n  success: Boolean\n}'),
+    'Envelope from /y',
+  );
+  assert.ok(yFirst.schema.includes(withoutSuccess), "/x's selection still has no success");
+  assert.ok(yFirst.schema.includes(withSuccess), "/y's selection has it");
+  assert.deepStrictEqual(yFirst.messages, [], 'no #207');
+});
+
+test('source-envelope shared: errors named in the overrides are not written', async () => {
+  const { schema } = await generateSharedEnvelope(['get:/z>**']);
+  assert.ok(schema.includes('type Page {\n  cursor: String\n  results: Detail\n}'), 'Page without errors');
+  assert.ok(schema.includes('cursor?\n      results? {\n       id?\n      }\n      """'), '/z writes results { id }');
+});

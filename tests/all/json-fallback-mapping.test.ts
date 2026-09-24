@@ -6,6 +6,7 @@ import { captureErrors } from './_setup.js';
 import { Factory, IType, PropArray, PropComp, Union } from '../../src/oas/nodes/internal.js';
 import { Schemas } from '../../src/oas/utils/schemas.js';
 import { ExpandedSelection } from '../../src/oas/utils/expandedSelection.js';
+import { OverridesConfig } from '../../src/oas/oasContext.js';
 import { SchemaObject } from 'oas/types';
 
 // --- FIXED #208: one field per kind, for a nested oneOf mixing object and non-object members ---
@@ -1213,4 +1214,165 @@ test('test_221_nested_choice_plain_and_list_position', async () => {
     'map value gets the wrapper',
   );
   assert.ok(schema!.includes('valueByKey: valueByKey?->entries {'), 'map value is selected, not commented out');
+});
+
+// --- #242: a union two ops share, built once, keeps each op's own selection ---
+
+const SHARED = '#/components/schemas/';
+const pickField = (op: string, holder: string, member: string, field: string) =>
+  `get:/${op}>res:r>obj:type:${SHARED}${holder}>prop:comp:pick>union:type:${SHARED}Pick>obj:type:${SHARED}${member}>${field}`;
+const priceField = (op: string, holder: string, field: string) =>
+  `get:/${op}>res:r>obj:type:${SHARED}${holder}>prop:comp:price>union:type:${SHARED}R>obj:type:${SHARED}Money>${field}`;
+const U_ALL = ['P', 'Q'].flatMap((member) =>
+  ['prop:enum:status', 'prop:scalar:code', 'prop:scalar:id'].map((field) => pickField('u', 'UHolder', member, field)),
+);
+const V_CODE = ['P', 'Q'].map((member) => pickField('v', 'VHolder', member, 'prop:scalar:code'));
+const M_AMOUNT = priceField('m', 'MHolder', 'prop:scalar:amount');
+const O_RATE = priceField('o', 'OHolder', `prop:obj:rate>obj:type:${SHARED}Rate>prop:scalar:value`);
+
+// Generates `file` for `paths` without composing, with the [collector] messages it logged.
+async function generateFixture(
+  file: string,
+  paths: string[],
+  overrides?: OverridesConfig,
+): Promise<{ schema: string; messages: string[] }> {
+  const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, { showParentInSelections: false, overrides } as never);
+  await gen.visit();
+  let schema = '';
+  const messages = await captureErrors(async () => {
+    schema = gen.generateSchema(paths);
+  });
+  return { schema, messages: messages.filter((message) => message.includes('[collector]')) };
+}
+
+const generateShared = (paths: string[]) => generateFixture('shared-union-fields.yaml', paths);
+
+test('test_242_shared_union_merged_fields_on_one_op', async () => {
+  // /u selects status, code and id on both members: a merged enum, code as JSON, id kept
+  const { schema } = await generateShared(U_ALL);
+  assert.ok(schema.includes('  code: JSON\n  id: ID\n  status: PickStatus\n}'), 'merged fields on Pick');
+  assert.ok(schema.includes('enum PickStatus {\n a,\n b\n}'), 'merged enum');
+  assert.ok(schema.includes('pick? {\n       code?\n       id?\n       status?\n      }'), '/u selects all three');
+});
+
+test('test_242_shared_union_each_op_writes_its_own_fields', async () => {
+  // /u selects all three, /v only code: each op writes its own fields; Pick comes from the op queued first
+  const uFirst = await generateShared([...U_ALL, ...V_CODE]);
+  assert.ok(uFirst.schema.includes('  code: JSON\n  id: ID\n  status: PickStatus\n}'), '/u first: Pick has all three');
+  assert.ok(uFirst.schema.includes('pick? {\n       code?\n      }'), '/v writes code only');
+
+  const vFirst = await generateShared([...V_CODE, ...U_ALL]);
+  assert.ok(vFirst.schema.includes('  code: JSON\n} '), '/v first: Pick has code only');
+  assert.ok(
+    vFirst.schema.includes('pick? {\n       code?\n       id?\n       status?\n      }'),
+    '/u still writes all three',
+  );
+});
+
+test('test_242_shared_union_both_ops_whole', async () => {
+  const { schema } = await generateShared(['get:/u>**', 'get:/v>**']);
+  assert.ok(schema.includes('  code: JSON\n  id: ID\n  status: PickStatus\n}'), 'Pick has all three');
+  assert.strictEqual(
+    schema.match(/pick\? \{\n {7}code\?\n {7}id\?\n {7}status\?\n {6}\}/g)?.length,
+    2,
+    'both ops write all three',
+  );
+});
+
+test('test_242_shared_mixed_value_each_op_writes_its_own_fields', async () => {
+  // /m selects amount, /o rate.value: RObject is written from /o in either order, each op writes its
+  // own field, and #207 names /m's amount
+  for (const paths of [
+    [M_AMOUNT, O_RATE],
+    [O_RATE, M_AMOUNT],
+  ]) {
+    const { schema, messages } = await generateShared(paths);
+    assert.ok(schema.includes('type R {\n  text: String\n  object: RObject\n  raw: JSON\n}'), 'text, object and raw');
+    assert.ok(schema.includes('type RObject {\n  rate: Rate\n}'), 'RObject from /o');
+    assert.ok(schema.includes('type Rate {\n  value: Float\n}'), 'Rate written');
+    assert.ok(schema.includes('["{", { object: raw {\n        amount?\n         } }]'), '/m writes amount');
+    assert.ok(
+      schema.includes('["{", { object: raw {\n        rate? {\n         value?\n        }\n         } }]'),
+      '/o writes rate',
+    );
+    assert.ok(
+      messages.some((m) => m.includes('`RObject` is written from get:/o') && m.includes('get:/m also selects amount')),
+      '#207 names get:/m and amount',
+    );
+  }
+});
+
+// --- #242: mixed values whose object member holds more objects ---
+
+const holderField = (op: string, field: string) =>
+  `get:/${op}>res:r>obj:type:${SHARED}Holder>prop:comp:value>union:type:HolderValueUnion>obj:type:${SHARED}Money>${field}`;
+const AMOUNT = 'prop:scalar:amount';
+const RATE_VALUE = `prop:obj:rate>obj:type:${SHARED}Rate>prop:scalar:value`;
+
+const generateNested = (paths: string[], overrides?: OverridesConfig) =>
+  generateFixture('mixed-value-nested-object.yaml', paths, overrides);
+
+test('test_242_mixed_value_nested_object_fields', async () => {
+  // /p selects amount and rate.value: the object type has both, Rate is written, /p writes both
+  const { schema } = await generateNested([holderField('p', AMOUNT), holderField('p', RATE_VALUE)]);
+  assert.ok(schema.includes('type ValueUnionObject {\n  amount: Float\n  rate: Rate\n}'), 'amount and rate');
+  assert.ok(schema.includes('type Rate {\n  value: Float\n}'), 'Rate { value }');
+  assert.ok(
+    schema.includes(
+      '["{", { object: raw {\n        amount?\n        rate? {\n         value?\n        }\n         } }]',
+    ),
+    '/p writes both',
+  );
+});
+
+test('test_242_mixed_value_nested_object_two_ops', async () => {
+  // /p selects amount and rate.value, /q rate.value: the object type is written from /q, #207 names amount
+  const pFirst = await generateNested([
+    holderField('p', AMOUNT),
+    holderField('p', RATE_VALUE),
+    holderField('q', RATE_VALUE),
+  ]);
+  assert.ok(pFirst.schema.includes('type ValueUnionObject {\n  rate: Rate\n}'), 'object type from /q');
+  assert.ok(
+    pFirst.schema.includes('["{", { object: raw {\n        amount?\n        rate? {'),
+    '/p writes its own fields',
+  );
+  assert.ok(
+    pFirst.messages.some((m) => m.includes('written from get:/q') && m.includes('get:/p also selects amount')),
+    '#207 names amount',
+  );
+
+  // /q selects amount only, /p rate.value: the object type is /q's, #207 names get:/p and rate
+  const qFirst = await generateNested([holderField('q', AMOUNT), holderField('p', RATE_VALUE)]);
+  assert.ok(qFirst.schema.includes('type ValueUnionObject {\n  amount: Float\n}'), 'object type from /q');
+  assert.ok(qFirst.schema.includes('type Rate {\n  value: Float\n}'), "Rate still written for /p's selection");
+  assert.ok(
+    qFirst.messages.some((m) => m.includes('written from get:/q') && m.includes('get:/p also selects rate')),
+    '#207 names rate',
+  );
+});
+
+test('test_242_mixed_value_object_member_leads_back', async () => {
+  // Branch.back leads back to Node: a comment on the object type and in the selection
+  const { schema } = await generateNested(['get:/n>**']);
+  assert.ok(
+    schema.includes('type ValueUnionObject {\n  # back: Node - circular reference omitted\n  label: String\n}'),
+    'back a comment',
+  );
+  assert.ok(schema.includes('# back: circular reference omitted (re-visit'), 'and in the selection');
+});
+
+test('test_242_mixed_value_route_under_an_envelope', async () => {
+  // /r reaches Pick under its envelope's meta, /s as its own response: /s's route writes x: String
+  const overrides: OverridesConfig = { $source: { errors: { message: '$.meta' } }, 'get:/r': { payload: 'data' } };
+  const pick = `res:r>obj:type:${SHARED}Pick>prop:comp:value>union:type:PickValueUnion`;
+  const { schema } = await generateNested(
+    [
+      `get:/r>res:r>obj:type:${SHARED}Env>prop:obj:meta>obj:type:${SHARED}Pick>prop:comp:value>union:type:PickValueUnion>obj:type:${SHARED}M1>prop:circular-ref:#x`,
+      `get:/s>${pick}>obj:type:${SHARED}M2>prop:scalar:x`,
+    ],
+    overrides,
+  );
+  assert.ok(schema.includes('type ValueUnionObject {\n  x: String\n}'), 'x: String');
+  assert.ok(schema.includes('["{", { object: raw {\n        x?\n         } }]'), '/s writes x');
 });

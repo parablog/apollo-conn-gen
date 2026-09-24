@@ -24,7 +24,6 @@ import { Patch } from './patch.js';
 import { Delete } from './delete.js';
 import { Body } from './body.js';
 import { Obj } from './obj.js';
-import { Ref } from './ref.js';
 import { Res } from './res.js';
 import { Scalar } from './scalar.js';
 import { Union } from './union.js';

@@ -4883,6 +4883,10 @@ removed-and-kept field surfacing through an allOf would need the same lookup in 
 
 **AST** — no new node shape; `PropCircRef` now also stands in at positions that kept the field.
 
+**2026-09-24:** the rule holds; since #242 step 4 only the field that closes a loop on an operation's
+own walk is left out, and the field that led into it is kept. e.g. (cycle-on-some-routes.yaml)
+`Space.homepage` and `Doc.folder` are left out; `Content.space` and `Folder.front` are written.
+
 **Refs:** `src/oas/generator/typesCollector.ts` (`consolidateRemovedFields`), `src/oas/oasContext.ts`
 (`propOverrides`), `src/oas/nodes/obj.ts` (generate/select/dependencies). Fixture
 `cycle-on-some-routes.yaml`, test `test_89_field_removed_on_any_route_is_removed_everywhere`.
@@ -11944,6 +11948,78 @@ beside the plain-`$ref` #10 case); the former known-gap pin in
 **Refs:** `docs/FIXED.md` #10, #182. `src/oas/nodes/factory.ts` (`findSingleAllOfMember`,
 `findAllOfSchema`, `fromProp`); closes `docs/TASKS.md #238`.
 
+## 242 [BUG] [P3] · Whole-spec generation of the Meta Marketing API dies at the 4 GB default heap — ✅ Fixed
+
+**Symptom:** `node ./dist/cli/oas tests/resources/oas/meta-ads.json -n` (all 129 ops, default
+heap) is killed after 65 s with "Ineffective mark-compacts near heap limit ... JavaScript heap out
+of memory"; the last GC line reads 4089.6 MB of a 4096 MB limit. No SDL is written. Before dying,
+stderr carries 18,867 identical `[factory] items in array have types that declare no fields -
+returning JSON type` lines. Same result with `--sparse-fieldsets-param fields` (67 s). The spec is
+863 KB; a single self-contained edge (`get:/act_{ad_account_id}/activities>**`, pinned as
+`test_corpus_meta_ads`) generates and composes in under a second. This is the docusign class
+(#178, #180, #203): a modest spec whose references fan out combinatorially per position.
+
+**OAS** (Graph API node types reference each other densely; three AdAccount fields open the same
+24-field Business, which opens Page, which opens more):
+```json
+"AdAccount": { "properties": {
+  "business":          { "$ref": "#/components/schemas/Business" },
+  "owner_business":    { "$ref": "#/components/schemas/Business" },
+  "viewable_business": { "$ref": "#/components/schemas/Business" } } },
+"Business": { "properties": {
+  "primary_page": { "$ref": "#/components/schemas/Page" },
+  "collaborative_ads_managed_partner_business_info": { "$ref": "#/components/schemas/ManagedPartnerBusiness" } } },
+"User": { "properties": {
+  "hometown": { "$ref": "#/components/schemas/Page" },
+  "location": { "$ref": "#/components/schemas/Page" } } }
+```
+Business reaches 136 of the spec's 347 schemas; 41 of the 80 GETs reach Business. An independent
+tree walk of the same spec (service-factory's `spans obligations`, which cuts cycles but not depth)
+counts 84,003 leaf paths under `get:/act_{ad_account_id}`, 27,918 under each of the three Business
+fields, nesting 12 levels deep — the size of tree a per-position expansion faces.
+
+**Before:** OOM, no output. **After:** the whole spec generates under the default heap, or the
+generator stops with a named, bounded failure instead of an OOM.
+
+**First step is measurement, not a fix:** which op peaks (`COV_TRACE=1` on a per-op sweep,
+`node tools/coverage-spec.mts --spec meta-ads.json`), and whether the peak is the
+`collector.expanded` path list #180 measured on docusign or the response-side nodes #203 targets.
+Not yet measured: the per-op cost of the 41 Business-reaching GETs.
+
+**2026-09-23, measured and split into four steps:**
+- Cause: every `$ref` occurrence builds its own copy of the referenced type, and the leaf walk keeps
+  one path string per position; both grow with the number of positions, not the number of types.
+- The heaviest op, `post:/act_{ad_account_id}/ads`, builds 3.0 million nodes and 1.29 million paths
+  to write 268 types and 500 KB of SDL.
+- The whole-spec run also dies at a 16 GB heap, after 739 s, between op 80 and op 90 of 129.
+- docusign's GET side dies at the 4 GB default heap too, after 66 s; it finishes only at 16 GB (9.2 GB RSS).
+- Step 1: the leaf walk builds each path from the ancestors it walked through, not from the node's
+  parents. Output unchanged. Done in 3c826ef, see `docs/FIXED.md` #242.
+- Step 2 (2026-09-23): writing a selection and walking the kept types pass down the path of the
+  route they are on, and a field is selected when that path is in the selection, not its node's own
+  path. Output unchanged. Done in the working tree, see `docs/FIXED.md` #242.
+- 2026-09-23: the last two steps swapped places. With one built type per schema, the leaf walk
+  passes a shared type once and would write leaf paths for its first route only, so the strings go first.
+- Step 3 (2026-09-23): a `>**` selection stays one entry; the leaf walk marks the nodes on the way to
+  each leaf instead of writing one path string per leaf. Output unchanged. Done in the working tree,
+  see `docs/FIXED.md` #242.
+- Step 4: one built type per schema and kind, with loop fields found once over the shared types and
+  written through `propOverrides`.
+- Step 4 records the selected written route per run: a shared node's first construction parent can
+  be an unselected route, even inside `isolatedRun`. Mixed-value clones (#208) keep absolute
+  `pathInSelection` values built from the union's written route. Do not rebase them separately at
+  the object type, generated `object` field and union callers; those callers have different bases.
+- Step 4 (2026-09-24): each component is built once per side, and a field that leads back to a type
+  still on an operation's walk is left out on that walk. Done in the working tree, see
+  `docs/FIXED.md` #242. A clone's path is moved under the calling route's union in one place,
+  `Type.findClonePath`, never at the callers.
+
+**AST:** one node per `#/components/schemas` schema and side (`OasContext.typesByRef`); `Ref` and
+`PropRef` are gone. See the step 4 entry below.
+
+**Refs:** #180, #203, `docs/DEFERRED.md` #178 and #139 (granularity mode), `TEST_CORPUS.md`
+(Meta Marketing API), `tests/resources/oas/meta-ads.json` (local, gitignored).
+
 ## 242 [BUG] [P3] · Step 1 of 4: the leaf walk builds each selection path from the walk itself · ✅ Step done
 
 **Example** (confluence.json, `post:/wiki/rest/api/user/{userId}/property/{key}`, its body's free-form `value`):
@@ -12098,3 +12174,109 @@ selected:                                             no, today and now
 `src/oas/utils/expandedSelection.ts`, `src/oas/generator/typesCollector.ts` (`collect`,
 `collectLeafPaths`, `collectExpandedPaths`, `LeafTarget`).
 
+## 242 [BUG] [P3] · Step 4 of 4: each component is built once, and loops are found on each operation's walk · ✅ Fixed
+
+**Example** (meta-ads.json, three AdAccount fields reach the same Business):
+```json
+"AdAccount": { "properties": {
+  "business":          { "$ref": "#/components/schemas/Business" },
+  "owner_business":    { "$ref": "#/components/schemas/Business" },
+  "viewable_business": { "$ref": "#/components/schemas/Business" } } }
+```
+- Before: each `$ref` built its own copy of Business and of everything Business reaches. The op
+  `post:/act_{ad_account_id}/ads` built 2,963,889 nodes, and the whole spec ran out of memory.
+- Now: Business is built once for responses and once for inputs, and all three fields point at it.
+  The same op builds 8,352 nodes.
+
+**What is shared:**
+- Every `#/components/schemas/` schema gets one node per side: one for responses, one for inputs.
+  e.g. petstore's Pet is `obj:type:#/components/schemas/Pet` and `obj:input:#/components/schemas/Pet`
+  for every op that reaches it.
+- An inline schema and a `#/paths/…` pointer still get a node at every position.
+- An inline request body that comes down to one `$ref` is built on its own, so it keeps the op's
+  name. e.g. (profound) `post:/v1/agents/{agent_id}/runs` stays `CreateV1AgentsByAgentIdRunsInput`.
+
+**The loop rule:** on each operation's own walk, a field that leads back to a type still open on
+that walk is left out, as a comment, on the type that writes it; the field that led into the loop is
+kept.
+- A flat union's member still open on the walk is left out of that union on that operation, with a
+  warning.
+- A union whose members are all `$ref`s counts as its set of members on its side (#118): the same
+  set again closes the loop. e.g. (hubspot lists) `OrFilterBranch.filterBranches` reopens the branch
+  choice, so it is left out.
+- A type that is its own allOf part or union member, with no field between, is left out as that
+  member, with a warning. e.g. (composed-loops.yaml) `Self: allOf [$ref Self, { x }]` writes `Self { x }`.
+  No spec in the corpus hits this.
+
+**What changed in the output** (294 files, whole spec, 11281ed against step 4):
+- 34 fields are written instead of left out as circular references:
+  - meta-ads 22, e.g. `AdAccount.business: Business` (144 more types written);
+  - bitbucket 7, e.g. `Commit.parents: [BaseCommit]` (BaseCommitInput now written);
+  - confluence 3, e.g. `UserInput.personalSpace: SpaceInput` (16 more types written);
+  - cycle-on-some-routes.yaml 2: `Content.space`, `Folder.front`.
+- The comment on a left-out field names the type as it is written (55 lines in 13 specs).
+  e.g. (jira-platform) `# conditionGroup: [ConditionGroupPayload]` → `[ConditionGroupPayloadInput]`.
+- Seven fields sent as JSON now have their type.
+  e.g. (launch_Library) `PolymorphicLauncherConfigEndpoint.manufacturer: JSON` → `AgencyNormal`;
+  box `MetadataQueryResultsEntriesUnion.createdBy: JSON` → `InlineFileCreatedBy`.
+- Fields that were lost because a part was still being built, not to a loop, are written:
+  - TMF632 `PartyOrPartyRole` and its three input forms gain Party's `creditRating`,
+    `externalReference`, `partyCharacteristic`, `taxExemptionCertificate` (16 lines);
+  - bitbucket `Branch` and `BranchInput`, on the `refs` ops, gain their `ref` part's `links`,
+    `name`, `type`, and `target` as a comment.
+- A type reached through a restored field moves to where that field reaches it.
+  e.g. (bitbucket) BaseCommit moves from last to where `Commit.parents` reaches it; meta-ads 88
+  types, confluence 2, cycle-on-some-routes 2.
+- Confluence's UserDetailsInput, UserDetailsPersonalInput, UserDetailsBusinessInput,
+  UserExpandableInput and GroupCreateType move as one block, behind the SpaceInput subtree that
+  `UserInput.personalSpace` now brings in.
+- Nothing else changes on the other 278 files.
+
+**Timing** (one run per spec, 4 GB heap, before → after):
+| spec | wall time | peak RSS |
+|---|---|---|
+| meta-ads `post:/act_{ad_account_id}/ads` | 48.2 → 2.7 s | 2.71 → 0.41 GB |
+| meta-ads, all 129 ops | out of memory at 146 s → 6.3 s | 4.19 → 0.42 GB |
+| hubspot lists | 12.7 → 1.1 s | 0.55 → 0.21 GB |
+| stripe | 52.3 → 16.5 s | 0.52 → 0.45 GB |
+| docusign, 167 GET ops (report only) | out of memory at 121 s → 23.7 s | 4.21 → 1.92 GB |
+
+**Compose** (rover, fed 2.15.1, before → after):
+- meta-ads op: 10.6 s, 0.14 GB → 2,220 s, 2.28 GB. The SDL grows 0.5 → 10.2 MB, see TASKS #251.
+- meta-ads, all 129 ops: no SDL before → 762.6 s, 0.83 GB.
+- confluence: 11.1 → 15.4 s.
+
+**Also:**
+- A saved selection that names an old circular-reference id resolves to the field of the same name,
+  with a warning. e.g. `…>obj:type:#/c/s/Item>prop:circular-ref:#parent_item` → `prop:obj:parent_item`.
+- A mixed value (#208) two operations share keeps each operation's own selection; its object type is
+  written from the last route, as before. e.g. (shared-union-fields.yaml) `/m` selects `amount`,
+  `/o` `rate.value` → `RObject { rate }` in either order, and `/m` still writes `amount`.
+- Twin field names (#69) are numbered by the type that writes them, not stored on the field.
+  e.g. (confluence) `LookAndFeel.links` is `links` on LookAndFeel and `links2` on
+  LookAndFeelWithLinks, which has its own `_links` as `links`.
+
+**Web follow-up** (not done here):
+- `web/src/hooks/useSpecTree.ts:103` and `:278` take a row's id from `type.path()`. A shared node
+  has no one path; the id should come from the parent's `Type.childPath(context, child, parentPath)`.
+- `useSpecTree.ts:216` calls `type.consolidate([])`; `Composed.consolidate()` now takes no argument.
+- Ids of fields that used to be circular references changed (`prop:circular-ref:#x` → `prop:obj:x`).
+
+**Refs:** `docs/TASKS.md` #243, #244, #245, #247, #251. `src/oas/nodes/factory.ts`
+(`buildOnce`, `cyclicAncestor`), `src/oas/oasContext.ts` (`typesByRef`, `commentOutField`),
+`src/oas/generator/typesCollector.ts` (`leaveOutLoopFields`, `keepMixedValueRoutes`,
+`collectLeafPaths`), `src/oas/nodes/type.ts` (`findMemberRoutes`, `findSelectedFields`,
+`findClonePath`), `src/oas/utils/selectionPath.ts`. Fixtures `shared-component-two-ops.yaml`,
+`shared-allof-members.yaml`, `shared-union-fields.yaml`, `shared-envelope.yaml`,
+`composed-loops.yaml`, `mixed-value-nested-object.yaml`.
+
+## 203 [FEAT] [P3] · Response-side type sharing, for the docusign memory bar · ✅ Fixed by #242
+
+**Example** (docusign, the 167 GET ops in one run, 4 GB heap):
+- Before: out of memory at 121 s, 4.21 GB RSS.
+- After: 23.7 s, 1.92 GB RSS, under the 2 GiB bar.
+- #242 step 4 builds each `#/components/schemas` type once per side, responses included.
+- Left: all 247 docusign mutations in one run has not been measured again.
+- Left: an inline schema, and one reached through a `#/paths` pointer, is still built at every position.
+
+**Refs:** `docs/FIXED.md` #242, `docs/TASKS.md` #180.

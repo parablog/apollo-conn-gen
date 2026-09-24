@@ -1,0 +1,120 @@
+openapi: 3.0.3
+info:
+  title: Mixed values whose object member holds more objects
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /p:
+    get:
+      operationId: getP
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holder'
+  /q:
+    get:
+      operationId: getQ
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holder'
+  /n:
+    get:
+      operationId: getN
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+  /r:
+    get:
+      operationId: getR
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Env'
+  /s:
+    get:
+      operationId: getS
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pick'
+components:
+  schemas:
+    # a plain string or a Money object holding a Rate
+    Holder:
+      type: object
+      properties:
+        value:
+          oneOf:
+            - type: string
+            - $ref: '#/components/schemas/Money'
+    Money:
+      type: object
+      properties:
+        amount:
+          type: number
+        rate:
+          $ref: '#/components/schemas/Rate'
+    Rate:
+      type: object
+      properties:
+        value:
+          type: number
+    # the object member leads back to the type holding the mixed value
+    Node:
+      type: object
+      properties:
+        value:
+          oneOf:
+            - type: string
+            - $ref: '#/components/schemas/Branch'
+    Branch:
+      type: object
+      properties:
+        label:
+          type: string
+        back:
+          $ref: '#/components/schemas/Node'
+    # Pick is reached under /r's envelope and as /s's own response
+    Env:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/Pick'
+        data:
+          $ref: '#/components/schemas/Rate'
+    Pick:
+      type: object
+      properties:
+        value:
+          oneOf:
+            - type: string
+            - $ref: '#/components/schemas/M1'
+            - $ref: '#/components/schemas/M2'
+    M1:
+      type: object
+      properties:
+        x:
+          $ref: '#/components/schemas/Pick'
+    M2:
+      type: object
+      properties:
+        x:
+          type: string

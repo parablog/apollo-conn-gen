@@ -1,0 +1,64 @@
+openapi: 3.0.3
+info:
+  title: One envelope two operations share, one returning its payload
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /x:
+    get:
+      operationId: getX
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+  /y:
+    get:
+      operationId: getY
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+  /z:
+    get:
+      operationId: getZ
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+components:
+  schemas:
+    Envelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        results:
+          $ref: '#/components/schemas/Detail'
+        cursor:
+          type: string
+    Page:
+      type: object
+      properties:
+        cursor:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Detail'
+        results:
+          $ref: '#/components/schemas/Detail'
+    Detail:
+      type: object
+      properties:
+        id:
+          type: string

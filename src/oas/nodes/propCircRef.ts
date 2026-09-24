@@ -36,7 +36,7 @@ export class PropCircRef extends Prop {
   // Render the whole field commented in the SDL (override generate, not just generateValue: the base
   // Prop.generate writes the uncommented `  field: ` prefix + `!`). A commented field is inert, so the
   // type carries no unresolved field (no CONNECTORS_UNRESOLVED_FIELD) while documenting why the field is left out. #10
-  public generate(context: OasContext, writer: Writer, _selection: ExpandedSelection): void {
+  public generate(context: OasContext, writer: Writer, _selection: ExpandedSelection, fieldName?: string): void {
     // the wrapped value may carry a raw ref (`[#/components/schemas/User]`): reduce refs to their name.
     // Names the value instead of 'JSON': a left-out object was never visited (no props), so
     // getValue falls back to that generic name on its own.
@@ -47,7 +47,7 @@ export class PropCircRef extends Prop {
     }
     writer
       .write('  # ')
-      .write(Naming.sanitiseField(this.name, context.generateOptions?.keepFieldNames === true))
+      .write(fieldName ?? Naming.sanitiseField(this.name, context.generateOptions?.keepFieldNames === true))
       .write(': ')
       .write(value)
       .write(' - circular reference omitted\n');

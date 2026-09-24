@@ -1,0 +1,137 @@
+openapi: 3.0.3
+info:
+  title: allOf parts reached through more than one route
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /c:
+    get:
+      operationId: getC
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/C'
+  /d:
+    get:
+      operationId: getD
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/D'
+  /d2:
+    get:
+      operationId: getD2
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/D'
+  /f:
+    get:
+      operationId: getF
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/F'
+  /u:
+    get:
+      operationId: getU
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UHolder'
+components:
+  schemas:
+    # both parts declare id
+    C:
+      allOf:
+        - $ref: '#/components/schemas/A'
+        - $ref: '#/components/schemas/B'
+    A:
+      type: object
+      properties:
+        id:
+          type: string
+        a:
+          type: string
+        detail:
+          $ref: '#/components/schemas/Detail'
+    B:
+      type: object
+      properties:
+        id:
+          type: string
+        b:
+          type: string
+    Detail:
+      type: object
+      properties:
+        x:
+          type: string
+        y:
+          type: string
+    # A is reached directly and through E
+    D:
+      allOf:
+        - $ref: '#/components/schemas/A'
+        - $ref: '#/components/schemas/E'
+    E:
+      allOf:
+        - $ref: '#/components/schemas/A'
+        - type: object
+          properties:
+            eOnly:
+              type: string
+    # A2 is repeated past B2, which declares code with another type
+    F:
+      allOf:
+        - $ref: '#/components/schemas/A2'
+        - $ref: '#/components/schemas/B2'
+        - $ref: '#/components/schemas/G'
+    G:
+      allOf:
+        - $ref: '#/components/schemas/A2'
+        - type: object
+          properties:
+            extra:
+              type: string
+    A2:
+      type: object
+      properties:
+        code:
+          type: string
+    B2:
+      type: object
+      properties:
+        code:
+          type: integer
+    # D as a member of a flat union under a property
+    UHolder:
+      type: object
+      properties:
+        pick:
+          $ref: '#/components/schemas/DOrOther'
+    DOrOther:
+      oneOf:
+        - $ref: '#/components/schemas/D'
+        - $ref: '#/components/schemas/Other'
+    Other:
+      type: object
+      properties:
+        note:
+          type: string

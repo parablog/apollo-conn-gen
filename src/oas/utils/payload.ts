@@ -96,24 +96,21 @@ export function envelopeContext(context: OasContext, op: IType & Op): EnvelopeCo
 }
 
 // True for a field the overrides file already handles through isSuccess or errors, and for anything
-// inside it (ErrorDetail.message); these stay out of the written type and its selection. Answers
-// false for every field when the overrides file names no field to return.
+// inside it (ErrorDetail.message); these stay out of the written type and its selection. `chain` is
+// the route from the op down to the node's parent: a node shared by two ops is inside the field on
+// one route only. Answers false for every field when the overrides file names no field to return.
 //   e.g. (ashby) ApplicationListSuccessResponse: { success, results, nextCursor } -> success: true, nextCursor: false
-export function isEnvelopeNode(node: IType, op: IType & Op, envelope: EnvelopeContext): boolean {
+export function isEnvelopeNode(node: IType, chain: IType[], envelope: EnvelopeContext): boolean {
   if (!envelope.hasPayload) {
     return false;
   }
 
-  let current: IType | undefined = node;
-  while (current && current !== (op as IType)) {
-    if (
+  const route = [...chain, node];
+  return route.some(
+    (current, i) =>
+      i > 0 &&
       current instanceof Prop &&
       envelope.names.has(current.name) &&
-      envelope.objects.includes(current.parent as Obj)
-    ) {
-      return true;
-    }
-    current = current.parent;
-  }
-  return false;
+      envelope.objects.includes(route[i - 1] as Obj),
+  );
 }

@@ -55,11 +55,11 @@ export class PropComp extends Prop {
     return this.comp ? [this.comp] : [];
   }
 
-  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string, fieldName?: string) {
     const comp = this.comp!;
     trace(context, '-> [prop-comp:select]', 'in ' + this.name + ', obj: ' + comp.name);
 
-    this.writeFieldHead(context, writer, { suffix: comp.selectionSuffix(context) });
+    this.writeFieldHead(context, writer, { suffix: comp.selectionSuffix(context), fieldName });
 
     if (this.needsBrackets(comp)) {
       writer.write(' {').write('\n');

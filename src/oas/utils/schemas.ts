@@ -54,6 +54,12 @@ export class Schemas {
     );
   }
 
+  // True when a schema is read as a list: `items` with `type: array` or no type at all. see docs/FIXED.md #4
+  //   e.g. (docker-engine) ContainerSummary: { type: array, items: { … } }  ->  true
+  public static isList(schema: SchemaObject): boolean {
+    return _.get(schema, 'items') != null && (schema.type === 'array' || schema.type == null);
+  }
+
   // True when a choice lists nothing but plain values — strings, numbers, enums, or refs to them.
   // A `null` member does not count, and two objects are a real union, left alone.
   //   e.g. (confluence) anyOf: [{ type: string }, { type: integer }] -> true            #86
@@ -351,8 +357,8 @@ export class Schemas {
     }
 
     const names = response
-      .selectedProps(selection, keep, response.path())
-      .map((prop) => prop.renamedTo ?? Naming.sanitiseField(prop.name, keep));
+      .selectedProps(selection, keep, selection.writtenPath(response))
+      .map((prop) => response.findFieldName(prop, keep));
     if (names.length === 0) {
       return undefined;
     }

@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { SchemaObject } from 'oas/types';
-import { Obj, Prop, PropArray, PropObj, PropScalar, Scalar, Union } from './internal.js';
+import { Obj, Prop, PropArray, PropCircRef, PropObj, PropScalar, Scalar, Union } from './internal.js';
 import { OasContext } from '../oasContext.js';
 import { Writer } from '../io/writer.js';
 import { MixedValueShape } from '../utils/schemas.js';
@@ -31,6 +31,9 @@ export class MixedValue {
     shape: MixedValueShape,
     context: OasContext,
     selection: ExpandedSelection,
+    // Lists the routes the union is reached on; the object type holds the fields any of them selects
+    //   e.g. (shared-union-fields.yaml) R on get:/m's and get:/o's price
+    public readonly routes: string[],
   ) {
     this.hasObjectMember = shape.objectMemberIndexes.length > 0;
     this.fields = { raw: new PropScalar(union, 'raw', 'JSON', {}) };
@@ -56,7 +59,7 @@ export class MixedValue {
       this.fields.list = list;
     }
     if (this.hasObjectMember) {
-      this.objectType = this.buildObjectType(context, shape, selection);
+      this.objectType = this.buildObjectType(context, shape, selection, routes);
       // an empty type isn't written (rover rejects it) — the "{" match branch still claims the
       // prefix regardless, see writeSelection.
       if (this.objectType.props.size > 0) {
@@ -66,27 +69,50 @@ export class MixedValue {
   }
 
   // Registered exactly like any other object (name-collision check included, #208). Each clone is
-  // owned by the object type but keeps its member field's own path (Type.pathInSelection).
-  private buildObjectType(context: OasContext, shape: MixedValueShape, selection: ExpandedSelection): Obj {
+  // owned by the object type but keeps its member field's own path (Type.pathInSelection). The
+  // written route's fields come first; a field only another route selects is cloned too, so that
+  // route's selection still writes it, as when each op built its own copy. #242
+  //   e.g. (shared-union-fields.yaml) /m selects amount, /o rate.value -> clones amount and rate
+  private buildObjectType(
+    context: OasContext,
+    shape: MixedValueShape,
+    selection: ExpandedSelection,
+    routes: string[],
+  ): Obj {
     const objectType = new Obj(this.union, `${this.union.name}Object`, { type: 'object', properties: {} });
     objectType.visit(context);
 
-    const members = shape.objectMemberIndexes.map((i) => this.union.children[i]);
-    const candidates: Prop[] = [];
+    const writtenRoute = selection.writtenPath(this.union);
+    for (const unionPath of [writtenRoute, ...routes.filter((route) => route !== writtenRoute)]) {
+      this.addObjectFields(context, shape, selection, objectType, unionPath);
+    }
+    return objectType;
+  }
+
+  // Clones onto the object type each field the object members select when the union sits at
+  // `unionPath`, merged by name as one op's copy always was; a name already cloned is kept.
+  //   e.g. (nested-oneof-branch-loss.yaml) value's Currency member -> ValueUnionObject { currencyCode value }
+  private addObjectFields(
+    context: OasContext,
+    shape: MixedValueShape,
+    selection: ExpandedSelection,
+    objectType: Obj,
+    unionPath: string,
+  ): void {
+    const members = shape.objectMemberIndexes
+      .map((i) => this.union.children[i])
+      .filter((member) => this.union.findMembersOn(unionPath).includes(member));
+    const candidates = members.flatMap((member) => this.union.findMemberFields(member, selection, unionPath));
     const pathByName = new Map<string, string>();
-    const unionPath = this.union.path();
-    const pathsToMembers = this.union.findPathsToMembers();
-    for (const member of members) {
-      for (const prop of member.props.values()) {
-        const path = this.union.propPath(prop, unionPath, pathsToMembers);
-        if (!selection.isSelected(prop, path)) continue;
-        if (!pathByName.has(prop.name)) pathByName.set(prop.name, path);
-        candidates.push(prop);
-      }
+    for (const candidate of candidates) {
+      if (!pathByName.has(candidate.prop.name)) pathByName.set(candidate.prop.name, candidate.path);
     }
 
     const keep = context.generateOptions?.keepFieldNames === true;
-    for (const prop of Union.dedupeByName(candidates, context, keep, this.union)) {
+    for (const { prop } of Union.dedupeByName(candidates, context, keep, this.union, unionPath)) {
+      if (objectType.props.has(prop.name)) {
+        continue;
+      }
       const clone = _.clone(prop) as Prop;
       clone.children = [...prop.children];
       clone.required = false;
@@ -97,9 +123,11 @@ export class MixedValue {
       if (clone.pathInSelection) selection.nodesWithLeaves.add(clone);
       objectType.props.set(clone.name, clone);
       objectType.add(clone);
+      // Leaves out on the object type too a member field the loop walk left out on this union. #242
+      if (this.union.emittedProp(context, prop) instanceof PropCircRef) {
+        context.commentOutField(objectType, clone, clone.name);
+      }
     }
-
-    return objectType;
   }
 
   // Writes the type with one field per kind present, in kind order. `<Name>Object` is not written

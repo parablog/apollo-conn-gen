@@ -4,7 +4,7 @@ import { ParameterObject, ResponseObject, SchemaObject } from 'oas/types';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { ReferenceObject } from './nodes/internal.js';
 import { Naming } from './utils/naming.js';
-import { IType } from './nodes/internal.js';
+import { IType, Prop, PropCircRef } from './nodes/internal.js';
 
 import { Mapper } from './mapper/index.js';
 import { DirectivesConfig } from './lint/directives.js';
@@ -147,6 +147,10 @@ export class OasContext {
 
   public stack: IType[] = new Array<IType>();
   public types: Map<string, IType | undefined> = new Map();
+  // One node per component $ref and side, keyed `${kind}:${ref}`: every later occurrence of the
+  // $ref reuses it, so the built nodes form a graph with loops. see docs/FIXED.md #242
+  //   e.g. (meta-ads) 'type:#/components/schemas/Business' -> the one Business under every AdAccount field
+  public typesByRef: Map<string, IType> = new Map();
   public generateOptions: GenerateOptions;
   public refCount: Map<string, number> = new Map();
 
@@ -174,6 +178,33 @@ export class OasContext {
 
   public size() {
     return this.stack.length;
+  }
+
+  // Swaps a field of `type` for its comment wherever `type` is written: a field that closes a loop
+  // on some op's walk (#10 #89 #242), or a field no route selects (#125).
+  //   e.g. (cycle-on-some-routes.yaml) Space.homepage, which leads back to Content
+  public commentOutField(type: IType, prop: Prop, name: string): void {
+    let overrides = this.propOverrides.get(type.id);
+    if (!overrides) {
+      overrides = new Map();
+      this.propOverrides.set(type.id, overrides);
+    }
+    overrides.set(name, prop instanceof PropCircRef ? prop : new PropCircRef(type, prop));
+  }
+
+  // True when `node` is the one node built for its $ref (typesByRef). A map is renamed to
+  // `<Name>Entry` when built, so it is never found here.
+  //   e.g. (petstore) the Pet every `$ref: Pet` response reuses -> true
+  public isBuiltOnce(node: IType): boolean {
+    return this.typesByRef.get(`${node.kind}:${node.name}`) === node;
+  }
+
+  // True when `node` is being built and no field lies between it and the node being built now: a
+  // composition or union that reaches itself through its members, with no field to leave out. #242
+  //   e.g. (composed-loops.yaml) A: allOf [ $ref B, … ], B: allOf [ $ref A, … ] -> B meets A again
+  public isOpenWithoutField(node: IType): boolean {
+    const at = this.stack.lastIndexOf(node);
+    return at >= 0 && this.stack.slice(at + 1).every((open) => !(open instanceof Prop));
   }
 
   public store(name: string, type: IType): void {
@@ -229,15 +260,6 @@ export class OasContext {
     }
 
     return null;
-  }
-
-  public decRefCount(ref: string): void {
-    if (ref && ref.startsWith(OasContext.COMPONENTS_SCHEMAS)) {
-      const currentCount = this.refCount.get(ref) || 0;
-      if (currentCount > 0) {
-        this.refCount.set(ref, currentCount - 1);
-      }
-    }
   }
 
   public lookupParam(ref: string): ParameterObject | boolean {

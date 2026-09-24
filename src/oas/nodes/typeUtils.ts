@@ -19,6 +19,7 @@ import {
   ReferenceObject,
   Res,
   Scalar,
+  SelectedField,
   Union,
 } from './internal.js';
 import _ from 'lodash';
@@ -49,8 +50,7 @@ export class T {
     if (!(type instanceof Obj) || type.props.size === 0) {
       return false;
     }
-    const overrides = context.propOverrides.get(type.id);
-    return Array.from(type.props.values()).every((prop) => (overrides?.get(prop.name) ?? prop) instanceof PropCircRef);
+    return Array.from(type.props.values()).every((prop) => type.emittedProp(context, prop) instanceof PropCircRef);
   }
 
   // Traverses a Composed to check for props. Useful when consolidate has not been invoked.
@@ -94,24 +94,33 @@ export class T {
     return type instanceof Get;
   }
 
-  // Visits each node once and passes the callback the ancestors the walk went through, walk root
-  // first, so a caller can build a leaf's path from the walk instead of the node's parents.
-  //   e.g. (cycles-by-route.yaml) the wrapper's label field under get:/nodes has five ancestors:
-  //   the op, its response, Node, the wrapper field and the wrapper object, in that order
+  // Visits each node once, passing the ancestors the walk went through, walk root first. A callback
+  // returning false keeps the node out: not visited, children not entered. `revisit` hears each
+  // child the walk already passed, `onStack` true when it is an ancestor: the edge closes a loop. #242
+  //   e.g. (cycle-on-some-routes.yaml) Space.homepage leads back to Content, still on the stack
   public static traverse(
     node: IType,
-    callback: (node: IType, ancestors: IType[]) => void,
+    callback: (node: IType, ancestors: IType[]) => boolean | void,
     after?: (node: IType) => void,
+    revisit?: (child: IType, ancestors: IType[], onStack: boolean) => void,
   ): void {
     const visited = new Set<IType>();
+    const onStack = new Set<IType>();
     const ancestors: IType[] = [];
     const traverseNode = (current: IType): void => {
-      if (visited.has(current)) return;
+      if (callback(current, ancestors) === false) return;
       visited.add(current);
-      callback(current, ancestors);
+      onStack.add(current);
       ancestors.push(current);
-      for (const child of current.children) traverseNode(child);
+      for (const child of current.children) {
+        if (visited.has(child)) {
+          revisit?.(child, ancestors, onStack.has(child));
+        } else {
+          traverseNode(child);
+        }
+      }
       ancestors.pop();
+      onStack.delete(current);
       after?.(current);
     };
     traverseNode(node);
@@ -171,9 +180,16 @@ export class T {
     return _.filter(T.containers(node), (e: IType) => e.id.startsWith('comp:')); // || e.id.startsWith('union:'));
   }
 
-  public static print(node: IType, prefix: string = '', isLast: boolean = true): string {
+  // Draws the tree under `node`. A node already drawn is written once more as its id and `(seen)`,
+  // without its children: one node is shared by every $ref to it, and the nodes can loop. #242
+  //   e.g. (cycle-on-some-routes.yaml) Space under Content.space, then `obj:type:#/c/s/Space (seen)` under User
+  public static print(node: IType, prefix: string = '', isLast: boolean = true, drawn: Set<IType> = new Set()): string {
     // Build the current line with the appropriate connector.
     const connector = prefix === '' ? '' : isLast ? '└─ ' : '├─ ';
+    if (drawn.has(node)) {
+      return prefix + connector + node.id + ' (seen)\n';
+    }
+    drawn.add(node);
     let result = prefix + connector + node.id + '\n';
 
     // Prepare the prefix for the children.
@@ -181,7 +197,7 @@ export class T {
 
     node.children.forEach((child, index) => {
       const last = index === node.children.length - 1;
-      result += T.print(child, childPrefix, last);
+      result += T.print(child, childPrefix, last, drawn);
     });
 
     return result;
@@ -385,77 +401,79 @@ export class T {
   // Siblings whose names clean to one field are never dropped: each keeps its own wire key, and
   // later twins take numbered names both the type and the mapping write. Under --keep-field-names,
   // a keepable spelling claims its own name first; unkeepable twins number around it, whatever
-  // order they were declared in. see docs/FIXED.md #69 #113 #162
+  // order they were declared in. `numbered` is the owner's own record of the numbers it gave: a
+  // field folded into two types can be a twin in one and not the other. see docs/FIXED.md #69 #113 #162 #242
   //   e.g. (trello) boards: prefs/background + prefs_background -> prefsBackground, prefsBackground2
   //   e.g. (keep-twin-fields.yaml) foo_bar + fooBar, flag on -> both bare, no collision at all
-  public static numberTwinFields(props: Prop[], keep: boolean): Prop[] {
+  public static numberTwinFields(fields: SelectedField[], keep: boolean, numbered: Map<Prop, string>): void {
+    const props = fields.map((field) => field.prop);
     const taken = new Map<string, Prop>();
 
     if (!keep) {
-      const kept: Prop[] = [];
       for (const prop of props) {
         // a name allocated on an earlier pass stays put — reallocating in another prop order could
         // flip which twin holds the base name between generate and select. #113
-        if (prop.renamedTo) {
-          taken.set(prop.renamedTo, prop);
-          kept.push(prop);
+        const pinned = numbered.get(prop);
+        if (pinned) {
+          taken.set(pinned, prop);
           continue;
         }
         const field = Naming.sanitiseField(prop.name);
         if (!taken.has(field)) {
           taken.set(field, prop);
-          kept.push(prop);
           continue;
         }
-        const numbered = Naming.numberedName(field, (n) => taken.has(n));
-        prop.renamedTo = numbered;
-        taken.set(numbered, prop);
-        kept.push(prop);
+        const name = Naming.numberedName(field, (n) => taken.has(n));
+        numbered.set(prop, name);
+        taken.set(name, prop);
       }
-      return kept;
+    } else {
+      // Pass A: the names a keepable prop in this view owns outright. A prop already pinned to one
+      // of these is a stale allocation from an earlier, partial view where that keepable prop was
+      // out of scope — evict it so the keepable prop can still win its own spelling below. Every
+      // other existing pin stays put, same as the keep=false loop above. see #113 #162
+      const keptNames = new Set(props.filter((p) => Naming.sanitiseField(p.name, true) === p.name).map((p) => p.name));
+      for (const prop of props) {
+        const pinned = numbered.get(prop);
+        if (!pinned) {
+          continue;
+        }
+        if (keptNames.has(pinned)) {
+          numbered.delete(prop);
+        } else {
+          taken.set(pinned, prop);
+        }
+      }
+
+      // Pass B: an unpinned keepable prop claims its own spelling unconditionally — Pass A already
+      // guaranteed the name is free, so there is no collision to check for here. A base holder is
+      // never numbered, the invariant every findFieldName reader relies on.
+      for (const prop of props) {
+        if (!numbered.has(prop) && Naming.sanitiseField(prop.name, true) === prop.name) {
+          taken.set(prop.name, prop);
+        }
+      }
+
+      // Pass C: everything left over — an unkeepable spelling claims the sanitised base name if it
+      // is free, else numbers around whatever Passes A and B already claimed.
+      for (const prop of props) {
+        if (numbered.has(prop) || taken.get(prop.name) === prop) {
+          continue;
+        }
+        const field = Naming.sanitiseField(prop.name, true);
+        if (!taken.has(field)) {
+          taken.set(field, prop);
+          continue;
+        }
+        const name = Naming.numberedName(field, (candidate) => taken.has(candidate));
+        numbered.set(prop, name);
+        taken.set(name, prop);
+      }
     }
 
-    // Pass A: the names a keepable prop in this view owns outright. A prop already pinned to one
-    // of these is a stale allocation from an earlier, partial view where that keepable prop was
-    // out of scope — evict it so the keepable prop can still win its own spelling below. Every
-    // other existing pin stays put, same as the keep=false loop above. see #113 #162
-    const keptNames = new Set(props.filter((p) => Naming.sanitiseField(p.name, true) === p.name).map((p) => p.name));
-    for (const prop of props) {
-      if (!prop.renamedTo) {
-        continue;
-      }
-      if (keptNames.has(prop.renamedTo)) {
-        prop.renamedTo = undefined;
-      } else {
-        taken.set(prop.renamedTo, prop);
-      }
+    for (const field of fields) {
+      field.name = numbered.get(field.prop) ?? Naming.sanitiseField(field.prop.name, keep);
     }
-
-    // Pass B: an unpinned keepable prop claims its own spelling unconditionally — Pass A already
-    // guaranteed the name is free, so there is no collision to check for here. A base holder never
-    // carries renamedTo, the invariant every `renamedTo ?? sanitiseField(...)` reader relies on.
-    for (const prop of props) {
-      if (!prop.renamedTo && Naming.sanitiseField(prop.name, true) === prop.name) {
-        taken.set(prop.name, prop);
-      }
-    }
-
-    // Pass C: everything left over — an unkeepable spelling claims the sanitised base name if it
-    // is free, else numbers around whatever Passes A and B already claimed.
-    for (const prop of props) {
-      if (prop.renamedTo || taken.get(prop.name) === prop) {
-        continue;
-      }
-      const field = Naming.sanitiseField(prop.name, true);
-      if (!taken.has(field)) {
-        taken.set(field, prop);
-        continue;
-      }
-      prop.renamedTo = Naming.numberedName(field, (candidate) => taken.has(candidate));
-      taken.set(prop.renamedTo, prop);
-    }
-
-    return props;
   }
 
   // Qualify a colliding inline name with its container, bumping `2`, `3`… until free.

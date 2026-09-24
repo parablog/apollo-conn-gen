@@ -9,7 +9,6 @@ import { SchemaWriter } from './schemaWriter.js';
 import { SecurityPlan } from './security.js';
 import { TypesCollector } from '../generator/typesCollector.js';
 import { Naming } from '../utils/naming.js';
-import _ from 'lodash';
 import { ExpandedSelection } from '../utils/expandedSelection.js';
 
 export class Writer {
@@ -56,9 +55,6 @@ export class Writer {
     const context = this.gen.context!;
     const generatedSet = context.generatedSet;
 
-    // make our own copy of the refCount, so it doesn't get modified by the writing process
-    const refCount = _.cloneDeep(context.refCount);
-
     // Attach entity resolvers onto the (single, canonical) collected type instances the
     // loop below generates, so each entity type can emit @key + its type-level
     // @connect/$this resolver. Resets first, so it's a no-op when the flag is off.
@@ -93,8 +89,6 @@ export class Writer {
         );
       }
 
-      const count = refCount.get(type.name) !== undefined ? refCount.get(type.name)! : Infinity;
-
       // `generatedSet` is keyed by internal id, but two ids can print the same GraphQL type.
       // Launch Library reaches `AgencyMini` as both `obj:type:...AgencyMini` (`program.agencies`)
       // and `comp:type:...AgencyMini` (`mission_patches.agency`). Track the printed name too, so
@@ -104,11 +98,11 @@ export class Writer {
         ? 'name:' + Naming.genTypeName(type.name) + (type.kind === 'input' ? 'Input' : '')
         : null;
 
-      if (!generatedSet.has(type.id) && !(nameKey && generatedSet.has(nameKey)) && count > 0) {
+      // every type here was reached from a written field (#26), so each is written once. #242
+      if (!generatedSet.has(type.id) && !(nameKey && generatedSet.has(nameKey))) {
         type.generate(context, this, selection);
         generatedSet.add(type.id);
         if (nameKey) generatedSet.add(nameKey);
-        refCount.set(type.name, count - 1);
       }
     });
 

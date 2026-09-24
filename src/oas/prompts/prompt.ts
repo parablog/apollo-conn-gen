@@ -22,7 +22,8 @@ import type { PartialDeep } from '@inquirer/type';
 import _ from 'lodash';
 
 import { OasContext } from '../oasContext.js';
-import { T, Composed, PropCircRef, CircularRef } from '../nodes/internal.js';
+import { T, Composed, Prop, PropCircRef, CircularRef, QueuedNode } from '../nodes/internal.js';
+import { Naming } from '../utils/naming.js';
 import { getMaxLength, isEscapeKey } from './base/utils.js';
 import { CustomTheme, RenderContext } from './theme.js';
 import { IType } from '../nodes/internal.js';
@@ -112,8 +113,24 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
   const theme = makeTheme<CustomTheme>(baseTheme, config.theme);
   const prefix = usePrefix({ status, theme });
 
-  const [current, setCurrent] = useState<IType>();
+  // Holds the nodes opened from the op down, each with its selection path: a node shared by two ops
+  // has no one parent, so a row's path is built from the route walked to it. see docs/FIXED.md #242
+  //   e.g. (petstore) get:/pet/{petId} > res:r > Pet -> get:/pet/{petId}>res:r>obj:type:#/c/s/Pet
+  const [trail, setTrail] = useState<QueuedNode[]>([]);
+  const current = trail[trail.length - 1]?.node;
   const [selected, setSelected] = useState<string[]>([]);
+
+  // Returns the selection path of a row under the node opened last; an op row is its own path.
+  //   e.g. (simple-allOf-example.yaml) User's city -> …>comp:type:#/c/s/User>obj:type:#/c/s/Address>prop:scalar:city
+  const pathOf = (item: IType): string => {
+    const opened = trail[trail.length - 1];
+    if (!opened) {
+      return item.id;
+    }
+    return item instanceof Prop && opened.node instanceof Composed
+      ? opened.node.propPath(item, opened.path)
+      : Naming.pathUnder(opened.path, item.id);
+  };
 
   const items = useMemo(() => {
     // console.log('expanding', current);
@@ -142,34 +159,27 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
         return;
       }
 
-      if (selected.includes(activeItem.path())) {
-        setSelected(selected.filter((path) => path !== activeItem.path()));
+      const activePath = pathOf(activeItem);
+      if (selected.includes(activePath)) {
+        setSelected(selected.filter((path) => path !== activePath));
       } else {
-        setSelected([...selected, activeItem.path()]);
+        setSelected([...selected, activePath]);
       }
     } else if (isSelectAllKey(key)) {
-      const children = current instanceof Composed ? current.props.values() : current!.children.values();
-
-      const filtered =
-        Array.from(children)
-          .filter((child) => T.isLeaf(child) && !selected.includes(child.path()))
-          .map((child) => child.path()) ?? [];
+      const filtered = items.map(pathOf).filter((path, i) => T.isLeaf(items[i]) && !selected.includes(path));
 
       setSelected([...selected, ...filtered]);
     } else if (isSelectNoneKey(key)) {
-      const filtered =
-        activeItem.parent?.children
-          .filter((child) => T.isLeaf(child) && selected.includes(child.path()))
-          .map((child) => child.path()) ?? [];
+      const filtered = items.map(pathOf).filter((path, i) => T.isLeaf(items[i]) && selected.includes(path));
 
       setSelected(selected.filter((path) => !filtered.includes(path)));
     } else if (isDumpKey(key)) {
-      if (current) console.info(T.print(current.ancestors()[0]));
+      if (trail.length > 0) console.info(T.print(trail[0].node));
     } else {
       const isLeaf = T.isLeaf(activeItem);
 
       if ((isSpaceKey(key) || isRightKey(key)) && !isLeaf) {
-        setCurrent(activeItem);
+        setTrail([...trail, { node: activeItem, path: pathOf(activeItem) }]);
         setActive(bounds.first);
       }
       // up and down
@@ -182,7 +192,7 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
           setActive(next);
         }
       } else if (isBackspaceKey(key) || isLeftKey(key)) {
-        setCurrent(current?.parent);
+        setTrail(trail.slice(0, -1));
         setActive(bounds.first);
       } else if (isEscapeKey(key) && allowCancel) {
         setStatus('canceled');
@@ -194,8 +204,17 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
   const page = usePagination({
     items,
     active,
+    // Hands the theme the rows whose route path is selected, spelled by their own path(): it checks
+    // a row against `selected` that way
     renderItem: ({ item, index, isActive }) =>
-      theme.renderItem(item, { items, index, isActive, loop, selected, context: config.context }),
+      theme.renderItem(item, {
+        items,
+        index,
+        isActive,
+        loop,
+        selected: selected.includes(pathOf(item)) ? [item.path()] : [],
+        context: config.context,
+      }),
     pageSize,
     loop,
   });
@@ -207,11 +226,11 @@ export const typesPrompt = createPrompt<string[] | [], PromptConfig>((config, do
   }
 
   if (status === 'done') {
-    return `${prefix} ${message} ${theme.style.answer(activeItem.path())}`;
+    return `${prefix} ${message} ${theme.style.answer(pathOf(activeItem))}`;
   }
 
   const header = _.replace(
-    theme.style.currentDir(current?.path() ?? 'Get operations:'),
+    theme.style.currentDir(trail[trail.length - 1]?.path ?? 'Get operations:'),
     />/g,
     ` ${figures.triangleRight} `,
   );

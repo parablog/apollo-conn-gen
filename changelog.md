@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- Specs whose schemas reference each other densely generate at the default heap instead of running
+  out of memory, and a field that only leads into a loop is written instead of left out. E.g.
+  (meta-ads) all 129 operations generate in 6 s at 0.4 GB, and `AdAccount.business: Business` is now
+  a field; only the field that closes a loop on an operation's walk is left out as a comment.
+  Issues #242, #89.
 - A field that can be a plain scalar or a list of that scalar, spelled `anyOf`/`oneOf`, nested or
   flat, types as `{ text, list, raw }` instead of `JSON`. E.g. (ashby) `valueLabel: anyOf [anyOf
   [string, [string]], null]` types as `CustomFieldValueLabelUnion { text: String list: [String]

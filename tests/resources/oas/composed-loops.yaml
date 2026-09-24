@@ -1,0 +1,191 @@
+openapi: 3.0.3
+info:
+  title: allOf parts and flat unions that lead back to themselves
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /trio:
+    get:
+      operationId: getTrio
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trio'
+  /node:
+    get:
+      operationId: getNode
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+  /tree:
+    get:
+      operationId: getTree
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreeHolder'
+  /self:
+    get:
+      operationId: getSelf
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Self'
+  /pair:
+    get:
+      operationId: getPair
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pair'
+  /h:
+    get:
+      operationId: getH
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holder'
+  /k:
+    get:
+      operationId: getK
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holder2'
+components:
+  schemas:
+    # C folds in A's and B's fields
+    Trio:
+      type: object
+      properties:
+        a:
+          $ref: '#/components/schemas/A'
+        b:
+          $ref: '#/components/schemas/B'
+        c:
+          $ref: '#/components/schemas/C'
+    A:
+      type: object
+      properties:
+        aId:
+          type: string
+    B:
+      type: object
+      properties:
+        bId:
+          type: string
+    C:
+      allOf:
+        - $ref: '#/components/schemas/A'
+        - $ref: '#/components/schemas/B'
+    # next leads back to Node through its own allOf
+    Node:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            next:
+              $ref: '#/components/schemas/Node'
+    Base:
+      type: object
+      properties:
+        label:
+          type: string
+    # children leads back to the flat union Choice
+    TreeHolder:
+      type: object
+      properties:
+        choice:
+          $ref: '#/components/schemas/Choice'
+    Choice:
+      oneOf:
+        - $ref: '#/components/schemas/Base'
+        - $ref: '#/components/schemas/Tree'
+    Tree:
+      type: object
+      properties:
+        size:
+          type: integer
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Choice'
+    # a type that is its own allOf part
+    Self:
+      allOf:
+        - $ref: '#/components/schemas/Self'
+        - type: object
+          properties:
+            x:
+              type: string
+    # two allOf types that are each other's part
+    Pair:
+      type: object
+      properties:
+        a:
+          $ref: '#/components/schemas/Ping'
+        b:
+          $ref: '#/components/schemas/Pong'
+    Ping:
+      allOf:
+        - $ref: '#/components/schemas/Pong'
+        - type: object
+          properties:
+            aField:
+              type: string
+    Pong:
+      allOf:
+        - $ref: '#/components/schemas/Ping'
+        - type: object
+          properties:
+            bField:
+              type: string
+    # a list of itself, and a list of objects holding the list
+    Holder:
+      type: object
+      properties:
+        id:
+          type: string
+        list:
+          $ref: '#/components/schemas/RecursiveList'
+    RecursiveList:
+      type: array
+      items:
+        $ref: '#/components/schemas/RecursiveList'
+    Holder2:
+      type: object
+      properties:
+        id:
+          type: string
+        list:
+          $ref: '#/components/schemas/NestedList'
+    NestedList:
+      type: array
+      items:
+        type: object
+        properties:
+          child:
+            $ref: '#/components/schemas/NestedList'

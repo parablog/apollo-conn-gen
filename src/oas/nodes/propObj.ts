@@ -22,8 +22,10 @@ export class PropObj extends Prop {
       throw new Error('obj parameter is required');
     }
 
-    // TODO: check if re-parenting is necessary?!?!
-    if (obj.parent !== this) {
+    // Moves an object built for this field under it. One built for a $ref elsewhere keeps the
+    // parent it was built under: a second field only points at it. see docs/FIXED.md #242
+    //   e.g. (meta-ads) AdAccount.owner_business points at the Business built under AdAccount.business
+    if (obj.parent === parent) {
       obj.parent = this;
     }
   }
@@ -98,10 +100,10 @@ export class PropObj extends Prop {
     return T.everyFieldRemoved(this.obj, context) ? [] : [this.obj];
   }
 
-  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string, fieldName?: string) {
     trace(context, '-> [prop-obj:select]', 'in ' + this.name + ', obj: ' + this.obj.name);
 
-    this.writeFieldHead(context, writer, { suffix: this.obj.selectionSuffix(context) });
+    this.writeFieldHead(context, writer, { suffix: this.obj.selectionSuffix(context), fieldName });
 
     // a target with every field removed is JSON: the value is taken whole, no block opens. #101
     //   e.g. (confluence) `contributors?` alone, not `contributors? { # publishers … omitted }`

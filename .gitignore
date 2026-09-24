@@ -85,5 +85,7 @@ LINT-CORPUS.md
 /tests/resources/oas/bitbucket.json
 /tests/resources/oas/confluence-v2.json
 /tests/resources/oas/meta-ads.json
+/tests/resources/oas/salesforce-introspection-result.json
+/tests/resources/oas/salesforce.json
 
 .issue-loop

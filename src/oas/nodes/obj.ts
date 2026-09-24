@@ -1,4 +1,19 @@
-import { Arr, Body, Composed, Factory, Get, IType, Prop, PropArray, Type, Res, T } from './internal.js';
+import {
+  Arr,
+  Body,
+  Composed,
+  Factory,
+  Get,
+  IType,
+  MemberRoute,
+  Prop,
+  PropArray,
+  QueuedNode,
+  SelectedField,
+  Type,
+  Res,
+  T,
+} from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -43,6 +58,9 @@ export class Obj extends Type {
     if (this.visited) {
       return;
     }
+    // set before the fields are built: a field can lead back here through the one node built per
+    // $ref, and must find this object already started. see docs/FIXED.md #242
+    this.visited = true;
 
     context.enter(this);
     trace(context, '-> [obj:visit]', 'in ' + this.name);
@@ -63,8 +81,6 @@ export class Obj extends Type {
     if (collides) {
       T.resolveNameConflict(this, context);
     }
-
-    this.visited = true;
 
     // register as the occupant that later same-named types check against. see #9/#12
     if (this.name && !this.nameOwnedByAnother(context)) {
@@ -114,7 +130,7 @@ export class Obj extends Type {
       for (const key of Array.from(new Set(resolvers.map((r) => r.keyFields))).sort()) {
         const sanitisedKey = key
           .split(' ')
-          .map((field) => this.props.get(field)?.renamedTo ?? Naming.sanitiseField(field, keep))
+          .map((field) => this.findKeyFieldName(field, keep))
           .join(' ');
         writer.write(` @key(fields: "${sanitisedKey}")`);
       }
@@ -130,15 +146,11 @@ export class Obj extends Type {
       writer.write(' {\n');
     }
 
-    const selected = this.selectedProps(selection, keep, this.path());
-    // a field cycle detection removed on another route is not written here either — the comment
-    // takes its place. #89
-    const overrides = context.propOverrides.get(this.id);
-
-    for (const prop of selected) {
-      const emitted = (overrides?.get(prop.name) as typeof prop) ?? prop;
+    // Writes the comment in place of a field left out on another route or to end a loop. #89 #242
+    for (const field of this.findWrittenFields(selection, keep, selection.writtenPath(this))) {
+      const emitted = this.emittedProp(context, field.prop);
       trace(context, '-> [obj::generate]', `-> property: ${emitted.name} (parent: ${emitted.parent!.name})`);
-      emitted.generate(context, writer, selection);
+      emitted.generate(context, writer, selection, field.name);
     }
 
     writer.write('}\n\n');
@@ -147,41 +159,54 @@ export class Obj extends Type {
     context.leave(this);
   }
 
-  // siblings that clean to one field name write once — generate, select and dependencies all
-  // read this list, so the three agree. e.g. (trello) prefs/background + prefs_background  #69
-  public override selectedProps(selection: ExpandedSelection, keep: boolean, path: string) {
-    return T.numberTwinFields([...super.selectedProps(selection, keep, path), ...this.entityLinkProps], keep);
-  }
-
-  // Returns an entity link's path as a field of this copy: every copy of the type shares one link
-  // list, so the link's owner can be another copy and no route leads to it. Other fields go to Type.
+  // Returns the selected fields, then the entity links, always selected: every route shares one link
+  // list, so a link sits at this node's path whatever route leads here. see #161
   //   e.g. (entity-link.yaml) GET and PATCH /cards/{card_ref} both write `thing: { id: thingId }`
-  public override propPath(prop: Prop, path: string, pathsToMembers?: Map<IType, string[]>): string {
-    return this.entityLinkProps.includes(prop)
-      ? Naming.pathUnder(path, prop.id)
-      : super.propPath(prop, path, pathsToMembers);
+  public override findSelectedFields(
+    selection: ExpandedSelection,
+    path: string,
+    routes?: MemberRoute[],
+  ): SelectedField[] {
+    return [
+      ...super.findSelectedFields(selection, path, routes),
+      ...this.entityLinkProps.map((link) => ({ prop: link, path: Naming.pathUnder(path, link.id) })),
+    ];
   }
 
-  // the selected props (a field removed on another route swapped for its comment, like generate does — #89)
+  // Returns an entity link's path as a field of this node: no route leads to a link, so it sits at
+  // this node's path. Other fields go to Type.
+  //   e.g. (entity-link.yaml) GET and PATCH /cards/{card_ref} both write `thing: { id: thingId }`
+  public override propPath(prop: Prop, path: string, routes?: MemberRoute[]): string {
+    return this.entityLinkProps.includes(prop) ? Naming.pathUnder(path, prop.id) : super.propPath(prop, path, routes);
+  }
+
+  // Returns the selected props, a field left out on another route or to end a loop swapped for its
+  // comment, as generate does. #89
   dependencies(context: OasContext, selection: ExpandedSelection, path: string): IType[] {
-    const overrides = context.propOverrides.get(this.id);
-    const keep = context.generateOptions?.keepFieldNames === true;
-    return this.selectedProps(selection, keep, path).map((prop) => overrides?.get(prop.name) ?? prop);
+    return this.findDependencies(context, selection, path).map((dependency) => dependency.node);
+  }
+
+  public override findDependencies(context: OasContext, selection: ExpandedSelection, path: string): QueuedNode[] {
+    return this.findFieldDependencies(context, selection, path);
   }
 
   public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [obj::select]', `-> in: ${this.name}`);
 
     // a route that kept the field writes the same comment as the routes where it was removed. #89
-    const overrides = context.propOverrides.get(this.id);
     const keep = context.generateOptions?.keepFieldNames === true;
-    const selected = this.selectedProps(selection, keep, path);
-    const pathsToMembers = this.findPathsToMembers();
-    for (const prop of selected) {
-      (overrides?.get(prop.name) ?? prop).select(context, writer, selection, this.propPath(prop, path, pathsToMembers));
+    for (const field of this.findWrittenFields(selection, keep, path)) {
+      this.emittedProp(context, field.prop).select(context, writer, selection, field.path, field.name);
     }
 
     trace(context, '<- [obj::select]', `-> out: ${this.name}`);
+  }
+
+  // Returns the written name of the field a key names: its twin number here, else its own name. #168
+  //   e.g. (keep-twin-fields.yaml) a key on foo_bar, numbered fooBar2 here -> fooBar2
+  private findKeyFieldName(name: string, keep: boolean): string {
+    const prop = this.props.get(name);
+    return prop ? this.findFieldName(prop, keep) : Naming.sanitiseField(name, keep);
   }
 
   // Emits a type-level @connect entity resolver (R1): fetches this entity by its key via the
@@ -199,7 +224,7 @@ export class Obj extends Type {
 
     // Rewrite each {param} to {$this.param} (vs {$args.param} for Query-field connectors).
     const keep = context.generateOptions?.keepFieldNames === true;
-    const thisField = (name: string) => this.props.get(name)?.renamedTo ?? Naming.sanitiseField(name, keep);
+    const thisField = (name: string) => this.findKeyFieldName(name, keep);
     const path = resolver.path.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, param) => `{$this.${thisField(param)}}`);
     const body = resolver.bodyProp ? `$({ ${resolver.bodyProp}: $this.${thisField(resolver.keyFields)} })` : undefined;
 
@@ -243,7 +268,7 @@ export class Obj extends Type {
     // Base the selection at 6 spaces like a Query connector, 8 when wrapped in an envelope
     // field. `select` adds `context.stack.length` (this object is mid-generation), subtracted.
     context.indent = (resolver.envelopeField ? 8 : 6) - context.stack.length;
-    this.select(context, writer, selection, this.path());
+    this.select(context, writer, selection, selection.writtenPath(this));
 
     if (resolver.envelopeField) {
       writer.write(i6).write('}\n');
@@ -292,7 +317,7 @@ export class Obj extends Type {
       writer.write(i6).write(`$.${batchSpec.wrapperKey} {\n`);
     }
     context.indent = (batchSpec.wrapperKey ? 8 : 6) - context.stack.length;
-    this.select(context, writer, selection, this.path());
+    this.select(context, writer, selection, selection.writtenPath(this));
     if (batchSpec.wrapperKey) {
       writer.write(i6).write('}\n');
     }

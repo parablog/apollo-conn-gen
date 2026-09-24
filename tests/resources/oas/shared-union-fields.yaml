@@ -1,0 +1,111 @@
+openapi: 3.0.3
+info:
+  title: Union-made fields on a union two operations share
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /u:
+    get:
+      operationId: getU
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UHolder'
+  /v:
+    get:
+      operationId: getV
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VHolder'
+  /m:
+    get:
+      operationId: getM
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MHolder'
+  /o:
+    get:
+      operationId: getO
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OHolder'
+components:
+  schemas:
+    # a flat union two ops reach: merging P and Q makes a merged enum `status` and `code: JSON`
+    UHolder:
+      type: object
+      properties:
+        pick:
+          $ref: '#/components/schemas/Pick'
+    VHolder:
+      type: object
+      properties:
+        pick:
+          $ref: '#/components/schemas/Pick'
+    Pick:
+      oneOf:
+        - $ref: '#/components/schemas/P'
+        - $ref: '#/components/schemas/Q'
+    P:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [a]
+        code:
+          type: integer
+        id:
+          type: string
+    Q:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [b]
+        code:
+          type: string
+        id:
+          type: string
+    # a mixed value two ops reach: a plain string or a Money object
+    MHolder:
+      type: object
+      properties:
+        price:
+          $ref: '#/components/schemas/R'
+    OHolder:
+      type: object
+      properties:
+        price:
+          $ref: '#/components/schemas/R'
+    R:
+      oneOf:
+        - type: string
+        - $ref: '#/components/schemas/Money'
+    Money:
+      type: object
+      properties:
+        amount:
+          type: number
+        rate:
+          $ref: '#/components/schemas/Rate'
+    Rate:
+      type: object
+      properties:
+        value:
+          type: number

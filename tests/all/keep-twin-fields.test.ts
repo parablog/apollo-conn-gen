@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { runOasTest, oasBasePath } from '../../src/tests/runners.js';
 import { OasGen } from '../../src/index.js';
-import { Obj, Prop, T } from '../../src/oas/nodes/internal.js';
+import { Obj, Prop, SelectedField, T } from '../../src/oas/nodes/internal.js';
 import './_setup.js';
 
 // #162: under --keep-field-names (#158), a field whose own spelling is already safe (foo_bar)
@@ -16,9 +16,9 @@ const run = (paths: string[], typesSize: number, opts: { keepFieldNames?: boolea
   runOasTest('keep-twin-fields.yaml', paths, PATHS_SIZE, typesSize, opts);
 
 // Widget's own Prop array, fully visited so each Prop carries its real name (id order: foo_bar,
-// fooBar, prefs-background, prefs/background, prefsBackground2). numberTwinFields mutates
-// renamedTo in place, so tests that call it directly ask for a fresh array of their own.
-//   e.g. widgetProps() twice -> two independent Prop arrays, neither sees the other's renamedTo
+// fooBar, prefs-background, prefs/background, prefsBackground2). numberTwinFields names the
+// entries it is given, so tests that call it directly ask for fresh entries of their own.
+//   e.g. asFields(props) twice -> two entry lists over the same Props, each named on its own
 async function widgetProps(): Promise<Prop[]> {
   const gen = await OasGen.fromFile(`${oasBasePath}/keep-twin-fields.yaml`, { showParentInSelections: false } as never);
   await gen.visit();
@@ -27,6 +27,11 @@ async function widgetProps(): Promise<Prop[]> {
   const [widget] = gen.expand(res) as [Obj];
   gen.expand(widget);
   return Array.from(widget.props.values());
+}
+
+// Selected-field entries over `props`, as a type hands them to numberTwinFields.
+function asFields(props: Prop[]): SelectedField[] {
+  return props.map((prop) => ({ prop, path: '' }));
 }
 
 test('test_162_disabled_by_default_still_numbers', async () => {
@@ -87,15 +92,25 @@ test('test_162_union_merge_route', async () => {
 });
 
 test('test_162_idempotent_across_repeated_calls', async () => {
-  // calling numberTwinFields again on the same Props must not renumber them further -- an already
-  // pinned twin stays put. see docs/FIXED.md #162
+  // calling numberTwinFields again for the same owner must not renumber the fields further -- an
+  // already pinned twin stays put. see docs/FIXED.md #162
   //   e.g. prefsBackground3 stays prefsBackground3, it never becomes prefsBackground4
   const props = await widgetProps();
-  const before = T.numberTwinFields(props, true).map((p) => p.renamedTo ?? p.name);
-  const after = T.numberTwinFields(props, true).map((p) => p.renamedTo ?? p.name);
-  assert.deepStrictEqual(after, before, 'a second call leaves every name exactly as the first left it');
-  const slash = props.find((p) => p.name === 'prefs/background')!;
-  assert.strictEqual(slash.renamedTo, 'prefsBackground3', 'the numbered twin keeps its number');
+  const numbered = new Map<Prop, string>();
+  const first = asFields(props);
+  const second = asFields(props);
+  T.numberTwinFields(first, true, numbered);
+  T.numberTwinFields(second, true, numbered);
+  assert.deepStrictEqual(
+    second.map((field) => field.name),
+    first.map((field) => field.name),
+    'a second call leaves every name exactly as the first left it',
+  );
+  assert.strictEqual(
+    second.find((field) => field.prop.name === 'prefs/background')!.name,
+    'prefsBackground3',
+    'the numbered twin keeps its number',
+  );
 });
 
 test('test_162_partial_view_then_full_view_kept_wins', async () => {
@@ -109,12 +124,17 @@ test('test_162_partial_view_then_full_view_kept_wins', async () => {
   const slash = props.find((p) => p.name === 'prefs/background')!;
   const literal = props.find((p) => p.name === 'prefsBackground2')!;
 
-  T.numberTwinFields([dash, slash], true);
-  assert.strictEqual(dash.renamedTo, undefined, 'the first twin claims the base name bare');
-  assert.strictEqual(slash.renamedTo, 'prefsBackground2', 'the second twin pins to the first free number');
+  const numbered = new Map<Prop, string>();
 
-  T.numberTwinFields(props, true);
-  assert.strictEqual(dash.renamedTo, undefined, 'still the base twin');
-  assert.strictEqual(literal.renamedTo, undefined, 'the literal field still claims its own spelling bare');
-  assert.strictEqual(slash.renamedTo, 'prefsBackground3', 'evicted from prefsBackground2, renumbered around it');
+  const partial = asFields([dash, slash]);
+  T.numberTwinFields(partial, true, numbered);
+  assert.strictEqual(partial[0].name, 'prefsBackground', 'the first twin claims the base name bare');
+  assert.strictEqual(partial[1].name, 'prefsBackground2', 'the second twin pins to the first free number');
+
+  const full = asFields(props);
+  T.numberTwinFields(full, true, numbered);
+  const nameOf = (prop: Prop) => full.find((field) => field.prop === prop)!.name;
+  assert.strictEqual(nameOf(dash), 'prefsBackground', 'still the base twin');
+  assert.strictEqual(nameOf(literal), 'prefsBackground2', 'the literal field still claims its own spelling bare');
+  assert.strictEqual(nameOf(slash), 'prefsBackground3', 'evicted from prefsBackground2, renumbered around it');
 });

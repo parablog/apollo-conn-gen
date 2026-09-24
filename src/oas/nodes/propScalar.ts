@@ -54,15 +54,15 @@ export class PropScalar extends Prop {
     return result;
   }
 
-  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string, fieldName?: string) {
     trace(context, '   [prop:select]', this.name);
 
     if (this.stringifiedNumber && this.parent?.kind !== 'input') {
       // wide integers widened to String read back through `->jsonStringify`.
       // e.g. (box) `chunkSize: chunk_size?->jsonStringify`
-      this.writeFieldHead(context, writer, { suffix: '->jsonStringify' });
+      this.writeFieldHead(context, writer, { suffix: '->jsonStringify', fieldName });
     } else {
-      const sanitised = this.fieldForSelect(context);
+      const sanitised = this.fieldForSelect(context, fieldName);
       writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
 
       // aliasing already writes its own colon, and only an actually-written default covers a

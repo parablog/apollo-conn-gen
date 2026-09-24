@@ -129,24 +129,15 @@ export class Body extends Type {
     }
     // If the response has a content property, we need to find the JSON content.
     else if (schema) {
-      let type = Factory.fromSchema(context, this, schema as SchemaObject);
-
-      // Sends the body whole as JSON when it is a map: a GraphQL input type cannot take arbitrary keys,
-      // so there is no fixed set of fields to build. A map under a body property already lands this
-      // way (FIXED #84, #133); this is the same rule for the body itself. #241
-      //   e.g. (jira-platform) put:/rest/api/3/config/fieldschemes/fields: { additionalProperties: {...} }
-      if (type instanceof Map) {
-        const reason = JsonDegradeReasons.mapAsInput();
-        warn(context, '[body:visit]', reason);
-        type = new Scalar(this, 'JSON', Schemas.withJsonNote(context, schema as SchemaObject, reason), reason);
+      // Builds an inline body that comes down to one $ref as a node of its own, from that schema, so
+      // it takes the op's name as before: renaming the one node built for the $ref renames it
+      // everywhere. #157 #242
+      //   e.g. (profound) post:/v1/agents/{agent_id}/runs: anyOf [ $ref RunAgentRequest, null ] -> CreateV1AgentsByAgentIdRunsInput
+      let built = Factory.fromSchema(context, this, schema as SchemaObject);
+      if (context.isBuiltOnce(built)) {
+        built = Factory.fromSchema(context, this, built.schema as SchemaObject);
       }
-      this.add(type);
-
-      this.payload = type;
-      // a scalar keeps its name — it IS the type the argument writes. e.g. { nullable: true } -> JSON  #67
-      if (!(type instanceof Scalar)) {
-        this.payload!.name = name;
-      }
+      this.setPayload(context, name, schema as SchemaObject, built);
     }
     // don't know how to handle this yet
     else {
@@ -156,10 +147,13 @@ export class Body extends Type {
     trace(context, '<- [post::body::content]', 'out ' + this.name);
   }
 
+  // Builds a `$ref` body from the ref itself, so it is the one input node every `$ref` to that
+  // component shares. see docs/FIXED.md #242
+  //   e.g. (petstore) post:/pet's body `$ref: Pet` is the same PetInput as any other Pet input
   private visitBodyRef(context: OasContext, ref: ReferenceObject): void {
     trace(context, '-> [post::body::ref]', `in: ${this.name}, ref: ${ref.$ref}`);
 
-    const lookup = context.lookupRef(ref.$ref!);
+    const lookup = context.resolvePointer(ref.$ref!) as SchemaObject | ReferenceObject | null;
     if (!lookup) {
       throw new Error('Could not find a response with ref: ' + ref.$ref);
     }
@@ -168,7 +162,26 @@ export class Body extends Type {
       throw new Error('Not yet implemented for nested refs');
     }
 
-    this.visitBody(context, ref.$ref, lookup as SchemaObject);
+    this.setPayload(context, ref.$ref!, lookup, Factory.fromSchema(context, this, ref));
     trace(context, '<- [post::body::ref]', `out: ${this.name}, ref: ${ref.$ref}`);
+  }
+
+  // Sends a map body whole as JSON: an input type cannot take arbitrary keys (#84 #133 #241). The
+  // payload takes the body's name, except a scalar, which is the type the argument writes (#67), and
+  // a node built once for its $ref, which keeps its component name. #157 #242
+  //   e.g. (jira-platform) put:/rest/api/3/config/fieldschemes/fields: { additionalProperties: {...} } -> JSON
+  private setPayload(context: OasContext, name: string, schema: SchemaObject, built: IType): void {
+    let type = built;
+    if (type instanceof Map) {
+      const reason = JsonDegradeReasons.mapAsInput();
+      warn(context, '[body:visit]', reason);
+      type = new Scalar(this, 'JSON', Schemas.withJsonNote(context, schema, reason), reason);
+    }
+    this.add(type);
+
+    this.payload = type;
+    if (!(type instanceof Scalar) && !context.isBuiltOnce(type)) {
+      this.payload!.name = name;
+    }
   }
 }

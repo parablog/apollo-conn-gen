@@ -19,8 +19,10 @@ export class PropMap extends Prop {
       throw new Error('map parameter is required');
     }
 
-    // Re-parent the map to this property if needed
-    if (map.parent !== this) {
+    // Moves a map built for this field under it; one built for a $ref elsewhere stays where it
+    // was built, as PropObj does. see docs/FIXED.md #242
+    //   e.g. (github) snapshot.metadata and manifest.metadata point at the one metadata map
+    if (map.parent === parent) {
       map.parent = this;
     }
   }
@@ -56,12 +58,12 @@ export class PropMap extends Prop {
     return '[' + Naming.genTypeName(this.map.name) + this.map.nameSuffix() + ']';
   }
 
-  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
+  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string, fieldName?: string) {
     trace(context, '-> [prop-map:select]', 'in ' + this.name + ', map: ' + this.map.name);
 
     // alwaysAlias: the local pre-release composer only accepts `->entries` behind `name: name`,
     // never a bare `name`; a field that already carries a real alias is unaffected. see docs/FIXED.md #42
-    this.writeFieldHead(context, writer, { alwaysAlias: true });
+    this.writeFieldHead(context, writer, { alwaysAlias: true, fieldName });
     this.map.selectEntries(context, writer, selection, Naming.pathUnder(path, this.map.id));
 
     if (context.generateOptions.showParentInSelections) {

@@ -36,6 +36,8 @@ export class Map extends Type {
     if (this.visited) {
       return;
     }
+    // set before the value is built, as Obj does: the value can lead back to this map. #242
+    this.visited = true;
 
     context.enter(this);
     trace(context, '-> [map:visit]', 'in ' + this.name);
@@ -56,7 +58,6 @@ export class Map extends Type {
     // maps over different inline shapes must split before the value is built. see docs/FIXED.md #107
     // e.g. (github) base-gist and gist-simple both hold a files map with different value fields
     this.visitAdditionalProperties(context);
-    this.visited = true;
 
     trace(context, '<- [map:visit]', 'out ' + this.name);
     context.leave(this);

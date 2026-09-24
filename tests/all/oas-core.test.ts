@@ -7,7 +7,8 @@ import { oasBasePath, runOasTest } from '../../src/tests/runners.js';
 import { DirectivesConfig, OasGen } from '../../src/index.js';
 import { Arr, IType, Prop, T, Union } from '../../src/oas/nodes/internal.js';
 import { TypesCollector } from '../../src/oas/generator/typesCollector.js';
-import './_setup.js';
+import { OverridesConfig } from '../../src/oas/oasContext.js';
+import { captureErrors } from './_setup.js';
 
 /// OAS TESTS
 test('test_001_oas_test minimal petstore', async () => {
@@ -1440,7 +1441,8 @@ test('test_118_recursive_oneof_clique_terminates', () => {
 test('test_118_recursive_oneof_clique_output_with_fields_left_out', async () => {
   // #118, output side: the no-discriminator union merges into one object, and every branch's
   // re-entry of the same 7-way member set is left out, commented in BOTH SDL and selection,
-  // like #10's left-out instances.
+  // like #10's left-out instances. Since #242 the comment names the field's own union type
+  // (OrBranchesUnion), not the component's raw name (filterBranchUnion).
   // 2, not 3: the shared tag field is a real enum with a different single value per branch
   // (OrBranch's is "or", AndBranch's is "and", …) — dedupeByName sends it to JSON.
   // 3, not 2: the seven branches' single-value enums merge into one enum holding all seven values
@@ -1450,7 +1452,7 @@ test('test_118_recursive_oneof_clique_output_with_fields_left_out', async () => 
   assert.ok(schema!.includes('type FilterBranchUnion'), 'merged union object emitted');
   for (const branch of ['or', 'and', 'notAll', 'notAny', 'restricted', 'unifiedEvents', 'association']) {
     assert.ok(
-      schema!.includes(`# ${branch}Branches: [filterBranchUnion] - circular reference omitted`),
+      schema!.includes(`# ${branch}Branches: [${_.upperFirst(branch)}BranchesUnion] - circular reference omitted`),
       `${branch}Branches left out in SDL`,
     );
     assert.ok(
@@ -1512,7 +1514,7 @@ test('test_153_whole_op_wildcard_selection_stays_compact', async () => {
   assert.ok(schema.includes('type FilterBranchUnion'), 'merged union object still emitted');
   for (const branch of ['or', 'and', 'notAll', 'notAny', 'restricted', 'unifiedEvents', 'association']) {
     assert.ok(
-      schema.includes(`# ${branch}Branches: [filterBranchUnion] - circular reference omitted`),
+      schema.includes(`# ${branch}Branches: [${_.upperFirst(branch)}BranchesUnion] - circular reference omitted`),
       `${branch}Branches still left out in SDL`,
     );
   }
@@ -2009,19 +2011,23 @@ test('test_89_field_removed_on_any_route_is_removed_everywhere', async () => {
   // #89: a field cycle detection removed on some routes but kept on others was declared in the SDL
   // (#13's donation) while the removed routes' selections provided nothing — rover wants a declared
   // field provided at every position the type appears (confluence's relation GETs, `Content.space`).
-  // A field removed on any route is now removed on every route and in the SDL, a comment in its place.
+  // Checks that since #242 only the loop-closing field is removed (Space.homepage, Doc.folder).
   const schema = await runOasTest('cycle-on-some-routes.yaml', ['get:/graph>**'], 1, 9);
   assert.ok(schema !== undefined);
-  // family A: the written Content kept `space`; removed here because homepage's Content lost it
-  assert.ok(/# space: Space - circular reference omitted/.test(schema!), 'space commented in the SDL');
-  assert.ok(!/\n {2}space: Space/.test(schema!), 'and not declared as a real field');
-  assert.ok(/# space: circular reference omitted \(re-visit/.test(schema!), 'the keeping route writes the comment');
-  assert.ok(!/space \{/.test(schema!), 'no route selects space');
-  // family B: the written Doc had `folder` removed; the subject route kept it (the old donation direction)
+  // family A: Space.homepage closes the loop Content > space > Space > homepage > Content
+  assert.ok(/# homepage: Content - circular reference omitted/.test(schema!), 'homepage commented in the SDL');
+  assert.ok(!/\n {2}homepage: Content/.test(schema!), 'and not declared as a real field');
+  assert.ok(/# homepage: circular reference omitted \(re-visit/.test(schema!), 'the selection writes the comment');
+  assert.ok(!/homepage\?? \{/.test(schema!), 'no route selects homepage');
+  assert.ok(/\n {2}space: Space\n/.test(schema!), 'Content.space is kept in the SDL');
+  assert.ok(/space\? \{/.test(schema!), 'and selected');
+  // family B: Doc.folder closes the loop Folder > front > Doc > folder > Folder
   assert.ok(/# folder: Folder - circular reference omitted/.test(schema!), 'folder commented in the SDL');
   assert.ok(!/\n {2}folder: Folder/.test(schema!), 'and not declared as a real field');
   assert.ok(/# folder: circular reference omitted \(re-visit/.test(schema!), 'the keeping route writes the comment');
-  assert.ok(!/folder \{/.test(schema!), 'no route selects folder');
+  assert.ok(!/folder\?? \{/.test(schema!), 'no route selects folder');
+  assert.ok(/\n {2}front: Doc\n/.test(schema!), 'Folder.front is kept in the SDL');
+  assert.ok(/front\? \{/.test(schema!), 'and selected');
   // guards against removing too much: fields kept on every route stay real in SDL and selection
   assert.ok(
     /\btitle: String\b/.test(schema!) && /\bkey: String\b/.test(schema!) && /\bnote: String\b/.test(schema!),
@@ -4150,4 +4156,327 @@ test('test_241_whole_body_map_degrades_to_json', async () => {
   const clean = await runOasTest('body-whole-map.yaml', ['put:/associations>**'], 1, 1, { skipDegradeReasons: true });
   assert.ok(clean !== undefined);
   assert.ok(!clean!.includes('NEEDS ATTENTION'), 'skipDegradeReasons drops the note from the docstring');
+});
+
+// Holds the overrides file and entity option to generate with, and the ops whose nodes are browsed first.
+interface GenerateOptions {
+  overrides?: OverridesConfig;
+  inferEntityResolvers?: boolean;
+  browse?: string[];
+}
+
+// Generates `file` for `paths` without composing, with the [collector] messages it logged. `browse`
+// expands every node under those ops first, as browsing them in the prompt does.
+async function generateWithWarnings(
+  file: string,
+  paths: string[],
+  options: GenerateOptions = {},
+): Promise<{ schema: string; messages: string[] }> {
+  const gen = await OasGen.fromFile(`${oasBasePath}/${file}`, {
+    showParentInSelections: false,
+    overrides: options.overrides,
+    inferEntityResolvers: options.inferEntityResolvers,
+  } as never);
+  await gen.visit();
+  const expandAll = (node: IType) => gen.expand(node).forEach(expandAll);
+  for (const opId of options.browse ?? []) {
+    expandAll(gen.paths.get(opId)!);
+  }
+  let schema = '';
+  const messages = await captureErrors(async () => {
+    schema = gen.generateSchema(paths);
+  });
+  return { schema, messages: messages.filter((message) => message.includes('[collector]')) };
+}
+
+test('test_242_shared_allof_each_op_writes_its_own_fields', async () => {
+  // #242: FullItem is built once and shared. post:/vaults/{vaultUuid}/items selects id and title, the
+  // GET selects id and version: each op writes its own fields, the type holds the fields of the op
+  // queued first, and #207 names the other op's extra field, in either order.
+  const fullItemField = (op: string, field: string) =>
+    `${op}>res:r>comp:type:#/components/schemas/FullItem>obj:type:#/components/schemas/Item>prop:scalar:${field}`;
+  const post = ['id', 'title'].map((field) => fullItemField('post:/vaults/{vaultUuid}/items', field));
+  const get = ['id', 'version'].map((field) => fullItemField('get:/vaults/{vaultUuid}/items/{itemUuid}', field));
+  for (const [paths, declared, extra] of [
+    [[...post, ...get], 'title: String', 'version'],
+    [[...get, ...post], 'version: Int', 'title'],
+  ] as const) {
+    const { schema, messages } = await generateWithWarnings('1password-connect.json', [...paths]);
+    assert.ok(schema.includes(`type FullItem {\n  id: ID\n  ${declared}\n}`), `FullItem declares id and ${declared}`);
+    assert.ok(
+      schema.includes('selection: """\n      id?\n      title?\n      """'),
+      'the mutation writes id and title',
+    );
+    assert.ok(
+      schema.includes('selection: """\n      id?\n      version?\n      """'),
+      'the query writes id and version',
+    );
+    assert.ok(
+      messages.some((m) => m.includes('`FullItem` is written from') && m.includes(`also selects ${extra} on it`)),
+      `#207 names ${extra}`,
+    );
+  }
+});
+
+// --- #242: one component several ops share, built once ---
+
+const TWO_OPS = 'shared-component-two-ops.yaml';
+const itemField = (op: string, field: string) => `get:/${op}>res:r>obj:type:#/components/schemas/Item>${field}`;
+const envelopeItemField = (op: string, field: string) =>
+  `get:/${op}>res:r>obj:type:#/components/schemas/Envelope>prop:obj:data>obj:type:#/components/schemas/Item>${field}`;
+const DETAIL_VALUE = 'prop:obj:detail>obj:type:#/components/schemas/Detail>prop:scalar:value';
+const A_ID_AND_VALUE = [itemField('a', 'prop:scalar:id'), itemField('a', DETAIL_VALUE)];
+const B_ID = [itemField('b', 'prop:scalar:id')];
+const E_RETURNS_DATA: OverridesConfig = { $source: { isSuccess: '$.success' }, 'get:/e': { payload: 'data' } };
+
+test('test_242_shared_component_first_queued_op_writes_the_type', async () => {
+  // /a selects id and detail.value, /b only id: Item has /a's fields, /b writes id, no warning
+  const aFirst = await generateWithWarnings(TWO_OPS, [...A_ID_AND_VALUE, ...B_ID]);
+  assert.ok(aFirst.schema.includes('type Item {\n  detail: Detail\n  id: ID\n}'), 'Item from /a');
+  assert.ok(aFirst.schema.includes('type Detail {\n  value: String\n}'), 'Detail { value }');
+  assert.deepStrictEqual(aFirst.messages, [], 'no warning');
+
+  // /b first: Item { id }, Detail still written for /a's selection, #207 names get:/a and detail
+  const bFirst = await generateWithWarnings(TWO_OPS, [...B_ID, ...A_ID_AND_VALUE]);
+  assert.ok(bFirst.schema.includes('type Item {\n  id: ID\n}'), 'Item from /b');
+  assert.ok(bFirst.schema.includes('type Detail {\n  value: String\n}'), 'Detail { value } still written');
+  assert.ok(bFirst.schema.includes('detail? {\n       value?\n      }\n      id?'), '/a writes its own selection');
+  assert.ok(
+    bFirst.messages.some(
+      (m) => m.includes('`Item` is written from get:/b') && m.includes('get:/a also selects detail'),
+    ),
+    '#207 names get:/a and detail',
+  );
+});
+
+test('test_242_shared_component_whole_op_beside_an_explicit_one', async () => {
+  // /a>** plus /b's name: /b writes only name, Item has /a's fields
+  const { schema } = await generateWithWarnings(TWO_OPS, ['get:/a>**', itemField('b', 'prop:scalar:name')]);
+  assert.ok(schema.includes('type Item {\n  detail: Detail\n  id: ID\n  name: String\n}'), "Item has /a's fields");
+  assert.ok(schema.includes('b: Item'), '/b is written');
+  assert.ok(/b: Item[\s\S]*selection: """\n {6}name\?\n {6}"""/.test(schema), '/b writes only name');
+
+  // /a>** then /w>**: Wrapper { child: Item }, /w writes child { … }
+  const wrapped = await generateWithWarnings(TWO_OPS, ['get:/a>**', 'get:/w>**']);
+  assert.ok(wrapped.schema.includes('type Wrapper {\n  child: Item\n}'), 'Wrapper written');
+  assert.ok(wrapped.schema.includes('child? {\n       detail? {'), '/w writes child { … }');
+});
+
+test('test_242_shared_component_browsed_first', async () => {
+  // browsing /b's Item and Detail first does not change what /a's selection writes
+  const { schema } = await generateWithWarnings(TWO_OPS, A_ID_AND_VALUE, { browse: ['get:/b'] });
+  assert.ok(schema.includes('type Item {\n  detail: Detail\n  id: ID\n}'), 'Item from /a');
+  assert.ok(schema.includes('type Detail {\n  value: String\n}'), 'Detail { value } written');
+});
+
+test('test_242_shared_component_under_an_envelope', async () => {
+  // /e returns its data payload; /f selects success and data.id: Envelope has both, /f writes both
+  const withF = await generateWithWarnings(
+    TWO_OPS,
+    [
+      'get:/e>**',
+      'get:/f>res:r>obj:type:#/components/schemas/Envelope>prop:scalar:success',
+      envelopeItemField('f', 'prop:scalar:id'),
+    ],
+    { overrides: E_RETURNS_DATA },
+  );
+  assert.ok(withF.schema.includes('e: Item'), '/e returns Item');
+  assert.ok(withF.schema.includes('type Envelope {\n  data: Item\n  success: Boolean\n}'), 'Envelope has both');
+  assert.ok(withF.schema.includes('data? {\n       id?\n      }\n      success?'), '/f writes success and data { id }');
+
+  // /f selects only success, /g only data.id: Envelope { data: Item } from /g, #207 names get:/f and success
+  const withG = await generateWithWarnings(
+    TWO_OPS,
+    [
+      'get:/e>**',
+      'get:/f>res:r>obj:type:#/components/schemas/Envelope>prop:scalar:success',
+      envelopeItemField('g', 'prop:scalar:id'),
+    ],
+    { overrides: E_RETURNS_DATA },
+  );
+  assert.ok(withG.schema.includes('type Envelope {\n  data: Item\n}'), 'Envelope from /g');
+  assert.ok(
+    withG.messages.some(
+      (m) => m.includes('`Envelope` is written from get:/g') && m.includes('get:/f also selects success'),
+    ),
+    '#207 names get:/f and success',
+  );
+});
+
+test('test_242_composed_loops_whole_spec', async () => {
+  // #242: allOf parts and flat unions leading back to themselves, each component built once
+  const ops = ['trio', 'node', 'tree', 'self', 'pair', 'h', 'k'].map((op) => `get:/${op}>**`);
+  const gen = await OasGen.fromFile(`${oasBasePath}/composed-loops.yaml`, { showParentInSelections: false } as never);
+  await gen.visit();
+  let schema = '';
+  const messages = await captureErrors(async () => {
+    schema = gen.generateSchema(ops);
+  });
+
+  // C: allOf [A, B] writes both parts' fields
+  assert.ok(schema.includes('type C {\n  aId: ID\n  bId: ID\n}'), "C has A's and B's fields");
+  assert.ok(schema.includes('c? {\n       aId?\n       bId?\n      }'), 'and selects them');
+
+  // Node.next and the Tree member's children lead back: a comment in SDL and selection, never a field
+  assert.ok(
+    schema.includes('type Node {\n  label: String\n  # next: Node - circular reference omitted\n}'),
+    'next in Node',
+  );
+  assert.ok(
+    schema.includes('  # children: [Choice] - circular reference omitted\n'),
+    "children in Choice's merged form",
+  );
+  assert.ok(schema.includes('# next: circular reference omitted (re-visit'), 'next in the selection');
+  assert.ok(schema.includes('# children: circular reference omitted (re-visit'), 'children in the selection');
+  assert.ok(!/\n\s+(next|children)\??( \{|:)/.test(schema.replace(/#.*\n/g, '\n')), 'never written as a field');
+
+  // Self: allOf [Self, { x }] finishes with x, and the warning names Self
+  assert.ok(schema.includes('type Self {\n  x: String\n}'), 'Self has x');
+  assert.ok(
+    messages.some((m) => m.includes('Self is already being built when Self takes it as a member')),
+    'warning names Self',
+  );
+
+  // Ping and Pong are each other's part: Ping has both fields, Pong has bField, the warning names Ping
+  assert.ok(schema.includes('type Ping {\n  aField: String\n  bField: String\n}'), 'Ping has both');
+  assert.ok(schema.includes('type Pong {\n  bField: String\n}'), 'Pong has bField');
+  assert.ok(
+    messages.some((m) => m.includes('Ping is already being built when Pong takes it as a member')),
+    'warning names Ping',
+  );
+  assert.ok(schema.includes('a: Ping\n  b: Pong'), 'neither a nor b is left out');
+
+  // Checks that a list of itself, and a list of objects holding it, both finish as before
+  assert.ok(schema.includes('  # list: [RecursiveList] - circular reference omitted\n'), "Holder's list a comment");
+  assert.ok(schema.includes('  list: [JSON]\n'), "Holder2's list sent as JSON");
+  assert.ok(!messages.some((m) => m.includes('[collector]')), 'no #207');
+});
+
+// --- #242: allOf parts reached through more than one route ---
+
+const ALLOF_MEMBERS = 'shared-allof-members.yaml';
+const SCHEMAS = '#/components/schemas/';
+const underC = (...ids: string[]) => [`get:/c>res:r>comp:type:${SCHEMAS}C`, ...ids].join('>');
+const underD = (op: string, ...ids: string[]) => [`get:/${op}>res:r>comp:type:${SCHEMAS}D`, ...ids].join('>');
+const PART_A = `obj:type:${SCHEMAS}A`;
+const PART_E = `comp:type:${SCHEMAS}E`;
+const DETAIL = `prop:obj:detail>obj:type:${SCHEMAS}Detail`;
+
+test('test_242_shared_allof_same_name_from_two_parts', async () => {
+  const fromA = await generateWithWarnings(ALLOF_MEMBERS, [underC(PART_A, 'prop:scalar:id')]);
+  const fromB = await generateWithWarnings(ALLOF_MEMBERS, [underC(`obj:type:${SCHEMAS}B`, 'prop:scalar:id')]);
+  const fromBoth = await generateWithWarnings(ALLOF_MEMBERS, [
+    underC(PART_A, 'prop:scalar:id'),
+    underC(`obj:type:${SCHEMAS}B`, 'prop:scalar:id'),
+  ]);
+  for (const { schema } of [fromA, fromB, fromBoth]) {
+    assert.ok(schema.includes('type C {\n  id: ID\n}'), 'C writes id once');
+    assert.ok(schema.includes('selection: """\n      id?\n      """'), 'and selects it once');
+  }
+});
+
+test('test_242_shared_allof_part_reached_directly_and_through_another', async () => {
+  const throughE = await generateWithWarnings(ALLOF_MEMBERS, [underD('d', PART_E, PART_A, 'prop:scalar:id')]);
+  assert.ok(throughE.schema.includes('type D {\n  id: ID\n}'), 'D>E>A>id writes D.id');
+
+  const withEOnly = await generateWithWarnings(ALLOF_MEMBERS, [
+    underD('d', PART_E, PART_A, 'prop:scalar:id'),
+    underD('d', PART_E, `obj:type:[inline:${SCHEMAS}E]`, 'prop:scalar:eOnly'),
+  ]);
+  assert.ok(withEOnly.schema.includes('type D {\n  eOnly: String\n  id: ID\n}'), 'both fields');
+
+  // two ops on D: each writes its own field, D from the first, #207 for the other
+  const twoOps = await generateWithWarnings(ALLOF_MEMBERS, [
+    underD('d', PART_A, 'prop:scalar:a'),
+    underD('d2', PART_E, PART_A, 'prop:scalar:id'),
+  ]);
+  assert.ok(twoOps.schema.includes('type D {\n  a: String\n}'), 'D from /d');
+  assert.ok(/d: D[\s\S]*?selection: """\n {6}a\?\n/.test(twoOps.schema), '/d writes a');
+  assert.ok(/d2: D[\s\S]*?selection: """\n {6}id\?\n/.test(twoOps.schema), '/d2 writes id');
+  assert.ok(
+    twoOps.messages.some((m) => m.includes('get:/d2 also selects id')),
+    '#207 names get:/d2 and id',
+  );
+});
+
+test('test_242_shared_allof_both_routes_to_one_part', async () => {
+  // D>A>detail>x and D>E>A>detail>y: the later route wins, in either entry order
+  const x = underD('d', PART_A, DETAIL, 'prop:scalar:x');
+  const y = underD('d', PART_E, PART_A, DETAIL, 'prop:scalar:y');
+  for (const paths of [
+    [x, y],
+    [y, x],
+  ]) {
+    const { schema } = await generateWithWarnings(ALLOF_MEMBERS, paths);
+    assert.ok(schema.includes('type Detail {\n  y: String\n}'), 'Detail { y }');
+    assert.ok(schema.includes('detail? {\n       y?\n      }'), 'detail { y } in the selection');
+  }
+});
+
+test('test_242_shared_allof_repeated_part_past_another', async () => {
+  // F: allOf [A2, B2, G], G: allOf [A2, { extra }]: A2 comes last, so code is its String
+  const whole = await generateWithWarnings(ALLOF_MEMBERS, ['get:/f>**']);
+  assert.ok(whole.schema.includes('type F {\n  code: String\n  extra: String\n}'), 'code: String');
+  const onlyB2 = await generateWithWarnings(ALLOF_MEMBERS, [
+    `get:/f>res:r>comp:type:${SCHEMAS}F>obj:type:${SCHEMAS}B2>prop:scalar:code`,
+  ]);
+  assert.ok(onlyB2.schema.includes('type F {\n  code: Int\n}'), "only B2's code: Int");
+});
+
+test('test_242_shared_allof_under_a_flat_union', async () => {
+  const union = `get:/u>res:r>obj:type:${SCHEMAS}UHolder>prop:comp:pick>union:type:${SCHEMAS}DOrOther>comp:type:${SCHEMAS}D`;
+  const { schema } = await generateWithWarnings(ALLOF_MEMBERS, [
+    `${union}>${PART_E}>${PART_A}>${DETAIL}>prop:scalar:y`,
+  ]);
+  assert.ok(
+    schema.includes('type DOrOther { #### replacement for Union DOrOther\n  detail: Detail\n}'),
+    'merged detail',
+  );
+  assert.ok(schema.includes('type Detail {\n  y: String\n}'), 'Detail { y }');
+  assert.ok(schema.includes('pick? {\n       detail? {\n        y?\n       }\n      }'), 'selected through the union');
+});
+
+test('test_242_shared_entity_link_beside_a_shared_type', async () => {
+  // entity-link.yaml's GET and PATCH /cards/{card_ref} share Card: the link is written once in SDL and
+  // in both selections, whole and explicit
+  const card = (op: string, field: string) =>
+    `${op}:/cards/{card_ref}>res:r>obj:type:${SCHEMAS}Card>prop:scalar:${field}`;
+  const explicit = ['get', 'patch'].flatMap((op) => [card(op, 'id'), card(op, 'thingId')]);
+  for (const paths of [['get:/cards/{card_ref}>**', 'patch:/cards/{card_ref}>**'], explicit]) {
+    const { schema } = await generateWithWarnings('entity-link.yaml', [...paths, 'get:/things/{thingId}>**'], {
+      inferEntityResolvers: true,
+    });
+    assert.strictEqual(schema.match(/\n {2}thing: Thing\n/g)?.length, 1, 'the link is declared once');
+    assert.strictEqual(schema.match(/thing: \{\n {8}id: thingId\n/g)?.length, 2, 'both selections write it');
+  }
+});
+
+test('test_242_each_component_built_once_per_side', async () => {
+  // #242: two ops reaching Pet as a response and one sending it as a body share two nodes
+  const gen = await OasGen.fromFile(`${oasBasePath}/petstore.yaml`, { showParentInSelections: false } as never);
+  await gen.visit();
+  const pets = new Set<IType>();
+  const findPets = (node: IType, depth: number) => {
+    for (const child of depth < 4 ? gen.expand(node) : []) {
+      if (child.id.endsWith('schemas/Pet') && !(child instanceof Arr)) pets.add(child);
+      findPets(child, depth + 1);
+    }
+  };
+  for (const op of ['get:/pet/{petId}', 'get:/pet/findByStatus', 'post:/pet']) findPets(gen.paths.get(op)!, 0);
+  assert.deepStrictEqual(
+    Array.from(pets, (pet) => pet.id).sort(),
+    ['obj:input:#/components/schemas/Pet', 'obj:type:#/components/schemas/Pet'],
+    'one Pet per side',
+  );
+
+  // Checks that a component first built under a property keeps that property in its path
+  const wrapped = await OasGen.fromFile(`${oasBasePath}/shared-component-two-ops.yaml`, {
+    showParentInSelections: false,
+  } as never);
+  await wrapped.visit();
+  const [res] = wrapped.expand(wrapped.paths.get('get:/w')!);
+  const [wrapper] = wrapped.expand(res);
+  const [child] = wrapped.expand(wrapper);
+  const [item] = wrapped.expand(child);
+  assert.strictEqual(item.path(), 'get:/w>res:r>obj:type:#/c/s/Wrapper>prop:obj:child>obj:type:#/c/s/Item');
 });

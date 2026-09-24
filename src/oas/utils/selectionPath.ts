@@ -1,9 +1,11 @@
-import { IType, T, Union } from '../nodes/internal.js';
+import { IType, Prop, T, Union } from '../nodes/internal.js';
 import { Naming } from './naming.js';
 import { warn } from '../log/trace.js';
 import type { OasContext } from '../oasContext.js';
 
 export class SelectionPath {
+  private static readonly CIRCULAR_REF_PREFIX = 'prop:circular-ref:#';
+
   // The selection that takes an operation's whole subtree. e.g. everythingUnder('get:/graph') -> 'get:/graph>**'
   public static everythingUnder(opId: string): string {
     return `${opId}${Naming.PATH_SEPARATOR}**`;
@@ -38,6 +40,18 @@ export class SelectionPath {
     if (target && SelectionPath.sameIdClass(target.id, part)) {
       warn(null, '[selection]', `segment ${part} not found; using ${target.id} (the only ${part.split(':')[0]} here)`);
       return target;
+    }
+
+    // Resolves an old circular-reference field to the parent's field of the same name: each component
+    // is built once now, so the field is built as usual and its loop is left out on the walk. #242
+    //   e.g. (keep-field-names.yaml) `...>obj:type:#/c/s/Item>prop:circular-ref:#parent_item` -> prop:obj:parent_item
+    if (part.startsWith(SelectionPath.CIRCULAR_REF_PREFIX)) {
+      const name = part.slice(SelectionPath.CIRCULAR_REF_PREFIX.length);
+      const field = collection.find((t) => t instanceof Prop && t.name === name);
+      if (field) {
+        warn(null, '[selection]', `segment ${part} not found; using ${field.id} (the field of the same name)`);
+        return field;
+      }
     }
 
     // A saved path can still name a field that was directly on the union before it became a mixed

@@ -14,8 +14,11 @@ import {
   PropEn,
   PropObj,
   PropScalar,
+  QueuedNode,
+  ReferenceObject,
   Res,
   Scalar,
+  SelectedField,
   T,
   Type,
 } from './internal.js';
@@ -42,16 +45,20 @@ export class Union extends Type {
   // promoteAllOfBase (a post-collect pass) — never in visit().
   public interfaceBaseRef?: string;
 
-  // set by TypesCollector when one op reaches this component top-level and another nests it,
-  // forcing the shared merged-object form everywhere. see docs/FIXED.md #121
-  // e.g.:
-  //   /media: get -> $ref Media                    # top level: real union, ->match selection
-  //   /shelf: get -> { featured: $ref Media, ... }  # nested: merged/flat object
-  //   Media: oneOf [Book, Movie], discriminator kind
-  public forcedFlat = false;
+  // Set by TypesCollector per run: whether every selected route reaches this union as the op's
+  // response, and whether every one reaches it as a field, list item or map value. One op reaching
+  // it top-level and another nested forces the merged form everywhere. see docs/FIXED.md #121 #242
+  //   e.g. (per-op-green-whole-red.yaml) /media returns Media, /shelf has featured: Media -> merged
+  public everyRouteTopLevel?: boolean;
+  public everyRouteValueOrItem?: boolean;
 
   // set once by consolidate() when this flat union mixes a plain value with a real object. see docs/FIXED.md #208
   public mixedValue?: MixedValue;
+
+  // Members an op's walk found leading back to this union, left out of it on that op's routes, by
+  // op id: a member loops back on one op's route and not another's. #242
+  //   e.g. (TMF632) get:/individual/{id}'s PartyOrPartyRole leaves out its member Individual
+  private readonly leftOutMembers = new Map<string, Set<IType>>();
 
   constructor(
     parent: IType,
@@ -81,6 +88,8 @@ export class Union extends Type {
     if (this.visited) {
       return;
     }
+    // set before the members are built, as Composed does: a member can reach this union again. #242
+    this.visited = true;
 
     const schemas = this.schemas.map((s) => s.type);
 
@@ -97,7 +106,7 @@ export class Union extends Type {
       if (refSchema && refSchema.type === 'null') {
         continue;
       }
-      const type = Factory.fromSchema(context, this, refSchema);
+      const type = this.buildMember(context, refSchema);
       this.add(type);
 
       type.visit(context);
@@ -122,7 +131,6 @@ export class Union extends Type {
       }
     }
 
-    this.visited = true;
     trace(context, '<- [union:visit]', 'out: ' + schemas);
     context.leave(this);
   }
@@ -132,8 +140,12 @@ export class Union extends Type {
   //   get:/item -> oneOf [Book, Movie]
   // This doesn't — launch library's real shape, rover won't resolve anything inside the match:
   //   PaginatedAgencyList.results: [ oneOf [AgencyMini, AgencyNormal, AgencyDetailed] ]
-  // see docs/FIXED.md #38
+  // Reads the collector's answer over every route in a run; a caller with no selection reads the parent.
+  // see docs/FIXED.md #38 #242
   public isTopLevelResponse(): boolean {
+    if (this.everyRouteTopLevel !== undefined) {
+      return this.everyRouteTopLevel;
+    }
     let node: IType | undefined = this.parent;
     while (node instanceof Arr) {
       node = node.parent;
@@ -145,7 +157,7 @@ export class Union extends Type {
   // (GraphQL has no input unions), it has no tag field to pick a branch (#25), or it's nested
   // inside a field rather than being the op's own response (#38). see docs/FIXED.md #25, #38
   public isFlat(): boolean {
-    return this.forcedFlat || this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
+    return this.kind === 'input' || !this.discriminator || !this.isTopLevelResponse();
   }
 
   public generate(context: OasContext, writer: Writer, selection: ExpandedSelection): void {
@@ -162,7 +174,7 @@ export class Union extends Type {
       }
     } else if (context.inContextOf(Res, this)) {
       // a merge with no fields is never written — the field answers JSON instead  #80
-      if (this.isFlat() && !this.hasSelectedProps(context, selection, keep, this.path())) {
+      if (this.isFlat() && !this.hasSelectedProps(context, selection, keep, selection.writtenPath(this))) {
         writer.write('JSON');
       } else {
         // R2: when promoted to an interface, the field returns the base interface, not the union name.
@@ -180,7 +192,7 @@ export class Union extends Type {
         this.consolidateMembers(context, selection);
 
         // an empty merge writes no type — its field was written as JSON  #80
-        if (!this.hasSelectedProps(context, selection, keep, this.path())) {
+        if (!this.hasSelectedProps(context, selection, keep, selection.writtenPath(this))) {
           trace(context, '   [union::generate]', `[union] no fields to merge, skipping: ${this.name}`);
         }
         // FIXED #208: a mixed oneOf — every branch kept as a field, not merged away.
@@ -202,7 +214,7 @@ export class Union extends Type {
         // for allOf members (their folded props keep the inner part as parent -> `union X = `). #34
         // Members are listed under the name their own `type` line uses: a component named
         // `http_rule_response` is written as `HttpRuleResponse`. see docs/FIXED.md #43
-        const filtered = this.selectedMembers(selection, this.path());
+        const filtered = this.selectedMembers(selection, selection.writtenPath(this));
 
         this.writeMemberJsonNote(context, writer);
         writer
@@ -248,32 +260,55 @@ export class Union extends Type {
       .write(name)
       .write('\n');
 
-    for (const prop of this.dedupedSelectedProps(context, selection, keep, this.path())) {
-      trace(context, '   [union::generate]', `-> property: ${prop.name} (parent: ${prop.parent!.name})`);
-      prop.generate(context, writer, selection);
+    for (const field of this.findMergedFields(context, selection, keep, selection.writtenPath(this))) {
+      trace(context, '   [union::generate]', `-> property: ${field.prop.name} (parent: ${field.prop.parent!.name})`);
+      field.prop.generate(context, writer, selection, field.name);
     }
 
     writer.write('} \n### End replacement for ').write(this.name).write('\n\n');
   }
 
   private dedupedSelectedProps(context: OasContext, selection: ExpandedSelection, keep: boolean, path: string): Prop[] {
-    return Union.dedupeByName(this.selectedProps(selection, keep, path), context, keep, this);
+    return this.findMergedFields(context, selection, keep, path).map((field) => field.prop);
+  }
+
+  // Returns the merged object's fields at `path`, one per name, each as written (a loop left out on
+  // the member that declares it is its comment here too) and with the path it was selected at. #242
+  //   e.g. (composed-loops.yaml) Choice: oneOf [Base, Tree] -> Tree's children as its comment
+  private findMergedFields(
+    context: OasContext,
+    selection: ExpandedSelection,
+    keep: boolean,
+    path: string,
+  ): SelectedField[] {
+    return Union.dedupeByName(this.findSelectedFields(selection, path), context, keep, this, path).map((field) => ({
+      prop: this.emittedProp(context, field.prop),
+      path: field.path,
+      name: field.name,
+    }));
   }
 
   // Members can give the same field name three outcomes: the same written shape keeps the first, an
   // all-enum clash merges every value, and two same-named objects fold under declaresEveryKeptField.
+  // Each field keeps the path its first occurrence was selected at, or the path of the field made here.
   //   e.g. Individual: { status: enum-ref }, PartyRole: { status: { type: string } } -> status: JSON
-  public static dedupeByName(props: Prop[], context: OasContext, keep: boolean, union: Union): Prop[] {
-    const firstByName = new Map<string, Prop>();
+  public static dedupeByName(
+    fields: SelectedField[],
+    context: OasContext,
+    keep: boolean,
+    union: Union,
+    path: string,
+  ): SelectedField[] {
+    const firstByName = new Map<string, SelectedField>();
     const allByName = new Map<string, Prop[]>();
 
-    for (const prop of props) {
-      const clashing = allByName.get(prop.name);
+    for (const field of fields) {
+      const clashing = allByName.get(field.prop.name);
       if (clashing) {
-        clashing.push(prop);
+        clashing.push(field.prop);
       } else {
-        allByName.set(prop.name, [prop]);
-        firstByName.set(prop.name, prop);
+        allByName.set(field.prop.name, [field.prop]);
+        firstByName.set(field.prop.name, field);
       }
     }
 
@@ -292,38 +327,47 @@ export class Union extends Type {
       }
     }
 
+    const merged = Array.from(firstByName.entries()).map(([name, first]): SelectedField => {
+      if (!incompatible.has(name)) {
+        return first;
+      }
+      const clashing = allByName.get(name)!;
+      if (clashing.every((p): p is PropEn => p instanceof PropEn)) {
+        const en = Union.mergeEnums(context, name, clashing, union);
+        return { prop: en, path: Naming.pathUnder(path, en.id) };
+      }
+      // one branch's enum value is not a legal name, so its field is String: the merged field is String, not JSON. #234
+      const stringEnumMember = Union.findStringEnumMember(clashing);
+      if (stringEnumMember) {
+        const illegalValue = (stringEnumMember.schema.enum as unknown[]).find(
+          (value) => !GqlUtils.isGqlEnumValue(value),
+        );
+        warn(
+          null,
+          '[union]',
+          `\`${name}\` is an enum on some branches but the value \`${illegalValue}\` is not a legal GraphQL enum name, so the merged field is String`,
+        );
+        const stringField = new PropScalar(first.prop.parent!, name, 'String', { type: 'string' });
+        stringField.required = clashing.every((p) => p.required);
+        return { prop: stringField, path: Union.replaceLastId(first.path, stringField.id) };
+      }
+      const reason = JsonDegradeReasons.incompatibleMergedField();
+      warn(null, '[union]', reason);
+      const jsonField = new PropScalar(first.prop.parent!, name, 'JSON', Schemas.withJsonNote(context, {}, reason));
+      return { prop: jsonField, path: Union.replaceLastId(first.path, jsonField.id) };
+    });
+
     // two members can spell the same field differently — number the later twin instead of writing
     // it twice. e.g. (trello) boards: prefs/background + prefs_background. see docs/FIXED.md #113
-    return T.numberTwinFields(
-      Array.from(firstByName.entries()).map(([name, prop]) => {
-        if (!incompatible.has(name)) {
-          return prop;
-        }
-        const clashing = allByName.get(name)!;
-        if (clashing.every((p): p is PropEn => p instanceof PropEn)) {
-          return Union.mergeEnums(context, name, clashing, union);
-        }
-        // one branch's enum value is not a legal name, so its field is String: the merged field is String, not JSON. #234
-        const stringEnumMember = Union.findStringEnumMember(clashing);
-        if (stringEnumMember) {
-          const illegalValue = (stringEnumMember.schema.enum as unknown[]).find(
-            (value) => !GqlUtils.isGqlEnumValue(value),
-          );
-          warn(
-            null,
-            '[union]',
-            `\`${name}\` is an enum on some branches but the value \`${illegalValue}\` is not a legal GraphQL enum name, so the merged field is String`,
-          );
-          const merged = new PropScalar(prop.parent!, name, 'String', { type: 'string' });
-          merged.required = clashing.every((p) => p.required);
-          return merged;
-        }
-        const reason = JsonDegradeReasons.incompatibleMergedField();
-        warn(null, '[union]', reason);
-        return new PropScalar(prop.parent!, name, 'JSON', Schemas.withJsonNote(context, {}, reason));
-      }),
-      keep,
-    );
+    union.numberFieldNames(merged, keep);
+    return merged;
+  }
+
+  // Returns `path` with its last id swapped for `id`: where a field made in place of a member's
+  // field sits, beside the field it replaces.
+  //   e.g. (flat-merge-incompatible-scalar-types.yaml) …>obj:type:#/c/s/A>prop:scalar:status -> same, as JSON
+  private static replaceLastId(path: string, id: string): string {
+    return Naming.pathUnder(path.slice(0, path.lastIndexOf(Naming.PATH_SEPARATOR)), id);
   }
 
   // The written shape dedupeByName keys same-named non-object fields on: an enum also carries its
@@ -460,58 +504,75 @@ export class Union extends Type {
   }
 
   // the members that carry at least one selected field — what the `union X = …` line lists and
-  // what `->match` branches over. Composed members fold their allOf parts in first. see #34
+  // what `->match` branches over. A Composed member reads its allOf parts' fields. see #34
   private selectedMembers(selection: ExpandedSelection, path: string): IType[] {
-    const pathsToMembers = this.findPathsToMembers();
-    return this.children.filter((child) => {
-      if (child instanceof Composed && child.schema.allOf != null && !child.consolidated) {
-        child.consolidate(selection);
-      }
-      // Checks each prop once with isSelected; a scan per prop rebuilt path() 55M times on hubspot lists. #10 #118
-      return Array.from(child.props.values()).some((p) => selection.isSelected(p, this.propPath(p, path, pathsToMembers)));
-    });
+    return this.findMembersOn(path).filter(
+      (child) => child.findSelectedFields(selection, Naming.pathUnder(path, child.id)).length > 0,
+    );
+  }
+
+  // Leaves `member` out of this union on `opId`'s routes. #242
+  //   e.g. (TMF632) get:/individual/{id}, member Individual
+  public leaveOutMember(opId: string, member: IType): void {
+    (this.leftOutMembers.get(opId) ?? this.leftOutMembers.set(opId, new Set()).get(opId)!).add(member);
+  }
+
+  // Returns the members this union has on the op `path` starts with: the ones its walk kept.
+  //   e.g. (TMF632) PartyOrPartyRole on get:/individual/{id} -> every member but Individual
+  public findMembersOn(path: string): IType[] {
+    const leftOut = this.leftOutMembers.get(path.split(Naming.PATH_SEPARATOR, 1)[0]);
+    return leftOut ? this.children.filter((member) => !leftOut.has(member)) : this.children;
   }
 
   // a real `union X = Book | Movie` needs its members (and a member's shared $ref base, which
   // the writer may promote to an interface — R2); a merged one needs its flat fields instead
   dependencies(context: OasContext, selection: ExpandedSelection, path: string): IType[] {
+    return this.findDependencies(context, selection, path).map((dependency) => dependency.node);
+  }
+
+  // What dependencies() returns, each at its path: a merged union's fields at the paths they were
+  // selected at, a mixed value's fields under this union, a real union's members and their $ref
+  // bases under their member. #242
+  //   e.g. (r2-interface-shared-base.yaml) Book: allOf [$ref Product, …] ->
+  //   get:/item>res:r>union:type:#/c/s/ItemResponse>comp:type:#/c/s/Book>obj:type:#/c/s/Product
+  public override findDependencies(context: OasContext, selection: ExpandedSelection, path: string): QueuedNode[] {
     if (this.isFlat()) {
-      // consolidate first, like generateMergedObject does: merging picks which member's copy of a
-      // shared field is kept, so reading the fields before the merge can name a different type than
-      // the writer emits — box collected enum WebLinkBaseType but wrote `type: FileBaseType!`. #57
+      // consolidate first, like generateMergedObject does: the mixed value is built there. #57 #208
       this.consolidateMembers(context, selection);
       // FIXED #208: the mixed-value fields, so the collector reaches the object type through PropObj.
       if (this.mixedValue) {
-        return this.mixedValue.dependencies();
+        return this.mixedValue.dependencies().map((field) => ({ node: field, path: Naming.pathUnder(path, field.id) }));
       }
       const keep = context.generateOptions?.keepFieldNames === true;
-      return this.dedupedSelectedProps(context, selection, keep, path);
+      return this.findMergedFields(context, selection, keep, path).map((field) => ({
+        node: field.prop,
+        path: field.path,
+      }));
     }
     // only members with a selected field are reachable (#26, #36); an allOf member also pulls in the
     // $ref base it extends — `Book: allOf [$ref Product, …]` -> Product (r2-interface-shared-base.yaml).
     return this.selectedMembers(selection, path).flatMap((member) => [
-      member,
-      // expand the list with all those that are referenced by this type, so we can filter them too
-      ...(member instanceof Composed ? T.containers(member).filter((c) => T.isRef(c.name)) : []),
+      { node: member, path: Naming.pathUnder(path, member.id) },
+      ...(member instanceof Composed ? T.containers(member).filter((c) => T.isRef(c.name)) : []).map((base) => ({
+        node: base,
+        path: Naming.pathUnder(path, member.id, base.id),
+      })),
     ]);
   }
 
-  // Returns the selection path of a node dependencies() returned: a member's $ref base sits under
-  // its member, not under this union, so its path keeps the member's id. Fields go to Type.
-  //   e.g. (r2-interface-shared-base.yaml) Book: allOf [$ref Product, …] ->
-  //   get:/item>res:r>union:type:#/c/s/ItemResponse>comp:type:#/c/s/Book>obj:type:#/c/s/Product
+  // Returns the selection path of a node dependencies() returned, for a caller with no selection:
+  // a member's $ref base sits under its member, not under this union. Fields go to Type.
+  //   e.g. (r2-interface-shared-base.yaml) …>union:type:#/c/s/ItemResponse>comp:type:#/c/s/Book>obj:type:#/c/s/Product
   public override childPath(context: OasContext, child: IType, path: string): string {
-    const pathToMember = this.findPathsToMembers().get(child);
-    return pathToMember ? Naming.pathUnder(path, ...pathToMember) : super.childPath(context, child, path);
+    const route = this.findMemberRoutes().find((memberRoute) => memberRoute.member === child);
+    return route ? Naming.pathUnder(path, ...route.ids) : super.childPath(context, child, path);
   }
 
   public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string): void {
     trace(context, '-> [union::select]', `-> in: ${this.name}`);
     const keep = context.generateOptions?.keepFieldNames === true;
 
-    if (!this.consolidated) {
-      this.consolidate(context, selection, keep);
-    }
+    this.consolidateMembers(context, selection);
 
     // R2: for a real output `union X = A | B` (output position + discriminator) produce the
     // composable abstract-type selection (connect v0.4): a spread `->match` whose branches set a
@@ -529,9 +590,8 @@ export class Union extends Type {
       return;
     }
 
-    const pathsToMembers = this.findPathsToMembers();
-    for (const prop of this.dedupedSelectedProps(context, selection, keep, path)) {
-      prop.select(context, writer, selection, this.propPath(prop, path, pathsToMembers));
+    for (const field of this.findMergedFields(context, selection, keep, path)) {
+      field.prop.select(context, writer, selection, field.path, field.name);
     }
 
     /* TODO: better selection for Unions
@@ -626,59 +686,42 @@ export class Union extends Type {
     return null;
   }
 
-  // Merging inlines the members' fields, so each loses one reference of its own — but a member can
-  // carry the union's own name, and zeroing that skips the type the body still asks for. #94
-  //   e.g. (confluence) ContentRestrictionAddOrUpdateArray: oneOf [ {object}, {array of $ref} ]
+  // Returns the members' $refs, sorted and joined after the union's side, when every member other than
+  // null is a $ref: the same set on one side is the same choice wherever it is spelled. Else undefined.
+  // see docs/FIXED.md #118 #242
+  //   e.g. (hubspot) oneOf: [$ref OrBranch, $ref AndBranch] and [$ref AndBranch, $ref OrBranch] -> one set
+  public findMemberRefs(): string | undefined {
+    const real = this.schemas.filter((member) => member && member.type !== 'null');
+    const refs = real.map((member) => (member as ReferenceObject).$ref).filter((ref): ref is string => ref != null);
+    return refs.length >= 2 && refs.length === real.length ? `${this.kind}:${refs.sort().join('|')}` : undefined;
+  }
+
+  // Consolidates once, the first time a writer or walk needs the merged fields or the mixed value.
+  //   e.g. (ashby) CustomField.value's mixed value, built when its type is first written
   private consolidateMembers(context: OasContext, selection: ExpandedSelection): void {
-    if (this.consolidated) {
-      return;
-    }
-    const keep = context.generateOptions?.keepFieldNames === true;
-    for (const member of this.consolidate(context, selection, keep)) {
-      if (member.name !== this.name) {
-        context.decRefCount(member.name);
-      }
+    if (!this.consolidated) {
+      this.consolidate(context, selection);
     }
   }
 
-  public consolidate(context: OasContext, selection: ExpandedSelection, keep: boolean): Set<IType> {
-    T.composables(this).forEach((child) => {
-      (child as Composed).consolidate(selection);
-    });
-
-    const ids: Set<IType> = new Set();
-
+  // Merges the members' fields selected on this union's written route into this.props, the tag field
+  // included, or builds the mixed value from them. The op line reads this.props with no selection at
+  // hand (#80); a writer reads the fields per route through findMergedFields. #208 #242
+  //   e.g. (ashby) OverlayCustomField.value: oneOf [boolean, { currencyCode, value }, string] -> text, boolean, object
+  public consolidate(context: OasContext, selection: ExpandedSelection): void {
     // A flat union under a field, list item or map value that mixes plain values with objects keeps
     // every branch as its own field, instead of the field merge below that keeps only the objects. #208
     const shape = this.isFlat() ? this.analyzeMixedValue(context) : undefined;
     if (shape) {
-      this.mixedValue = new MixedValue(this, shape, context, selection);
+      this.mixedValue = new MixedValue(this, shape, context, selection, [selection.writtenPath(this)]);
       this.mixedValue.dependencies().forEach((prop) => this.props.set(prop.name, prop));
     } else {
-      const props: Prop[] = [];
+      const props = this.findSelectedFields(selection, selection.writtenPath(this)).map((field) => field.prop);
       const discriminator = this.discriminator;
-
-      const path = this.path();
-      const pathsToMembers = this.findPathsToMembers();
-
-      this.children?.forEach((child) => {
-        // go deeper to get the fields from those inner members, if needed, and only those selected
-        if (child instanceof Union) {
-          props.push(...child.selectedProps(selection, keep, Naming.pathUnder(path, child.id)));
-          return;
-        }
-
-        Array.from(child.props.values())
-          .filter((prop) => selection.isSelected(prop, this.propPath(prop, path, pathsToMembers)))
-          .forEach((prop) => props.push(prop));
-      });
 
       // add the discriminator, if we have one
       if (discriminator) {
-        const prop = (this.children || [])
-          .map((child) => child.props.get(discriminator))
-          .find((prop) => prop !== undefined);
-
+        const prop = this.children.map((child) => child.props.get(discriminator)).find((prop) => prop !== undefined);
         if (prop) props.push(prop);
       }
 
@@ -686,31 +729,42 @@ export class Union extends Type {
       props.sort((a, b) => a.name.localeCompare(b.name)).forEach((prop) => this.props.set(prop.name, prop));
     }
 
-    this.children?.forEach((child) => ids.add(child));
-
-    // and return the set of types we've used
     this.consolidated = true;
+  }
 
-    // now remove every added ID
-    const queue: IType[] = Array.from(this.children.values());
-    while (queue.length > 0) {
-      const node = queue.shift()!;
-      const containers = T.containers(node);
-      containers.forEach((c) => ids.add(c));
-      // queue.push(...node.children);
+  // Builds the mixed value again from the routes this union is now reached on: the object type holds
+  // the fields they select, and the comments recorded for the old one are dropped. #242
+  //   e.g. (mixed-value-nested-object.yaml) Pick.value from /s's route, x: String instead of M1's comment
+  public rebuildMixedValue(context: OasContext, selection: ExpandedSelection, routes: string[]): void {
+    const old = this.mixedValue;
+    const shape = old ? this.analyzeMixedValue(context, true) : undefined;
+    if (!old || !shape) {
+      return;
     }
-
-    return ids;
+    if (old.objectType) {
+      context.propOverrides.delete(old.objectType.id);
+    }
+    old.dependencies().forEach((field) => this.props.delete(field.name));
+    this.mixedValue = new MixedValue(this, shape, context, selection, routes);
+    this.mixedValue.dependencies().forEach((field) => this.props.set(field.name, field));
   }
 
   // Whether this union mixes a plain value with a real object, or undefined when it doesn't:
   // input side, not under a field/list/map, not mixed, or a wide integer member (open gap, #208).
+  // Under a field, list or map means on every selected route, or on the route the walk is on.
   //   e.g. (ashby) OverlayCustomField.value: oneOf [boolean, { currencyCode, value }, string] -> text, boolean, object
-  public analyzeMixedValue(context: OasContext, quiet: boolean = false): MixedValueShape | undefined {
+  public analyzeMixedValue(
+    context: OasContext,
+    quiet: boolean = false,
+    parentOnRoute?: IType,
+  ): MixedValueShape | undefined {
     if (this.kind === 'input') {
       return undefined;
     }
-    if (!(this.parent instanceof PropComp || this.parent instanceof PropArray || this.parent instanceof MapType)) {
+    const underValueOrItem = parentOnRoute
+      ? Union.isValueOrItemParent(parentOnRoute)
+      : (this.everyRouteValueOrItem ?? Union.isValueOrItemParent(this.parent));
+    if (!underValueOrItem) {
       return undefined;
     }
 
@@ -720,6 +774,12 @@ export class Union extends Type {
       warn(null, '[union]', `wide-integer member in a mixed oneOf keeps today's merge: ${this.name}`);
     }
     return shape;
+  }
+
+  // True for a node a union can sit under as a field's value, a list item or a map value.
+  //   e.g. (ashby) CustomField's prop:comp:value -> true; get:/…'s res:r -> false
+  public static isValueOrItemParent(node: IType | undefined): boolean {
+    return node instanceof PropComp || node instanceof PropArray || node instanceof MapType;
   }
 
   // Whether a member is an integer too wide for Int: the one reason analyzeMixedValue declines,
@@ -750,7 +810,7 @@ export class Union extends Type {
   //   e.g. (github) get stargazers answers anyOf [array of simple-user, array of stargazer] — no
   //   fields to merge, so the operation answers JSON instead of an empty type
   public emptyMergeReason(context: OasContext, selection: ExpandedSelection, keep: boolean): string | undefined {
-    return this.isFlat() && !this.hasSelectedProps(context, selection, keep, this.path())
+    return this.isFlat() && !this.hasSelectedProps(context, selection, keep, selection.writtenPath(this))
       ? JsonDegradeReasons.emptyMerge()
       : undefined;
   }
@@ -760,23 +820,28 @@ export class Union extends Type {
     return this.mixedValue?.selectionSuffix();
   }
 
-  public selectedProps(selection: ExpandedSelection, keep: boolean, path: string) {
-    const collected: Prop[] = [];
-    const pathsToMembers = this.findPathsToMembers();
+  public selectedProps(selection: ExpandedSelection, _keep: boolean, path: string): Prop[] {
+    return this.findSelectedFields(selection, path).map((field) => field.prop);
+  }
 
-    this.children.forEach((child) => {
-      // a member that is itself a union has no fields of its own — take its members' fields.
-      // e.g. (stripe) del bank_accounts answers anyOf [payment_source, deleted_payment_source], both anyOf too  #80
-      if (child instanceof Union) {
-        collected.push(...child.selectedProps(selection, keep, Naming.pathUnder(path, child.id)));
-        return;
-      }
-      Array.from(child.props.values())
-        .filter((prop) => selection.isSelected(prop, this.propPath(prop, path, pathsToMembers)))
-        .forEach((prop) => collected.push(prop));
-    });
+  // Every member's selected fields in member order, one entry per occurrence (a name two members
+  // declare is listed twice, for dedupeByName to settle), each at the path it was selected at. A
+  // member that is a union or allOf reads its own members' fields under its own id. #80 #242
+  //   e.g. (stripe) del bank_accounts answers anyOf [payment_source, deleted_payment_source], both anyOf too
+  public override findSelectedFields(selection: ExpandedSelection, path: string): SelectedField[] {
+    return this.findMembersOn(path).flatMap((member) => this.findMemberFields(member, selection, path));
+  }
 
-    return collected;
+  // One member's selected fields when this union sits at `path`, each at the path it was selected at.
+  //   e.g. (nested-oneof-branch-loss.yaml) the Currency member's currencyCode at …>obj:type:[inline:valueUnion]:1>prop:scalar:currencyCode
+  public findMemberFields(member: IType, selection: ExpandedSelection, path: string): SelectedField[] {
+    const memberPath = Naming.pathUnder(path, member.id);
+    if (member instanceof Union || member instanceof Composed) {
+      return member.findSelectedFields(selection, memberPath);
+    }
+    return Array.from(member.props.values())
+      .map((prop) => ({ prop, path: prop.pathInSelection ?? Naming.pathUnder(memberPath, prop.id) }))
+      .filter((field) => selection.isSelected(field.prop, field.path));
   }
 
   private updateName(): void {

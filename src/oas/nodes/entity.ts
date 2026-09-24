@@ -208,7 +208,7 @@ function getResolverCandidate(op: IType & Op, selection: ExpandedSelection, keep
     return undefined;
   }
 
-  const selected = obj.selectedProps(selection, keep, obj.path());
+  const selected = obj.selectedProps(selection, keep, selection.writtenPath(obj));
   const keyFields = pathParams.map((p) => findKeyField(obj, p, pathParams, selected));
   if (!keyFields.every((field): field is Prop => field !== undefined)) {
     return undefined;
@@ -246,7 +246,7 @@ function postResolverCandidate(
     return undefined;
   }
 
-  const selected = unwrapped.obj.selectedProps(selection, keep, unwrapped.obj.path());
+  const selected = unwrapped.obj.selectedProps(selection, keep, selection.writtenPath(unwrapped.obj));
   const match = findBodyKeyField(unwrapped.obj, op.body!, selected);
   if (!match) {
     return undefined;
@@ -379,7 +379,12 @@ export function inferEntityLinks(
     }
 
     const refName = Naming.getRefName(target.name);
-    const keyField = findKeyField(target, param, pathParams, target.selectedProps(selection, keep, target.path()));
+    const keyField = findKeyField(
+      target,
+      param,
+      pathParams,
+      target.selectedProps(selection, keep, selection.writtenPath(target)),
+    );
     const resolver = keyField && target.entityResolvers.find((r) => r.keyFields === keyField.name);
     if (!resolver || !keyField || !isIdKey(refName, keyField)) {
       continue;
@@ -408,7 +413,7 @@ export function inferEntityLinks(
       // #168 twin case: Loop carries both beat_Id (optional) and beat_id (required) -- both name
       // Beat, so prefer the one spelled exactly like the target's own key, Loop.beat_id.
       const idAliases = host
-        .selectedProps(selection, keep, host.path())
+        .selectedProps(selection, keep, selection.writtenPath(host))
         .filter((prop) => T.isPropScalar(prop) && isIdAlias(refName, prop.name));
       const sourceProp = idAliases.find((prop) => prop.name === targetKeyProp.name) ?? idAliases[0];
       if (!sourceProp) {
@@ -424,8 +429,8 @@ export function inferEntityLinks(
     }
   }
 
-  // Each op builds its own copy of a response type and only the copy in `types` got the links
-  // above. Share the list with every other copy, so each op's selection writes the same stub,
+  // Shares the links above with every other copy of an inline response type, which is built once per
+  // op (a $ref type is one node, #242), so each op writes the same stub,
   // e.g. (entity-link) GET and PATCH /cards/{card_ref} both write `thing: { id: thingId }`. #196
   const linkedHosts = new Map<string, Obj>();
   for (const type of types.values()) {
@@ -453,18 +458,14 @@ export function inferEntityLinks(
 // typesCollector.collectReachable uses. e.g. (entity-link) from Album, reaches Song via Song.album. #161
 function descendants(context: OasContext, selection: ExpandedSelection, from: IType): Set<IType> {
   const visited = new Set<IType>();
-  const queue: QueuedNode[] = [{ node: from, path: from.path() }];
+  const queue: QueuedNode[] = [{ node: from, path: selection.writtenPath(from) }];
   while (queue.length > 0) {
     const { node, path } = queue.pop()!;
     if (visited.has(node)) {
       continue;
     }
     visited.add(node);
-    queue.push(
-      ...node
-        .dependencies(context, selection, path)
-        .map((child) => ({ node: child, path: node.childPath(context, child, path) })),
-    );
+    queue.push(...node.findDependencies(context, selection, path));
   }
   return visited;
 }

@@ -1,12 +1,14 @@
 import {
   Body,
-  Factory,
   Get,
   IType,
+  MemberRoute,
   Param,
   Prop,
+  QueuedNode,
   ReferenceObject,
   Res,
+  SelectedField,
   T,
   Type,
 } from './internal.js';
@@ -47,6 +49,9 @@ export class Composed extends Type {
     if (this.visited) {
       return;
     }
+    // set before the parts are built: a part can reach this node again through the one node built
+    // per $ref, and must find it already started. see docs/FIXED.md #242
+    this.visited = true;
 
     context.enter(this);
     trace(context, '-> [composed:visit]', 'in: ' + (this.name == null ? '[object]' : this.name));
@@ -85,7 +90,6 @@ export class Composed extends Type {
       throw new Error('Composed.visit: unsupported composed schema: ' + this.schema);
     }
 
-    this.visited = true;
     trace(context, '<- [composed:visit]', 'out: ' + this.name);
     context.leave(this);
   }
@@ -98,7 +102,7 @@ export class Composed extends Type {
       writer.write(Naming.genTypeName(this.name));
     } else if (this.schema.allOf != null) {
       const keep = context.generateOptions?.keepFieldNames === true;
-      const selected = this.selectedProps(selection, keep, this.path());
+      const selected = this.findWrittenFields(selection, keep, selection.writtenPath(this));
 
       if (selected.length > 0) {
         // Definition and reference must agree: references emit genTypeName(name), so the definition
@@ -115,13 +119,12 @@ export class Composed extends Type {
         }
         writer.write(' {\n');
 
-        // a field cycle detection removed on another route is not written here either — the comment
-        // takes its place, same as obj.ts. #89
-        const overrides = context.propOverrides.get(this.id);
-        for (const prop of selected) {
-          const emitted = (overrides?.get(prop.name) as typeof prop) ?? prop;
+        // Writes the comment in place of a field left out on another route or to end a loop, same
+        // as obj.ts. #89 #242
+        for (const field of selected) {
+          const emitted = this.emittedProp(context, field.prop);
           trace(context, '   [comp::generate]', `-> property: ${emitted.name} (parent: ${emitted.parent!.name})`);
-          emitted.generate(context, writer, selection);
+          emitted.generate(context, writer, selection, field.name);
         }
 
         writer.write('}\n\n');
@@ -132,37 +135,24 @@ export class Composed extends Type {
     context.leave(this);
   }
 
-  // the selected props, once the allOf members are folded in (same shape select writes)
+  // Returns the selected props, the allOf parts' fields folded in (same shape select writes)
   dependencies(context: OasContext, selection: ExpandedSelection, path: string): IType[] {
-    if (this.schema.allOf != null && !this.consolidated) {
-      this.consolidate(selection);
-    }
-    const overrides = context.propOverrides.get(this.id);
-    const keep = context.generateOptions?.keepFieldNames === true;
-    return this.selectedProps(selection, keep, path).map((prop) => overrides?.get(prop.name) ?? prop);
+    return this.findFieldDependencies(context, selection, path).map((dependency) => dependency.node);
+  }
+
+  public override findDependencies(context: OasContext, selection: ExpandedSelection, path: string): QueuedNode[] {
+    return this.findFieldDependencies(context, selection, path);
   }
 
   public select(context: OasContext, writer: Writer, selection: ExpandedSelection, path: string) {
     trace(context, '-> [comp::select]', `-> in: ${this.name}`);
-    if (!this.consolidated) {
-      this.consolidate(selection);
-    }
 
     const composedSchema = this.schema;
     if (composedSchema.allOf != null) {
       // a route that kept the field writes the same comment as the routes where it was removed. #89
-      const overrides = context.propOverrides.get(this.id);
       const keep = context.generateOptions?.keepFieldNames === true;
-      const selected = this.selectedProps(selection, keep, path);
-      const pathsToMembers = this.findPathsToMembers();
-
-      for (const prop of selected) {
-        (overrides?.get(prop.name) ?? prop).select(
-          context,
-          writer,
-          selection,
-          this.propPath(prop, path, pathsToMembers),
-        );
+      for (const field of this.findWrittenFields(selection, keep, path)) {
+        this.emittedProp(context, field.prop).select(context, writer, selection, field.path, field.name);
       }
     } else if (composedSchema.oneOf != null) {
       if (this.children.length === 1) {
@@ -175,44 +165,43 @@ export class Composed extends Type {
     trace(context, '<- [comp::select]', `-> out: ${this.name}`);
   }
 
-  // allOf can fold two spellings of one field onto this type — number the later twin, as a plain
-  // object does. e.g. (trello) boards: prefs/background + prefs_background. see docs/FIXED.md #113
-  public override selectedProps(selection: ExpandedSelection, keep: boolean, path: string) {
-    return T.numberTwinFields(super.selectedProps(selection, keep, path), keep);
+  // Returns the parts' selected fields, sorted by name the way the folded fields always were; a name
+  // two parts select keeps the later occurrence. The allOf parts are read at every call, so each
+  // route selects from all of them. see docs/FIXED.md #242
+  //   e.g. (shared-allof-members.yaml) C: allOf [$ref A, $ref B], C>A>id selected -> A's id
+  public override findSelectedFields(
+    selection: ExpandedSelection,
+    path: string,
+    routes?: MemberRoute[],
+  ): SelectedField[] {
+    const byName = super
+      .findSelectedFields(selection, path, routes)
+      .map((field): [string, SelectedField] => [field.prop.name, field]);
+    return byName.sort().map(([, field]) => field);
   }
 
-  public consolidate(selection: ExpandedSelection): Set<string> {
+  // Returns the type this allOf only wraps: its one part, when that part is the $ref this allOf is
+  // named after; undefined for any other allOf. #238
+  //   e.g. (jira-platform) templateEvent: allOf [ $ref NotificationEvent ] -> NotificationEvent
+  public findWrappedType(): IType | undefined {
+    const parts = this.children.filter((child) => !(child instanceof Prop));
+    return parts.length === 1 && parts[0].name === this.name ? parts[0] : undefined;
+  }
+
+  // Folds every part's fields into this.props, for a reader with no route to select at (the CLI
+  // prompt, the web tree); returns the ids of the parts. A name two parts declare keeps the later one.
+  //   e.g. (simple-allOf-example.yaml) User: allOf [ $ref Address, { name } ] -> city, name, …
+  public consolidate(): Set<string> {
     const ids: Set<string> = new Set();
-    let props: Map<string, Prop> = new Map();
+    const props: Map<string, Prop> = new Map();
 
-    const tree = T.print(this);
-    const queue: IType[] = Array.from(this.children.values()).filter((child) => !(child instanceof Prop));
-    const pathsToMembers = this.findPathsToMembers();
-
-    while (queue.length > 0) {
-      const node = queue.shift()!;
-      ids.add(node.id);
-
-      if (selection.entries.length > 0) {
-        // Checks each prop once with isSelected; a scan per prop rebuilt path() 55M times on hubspot lists. #10 #118
-        node.props.forEach((prop) => {
-          if (selection.isSelected(prop, this.propPath(prop, this.path(), pathsToMembers))) {
-            props.set(prop.name, prop);
-          }
-        });
-      } else {
-        node.props.forEach((prop) => props.set(prop.name, prop));
-      }
-
-      // sort props
-      props = new Map([...props.entries()].sort());
-
-      const children = Array.from(node.children.values()).filter((child) => !(child instanceof Prop));
-      queue.push(...children);
+    for (const route of this.findMemberRoutes()) {
+      ids.add(route.member.id);
+      route.member.props.forEach((prop) => props.set(prop.name, prop));
     }
 
-    // copy all collected props from children into this node
-    props.forEach((prop, name) => this.props.set(name, prop));
+    // copy all collected props from children into this node, sorted by name
+    new Map([...props.entries()].sort()).forEach((prop, name) => this.props.set(name, prop));
 
     this.consolidated = true;
 
@@ -235,7 +224,7 @@ export class Composed extends Type {
         continue;
       }
 
-      const type = Factory.fromSchema(context, this, allOfItemSchema as SchemaObject);
+      const type = this.buildMember(context, allOfItemSchema as SchemaObject | ReferenceObject);
       this.add(type);
 
       trace(context, '   [composed::all-of]', 'allOf type: ' + type);
@@ -245,7 +234,6 @@ export class Composed extends Type {
       }
     }
 
-    const tree = T.print(this);
     // two inline allOf bodies can share a name but hold different fields — the second one
     // takes a new name instead of reusing the first one's stored input type. see docs/FIXED.md #123
     if (this.parent instanceof Body) {

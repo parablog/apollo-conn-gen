@@ -69,10 +69,10 @@ export class Factory {
     // OAS 3.1 nullable syntax (`type: [string, 'null']`) would crash every plain-string `type` read below. #23
     Nullability.normalize(schemaObj);
 
-    // Stops a recursive schema at its first re-entry (see docs/FIXED.md #10): `lookupRef` returns
-    // the same `SchemaObject` instance per ref, so a resolved ref already on the expansion path
-    // would recurse forever. Returns a `RefCircRef` sentinel (commented in both SDL and selection).
-    const cyclic = ref ? this.cyclicAncestor(parent, schemaObj) : undefined;
+    // Stops a list that holds itself at its first re-entry: a list is built at once and is never
+    // shared, so nothing else would end it. Other loops are ended by the shared nodes. #10 #242
+    //   e.g. (composed-loops.yaml) RecursiveList: { type: array, items: $ref RecursiveList }
+    const cyclic = ref && Schemas.isList(schemaObj) ? this.cyclicAncestor(context, parent, schemaObj) : undefined;
     if (cyclic) {
       return this.fromRefCircRef(parent, cyclic, ref!);
     }
@@ -87,7 +87,7 @@ export class Factory {
     }
 
     // implied array: `items` present even without an explicit `type: array`. see docs/FIXED.md #4
-    if (_.get(schemaObj, 'items') && (schemaObj.type === 'array' || schemaObj.type == null)) {
+    if (Schemas.isList(schemaObj)) {
       result = this.createArrayType(parent, schemaObj, context);
     }
     // an object with no fields of its own and an `items` beside it: the example next to slack's
@@ -106,7 +106,7 @@ export class Factory {
       Schemas.isMap(schemaObj) ||
       !_.isEmpty(schemaObj.properties)
     ) {
-      result = this.createContainerType(parent, schemaObj, ref);
+      result = this.createContainerType(context, parent, schemaObj, ref);
     }
     // a shapeless object (nothing but a boolean `additionalProperties`, or `{}`) declares no fields:
     // fall back to the JSON scalar — NOT an empty Obj, which generate() would skip, dangling the
@@ -179,39 +179,31 @@ export class Factory {
   // The node type for a container schema, decided by shape: allOf -> Composed, oneOf/anyOf ->
   // Union, additionalProperties-only -> Map, otherwise Obj. Schemas.analyzeMixedValue mirrors this order.
   //   e.g. (ashby) oneOf: [boolean, { currencyCode, value }, string(date)] -> Union
-  private static createContainerType(parent: IType, schema: SchemaObject, ref?: string) {
-    let result: IType | null;
-
-    // composed object
-    if (schema.allOf) {
-      result = new Composed(parent, ref || _.get(schema, 'name'), schema);
-    }
-    // union
-    else if (schema.oneOf || schema.anyOf) {
-      // an `anyOf` lists members just like a `oneOf` — read them too, or the union is built with
-      // none and writes an empty block (digitalocean's create-record body). see docs/FIXED.md #50
-      //   schema: { anyOf: [ { allOf: [ … ] }, { … } ] }
-      const members = schema.oneOf || schema.anyOf || [];
-      // Catches the union form of the same cycle: re-entering the same member set on this path means
-      // a mutually-recursive clique would otherwise expand once per member ordering, never returning. #118
-      const cyclicUnion = this.cyclicUnionAncestor(parent, members as SchemaObject[]);
-      if (cyclicUnion) {
-        return this.fromRefCircRef(parent, cyclicUnion, ref ?? cyclicUnion.name);
+  private static createContainerType(context: OasContext, parent: IType, schema: SchemaObject, ref?: string) {
+    return this.buildOnce(context, parent, ref, () => {
+      // composed object
+      if (schema.allOf) {
+        return new Composed(parent, ref || _.get(schema, 'name'), schema);
       }
-      result = new Union(
-        parent,
-        ref || _.get(schema, 'name'),
-        members as SchemaObject[],
-        false,
-        _.get(schema, 'discriminator'),
-      );
-    }
-    // map (object with only additionalProperties)
-    else if (Schemas.isMap(schema)) {
-      result = new Map(parent, ref || _.get(schema, 'name') || null, schema);
-    }
-    // or a plain obj
-    else {
+      // union
+      if (schema.oneOf || schema.anyOf) {
+        // an `anyOf` lists members just like a `oneOf` — read them too, or the union is built with
+        // none and writes an empty block (digitalocean's create-record body). see docs/FIXED.md #50
+        //   schema: { anyOf: [ { allOf: [ … ] }, { … } ] }
+        const members = schema.oneOf || schema.anyOf || [];
+        return new Union(
+          parent,
+          ref || _.get(schema, 'name'),
+          members as SchemaObject[],
+          false,
+          _.get(schema, 'discriminator'),
+        );
+      }
+      // map (object with only additionalProperties)
+      if (Schemas.isMap(schema)) {
+        return new Map(parent, ref || _.get(schema, 'name') || null, schema);
+      }
+      // or a plain obj
       if (!schema.properties) {
         warn(
           null,
@@ -219,11 +211,31 @@ export class Factory {
           'Object has no properties: ' + JSON.stringify(schema, null, 2) + ' in: ' + parent.pathToRoot(),
         );
       }
+      return new Obj(parent, ref || _.get(schema, 'name') || null, schema);
+    });
+  }
 
-      result = new Obj(parent, ref || _.get(schema, 'name') || null, schema);
+  // Returns the node already built for `ref` on this side (input or output), or builds it and
+  // records it before its fields are built, so a $ref back to a type still being built finds it.
+  // An inline schema, and one a `#/paths` pointer leads to, is built at every position, as before. #124 #242
+  //   e.g. (meta-ads) AdAccount.business, owner_business and viewable_business share one Business
+  private static buildOnce<T extends IType>(
+    context: OasContext,
+    parent: IType,
+    ref: string | undefined,
+    build: () => T,
+  ): T {
+    if (!ref?.startsWith(OasContext.COMPONENTS_SCHEMAS)) {
+      return build();
     }
-
-    return result;
+    const key = `${parent.kind ?? 'type'}:${ref}`;
+    const built = context.typesByRef.get(key);
+    if (built) {
+      return built as T;
+    }
+    const node = build();
+    context.typesByRef.set(key, node);
+    return node;
   }
 
   // What a list holds. An object with no fields becomes JSON — an empty type would take the whole
@@ -360,9 +372,6 @@ export class Factory {
     if (!_.get(schema, 'type') && '$ref' in schema) {
       ref = (schema as ReferenceObject).$ref;
       schema = context.lookupRef(ref);
-      // this was a prop ref, but now needs to be returned as the ref directly?
-      // prop = new PropRef(parent, propName, schema, ref);
-      // return prop;
     }
 
     // uses the type of the schema to find out what kind of property it is
@@ -455,12 +464,18 @@ export class Factory {
             prop = Factory.fromListChoice(context, parent, propName, schemaObj);
           } else {
             const inner: PropComp = new PropComp(parent, propName, schemaObj);
-            inner.comp = new Union(
+            inner.comp = this.buildOnce(
+              context,
               inner,
-              ref || _.get(schemaObj, 'name'),
-              schemaObj.oneOf as SchemaObject[],
-              false,
-              _.get(schemaObj, 'discriminator'),
+              ref,
+              () =>
+                new Union(
+                  inner,
+                  ref || _.get(schemaObj, 'name'),
+                  schemaObj.oneOf as SchemaObject[],
+                  false,
+                  _.get(schemaObj, 'discriminator'),
+                ),
             );
             prop = inner;
           }
@@ -494,12 +509,18 @@ export class Factory {
               prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
             } else {
               const inner: PropComp = new PropComp(parent, propName, schemaObj);
-              inner.comp = new Union(
+              inner.comp = this.buildOnce(
+                context,
                 inner,
-                ref || _.get(schemaObj, 'name'),
-                members as SchemaObject[],
-                false,
-                _.get(schemaObj, 'discriminator'),
+                ref,
+                () =>
+                  new Union(
+                    inner,
+                    ref || _.get(schemaObj, 'name'),
+                    members as SchemaObject[],
+                    false,
+                    _.get(schemaObj, 'discriminator'),
+                  ),
               );
               prop = inner;
             }
@@ -513,7 +534,19 @@ export class Factory {
             Schemas.analyzeMixedValue(context, members as (SchemaObject | ReferenceObject)[])
           ) {
             const inner: PropComp = new PropComp(parent, propName, schemaObj);
-            inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[], false, _.get(schemaObj, 'discriminator'));
+            inner.comp = this.buildOnce(
+              context,
+              inner,
+              ref,
+              () =>
+                new Union(
+                  inner,
+                  ref || _.get(schemaObj, 'name'),
+                  members as SchemaObject[],
+                  false,
+                  _.get(schemaObj, 'discriminator'),
+                ),
+            );
             prop = inner;
           } else {
             // a member that is itself a choice, or a map, is neither plain nor object to the
@@ -524,7 +557,12 @@ export class Factory {
           }
         } else if (schemaObj.allOf) {
           const propComp: PropComp = new PropComp(parent, propName, schemaObj);
-          propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
+          propComp.comp = this.buildOnce(
+            context,
+            propComp,
+            ref,
+            () => new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj),
+          );
           prop = propComp;
         } else if (Schemas.isMap(schemaObj)) {
           if (parent.kind === 'input') {
@@ -535,15 +573,30 @@ export class Factory {
             prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
           } else {
             // Map property: object with only additionalProperties
-            const mapType: Map = new Map(parent, ref || propName, schemaObj);
+            const mapType: Map = this.buildOnce(
+              context,
+              parent,
+              ref,
+              () => new Map(parent, ref || propName, schemaObj),
+            );
             prop = new PropMap(parent, propName, schemaObj, mapType);
           }
         } else if (schemaObj.properties != null) {
-          const propType: IType = new Obj(parent, ref || propName, schemaObj);
+          const propType: IType = this.buildOnce(
+            context,
+            parent,
+            ref,
+            () => new Obj(parent, ref || propName, schemaObj),
+          );
           prop = new PropObj(parent, propName, schemaObj, propType);
         } else {
           // the type of the property will be an object, which needs to be added as a child
-          const propType: IType = new Obj(parent, ref || propName, schemaObj);
+          const propType: IType = this.buildOnce(
+            context,
+            parent,
+            ref,
+            () => new Obj(parent, ref || propName, schemaObj),
+          );
           prop = new PropObj(parent, propName, schemaObj, propType);
         }
       } else if (schemaObj?.enum) {
@@ -601,7 +654,12 @@ export class Factory {
         prop = Factory.fromListChoice(context, parent, propName, schemaObj);
       } else {
         const inner: PropComp = new PropComp(parent, propName, schemaObj);
-        inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]);
+        inner.comp = this.buildOnce(
+          context,
+          inner,
+          ref,
+          () => new Union(inner, ref || _.get(schemaObj, 'name'), schemaObj.oneOf as SchemaObject[]),
+        );
         prop = inner;
       }
     } else if (schemaObj.anyOf) {
@@ -629,7 +687,12 @@ export class Factory {
           prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
         } else {
           const inner: PropComp = new PropComp(parent, propName, schemaObj);
-          inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[]);
+          inner.comp = this.buildOnce(
+            context,
+            inner,
+            ref,
+            () => new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[]),
+          );
           prop = inner;
         }
       } else if (Schemas.holdsOnlyArrayMembers(context, schemaObj)) {
@@ -640,7 +703,12 @@ export class Factory {
         Schemas.analyzeMixedValue(context, members as (SchemaObject | ReferenceObject)[])
       ) {
         const inner: PropComp = new PropComp(parent, propName, schemaObj);
-        inner.comp = new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[]);
+        inner.comp = this.buildOnce(
+          context,
+          inner,
+          ref,
+          () => new Union(inner, ref || _.get(schemaObj, 'name'), members as SchemaObject[]),
+        );
         prop = inner;
       } else {
         // a member that is itself a choice, or a map, is neither plain nor object to the checks
@@ -651,7 +719,12 @@ export class Factory {
       }
     } else if (schemaObj.allOf) {
       const propComp: PropComp = new PropComp(parent, propName, schemaObj);
-      propComp.comp = new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj);
+      propComp.comp = this.buildOnce(
+        context,
+        propComp,
+        ref,
+        () => new Composed(propComp, ref || _.get(schemaObj, 'name'), schemaObj),
+      );
       prop = propComp;
     } else if (Schemas.isMap(schemaObj)) {
       if (parent.kind === 'input') {
@@ -661,11 +734,11 @@ export class Factory {
         prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
       } else {
         // Map property: object with only additionalProperties (no explicit type)
-        const mapType: Map = new Map(parent, ref || propName, schemaObj);
+        const mapType: Map = this.buildOnce(context, parent, ref, () => new Map(parent, ref || propName, schemaObj));
         prop = new PropMap(parent, propName, schemaObj, mapType);
       }
     } else if (schemaObj.properties != null) {
-      const propType: IType = new Obj(parent, ref || propName, schemaObj);
+      const propType: IType = this.buildOnce(context, parent, ref, () => new Obj(parent, ref || propName, schemaObj));
       prop = new PropObj(parent, propName, schemaObj, propType);
     }
     // default case: no type, no oneOf/allOf, not a map, no properties — an unrecognised shape. #133
@@ -675,27 +748,10 @@ export class Factory {
       prop = new PropScalar(parent, propName, 'JSON', Schemas.withJsonNote(context, schemaObj, reason));
     }
 
-    // Leaves out only a real loop: a field pointing back to a type already passed through. Compares
-    // the schema, not the field name; different types reuse field names (e.g. Adobe `extension_attributes`). docs/FIXED.md #36
-    const unionMembers = (schemaObj.oneOf ?? schemaObj.anyOf) as SchemaObject[] | undefined;
-
-    // A map whose values point back to a type we already passed through is removed like any other loop.
-    // e.g. (map-recursive-value.yaml) alternatives: { additionalProperties: $ref Amount } inside Amount itself.
-    // Only for a map under a property; an input-side map is already JSON. see docs/FIXED.md #182 #133
-    const mapValueRef =
-      prop instanceof PropMap ? (schemaObj.additionalProperties as ReferenceObject | undefined)?.$ref : undefined;
-
-    // Look through a one-member allOf to the $ref inside. A wrapped reference back to a type already
-    // being built is left out with the "circular reference omitted" comment, the same as a plain $ref.
-    // e.g. (jira-platform) NotificationEvent.templateEvent: allOf [ $ref NotificationEvent ]
-    const allOfMember = schemaObj.allOf ? this.findSingleAllOfMember(context, schemaObj) : undefined;
-
-    // the union-set form of the same loop: PropComp builds its Union without createContainerType. #118
-    const cyclic =
-      this.cyclicAncestor(parent, schemaObj) ??
-      (unionMembers ? this.cyclicUnionAncestor(parent, unionMembers) : undefined) ??
-      (mapValueRef ? this.cyclicAncestor(parent, context.resolvePointer(mapValueRef) as SchemaObject) : undefined) ??
-      (allOfMember ? this.cyclicAncestor(parent, allOfMember) : undefined);
+    // Leaves out a list field whose list holds itself further down, since a list is built at once
+    // and never shared. A loop through a shared type is left out on the selection walk instead. #10 #242
+    //   e.g. (composed-loops.yaml) NestedList: array of { child: $ref NestedList }
+    const cyclic = prop instanceof PropArray ? this.cyclicAncestor(context, parent, schemaObj) : undefined;
     if (cyclic) {
       prop = new PropCircRef(parent, prop);
     }
@@ -756,35 +812,18 @@ export class Factory {
     return objectLike ? undefined : resolved;
   }
 
-  // Finds the nearest ancestor built from the same `$ref` (same `SchemaObject` instance, since
-  // `lookupRef` returns one per ref), or undefined. Only the current expansion path counts, so a
-  // shared component used by sibling fields matches nothing; an inline node has no schema and never matches. see docs/FIXED.md #10
-  private static cyclicAncestor(parent: IType, schema?: SchemaObject): IType | undefined {
-    if (!schema) return undefined;
-    return parent.ancestors().find((a) => a.schema === schema);
-  }
-
-  // Identifies a choice made entirely of component references, ignoring null members.
-  // e.g. (hubspot) oneOf: [$ref OrBranch, $ref AndBranch] has the same identity in either order.
-  private static unionRefSignature(members: (SchemaObject | ReferenceObject)[]): string | undefined {
-    const real = members.filter((m) => m && (m as SchemaObject).type !== 'null');
-    const refs = real
-      .filter((m) => (m as ReferenceObject).$ref != null)
-      .map((m) => (m as ReferenceObject).$ref as string);
-    if (refs.length < 2 || refs.length !== real.length) return undefined;
-    return refs.slice().sort().join('|');
-  }
-
-  // Union analog of cyclicAncestor (#10): mutual recursion through a oneOf clique closes through
-  // the member LIST, which a Union carries as raw $refs, never as one `.schema`. see docs/FIXED.md #118
-  //   e.g. (hubspot lists) OrBranch.orBranches items: oneOf [OrBranch, AndBranch, …] — the same
-  //   7-way member set re-entered under every branch, never the same single schema.
-  private static cyclicUnionAncestor(parent: IType, members: (SchemaObject | ReferenceObject)[]): Union | undefined {
-    const signature = this.unionRefSignature(members);
-    if (!signature) return undefined;
-    return parent.ancestors().find((a) => a instanceof Union && this.unionRefSignature(a.schemas) === signature) as
-      | Union
-      | undefined;
+  // Finds the nearest ancestor built from the same list schema, or undefined. The search stops at
+  // the first type built once for its $ref: a loop through it is ended there and left out on the
+  // selection walk. An inline node has no schema of its own and never matches. see docs/FIXED.md #10
+  //   e.g. (composed-loops.yaml) Holder.list: $ref RecursiveList -> items $ref RecursiveList again
+  private static cyclicAncestor(context: OasContext, parent: IType, schema: SchemaObject): IType | undefined {
+    const ancestors = parent.ancestors();
+    for (let i = ancestors.length - 1; i >= 0 && !context.isBuiltOnce(ancestors[i]); i--) {
+      if (ancestors[i].schema === schema) {
+        return ancestors[i];
+      }
+    }
+    return undefined;
   }
 
   /** Build the `fromSchema` circular sentinel (commented in both SDL + selection). see docs/FIXED.md #10 */
@@ -833,8 +872,6 @@ export class Factory {
   }
 
   public static fromCircularRef(parent: IType, child: IType): IType {
-    const _tree = T.print(parent);
-
     const circularRef = new CircularRef(parent, child.name);
     circularRef.ref = child;
     return circularRef;

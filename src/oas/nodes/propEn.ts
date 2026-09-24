@@ -51,9 +51,15 @@ export class PropEn extends Prop {
     return Array.from(this.children.values());
   }
 
-  public select(context: OasContext, writer: Writer, selection: ExpandedSelection, _path: string): void {
+  public select(
+    context: OasContext,
+    writer: Writer,
+    selection: ExpandedSelection,
+    _path: string,
+    fieldName?: string,
+  ): void {
     trace(context, '   [prop:select]', this.name);
-    const sanitised = this.fieldForSelect(context);
+    const sanitised = this.fieldForSelect(context, fieldName);
     writer.write(' '.repeat(context.indent + context.stack.length)).write(sanitised);
     if (this.isOptionalInSelection(context)) {
       writer.write('?');

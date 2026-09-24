@@ -1,0 +1,98 @@
+openapi: 3.0.3
+info:
+  title: One component several operations share
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /a:
+    get:
+      operationId: getA
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+  /b:
+    get:
+      operationId: getB
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+  /w:
+    get:
+      operationId: getW
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wrapper'
+  /e:
+    get:
+      operationId: getE
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+  /f:
+    get:
+      operationId: getF
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+  /g:
+    get:
+      operationId: getG
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        detail:
+          $ref: '#/components/schemas/Detail'
+    Detail:
+      type: object
+      properties:
+        value:
+          type: string
+        unit:
+          type: string
+    Wrapper:
+      type: object
+      properties:
+        child:
+          $ref: '#/components/schemas/Item'
+    # /e returns its data payload through the overrides file; /f and /g keep the envelope
+    Envelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/Item'
