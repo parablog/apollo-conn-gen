@@ -1,4 +1,4 @@
-import { IType, Param, PropArray, Res, T, Type, Union } from './internal.js';
+import { Get, IType, Param, PropArray, Res, T, Type, Union } from './internal.js';
 import { SchemaObject } from 'oas/types';
 import { trace } from '../log/trace.js';
 import { OasContext } from '../oasContext.js';
@@ -36,7 +36,9 @@ export class En extends Type {
     context.enter(this);
     trace(context, '-> [enum:visit]', 'in: ' + this.items.toString());
 
-    if (!context.inContextOf(Param, this)) {
+    // Stores an argument's enum only under --keep-arg-enums; otherwise the argument writes its scalar. #250
+    //   e.g. (petstore) get:/pet/findByStatus status -> enum PetFindByStatusStatus
+    if (!context.inContextOf(Param, this) || context.generateOptions.keepArgEnums) {
       // an inline array-item enum has no name of its own — take its field's name, so the rename
       // below gives it the owner-prefixed form instead of the shared name Enum.
       //   e.g. (motion) include: { type: array, items: { enum: [workHours] } } -> enum SchedulesGetRequestInclude
@@ -45,8 +47,16 @@ export class En extends Type {
         this.name = this.parent.name;
         this.unnamed = false;
       }
+      // Names an inline argument enum after its op and param, numbered if a stored type has that name.
+      //   e.g. (petstore) get:/pet/findByStatus status -> enum PetFindByStatusStatus
+      const param = this.ancestors().find((node): node is Param => node instanceof Param);
+      if (this.unnamed && param) {
+        const name = Naming.genTypeName((param.parent as Get).getGqlOpName()) + Naming.genTypeName(param.name);
+        this.name = context.types.has(name) ? Naming.numberedName(name, (taken) => context.types.has(taken)) : name;
+        this.unnamed = false;
+      }
       // rename an inline enum, i.e: status: { type: string, enum: [placed, approved, delivered] }   # -> enum OrderStatus
-      if (!T.isRef(this.name) && !this.unnamed) {
+      else if (!T.isRef(this.name) && !this.unnamed) {
         T.resolveNameConflict(this, context);
       }
       context.store(this.name, this);
@@ -86,6 +96,11 @@ export class En extends Type {
         this.items.map((s) => ' ' + s).join(',\n') +
         '\n}\n\n';
       writer.write(builder);
+    }
+    // Writes an argument's enum by name under --keep-arg-enums; the definition is written once at the
+    // top level, never inside the argument list (#53). #250
+    else if (context.generateOptions.keepArgEnums) {
+      writer.write(Naming.genTypeName(this.name));
     }
     // this covers the case where a union combines a scalar with an enum.
     else if (!context.inContextOf(Union, this)) {

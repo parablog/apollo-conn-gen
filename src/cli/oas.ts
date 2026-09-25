@@ -1,12 +1,13 @@
 import fs from 'fs';
 import { assertName } from 'graphql';
-import { Command, InvalidArgumentError, OptionValues } from 'commander';
+import { Command, InvalidArgumentError, Option, OptionValues } from 'commander';
 import { DEFAULT_VERSIONS } from '../versions.js';
 import { generateFromSelection, promptForSelection } from './oas-helpers/index.js';
 import { OasGen } from '../oas/oasGen.js';
 import { BatchConfig, DirectivesConfig, OverridesConfig } from '../oas/oasContext.js';
 import { RulesLoader, OpNameMapper, MapRules, Mapper } from '../oas/mapper/index.js';
 import { SelectionPath } from '../oas/utils/selectionPath.js';
+import { warn } from '../oas/log/trace.js';
 
 const originalConsole = Object.assign(
   {
@@ -100,8 +101,9 @@ async function main(sourceFile: string, opts: OptionValues): Promise<void> {
     skipOptionalMarkers: opts.skipOptionalMarkers,
     skipArgDefaults: opts.skipArgDefaults,
     keepFieldNames: opts.keepFieldNames,
-    docResponseFields: opts.docResponseFields,
-    docPagination: opts.docPagination,
+    keepArgEnums: opts.keepArgEnums,
+    noteResponseFields: opts.noteResponseFields,
+    notePartialPages: opts.notePartialPages,
     emitConnectorErrors: opts.emitConnectorErrors,
     useOperationIds: opts.useOperationIds,
     skipDegradeReasons: opts.skipDegradeReasons,
@@ -168,7 +170,7 @@ program
   .option('--base-url <url>', 'Override the @source base URL (default: servers[0] from the spec)')
   .option(
     '--overrides <file>',
-    'Load per-operation path/queryParams overrides from a JSON file; "$links" names a field\'s link to another record',
+    'Load per-operation path/queryParams overrides from a JSON file; "$links" names a field\'s link to another record. A queryParams value that is a $( ) naming $args is sent without arguments too',
   )
   .option('--batch <file>', 'Load batch endpoints (op id -> { maxSize? }) from a JSON file')
   .option('--directives <file>', 'Load directives (Type or Type.field -> ["@…"]) from a JSON file')
@@ -190,12 +192,17 @@ program
     false,
   )
   .option(
-    '--doc-response-fields',
+    '--keep-arg-enums',
+    'An enum query or path param keeps its enum as the argument type, defined once, instead of becoming String or Int',
+    false,
+  )
+  .option(
+    '--note-response-fields',
     'Add each operation\'s top-level response field names as a "Returns: ..." note on the operation',
     false,
   )
   .option(
-    '--doc-pagination',
+    '--note-partial-pages',
     'Note on every operation with pagination parameters that a full page is not necessarily the last page',
   )
   .option(
@@ -218,6 +225,15 @@ program
     '--auth-value-prefix <prefix>',
     'Text to write before an apiKey header value, e.g. "Token token=" (add the trailing space yourself if the API needs one); only applies when the scheme is apiKey in a header',
   )
+  // Old switch names still work so existing scripts keep running, but are left out of --help: each
+  // sets the new option, which is all main() reads, and warns with the new name.
+  //   e.g. --doc-pagination sets notePartialPages and warns "--doc-pagination is now --note-partial-pages"
+  .addOption(new Option('--enum-arguments').hideHelp().implies({ keepArgEnums: true }))
+  .addOption(new Option('--doc-response-fields').hideHelp().implies({ noteResponseFields: true }))
+  .addOption(new Option('--doc-pagination').hideHelp().implies({ notePartialPages: true }))
+  .on('option:enum-arguments', () => warn(null, '[cli]', '--enum-arguments is now --keep-arg-enums'))
+  .on('option:doc-response-fields', () => warn(null, '[cli]', '--doc-response-fields is now --note-response-fields'))
+  .on('option:doc-pagination', () => warn(null, '[cli]', '--doc-pagination is now --note-partial-pages'))
   .parse(process.argv);
 
 const source = program.args[0];

@@ -1,0 +1,60 @@
+openapi: 3.0.3
+info:
+  title: Enum params only an argument uses
+  version: 1.0.0
+servers:
+  - url: https://example.com
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        # two params that $ref one component enum
+        - name: color
+          in: query
+          schema:
+            $ref: '#/components/schemas/Color'
+        - name: trim
+          in: query
+          schema:
+            $ref: '#/components/schemas/Color'
+        # an inline enum
+        - name: size
+          in: query
+          schema:
+            type: string
+            enum: [small, large]
+        # a list of an inline enum
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [new, sale]
+        # a default that is not one of the values
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [fast, slow]
+            default: medium
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+components:
+  schemas:
+    Color:
+      type: string
+      enum: [red, green]
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string

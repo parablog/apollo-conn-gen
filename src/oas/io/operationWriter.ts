@@ -39,14 +39,14 @@ export class OperationWriter {
     for (const path of paths) {
       // path.generate() writes the operation's description and its argument/return signature.
       // None of that needs to know which response fields were kept — except the "Returns:"
-      // line --doc-response-fields adds, so only then does it get the real field list; with the
+      // line --note-response-fields adds, so only then does it get the real field list; with the
       // flag off this stays [] exactly as before. see docs/FIXED.md #160
       //   e.g. (doc-response-fields.yaml) GET /items/{item_id} keeping { id, name, created_at }
       //   gains the description line "Returns: createdAt, id, name"; without the flag, nothing changes here
       path.generate(
         context,
         writer,
-        context.generateOptions?.docResponseFields ? selection : new ExpandedSelection([]),
+        context.generateOptions?.noteResponseFields ? selection : new ExpandedSelection([]),
       );
       this.writeConnector(context, writer, path, selection);
       context.generatedSet.add(path.id);
@@ -71,14 +71,14 @@ export class OperationWriter {
     for (const path of paths) {
       // path.generate() writes the operation's description and its argument/return signature.
       // None of that needs to know which response fields were kept — except the "Returns:"
-      // line --doc-response-fields adds, so only then does it get the real field list; with the
+      // line --note-response-fields adds, so only then does it get the real field list; with the
       // flag off this stays [] exactly as before. see docs/FIXED.md #160
       //   e.g. (doc-response-fields.yaml) GET /items/{item_id} keeping { id, name, created_at }
       //   gains the description line "Returns: createdAt, id, name"; without the flag, nothing changes here
       path.generate(
         context,
         writer,
-        context.generateOptions?.docResponseFields ? selection : new ExpandedSelection([]),
+        context.generateOptions?.noteResponseFields ? selection : new ExpandedSelection([]),
       );
       this.writeConnector(context, writer, path, selection);
       context.generatedSet.add(path.id);
@@ -208,8 +208,8 @@ export class OperationWriter {
       return null;
     }
 
-    const argEntries = entries.filter(({ value }) => !this.isFixedValue(value));
-    const besideEntries = entries.filter(({ value }) => this.isFixedValue(value));
+    const argEntries = entries.filter(({ value }) => !this.isBesideBlock(value));
+    const besideEntries = entries.filter(({ value }) => this.isBesideBlock(value));
     if (auth) {
       besideEntries.push(auth);
     }
@@ -224,8 +224,7 @@ export class OperationWriter {
       }
       lines.push('          }');
     }
-    // Writes fixed values and the query-string API key beside the block, keys quoted so names like
-    // `api-version` are safe. e.g. `"api-version": $("2024-01")`, `"api_key": $config.apiKey`
+    // Writes fixed values, `$args` expressions and the API key beside the block, keys quoted (`api-version`)
     for (const { name, value } of besideEntries) {
       lines.push(`          "${name}": ${value}`);
     }
@@ -233,20 +232,54 @@ export class OperationWriter {
     return lines.join('\n') + '\n';
   }
 
-  // Answers whether a value is `$( <JSON literal> )`: `$args { … }` sends nothing without arguments
-  // and only a literal reads no scope, so only a literal moves beside it. see docs/FIXED.md #248
-  //   e.g. (r7r8-selection) `$("2024-01")` moves, `ids->joinNotNull(";")` stays
-  private isFixedValue(value: string): boolean {
+  // Answers whether a value is written beside `$args { … }`, which sends nothing without arguments:
+  // one `$( … )` holding a JSON literal, or naming `$args`. Beside the block only `$args.x` reaches an
+  // argument; a name alone (`page`) or `$.page` resolves only inside it, so those stay. see docs/FIXED.md #248 #250
+  //   e.g. (Salesforce) `q: $(["SELECT Id FROM Opportunity", $($args.stageName…)]…)` moves, `$(page ?? 1)` stays
+  private isBesideBlock(value: string): boolean {
     const trimmed = value.trim();
-    if (!trimmed.startsWith('$(') || !trimmed.endsWith(')')) {
+    if (!this.isOneExpression(trimmed)) {
       return false;
     }
+    const inside = trimmed.slice(2, -1);
+    // Matches `$args` as text: a string literal holding `$args` moves too; a tokenizer if that shows up.
+    if (inside.includes('$args')) {
+      return true;
+    }
     try {
-      JSON.parse(trimmed.slice(2, -1));
+      JSON.parse(inside);
       return true;
     } catch {
       return false;
     }
+  }
+
+  // Answers whether `text` is a single `$( … )`: the parenthesis closing its `$(` is the last
+  // character. Quoted text is skipped, since a string literal may hold a parenthesis.
+  //   e.g. `$("a)" ?? 1)` is one, `$(a)->joinNotNull(" ")` is not
+  private isOneExpression(text: string): boolean {
+    if (!text.startsWith('$(')) {
+      return false;
+    }
+    let depth = 0;
+    let quote: string | undefined;
+    for (let at = 1; at < text.length; at++) {
+      const char = text[at];
+      if (quote) {
+        if (char === '\\') {
+          at++;
+        } else if (char === quote) {
+          quote = undefined;
+        }
+      } else if (char === '"' || char === "'") {
+        quote = char;
+      } else if (char === '(') {
+        depth++;
+      } else if (char === ')' && --depth === 0) {
+        return at === text.length - 1;
+      }
+    }
+    return false;
   }
 
   // the op's headers block (a self-contained string ending in a newline), or null when there are

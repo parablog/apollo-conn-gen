@@ -2496,6 +2496,117 @@ test('test_overrides_fixed_query_params_sent_without_arguments', async (t) => {
   assert.ok(result.success, result.output);
 });
 
+// Reads the `page` argument by name, so it is written after the `$args { … }` block and sent with no
+// arguments too: without `page` the query is `B`, with `page: 3` it is `B-3`. #250
+const PAGE_QUERY = '$($args.page->echo(["B", @->toString])->joinNotNull("-") ?? "B")';
+
+test('test_250_args_expression_written_beside_block', async () => {
+  // Checks a `$( … )` naming `$args` sits after the block, while `$args.page` alone and `$(page ?? 1)`
+  // stay inside it and the #248 literal stays after it. #250
+  const schema = await runOasTest('r7r8-selection.yaml', ['get:/things>**'], 1, 1, {
+    skipValidation: true,
+    overrides: {
+      'get:/things': {
+        queryParams: {
+          q: PAGE_QUERY,
+          'page-arg': '$args.page',
+          'page-fallback': '$(page ?? 1)',
+          'api-version': '$("2024-01")',
+        },
+      },
+    },
+  });
+  assert.ok(schema !== undefined);
+  const block = schema!.match(/\$args \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(block.includes('"page-arg": $args.page'), '$args.page stays inside the block');
+  assert.ok(block.includes('"page-fallback": $(page ?? 1)'), 'a name alone stays inside the block');
+  assert.ok(!block.includes('"q"'), 'the $args expression is not inside the block');
+  assert.ok(schema!.includes(`}\n          "q": ${PAGE_QUERY}\n`), 'the $args expression follows the block');
+  assert.ok(/"api-version": \$\("2024-01"\)/.test(schema!.slice(schema!.indexOf(block) + block.length)), 'the literal still follows it');
+});
+
+test('test_250_args_expression_sent_without_arguments', async (t) => {
+  // Checks the `$args` expression is sent with no arguments (`q=B`) and reads `page` when given. #250
+  const result = await runConnectorTest(
+    'r7r8-selection.yaml',
+    ['get:/things>**'],
+    'tests/resources/connectors/override-fixed-query-params/things-args-expression.connector.yaml',
+    {
+      skipValidation: true,
+      overrides: { 'get:/things': { queryParams: { ids: null, tags: null, q: PAGE_QUERY } } },
+    },
+  );
+  if (result.skipped) return t.skip(result.output);
+  assert.ok(result.success, result.output);
+});
+
+test('test_250_enum_param_is_an_enum_argument', async () => {
+  // Checks petstore's `status` becomes an enum argument under --keep-arg-enums, defined once at the
+  // top level with its default unquoted, and stays `String = "available"` without the flag. #250
+  const schema = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 5, {
+    skipValidation: true,
+    keepArgEnums: true,
+  });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('petFindByStatus(status: PetFindByStatusStatus = available)'), 'enum argument, unquoted default');
+  assert.strictEqual(schema!.match(/^enum PetFindByStatusStatus \{/gm)?.length, 1, 'defined once');
+  assert.ok(!/petFindByStatus\([^)]*\{/.test(schema!), 'no value list inside the argument list');
+
+  const scalar = await runOasTest('petstore.yaml', ['get:/pet/findByStatus>**'], 19, 4, { skipValidation: true });
+  assert.ok(scalar!.includes('petFindByStatus(status: String = "available")'), 'a String without the flag');
+});
+
+test('test_250_enum_argument_sends_its_value', async (t) => {
+  // Checks `status: available` is sent as `status=available`. #250
+  const result = await runConnectorTest(
+    'petstore.yaml',
+    ['get:/pet/findByStatus>**'],
+    'tests/resources/connectors/enum-arguments/pets.connector.yaml',
+    { skipValidation: true, keepArgEnums: true },
+  );
+  if (result.skipped) return t.skip(result.output);
+  assert.ok(result.success, result.output);
+});
+
+test('test_250_enum_arguments_only_an_argument_uses', async () => {
+  // Checks enums no response field uses are still defined, a shared component once, a list as `[X!]`,
+  // and a default outside the values left out; without the flag every one is a scalar. #250
+  const schema = await runOasTest('enum-arguments.yaml', ['get:/items>**'], 1, 5, { keepArgEnums: true });
+  assert.ok(schema !== undefined);
+  assert.ok(schema!.includes('items(color: Color, trim: Color, size: ItemsSize, tags: [ItemsTags!], mode: ItemsMode): Item'), 'enum arguments');
+  assert.strictEqual(schema!.match(/^enum Color \{/gm)?.length, 1, 'the shared component defined once');
+  assert.ok(/^enum ItemsSize \{/m.test(schema!) && /^enum ItemsTags \{/m.test(schema!), 'inline and list enums defined');
+  assert.ok(!/mode: ItemsMode =/.test(schema!), 'a default outside the values is left out');
+
+  const scalar = await runOasTest('enum-arguments.yaml', ['get:/items>**'], 1, 1);
+  assert.ok(scalar!.includes('items(color: String, trim: String, size: String, tags: [String!], mode: String = "medium"): Item'), 'scalars without the flag');
+  assert.ok(!/^enum /m.test(scalar!), 'no enum definition without the flag');
+});
+
+test('test_250_old_switch_name_still_works', () => {
+  // Checks the old --enum-arguments still writes enum arguments, through the CLI, and names the new switch
+  const cli = spawnSync(
+    'node',
+    ['--import', 'tsx/esm', 'src/cli/oas.ts', 'tests/resources/oas/enum-arguments.yaml', '-i', '-n', '--enum-arguments'],
+    { encoding: 'utf-8' },
+  );
+  assert.strictEqual(cli.status, 0, cli.stderr);
+  assert.ok(/^enum ItemsSize \{/m.test(cli.stdout), 'sets keepArgEnums');
+  assert.ok(cli.stderr.includes('--enum-arguments is now --keep-arg-enums'), 'warns with the new name');
+});
+
+test('test_250_help_leaves_out_old_switch_names', () => {
+  // Checks --help lists only the new names of the three renamed switches
+  const cli = spawnSync('node', ['--import', 'tsx/esm', 'src/cli/oas.ts', '--help'], { encoding: 'utf-8' });
+  assert.strictEqual(cli.status, 0, cli.stderr);
+  for (const name of ['--keep-arg-enums', '--note-response-fields', '--note-partial-pages']) {
+    assert.ok(cli.stdout.includes(name), `${name} listed`);
+  }
+  for (const name of ['--enum-arguments', '--doc-response-fields', '--doc-pagination']) {
+    assert.ok(!cli.stdout.includes(name), `${name} not listed`);
+  }
+});
+
 test('test_overrides_replace_or_drop_body', async () => {
   // R9: an override body (raw JSONSelection) replaces the inferred `$args.input { … }`
   // mapping — literals and renamed keys included; null drops the body altogether

@@ -339,6 +339,26 @@ export class TypesCollector {
     return roots;
   }
 
+  // Returns the enum behind each argument of the selected ops, itself or its list's items, so an enum
+  // only an argument uses is still defined; the loop walk never starts here, an enum has no fields. #250
+  //   e.g. (petstore) get:/pet/findByStatus status -> enum:PetFindByStatusStatus at get:/pet/findByStatus>…
+  private findArgumentEnums(expanded: ExpandedSelection): QueuedNode[] {
+    const opIds = new Set(expanded.entries.map((p) => p.split(Naming.PATH_SEPARATOR)[0]));
+    const enums: QueuedNode[] = [];
+    for (const op of this.gen.paths.values()) {
+      if (!opIds.has(op.id) || !T.isOp(op)) {
+        continue;
+      }
+      for (const param of op.params) {
+        const argument = param.resultType instanceof Arr ? param.resultType.itemsType : param.resultType;
+        if (argument instanceof En) {
+          enums.push({ node: argument, path: Naming.pathUnder(op.id, argument.id) });
+        }
+      }
+    }
+    return enums;
+  }
+
   // Leaves out every field that closes a loop, walking each selected op's written types once per op:
   // a field whose type is still on the walk's stack is left out on the type that writes it, for every
   // route, as #89 writes its removals; a real union's member on the stack is left out of that union.
@@ -499,6 +519,9 @@ export class TypesCollector {
   private collectReachable(expanded: ExpandedSelection): ReachedTypes {
     const context = this.gen.context!;
     const queue = this.writtenRoots(expanded);
+    if (context.generateOptions.keepArgEnums) {
+      queue.push(...this.findArgumentEnums(expanded));
+    }
     const walked = new Map<IType, Set<string>>();
     const routes = new Map<IType, string[]>();
     while (queue.length > 0) {

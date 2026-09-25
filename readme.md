@@ -227,6 +227,7 @@ All options are optional unless noted. They can be passed to `OasGen.fromFile` /
 | `skipOptionalArgs`       | `boolean`          | `false`                    | Omit optional query parameters from generated operations.                                                                                            |
 | `skipOptionalMarkers`    | `boolean`          | `false`                    | Omit the `?` optional-field markers from selections, so the output composes with composition older than 2.15.                                        |
 | `inferEntityResolvers`   | `boolean`          | `false`                    | Infer entity resolvers and emit `@key` / `entity: true`.                                                                                             |
+| `keepArgEnums`           | `boolean`          | `false`                    | An enum query or path param keeps its enum as the argument type, defined once, instead of becoming `String` or `Int`.                                |
 | `emitConnectorErrors`    | `boolean`          | `false`                    | Emit an `errors { message extensions { statusCode: $status } }` block for operations that document HTTP error responses (CLI: `--emit-connector-errors`). |
 | `useOperationIds`        | `boolean`          | `false`                    | Name Query/Mutation fields, and any synthesized (non-`$ref`) response or request-body input type, from the OAS `operationId` when present, falling back to the derived verb+path name otherwise. A `$ref` component schema keeps its own name either way (CLI: `--use-operation-ids`). A saved selection into a part of the tree this flag renames either recovers to the same field, when the rename left exactly one candidate the old segment could still mean, or generation fails with an explicit `Could not find type` error — it is never silently redirected to a different field. |
 | `skipAuth`               | `boolean`          | `false`                    | Omit all auth: no headers on `@source`, no auth on `@connect`.                                                                                       |
@@ -468,6 +469,7 @@ Note the `api_key` header: petstore declares an `apiKey` security scheme, which 
 - `--batch <file>`: Load batch endpoints (op id -> `{ maxSize? }`) from a JSON file. See [Batch endpoints](#batch-endpoints).
 - `--directives <file>`: Load directives (`Type` or `Type.field` -> `["@…"]`) from a JSON file. See [Manual directives](#manual-directives).
 - `--infer-entity-resolvers`: Infer entity resolvers and emit `@key` / `entity: true` (default: `false`).
+- `--keep-arg-enums`: An enum query or path param keeps its enum as the argument type, defined once, instead of becoming `String` or `Int` (default: `false`). e.g. petstore `findByStatus` takes `status: PetFindByStatusStatus = available`.
 - `--use-operation-ids`: Name Query/Mutation fields (and any synthesized response/input type) from the OAS `operationId` when present, falling back to the derived name otherwise (default: `false`). See the [`useOperationIds`](#oasgen-options) row for the `$ref` exception and saved-selection behaviour.
 - `--skip-auth`: Omit all auth — no headers on `@source`, no auth on `@connect` (default: `false`).
 - `--auth-value-prefix <prefix>`: Text to write before an API-key header value, e.g. `"Token token="` (default: none). Only applies when the scheme is an API key in a header.
@@ -483,7 +485,9 @@ node ./dist/cli/oas -h
 `--overrides <file>` (library: the `overrides` option) loads a JSON file keyed by operation id, `verb:path`, e.g. `post:/application.list`. An entry can carry:
 
 - `path`: replaces the HTTP path.
-- `queryParams`: raw JSONSelection per parameter. A string replaces the inferred value, `null` drops it, an unknown key is added.
+- `queryParams`: raw JSONSelection per parameter. A string replaces the inferred value, `null` drops it, an unknown key is added. `null` drops the param from the request only; the argument stays.
+  - Sent whether or not the caller passes arguments: a literal `$("2024-01")`, and a `$( … )` expression that names `$args`, e.g. `$($args.stageName->echo(["StageName = '", @, "'"])->joinNotNull("") ?? null)`. Such an expression must read every argument as `$args.x`.
+  - Sent only when the caller passes arguments: a name alone (`page`), `$.page`, `$args.page` alone, and a `$( … )` that does not name `$args`, e.g. `$(page ?? 1)`.
 - `headers`: string templates per header, same rules as `queryParams`.
 - `body`: one raw JSONSelection string replacing the whole inferred `$args.input { … }` mapping. `null` drops the body.
 - `root`: `"query"` or `"mutation"` writes the operation under that type regardless of its HTTP method. The request keeps its real method. Any other value stops the run.

@@ -1,4 +1,4 @@
-import { Factory, IType, ReferenceObject, Scalar, Type } from './internal.js';
+import { En, Factory, IType, ReferenceObject, Scalar, Type } from './internal.js';
 import { ParameterObject, SchemaObject } from 'oas/types';
 import _ from 'lodash';
 import { trace } from '../log/trace.js';
@@ -96,7 +96,7 @@ export class Param extends Type {
     // e.g. { type: integer, default: 5 } -> `pageLimit: Int`, and the operation's description
     // gains "Params: pageLimit (default 5)". see docs/FIXED.md #159
     if (this.defaultValue !== null && this.defaultValue !== undefined && !context.generateOptions?.skipArgDefaults) {
-      this.writeDefaultValue(writer);
+      this.writeDefaultValue(context, writer);
     }
 
     trace(context, '<- [param::generate]', `-> out: ${this.name}`);
@@ -138,8 +138,17 @@ export class Param extends Type {
 
   // Emit ` = <value>` only for types we can render as a GraphQL literal; otherwise skip the whole
   // default (a dangling ` = ` is a compose syntax error, an omitted default is always valid). #17
-  private writeDefaultValue(writer: Writer): void {
+  private writeDefaultValue(context: OasContext, writer: Writer): void {
     const value = this.defaultValue;
+    // Writes an enum argument's default without quotes, and none when it is not one of the enum's
+    // values: a quoted or unknown value fails compose. #250
+    //   e.g. (petstore) get:/pet/findByStatus status: PetFindByStatusStatus = available
+    if (this.resultType instanceof En && context.generateOptions.keepArgEnums) {
+      if (typeof value === 'string' && this.resultType.items.includes(value)) {
+        writer.write(' = ').write(value);
+      }
+      return;
+    }
     // an OAS param can declare `type: string` with a JSON number/boolean default (spec-authoring
     // slip) — writing it unquoted mismatches the arg's own String type. #127
     //   e.g. (omni) count: { type: string, default: 100 } -> String = "100", not String = 100

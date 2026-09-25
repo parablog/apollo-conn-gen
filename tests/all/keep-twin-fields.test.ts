@@ -128,13 +128,13 @@ test('test_162_partial_view_then_full_view_kept_wins', async () => {
 
   const partial = asFields([dash, slash]);
   T.numberTwinFields(partial, true, numbered);
-  assert.strictEqual(partial[0].name, 'prefsBackground', 'the first twin claims the base name bare');
+  assert.strictEqual(partial[0].name, 'prefsBackground', 'the first twin claims the base name as is');
   assert.strictEqual(partial[1].name, 'prefsBackground2', 'the second twin pins to the first free number');
 
   const full = asFields(props);
   T.numberTwinFields(full, true, numbered);
   const nameOf = (prop: Prop) => full.find((field) => field.prop === prop)!.name;
   assert.strictEqual(nameOf(dash), 'prefsBackground', 'still the base twin');
-  assert.strictEqual(nameOf(literal), 'prefsBackground2', 'the literal field still claims its own spelling bare');
+  assert.strictEqual(nameOf(literal), 'prefsBackground2', 'the literal field still claims its own spelling as is');
   assert.strictEqual(nameOf(slash), 'prefsBackground3', 'evicted from prefsBackground2, renumbered around it');
 });

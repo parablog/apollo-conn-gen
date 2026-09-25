@@ -1,0 +1,31 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "no-arguments",
+      "connector": "Query.things",
+      "variables": { "args": {} },
+      "apiResponseBody": "{\"name\": \"Rex\"}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://example.com/things?q=B",
+          "method": "GET"
+        }
+      }
+    },
+    {
+      "name": "page-supplied",
+      "connector": "Query.things",
+      "variables": { "args": { "page": 3 } },
+      "apiResponseBody": "{\"name\": \"Rex\"}",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://example.com/things?page=3&q=B-3",
+          "method": "GET"
+        }
+      }
+    }
+  ]
+}

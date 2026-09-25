@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- `--keep-arg-enums`: an enum query or path param keeps its enum as the argument type, defined once,
+  instead of becoming `String` or `Int`. E.g. (petstore) `get:/pet/findByStatus` takes
+  `status: PetFindByStatusStatus = available` instead of `status: String = "available"`. Issue #250.
+
+### Changed
+
+- `--doc-response-fields` is now `--note-response-fields` and `--doc-pagination` is now
+  `--note-partial-pages`, so each switch name says what it does. The old names still work and warn
+  with the new one, but are no longer shown in `--help`.
+
+### Fixed
+
+- A query param the overrides file builds from optional arguments is sent even when the operation is
+  called with none. Before, a `$( … )` expression reading `$args`, such as a Salesforce `q` that adds
+  `WHERE StageName = '…'` only when `stageName` is given, sat inside the `$args { … }` block and was
+  not sent at all; now it is written after the block and always sent. Issue #250.
+
 ## [0.32.0] - 2026-09-24
 
 ### Added

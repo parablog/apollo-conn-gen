@@ -1067,30 +1067,6 @@ union takes; it was left as it is.
 **Refs:** found during #242 step 4 (`docs/FIXED.md` #242). `src/oas/nodes/propScalar.ts`.
 
 
-## 250 [BUG] [P3] · An override query param that reads only named variables is not sent when the caller passes no arguments · ⬜ Open
-
-**Symptom:** #248 moved only `$( <JSON literal> )` values out of the `$args { … }` block. A value
-such as `$config.apiVersion` or `$($args.q ?? "SELECT Id FROM Account")` reads no argument by
-bare name either, but it stays inside the block, so it is still dropped when the caller passes
-no arguments.
-
-**Overrides file:**
-```json
-{ "get:/things": { "queryParams": { "api-version": "$config.apiVersion" } } }
-```
-Called with no arguments, the request has no `api-version`.
-
-**Cause:** inside the block, a bare `$` or a bare name reads the arguments; outside it, the top
-level. Telling `$config.x` (safe to move) from `$(page ?? 1)` (reads the argument `page`) needs a
-real JSONSelection parser, which gen does not have, so #248 leaves every such value inside.
-
-**Shape:** none yet. The question is whether the overrides file should let an entry say it
-belongs outside the block, instead of the writer guessing.
-
-**Refs:** `docs/FIXED.md` #248. `src/oas/io/operationWriter.ts` (`queryParamsBlock`,
-`isFixedValue`).
-
-
 ## 251 [PERF] [P3] · A restored field writes its whole subtree at every place it is selected · ⬜ Open
 
 **Symptom:** since #242 step 4 writes fields that were left out as circular references before, the
@@ -1147,3 +1123,66 @@ case-insensitively. Open question first: which corpus specs have a key spelled `
 they would gain under `--infer-entity-resolvers`; measure before changing.
 
 **Refs:** `docs/FIXED.md` #249.
+
+## 253 [BUG] [P4] · A query param dropped with `null` in the overrides file leaves an argument the request ignores · ⬜ Open
+
+**Symptom:** `null` drops a query param from the request, but the argument comes from the OAS param
+and stays. A caller can pass it, and nothing is sent.
+
+**Overrides file** (a fixture with query params `dropme` and `keep`):
+```json
+{ "get:/things": { "queryParams": { "dropme": null } } }
+```
+The field is `things(dropme: String, keep: String)` and the request block `$args { "keep": keep }`.
+
+**Cause:** field arguments are built from the OAS params (`get.ts`) and never read the overrides;
+`null` only removes the entry in `mergeOverrides`.
+
+**Shape:** none yet. #250's filters rely on this: a typed param dropped from the query string is
+read by the `q` expression. Whether an unused argument should be dropped or noted needs deciding.
+
+**Refs:** `docs/FIXED.md` #250. `src/oas/io/operationWriter.ts` (`mergeOverrides`).
+
+## 254 [FEAT] [P3] · Filters on text and id fields wait on a way to escape a quote · ⬜ Open
+
+**Symptom:** a filter built into a query string (Salesforce `q`) can only take enums, numbers and
+booleans. A string value is spliced in raw: `O'Brien` breaks the query, and `x' OR Name != '`
+widens it.
+
+**Cause:** the mapping language has no replace or escape method (echo, map, match, joinNotNull,
+jsonStringify, toString, slice, eq and similar).
+
+**Shape:** none yet; waits on the connectors mapping language. The most wanted case is a reference
+filter, e.g. `accounts(ownerId: …)`.
+
+**Refs:** `docs/FIXED.md` #250.
+
+## 255 [FEAT] [P4] · `--keep-arg-enums` as the default · ⬜ Open
+
+**Symptom:** an OAS enum param is a `String` argument unless `--keep-arg-enums` is set.
+e.g. (petstore) `get:/pet/findByStatus` takes `status: String = "available"`.
+
+**Cause:** the flag defaults off: turning it on changes every corpus spec with an enum param, and
+a client that sends a quoted string for that argument stops validating.
+
+**Shape:** measure the corpus change first (how many specs and arguments), then decide.
+
+**Refs:** `docs/FIXED.md` #250.
+
+## 256 [BUG] [P4] · A `$( … )` query param that reads only `$config` is not sent without arguments · ⬜ Open
+
+**Symptom:** a query param value such as `$($config.apiVersion)` stays inside the `$args { … }`
+block, so it is dropped when the caller passes no arguments.
+
+**Overrides file:**
+```json
+{ "get:/things": { "queryParams": { "api-version": "$($config.apiVersion)" } } }
+```
+
+**Cause:** #250 moves a `$( … )` beside the block only when it holds a JSON literal or names
+`$args`. Telling `$config.x` (safe beside it) from a name alone like `page` (which resolves only
+inside it) needs a JSONSelection parser, which gen does not have.
+
+**Shape:** none yet. An overrides entry that says where the value goes is one option.
+
+**Refs:** `docs/FIXED.md` #248, #250. `src/oas/io/operationWriter.ts` (`isBesideBlock`).

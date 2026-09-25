@@ -327,7 +327,7 @@ export class Schemas {
     return parts.length > 0 ? `${name} (${parts.join(', ')})` : undefined;
   }
 
-  // Builds the "Returns:" line --doc-response-fields adds to an operation's description, naming
+  // Builds the "Returns:" line --note-response-fields adds to an operation's description, naming
   // the top-level fields of what the operation actually sends back. Only two response shapes are
   // covered: a single object, or a list of one kind of object. Any other response — a plain
   // value, a mix of different types, a catch-all JSON blob, and so on — gets no line at all, so

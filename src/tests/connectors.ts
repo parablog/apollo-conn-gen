@@ -12,6 +12,7 @@ export interface ConnectorTestOptions {
   // Composes on stock rover by default; pass false to also check the patched local composer.
   forceRover?: boolean;
   inferEntityResolvers?: boolean;
+  keepArgEnums?: boolean;
   overrides?: OverridesConfig;
 }
 
@@ -47,6 +48,7 @@ export async function runConnectorTest(
     skipValidation: opts.skipValidation,
     showParentInSelections: false,
     inferEntityResolvers: opts.inferEntityResolvers,
+    keepArgEnums: opts.keepArgEnums,
     overrides: opts.overrides,
   });
   await gen.visit();

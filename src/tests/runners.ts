@@ -27,8 +27,9 @@ export async function runOasTest(
     skipOptionalArgs?: boolean;
     skipArgDefaults?: boolean;
     keepFieldNames?: boolean;
-    docResponseFields?: boolean;
-    docPagination?: boolean;
+    keepArgEnums?: boolean;
+    noteResponseFields?: boolean;
+    notePartialPages?: boolean;
     inferEntityResolvers?: boolean;
     baseURL?: string;
     overrides?: OverridesConfig;
@@ -67,8 +68,9 @@ export async function runOasTest(
     skipArgDefaults: opts.skipArgDefaults,
     skipOptionalMarkers: opts.skipOptionalMarkers,
     keepFieldNames: opts.keepFieldNames,
-    docResponseFields: opts.docResponseFields,
-    docPagination: opts.docPagination,
+    keepArgEnums: opts.keepArgEnums,
+    noteResponseFields: opts.noteResponseFields,
+    notePartialPages: opts.notePartialPages,
     inferEntityResolvers: opts.inferEntityResolvers,
     emitConnectorErrors: opts.emitConnectorErrors,
     useOperationIds: opts.useOperationIds,

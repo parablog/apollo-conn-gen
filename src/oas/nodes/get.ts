@@ -178,14 +178,14 @@ export class Get extends Type implements Op {
     return notes.length > 0 ? `Params: ${notes.join(', ')}` : undefined;
   }
 
-  // Builds the pagination note --doc-pagination adds to an operation's description, when any
+  // Builds the pagination note --note-partial-pages adds to an operation's description, when any
   // parameter's name carries a "page" token or is exactly "cursor"/"offset". A page-sized
   // response otherwise reads as complete, so the note says the one thing the signature can't:
   // a full page is not necessarily the last page. see docs/FIXED.md #170
   //   e.g. (doc-pagination.yaml) get:/items(page_index, page_limit) -> "Returns one page of
   //   results; a full page is not necessarily the last page."
   protected paginationDocLine(context: OasContext): string | undefined {
-    if (!context.generateOptions?.docPagination) {
+    if (!context.generateOptions?.notePartialPages) {
       return undefined;
     }
 
@@ -200,12 +200,12 @@ export class Get extends Type implements Op {
     return paginates ? 'Returns one page of results; a full page is not necessarily the last page.' : undefined;
   }
 
-  // Builds the "Returns:" line --doc-response-fields adds to an operation's description, naming
+  // Builds the "Returns:" line --note-response-fields adds to an operation's description, naming
   // the top-level fields of its response, when the flag is on. see docs/FIXED.md #160
   //   e.g. (doc-response-fields.yaml) get:/items answers a list of { id, name, created_at }
   //   objects -> "Returns a list of items with: createdAt, id, name"
   protected responseFieldsDocLine(context: OasContext, selection: ExpandedSelection): string | undefined {
-    if (!context.generateOptions?.docResponseFields) {
+    if (!context.generateOptions?.noteResponseFields) {
       return undefined;
     }
 

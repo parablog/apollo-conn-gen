@@ -1,0 +1,19 @@
+{
+  "config": {
+    "schema": "generated-at-test-time.graphql"
+  },
+  "tests": [
+    {
+      "name": "enum-status",
+      "connector": "Query.petFindByStatus",
+      "variables": { "args": { "status": "available" } },
+      "apiResponseBody": "[]",
+      "expect": {
+        "connectorRequest": {
+          "url": "https://petstore3.swagger.io/v3/pet/findByStatus?status=available",
+          "method": "GET"
+        }
+      }
+    }
+  ]
+}

@@ -8690,7 +8690,7 @@ coupled design and `Params:` note idea; its ungated emission, bare try/catch, dr
 empty-string defaults, and uncapped enum lists deliberately not copied). Adam's AppWorld
 benchmark report (Slack, 2026-08-24).
 
-## 160 [FEAT] [P4] · `--doc-response-fields`: document response fields as prose in operation docstrings — ✅ Fixed
+## 160 [FEAT] [P4] · `--note-response-fields`: document response fields as prose in operation docstrings — ✅ Fixed
 
 **Symptom:** AppWorld benchmark feedback (Adam, 2026-08-24): GraphQL requires a subfield selection,
 and agents guessed response field names and retried until the shape stuck. Putting the top-level
@@ -8701,7 +8701,7 @@ was the single biggest lever in the whole benchmark, fully closing the extra-tur
 gains a blank line and `Returns: createdAt, id, name`; an array response (`listItems`) gains
 `Returns a list of items with: createdAt, id, name`.
 
-**Fix:** an opt-in `--doc-response-fields` flag (`GenerateOptions.docResponseFields`), threaded
+**Fix:** an opt-in `--note-response-fields` flag (`GenerateOptions.noteResponseFields`), threaded
 through `context.generateOptions` like `skipArgDefaults`; emission-only, default output stays
 byte-identical.
 - Formatter: `Schemas.describeResponseFields` beside `describeParamDefault` (same shared-by-two-
@@ -8720,7 +8720,7 @@ byte-identical.
   the flag; off, they hand `[]` as before.
 
 **Verified:** fixture `doc-response-fields.yaml` (object, array-of-object, 16-field object, and all
-four mutation verbs on the same `Item`); seven tests in `tests/all/doc-response-fields.test.ts` —
+four mutation verbs on the same `Item`); seven tests in `tests/all/note-response-fields.test.ts` —
 flag off unchanged, single-object `Returns:`, array `Returns a list of items with:`, the 14-name
 cap with `(+2 more)`, kept spelling with #158, post/put/patch/del each carrying the line (pins the
 Post inheritance, so a future verb-specific `generate` cannot silently drop it), and a CLI spawn
@@ -8772,7 +8772,7 @@ returned (idempotent — decision below):
 - The required param threads through every `selectedProps` override and caller: `Type`/`Obj`/
   `Composed`/`Union`, `entity.ts`, `sparseFieldsets.ts`, `Get`/`Post`'s `resultJsonReason`, `Union`'s
   `emptyMergeReason`/`hasSelectedProps`/`consolidate`, and `schemas.ts`'s `describeResponseFields`.
-- `schemas.ts:164`'s `--doc-response-fields` `Returns:` line now agrees with the SDL under the flag
+- `schemas.ts:164`'s `--note-response-fields` `Returns:` line now agrees with the SDL under the flag
   too, since it reads the same keep-aware `selectedProps`.
 
 **Verified:** fixture `keep-twin-fields.yaml` (an Obj route, an inline allOf, and a discriminator-
@@ -12414,3 +12414,52 @@ end-to-end fetch is covered by composition, not run.
   file), r9-body (with its overrides file), entity-link, petstore and github.
 
 **Refs:** `docs/TASKS.md` #252 (a key spelled `Id` under plain inference).
+
+## 250 [BUG] [P3] · A query param built from optional arguments was not sent when the caller passed none — ✅ Fixed
+
+**Example** (Salesforce `queryOpportunity`, the `q` query param from the overrides file):
+```
+q: $($(["SELECT Id, Name FROM Opportunity",
+        $([ $($args.stageName->echo(["StageName = '", @, "'"])->joinNotNull("") ?? null),
+            $($args.amountMin->echo(["Amount >= ", @->toString])->joinNotNull("") ?? null)
+          ])->joinNotNull(" AND ")->match(["", null], [@, $(["WHERE", @])->joinNotNull(" ")])
+       ])->joinNotNull(" "))
+```
+- Before: this sat inside the `$args { … }` block, which sends nothing when the caller passes no
+  arguments, so the list went out with no `q` and returned nothing.
+- Now: it is written after the block, so `q` is always sent; with no arguments it has no `WHERE`.
+
+**Rule:** a query param value is written after the block when its whole trimmed text is one
+`$( … )` that holds a JSON literal (#248) or names `$args`.
+- Beside the block only `$args.x` reaches an argument; a name alone (`page`) or `$.page` resolves only
+  inside it. So an expression that names `$args` must read every argument as `$args.x`: a mixed
+  `$(page ?? $args.x)` moves and its `page` stops resolving.
+- `$(page ?? 1)` names no `$args`, so it stays inside, and the #248 test still sends `page-fallback=3`.
+- The check matches the text `$args`; a string literal holding `$args` moves too.
+- `null` on a query param drops it from the request only; the argument stays. A filter uses this: the
+  OAS declares the typed param, the override drops it from the query string, and `q` reads it.
+
+**No escape for a quote:** the mapping language has no replace or escape method, so a string value
+spliced into the query breaks it (`O'Brien`) or widens it (`x' OR Name != '`). Filters take enums,
+numbers and booleans only.
+
+**Enum arguments** (`--keep-arg-enums`, library `keepArgEnums`, default off):
+- An OAS enum param becomes a GraphQL enum argument, defined once at the top level, never inside the
+  argument list (#53). e.g. (petstore) `get:/pet/findByStatus` writes
+  `petFindByStatus(status: PetFindByStatusStatus = available)`; without the flag, `status: String = "available"`.
+- An inline enum takes its op and param names; a `$ref` enum keeps its component name, one
+  definition for every param that names it.
+- An enum only an argument uses is still written: the collector starts from each selected op's
+  argument enums, not only its response and body.
+- A default that is one of the values is written without quotes; any other default is left out (#17).
+- An enum whose values are not legal GraphQL names stays its scalar (#172).
+
+**Tests:** `tests/all/oas-core.test.ts`: `test_250_args_expression_written_beside_block`,
+`test_250_args_expression_sent_without_arguments` (`things-args-expression.connector.yaml`: `q=B`
+with no arguments, `q=B-3` with `page: 3`), `test_250_enum_param_is_an_enum_argument`,
+`test_250_enum_argument_sends_its_value` (`enum-arguments/pets.connector.yaml`), and
+`test_250_enum_arguments_only_an_argument_uses` (new fixture `enum-arguments.yaml`).
+
+**Refs:** `src/oas/io/operationWriter.ts` (`isBesideBlock`, `isOneExpression`), `src/oas/nodes/en.ts`,
+`src/oas/nodes/param.ts` (`writeDefaultValue`), `src/oas/generator/typesCollector.ts`
+(`findArgumentEnums`). `docs/TASKS.md` #253, #254, #255, #256.
