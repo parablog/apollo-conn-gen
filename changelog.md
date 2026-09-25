@@ -4,26 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
-
-### Added
-
-- `--keep-arg-enums`: an enum query or path param keeps its enum as the argument type, defined once,
-  instead of becoming `String` or `Int`. E.g. (petstore) `get:/pet/findByStatus` takes
-  `status: PetFindByStatusStatus = available` instead of `status: String = "available"`. Issue #250.
+## [0.33.0] - 2026-09-25
 
 ### Changed
 
-- `--doc-response-fields` is now `--note-response-fields` and `--doc-pagination` is now
-  `--note-partial-pages`, so each switch name says what it does. The old names still work and warn
-  with the new one, but are no longer shown in `--help`.
+- `--doc-response-fields` is now `--note-response-fields`, so the name says what the switch does.
+  It still adds the "Returns: ..." note, e.g. `Returns a list of items with: createdAt, id, name`.
+  The old name still works and warns `--doc-response-fields is now --note-response-fields`, but is
+  no longer shown in `--help`.
+- `--doc-pagination` is now `--note-partial-pages`, so the name says what the switch does. It still
+  adds `Returns one page of results; a full page is not necessarily the last page.` to each
+  paginated operation. The old name still works and warns
+  `--doc-pagination is now --note-partial-pages`, but is no longer shown in `--help`.
+
+### Added
+
+- `--keep-arg-enums`: an enum query or path param keeps its enum as the argument type. Before, every
+  enum param became its scalar: (petstore) `get:/pet/findByStatus` took
+  `status: String = "available"`. Now it takes `status: PetFindByStatusStatus = available`, with the
+  enum defined once at the top level; a `$ref` enum keeps its component name. Off by default.
+  Issue #250.
 
 ### Fixed
 
 - A query param the overrides file builds from optional arguments is sent even when the operation is
   called with none. Before, a `$( … )` expression reading `$args`, such as a Salesforce `q` that adds
-  `WHERE StageName = '…'` only when `stageName` is given, sat inside the `$args { … }` block and was
-  not sent at all; now it is written after the block and always sent. Issue #250.
+  `WHERE StageName = '…'` only when `stageName` is given, sat inside the `$args { … }` block, so a
+  call with no arguments sent no `q` and returned nothing; now it is written after the block and
+  always sent, as `SELECT Id, Name FROM Opportunity` with no `WHERE`. Issue #250.
 
 ## [0.32.0] - 2026-09-24
 
